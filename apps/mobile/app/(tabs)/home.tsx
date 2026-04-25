@@ -25,8 +25,8 @@ export default function HomeScreen() {
         <Text style={styles.scoreHint}>
           {hasActivity
             ? score >= 80
-              ? "You're ready to book! 🎉"
-              : 'Keep practising — you're almost ready!'
+              ? "You're ready to book!"
+              : "Keep practising - you're almost ready!"
             : 'Answer some questions to see your score'}
         </Text>
       </View>
@@ -36,21 +36,19 @@ export default function HomeScreen() {
         <Text style={styles.sectionTitle}>Quick Actions</Text>
 
         <TouchableOpacity style={[styles.actionCard, styles.actionCardPrimary]} activeOpacity={0.85}>
-          <Text style={styles.actionIcon}>📖</Text>
           <View style={styles.actionText}>
             <Text style={styles.actionTitle}>Start Practice</Text>
             <Text style={styles.actionSub}>Random questions from all topics</Text>
           </View>
-          <Text style={styles.actionChevron}>›</Text>
+          <Text style={styles.actionChevron}>{'>'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={[styles.actionCard, styles.actionCardSecondary]} activeOpacity={0.85}>
-          <Text style={styles.actionIcon}>📋</Text>
           <View style={styles.actionText}>
             <Text style={[styles.actionTitle, styles.actionTitleDark]}>Take Mock Test</Text>
-            <Text style={styles.actionSub}>50 questions · 57 minutes</Text>
+            <Text style={styles.actionSub}>50 questions - 57 minutes</Text>
           </View>
-          <Text style={[styles.actionChevron, styles.actionChevronDark]}>›</Text>
+          <Text style={[styles.actionChevron, styles.actionChevronDark]}>{'>'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -155,9 +153,6 @@ const styles = StyleSheet.create({
   actionCardSecondary: {
     backgroundColor: '#FFFFFF',
   },
-  actionIcon: {
-    fontSize: 28,
-  },
   actionText: {
     flex: 1,
   },
@@ -175,9 +170,9 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
   },
   actionChevron: {
-    fontSize: 24,
+    fontSize: 20,
     color: 'rgba(255,255,255,0.5)',
-    fontWeight: '300',
+    fontWeight: '600',
   },
   actionChevronDark: {
     color: '#CBD5E1',
