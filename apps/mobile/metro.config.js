@@ -10,6 +10,7 @@ const config = getDefaultConfig(projectRoot);
 config.watchFolders = [
   path.resolve(monorepoRoot, 'packages/core'),
   path.resolve(monorepoRoot, 'packages/content'),
+  path.resolve(monorepoRoot, 'packages/ai'),
 ];
 
 // Allow resolution from both the app's own node_modules and the monorepo root.

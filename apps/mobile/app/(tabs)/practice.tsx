@@ -26,9 +26,13 @@ import {
   saveQuestionStates,
   saveUserProgress,
 } from '@/src/storage';
+import { explainAnswer } from '@clearpass/ai';
 
 const SESSION_SIZE = 10;
 const LABELS = ['A', 'B', 'C', 'D'];
+
+// TODO: move to environment variables before production
+const ANTHROPIC_API_KEY = 'YOUR_KEY_HERE';
 
 type Phase = 'loading' | 'quiz' | 'results';
 
@@ -44,6 +48,8 @@ export default function PracticeScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [sessionResults, setSessionResults] = useState<SessionResult[]>([]);
+  const [aiExplanation, setAiExplanation] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   // Refs hold mutable state that doesn't need to trigger re-renders but must
   // be current inside async callbacks.
@@ -114,8 +120,26 @@ export default function PracticeScreen() {
     } else {
       setCurrentIndex((i) => i + 1);
       setSelectedIndex(null);
+      setAiExplanation(null);
+      setAiLoading(false);
     }
   }, [currentIndex, questions.length]);
+
+  const handleExplain = useCallback(async () => {
+    if (aiLoading || aiExplanation !== null) return;
+    const q = questions[currentIndex];
+    if (selectedIndex === null) return;
+    setAiLoading(true);
+    const result = await explainAnswer(
+      q.questionText,
+      q.options,
+      q.correctIndex,
+      selectedIndex,
+      ANTHROPIC_API_KEY,
+    );
+    setAiExplanation(result);
+    setAiLoading(false);
+  }, [aiLoading, aiExplanation, questions, currentIndex, selectedIndex]);
 
   async function finaliseSession() {
     const results = resultsRef.current;
@@ -242,6 +266,31 @@ export default function PracticeScreen() {
           </Text>
           <Text style={styles.explanationBody}>{question.explanation}</Text>
         </View>
+      )}
+
+      {/* AI tutor explanation - wrong answers only */}
+      {isAnswered && !answeredCorrectly && (
+        <>
+          {aiExplanation !== null ? (
+            <View style={styles.aiCard}>
+              <Text style={styles.aiCardTitle}>AI Tutor</Text>
+              <Text style={styles.aiCardBody}>{aiExplanation}</Text>
+            </View>
+          ) : aiLoading ? (
+            <View style={styles.aiLoadingRow}>
+              <ActivityIndicator size="small" color="#012169" />
+              <Text style={styles.aiLoadingText}>Getting explanation...</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.explainButton}
+              onPress={handleExplain}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.explainButtonText}>Explain this answer</Text>
+            </TouchableOpacity>
+          )}
+        </>
       )}
 
       {/* Next / See Results */}
@@ -420,4 +469,53 @@ const styles = StyleSheet.create({
   dotRed: { backgroundColor: '#DC2626' },
   dotText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
   breakdownText: { flex: 1, fontSize: 14, color: '#334155', lineHeight: 20 },
+
+  // AI tutor
+  explainButton: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#012169',
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  explainButtonText: {
+    color: '#012169',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  aiLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+  aiLoadingText: {
+    color: '#64748B',
+    fontSize: 14,
+  },
+  aiCard: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3B82F6',
+  },
+  aiCardTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1D4ED8',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  aiCardBody: {
+    fontSize: 14,
+    color: '#1E3A5F',
+    lineHeight: 21,
+  },
 });
