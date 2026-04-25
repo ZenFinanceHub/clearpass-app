@@ -1,0 +1,16 @@
+export enum TopicCategory {
+  Alertness = 'Alertness',
+  Attitude = 'Attitude',
+  SafetyAndYourVehicle = 'SafetyAndYourVehicle',
+  SafetyMargins = 'SafetyMargins',
+  HazardAwareness = 'HazardAwareness',
+  VulnerableRoadUsers = 'VulnerableRoadUsers',
+  OtherTypes = 'OtherTypes',
+  VehicleHandling = 'VehicleHandling',
+  MotorwayRules = 'MotorwayRules',
+  RulesOfTheRoad = 'RulesOfTheRoad',
+  RoadAndTrafficSigns = 'RoadAndTrafficSigns',
+  DocumentsAndRegulations = 'DocumentsAndRegulations',
+  AccidentsAndEmergencies = 'AccidentsAndEmergencies',
+  VehicleLoading = 'VehicleLoading',
+}
