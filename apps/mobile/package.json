@@ -9,7 +9,10 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@clearpass/content": "file:../../packages/content",
+    "@clearpass/core": "file:../../packages/core",
     "@expo/vector-icons": "^15.0.3",
+    "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~54.0.33",
     "expo-router": "~6.0.23",
     "expo-status-bar": "~3.0.9",

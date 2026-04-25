@@ -1,22 +1,37 @@
+import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-
-const READINESS_SCORE = 72;
+import { UserProgress } from '@clearpass/core';
+import { loadUserProgress } from '@/src/storage';
 
 export default function HomeScreen() {
+  const [progress, setProgress] = useState<UserProgress | null>(null);
+
+  useEffect(() => {
+    loadUserProgress().then(setProgress);
+  }, []);
+
+  const score = progress?.readinessScore ?? 0;
+  const hasActivity = score > 0;
+
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.content}
-    >
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      {/* Score banner */}
       <View style={styles.scoreSection}>
         <Text style={styles.scoreSectionLabel}>Your Readiness Score</Text>
         <View style={styles.scoreCircle}>
-          <Text style={styles.scoreNumber}>{READINESS_SCORE}</Text>
+          <Text style={styles.scoreNumber}>{score}</Text>
           <Text style={styles.scoreOutOf}>/ 100</Text>
         </View>
-        <Text style={styles.scoreHint}>Keep practising — you're almost ready!</Text>
+        <Text style={styles.scoreHint}>
+          {hasActivity
+            ? score >= 80
+              ? "You're ready to book! 🎉"
+              : 'Keep practising — you're almost ready!'
+            : 'Answer some questions to see your score'}
+        </Text>
       </View>
 
+      {/* Quick actions */}
       <View style={styles.actionsSection}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
 
@@ -38,6 +53,24 @@ export default function HomeScreen() {
           <Text style={[styles.actionChevron, styles.actionChevronDark]}>›</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Stats row (only once user has answered questions) */}
+      {progress && progress.totalQuestionsAnswered > 0 && (
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{progress.totalQuestionsAnswered}</Text>
+            <Text style={styles.statLabel}>Questions</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{progress.studyStreakDays}</Text>
+            <Text style={styles.statLabel}>Day streak</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{progress.mockTestHistory.length}</Text>
+            <Text style={styles.statLabel}>Mock tests</Text>
+          </View>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -148,5 +181,33 @@ const styles = StyleSheet.create({
   },
   actionChevronDark: {
     color: '#CBD5E1',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 20,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  statValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#012169',
+  },
+  statLabel: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '500',
+    marginTop: 2,
   },
 });

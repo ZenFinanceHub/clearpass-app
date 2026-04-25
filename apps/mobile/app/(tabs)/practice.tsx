@@ -1,124 +1,423 @@
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { router } from 'expo-router';
+import {
+  Question,
+  QuestionState,
+  TopicCategory,
+  UserProgress,
+  calculateReadiness,
+  getQuestionsForSession,
+  initQuestionState,
+  updateQuestionState,
+} from '@clearpass/core';
+import { allQuestions, getQuestionById } from '@clearpass/content';
+import {
+  createFreshUserProgress,
+  loadQuestionStates,
+  loadUserProgress,
+  saveQuestionStates,
+  saveUserProgress,
+} from '@/src/storage';
 
-const CATEGORIES = [
-  { id: '1', label: 'Alertness', count: 45, emoji: '👀' },
-  { id: '2', label: 'Attitude', count: 30, emoji: '🤝' },
-  { id: '3', label: 'Safety & Your Vehicle', count: 40, emoji: '🚗' },
-  { id: '4', label: 'Safety Margins', count: 35, emoji: '📏' },
-  { id: '5', label: 'Hazard Awareness', count: 50, emoji: '⚠️' },
-  { id: '6', label: 'Vulnerable Road Users', count: 25, emoji: '🚶' },
-];
+const SESSION_SIZE = 10;
+const LABELS = ['A', 'B', 'C', 'D'];
+
+type Phase = 'loading' | 'quiz' | 'results';
+
+type SessionResult = {
+  question: Question;
+  selectedIndex: number;
+  correct: boolean;
+};
 
 export default function PracticeScreen() {
+  const [phase, setPhase] = useState<Phase>('loading');
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [sessionResults, setSessionResults] = useState<SessionResult[]>([]);
+
+  // Refs hold mutable state that doesn't need to trigger re-renders but must
+  // be current inside async callbacks.
+  const questionStatesRef = useRef<Record<string, QuestionState>>({});
+  const userProgressRef = useRef<UserProgress | null>(null);
+  const resultsRef = useRef<SessionResult[]>([]);
+
+  useEffect(() => {
+    void startSession();
+  }, []);
+
+  async function startSession() {
+    const [statesMap, progress] = await Promise.all([
+      loadQuestionStates(),
+      loadUserProgress(),
+    ]);
+
+    questionStatesRef.current = statesMap;
+    userProgressRef.current = progress ?? createFreshUserProgress();
+
+    const sessionIds = getQuestionsForSession(
+      Object.values(statesMap),
+      allQuestions.map((q) => q.id),
+      SESSION_SIZE,
+    );
+
+    const sessionQuestions = sessionIds
+      .map((id) => getQuestionById(id))
+      .filter((q): q is Question => q !== undefined);
+
+    setQuestions(sessionQuestions);
+    setPhase(sessionQuestions.length > 0 ? 'quiz' : 'results');
+  }
+
+  const handleAnswer = useCallback(
+    async (optionIndex: number) => {
+      if (selectedIndex !== null) return;
+
+      const question = questions[currentIndex];
+      const correct = optionIndex === question.correctIndex;
+
+      // SM-2 update
+      const existing =
+        questionStatesRef.current[question.id] ?? initQuestionState(question.id);
+      const updated = updateQuestionState(existing, correct, correct ? 4 : 1);
+      questionStatesRef.current = {
+        ...questionStatesRef.current,
+        [question.id]: updated,
+      };
+
+      const result: SessionResult = { question, selectedIndex: optionIndex, correct };
+      resultsRef.current = [...resultsRef.current, result];
+
+      setSelectedIndex(optionIndex);
+      setSessionResults(resultsRef.current);
+
+      await saveQuestionStates(questionStatesRef.current);
+    },
+    [selectedIndex, questions, currentIndex],
+  );
+
+  const handleNext = useCallback(async () => {
+    const isLast = currentIndex + 1 >= questions.length;
+
+    if (isLast) {
+      await finaliseSession();
+      setPhase('results');
+    } else {
+      setCurrentIndex((i) => i + 1);
+      setSelectedIndex(null);
+    }
+  }, [currentIndex, questions.length]);
+
+  async function finaliseSession() {
+    const results = resultsRef.current;
+    const progress = userProgressRef.current ?? createFreshUserProgress();
+
+    // Compute per-topic accuracy for this session
+    const topicData: Partial<Record<TopicCategory, { correct: number; total: number }>> = {};
+    for (const { question, correct } of results) {
+      const cat = question.topicCategory;
+      if (!topicData[cat]) topicData[cat] = { correct: 0, total: 0 };
+      topicData[cat]!.total += 1;
+      if (correct) topicData[cat]!.correct += 1;
+    }
+
+    // Blend session accuracy into the rolling topic scores (60/40 weighted average)
+    const updatedScores = { ...progress.topicScores };
+    for (const [cat, data] of Object.entries(topicData) as [TopicCategory, { correct: number; total: number }][]) {
+      const sessionAccuracy = Math.round((data.correct / data.total) * 100);
+      const existing = updatedScores[cat] ?? 0;
+      updatedScores[cat] =
+        existing === 0
+          ? sessionAccuracy
+          : Math.round(existing * 0.6 + sessionAccuracy * 0.4);
+    }
+
+    const updated: UserProgress = {
+      ...progress,
+      topicScores: updatedScores,
+      totalQuestionsAnswered: progress.totalQuestionsAnswered + results.length,
+      lastStudied: new Date().toISOString(),
+    };
+    updated.readinessScore = calculateReadiness(updated).score;
+
+    userProgressRef.current = updated;
+    await saveUserProgress(updated);
+  }
+
+  // ─── Loading ────────────────────────────────────────────────────────────────
+  if (phase === 'loading') {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#012169" />
+        <Text style={styles.loadingText}>Loading questions…</Text>
+      </View>
+    );
+  }
+
+  // ─── Results ────────────────────────────────────────────────────────────────
+  if (phase === 'results') {
+    return <ResultsScreen results={sessionResults} />;
+  }
+
+  // ─── Quiz ───────────────────────────────────────────────────────────────────
+  const question = questions[currentIndex];
+  const isAnswered = selectedIndex !== null;
+  const answeredCorrectly = isAnswered && selectedIndex === question.correctIndex;
+  const progress = ((currentIndex + (isAnswered ? 1 : 0)) / questions.length) * 100;
+
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-      <Text style={styles.screenTitle}>Practice Questions</Text>
-      <Text style={styles.screenSub}>Choose a topic or start a mixed session</Text>
-
-      <TouchableOpacity style={styles.randomButton} activeOpacity={0.85}>
-        <Text style={styles.randomButtonText}>🔀  Start Random Practice</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.sectionLabel}>Browse by Topic</Text>
-
-      <View style={styles.cardList}>
-        {CATEGORIES.map((cat) => (
-          <TouchableOpacity key={cat.id} style={styles.card} activeOpacity={0.75}>
-            <View style={styles.cardLeft}>
-              <Text style={styles.cardEmoji}>{cat.emoji}</Text>
-              <Text style={styles.cardLabel}>{cat.label}</Text>
-            </View>
-            <View style={styles.cardRight}>
-              <Text style={styles.cardCount}>{cat.count}</Text>
-              <Text style={styles.cardCountLabel}>Qs</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+      {/* Progress */}
+      <View style={styles.progressRow}>
+        <Text style={styles.progressLabel}>
+          Question {currentIndex + 1} of {questions.length}
+        </Text>
+        <Text style={styles.progressPct}>{Math.round(progress)}%</Text>
       </View>
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: `${progress}%` as any }]} />
+      </View>
+
+      {/* Question card */}
+      <View style={styles.questionCard}>
+        <Text style={styles.questionText}>{question.questionText}</Text>
+      </View>
+
+      {/* Options */}
+      <View style={styles.optionList}>
+        {question.options.map((option, idx) => {
+          const isCorrect = idx === question.correctIndex;
+          const isSelected = idx === selectedIndex;
+
+          let cardStyle = styles.optionDefault;
+          let badgeStyle = styles.badgeDefault;
+          let textStyle = styles.optionTextDefault;
+
+          if (isAnswered) {
+            if (isCorrect) {
+              cardStyle = styles.optionCorrect;
+              badgeStyle = styles.badgeCorrect;
+              textStyle = styles.optionTextCorrect;
+            } else if (isSelected) {
+              cardStyle = styles.optionWrong;
+              badgeStyle = styles.badgeWrong;
+              textStyle = styles.optionTextWrong;
+            } else {
+              cardStyle = styles.optionDimmed;
+              textStyle = styles.optionTextDimmed;
+            }
+          }
+
+          return (
+            <TouchableOpacity
+              key={idx}
+              style={[styles.option, cardStyle]}
+              onPress={() => handleAnswer(idx)}
+              activeOpacity={isAnswered ? 1 : 0.75}
+              disabled={isAnswered}
+            >
+              <View style={[styles.badge, badgeStyle]}>
+                <Text style={styles.badgeText}>{LABELS[idx]}</Text>
+              </View>
+              <Text style={[styles.optionText, textStyle]}>{option}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Explanation */}
+      {isAnswered && (
+        <View style={[styles.explanation, answeredCorrectly ? styles.explanationGreen : styles.explanationRed]}>
+          <Text style={styles.explanationTitle}>
+            {answeredCorrectly ? '✓  Correct!' : '✗  Incorrect'}
+          </Text>
+          <Text style={styles.explanationBody}>{question.explanation}</Text>
+        </View>
+      )}
+
+      {/* Next / See Results */}
+      {isAnswered && (
+        <TouchableOpacity style={styles.primaryButton} onPress={handleNext} activeOpacity={0.85}>
+          <Text style={styles.primaryButtonText}>
+            {currentIndex + 1 >= questions.length ? 'See Results' : 'Next Question →'}
+          </Text>
+        </TouchableOpacity>
+      )}
     </ScrollView>
   );
 }
 
+// ─── Results screen ──────────────────────────────────────────────────────────
+
+function ResultsScreen({ results }: { results: SessionResult[] }) {
+  const correct = results.filter((r) => r.correct).length;
+  const total = results.length;
+  const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
+
+  const verdict =
+    pct >= 86 ? '🎉 Excellent work!' : pct >= 60 ? '👍 Good effort!' : '📚 Keep practising';
+
+  return (
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      {/* Score banner */}
+      <View style={styles.scoreBanner}>
+        <Text style={styles.scoreValue}>
+          {correct} / {total}
+        </Text>
+        <Text style={styles.scorePct}>{pct}%</Text>
+        <Text style={styles.scoreVerdict}>{verdict}</Text>
+      </View>
+
+      {/* Breakdown */}
+      <Text style={styles.sectionLabel}>Question Breakdown</Text>
+      <View style={styles.breakdownList}>
+        {results.map(({ question, correct: isCorrect }, i) => (
+          <View key={question.id} style={styles.breakdownRow}>
+            <View style={[styles.breakdownDot, isCorrect ? styles.dotGreen : styles.dotRed]}>
+              <Text style={styles.dotText}>{isCorrect ? '✓' : '✗'}</Text>
+            </View>
+            <Text style={styles.breakdownText} numberOfLines={2}>
+              {i + 1}.{'  '}{question.questionText}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      <TouchableOpacity
+        style={styles.primaryButton}
+        onPress={() => router.replace('/(tabs)/home')}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.primaryButtonText}>Back to Home</Text>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+}
+
+// ─── Styles ──────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  content: {
+  scroll: { flex: 1, backgroundColor: '#F5F5F5' },
+  content: { padding: 16, paddingBottom: 48 },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  loadingText: { color: '#64748B', fontSize: 15 },
+
+  // Progress bar
+  progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  progressLabel: { fontSize: 13, color: '#64748B', fontWeight: '500' },
+  progressPct: { fontSize: 13, color: '#012169', fontWeight: '700' },
+  progressTrack: { height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, marginBottom: 16, overflow: 'hidden' },
+  progressFill: { height: 6, backgroundColor: '#012169', borderRadius: 3 },
+
+  // Question
+  questionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     padding: 20,
-    paddingBottom: 36,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  screenTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 4,
+  questionText: { fontSize: 17, fontWeight: '600', color: '#0F172A', lineHeight: 26 },
+
+  // Options
+  optionList: { gap: 10, marginBottom: 14 },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    padding: 14,
+    gap: 12,
   },
-  screenSub: {
-    fontSize: 14,
-    color: '#64748B',
-    marginBottom: 20,
-  },
-  randomButton: {
+  optionDefault: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' },
+  optionCorrect: { backgroundColor: '#DCFCE7', borderColor: '#16A34A' },
+  optionWrong: { backgroundColor: '#FEE2E2', borderColor: '#DC2626' },
+  optionDimmed: { backgroundColor: '#F8FAFC', borderColor: '#F1F5F9' },
+
+  badge: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  badgeDefault: { backgroundColor: '#012169' },
+  badgeCorrect: { backgroundColor: '#16A34A' },
+  badgeWrong: { backgroundColor: '#DC2626' },
+  badgeText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
+
+  optionText: { flex: 1, fontSize: 15, lineHeight: 22 },
+  optionTextDefault: { color: '#1E293B' },
+  optionTextCorrect: { color: '#15803D', fontWeight: '600' },
+  optionTextWrong: { color: '#B91C1C', fontWeight: '600' },
+  optionTextDimmed: { color: '#94A3B8' },
+
+  // Explanation
+  explanation: { borderRadius: 12, padding: 16, marginBottom: 14, borderLeftWidth: 4 },
+  explanationGreen: { backgroundColor: '#F0FDF4', borderLeftColor: '#16A34A' },
+  explanationRed: { backgroundColor: '#FFF1F2', borderLeftColor: '#DC2626' },
+  explanationTitle: { fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
+  explanationBody: { fontSize: 14, color: '#334155', lineHeight: 21 },
+
+  // Buttons
+  primaryButton: {
     backgroundColor: '#012169',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
+    marginTop: 4,
+  },
+  primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+
+  // Results
+  scoreBanner: {
+    backgroundColor: '#012169',
+    borderRadius: 20,
+    paddingVertical: 32,
+    alignItems: 'center',
     marginBottom: 24,
   },
-  randomButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  scoreValue: { fontSize: 56, fontWeight: '800', color: '#FFFFFF', lineHeight: 62 },
+  scorePct: { fontSize: 22, color: '#A5B4CC', fontWeight: '600', marginBottom: 6 },
+  scoreVerdict: { fontSize: 17, color: '#FFFFFF', fontWeight: '600' },
+
   sectionLabel: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
     color: '#94A3B8',
-    letterSpacing: 0.8,
+    letterSpacing: 1,
     textTransform: 'uppercase',
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  cardList: {
-    gap: 10,
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
+  breakdownList: { gap: 8, marginBottom: 24 },
+  breakdownRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    gap: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  cardLeft: {
-    flexDirection: 'row',
+  breakdownDot: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: 'center',
-    gap: 12,
-    flex: 1,
+    justifyContent: 'center',
+    flexShrink: 0,
+    marginTop: 1,
   },
-  cardEmoji: {
-    fontSize: 22,
-  },
-  cardLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1E293B',
-    flex: 1,
-  },
-  cardRight: {
-    alignItems: 'center',
-  },
-  cardCount: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#012169',
-  },
-  cardCountLabel: {
-    fontSize: 11,
-    color: '#94A3B8',
-    fontWeight: '500',
-  },
+  dotGreen: { backgroundColor: '#16A34A' },
+  dotRed: { backgroundColor: '#DC2626' },
+  dotText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+  breakdownText: { flex: 1, fontSize: 14, color: '#334155', lineHeight: 20 },
 });
