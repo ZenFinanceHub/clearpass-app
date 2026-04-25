@@ -31,8 +31,7 @@ import { explainAnswer } from '@clearpass/ai';
 const SESSION_SIZE = 10;
 const LABELS = ['A', 'B', 'C', 'D'];
 
-// TODO: move to environment variables before production
-const ANTHROPIC_API_KEY = 'YOUR_KEY_HERE';
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? '';
 
 type Phase = 'loading' | 'quiz' | 'results';
 
