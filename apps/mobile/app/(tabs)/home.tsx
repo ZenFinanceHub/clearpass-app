@@ -1,54 +1,132 @@
-import { ScrollView, Text, View } from 'react-native';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const READINESS_SCORE = 72;
 
 export default function HomeScreen() {
   return (
-    <ScrollView className="flex-1 bg-gray-50">
-      <ThemedView className="bg-blue-600 px-6 pt-6 pb-10">
-        <ThemedText className="text-white text-lg font-medium">Good morning!</ThemedText>
-        <ThemedText className="text-white text-3xl font-bold mt-1">Ready to study?</ThemedText>
-      </ThemedView>
-
-      <View className="-mt-6 mx-4">
-        <ThemedView className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <ThemedText className="text-gray-500 text-sm font-medium mb-1">
-            Readiness Score
-          </ThemedText>
-          <View className="flex-row items-end gap-x-2">
-            <ThemedText className="text-5xl font-bold text-blue-600">
-              {READINESS_SCORE}
-            </ThemedText>
-            <ThemedText className="text-2xl text-gray-400 mb-1">/ 100</ThemedText>
-          </View>
-          <View className="mt-3 bg-gray-100 rounded-full h-2">
-            <View
-              className="bg-blue-600 rounded-full h-2"
-              style={{ width: `${READINESS_SCORE}%` }}
-            />
-          </View>
-        </ThemedView>
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <View style={styles.scoreSection}>
+        <Text style={styles.scoreSectionLabel}>Your Readiness Score</Text>
+        <View style={styles.scoreCircle}>
+          <Text style={styles.scoreNumber}>{READINESS_SCORE}</Text>
+          <Text style={styles.scoreOutOf}>/ 100</Text>
+        </View>
+        <Text style={styles.scoreHint}>Keep practising — you're almost ready!</Text>
       </View>
 
-      <View className="px-4 mt-6 mb-8">
-        <ThemedText className="text-gray-700 text-base font-semibold mb-3">
-          Quick Actions
-        </ThemedText>
-        <View className="flex-row gap-x-3">
-          <ThemedView className="flex-1 bg-white rounded-xl p-4 border border-gray-100">
-            <ThemedText className="text-blue-600 text-2xl mb-1">📖</ThemedText>
-            <ThemedText className="text-gray-800 font-semibold">Practice</ThemedText>
-            <ThemedText className="text-gray-500 text-xs mt-0.5">Random questions</ThemedText>
-          </ThemedView>
-          <ThemedView className="flex-1 bg-white rounded-xl p-4 border border-gray-100">
-            <ThemedText className="text-blue-600 text-2xl mb-1">📋</ThemedText>
-            <ThemedText className="text-gray-800 font-semibold">Mock Test</ThemedText>
-            <ThemedText className="text-gray-500 text-xs mt-0.5">50 questions</ThemedText>
-          </ThemedView>
-        </View>
+      <View style={styles.actionsSection}>
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <TouchableOpacity style={[styles.actionCard, styles.actionCardPrimary]} activeOpacity={0.85}>
+          <Text style={styles.actionIcon}>📖</Text>
+          <View style={styles.actionText}>
+            <Text style={styles.actionTitle}>Start Practice</Text>
+            <Text style={styles.actionSub}>Random questions from all topics</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.actionCard, styles.actionCardSecondary]} activeOpacity={0.85}>
+          <Text style={styles.actionIcon}>📋</Text>
+          <View style={styles.actionText}>
+            <Text style={[styles.actionTitle, styles.actionTitleDark]}>Take Mock Test</Text>
+            <Text style={styles.actionSub}>50 questions · 57 minutes</Text>
+          </View>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  scroll: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  content: {
+    paddingBottom: 32,
+  },
+  scoreSection: {
+    backgroundColor: '#012169',
+    paddingTop: 36,
+    paddingBottom: 44,
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  scoreSectionLabel: {
+    color: '#A5B4CC',
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 20,
+    letterSpacing: 0.5,
+  },
+  scoreCircle: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 6,
+    borderColor: '#22C55E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  scoreNumber: {
+    fontSize: 56,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    lineHeight: 60,
+  },
+  scoreOutOf: {
+    fontSize: 16,
+    color: '#A5B4CC',
+    fontWeight: '500',
+  },
+  scoreHint: {
+    color: '#A5B4CC',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  actionsSection: {
+    padding: 20,
+    gap: 12,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 4,
+  },
+  actionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    padding: 18,
+    gap: 16,
+  },
+  actionCardPrimary: {
+    backgroundColor: '#012169',
+  },
+  actionCardSecondary: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  actionIcon: {
+    fontSize: 28,
+  },
+  actionText: {
+    flex: 1,
+  },
+  actionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  actionTitleDark: {
+    color: '#1E293B',
+  },
+  actionSub: {
+    fontSize: 13,
+    color: '#94A3B8',
+  },
+});

@@ -1,52 +1,146 @@
-import { Pressable, ScrollView, Text, View } from 'react-native';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-const HAZARD_INFO = [
-  {
-    id: '1',
-    title: 'What is Hazard Perception?',
-    body:
-      'You watch 14 video clips and must tap when you spot a developing hazard. Each clip scores 0–5 based on reaction speed.',
-  },
-  {
-    id: '2',
-    title: 'Pass mark',
-    body: 'You need at least 44 out of 75 to pass the hazard perception part of the theory test.',
-  },
+const FACTS = [
+  { icon: '🎬', label: 'Video Clips', value: '14' },
+  { icon: '⏱️', label: 'Approx. Time', value: '20 min' },
+  { icon: '🎯', label: 'Pass Mark', value: '44 / 75' },
+  { icon: '⚡', label: 'Points per Clip', value: '0 – 5' },
 ];
 
 export default function HazardScreen() {
   return (
-    <ScrollView className="flex-1 bg-gray-50">
-      <View className="px-4 pt-5">
-        <ThemedView className="bg-white rounded-2xl p-5 border border-gray-100 mb-5">
-          <View className="flex-row items-center gap-x-3 mb-4">
-            <View className="bg-yellow-100 rounded-xl p-3">
-              <ThemedText className="text-2xl">⚠️</ThemedText>
-            </View>
-            <View className="flex-1">
-              <ThemedText className="text-gray-800 font-bold text-lg">Hazard Perception</ThemedText>
-              <ThemedText className="text-gray-500 text-sm">14 video clips · 75 points total</ThemedText>
-            </View>
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <Text style={styles.screenTitle}>Hazard Perception</Text>
+      <Text style={styles.screenSub}>Spot developing hazards in real driving footage</Text>
+
+      <View style={styles.factsRow}>
+        {FACTS.map(({ icon, label, value }) => (
+          <View key={label} style={styles.factCard}>
+            <Text style={styles.factIcon}>{icon}</Text>
+            <Text style={styles.factValue}>{value}</Text>
+            <Text style={styles.factLabel}>{label}</Text>
           </View>
-
-          {HAZARD_INFO.map(({ id, title, body }) => (
-            <View key={id} className="mb-3">
-              <ThemedText className="text-gray-800 font-semibold text-sm mb-0.5">{title}</ThemedText>
-              <ThemedText className="text-gray-500 text-sm leading-5">{body}</ThemedText>
-            </View>
-          ))}
-        </ThemedView>
-
-        <Pressable className="bg-yellow-500 rounded-xl py-4 items-center mb-3 active:opacity-80">
-          <Text className="text-white text-base font-semibold">Watch Practice Clips</Text>
-        </Pressable>
-
-        <Pressable className="bg-white border border-gray-200 rounded-xl py-4 items-center active:opacity-80">
-          <Text className="text-gray-700 text-base font-medium">Tips &amp; Techniques</Text>
-        </Pressable>
+        ))}
       </View>
+
+      <View style={styles.infoBox}>
+        <Text style={styles.infoTitle}>How it works</Text>
+        <Text style={styles.infoText}>
+          Watch 14 video clips shot from a driver's perspective. Tap the screen as soon as you spot a developing hazard — the sooner you respond, the higher your score. You can score up to 5 points per clip (75 total).
+        </Text>
+      </View>
+
+      <View style={styles.tipBox}>
+        <Text style={styles.tipTitle}>💡 Key Tip</Text>
+        <Text style={styles.tipText}>
+          Don't tap repeatedly — the system will penalise you for clicking patterns that suggest guessing.
+        </Text>
+      </View>
+
+      <TouchableOpacity style={styles.startButton} activeOpacity={0.85}>
+        <Text style={styles.startButtonText}>Start Practice Clips</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  scroll: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  content: {
+    padding: 20,
+    paddingBottom: 36,
+  },
+  screenTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  screenSub: {
+    fontSize: 14,
+    color: '#64748B',
+    marginBottom: 20,
+  },
+  factsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 20,
+  },
+  factCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  factIcon: {
+    fontSize: 20,
+    marginBottom: 6,
+  },
+  factValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#012169',
+    marginBottom: 2,
+  },
+  factLabel: {
+    fontSize: 10,
+    color: '#94A3B8',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  infoBox: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: 14,
+    padding: 18,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#012169',
+  },
+  infoTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#012169',
+    marginBottom: 6,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#334155',
+    lineHeight: 21,
+  },
+  tipBox: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 24,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+  },
+  tipTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#92400E',
+    marginBottom: 4,
+  },
+  tipText: {
+    fontSize: 14,
+    color: '#78350F',
+    lineHeight: 20,
+  },
+  startButton: {
+    backgroundColor: '#012169',
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  startButtonText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+});

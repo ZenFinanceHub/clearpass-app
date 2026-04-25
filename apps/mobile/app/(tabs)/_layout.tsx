@@ -22,12 +22,19 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#2563EB',
+        tabBarActiveTintColor: '#012169',
         tabBarInactiveTintColor: '#9CA3AF',
-        tabBarStyle: { borderTopColor: '#E5E7EB' },
-        headerStyle: { backgroundColor: '#2563EB' },
-        headerTintColor: '#fff',
-        headerTitleStyle: { fontWeight: '600' },
+        tabBarStyle: {
+          borderTopColor: '#E5E7EB',
+          backgroundColor: '#FFFFFF',
+        },
+        headerStyle: {
+          backgroundColor: '#012169',
+        },
+        headerTintColor: '#FFFFFF',
+        headerTitleStyle: {
+          fontWeight: '700',
+        },
       }}
     >
       {TABS.map(({ name, title, icon, iconFocused }) => (

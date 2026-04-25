@@ -1,61 +1,165 @@
-import { ScrollView, View } from 'react-native';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 const STATS = [
-  { label: 'Questions Answered', value: '342', sub: 'all time' },
-  { label: 'Accuracy', value: '78%', sub: 'last 7 days' },
-  { label: 'Study Streak', value: '5', sub: 'days' },
-  { label: 'Mock Tests', value: '3', sub: 'completed' },
+  { label: 'Questions Answered', value: '342', icon: '❓', color: '#EFF6FF', border: '#BFDBFE' },
+  { label: 'Mock Tests Taken', value: '3', icon: '📋', color: '#F0FDF4', border: '#BBF7D0' },
+  { label: 'Current Streak', value: '5 days', icon: '🔥', color: '#FFF7ED', border: '#FED7AA' },
+  { label: 'Best Score', value: '46 / 50', icon: '⭐', color: '#FEF9C3', border: '#FDE047' },
 ];
 
-const RECENT_SESSIONS = [
-  { date: 'Today', topic: 'Hazard Awareness', score: '18 / 20', pct: 90 },
-  { date: 'Yesterday', topic: 'Vehicle Handling', score: '14 / 20', pct: 70 },
-  { date: 'Mon', topic: 'Full Mock Test', score: '41 / 50', pct: 82 },
+const RECENT = [
+  { date: 'Today', topic: 'Hazard Awareness', score: 18, total: 20 },
+  { date: 'Yesterday', topic: 'Vehicle Handling', score: 14, total: 20 },
+  { date: 'Mon 21 Apr', topic: 'Full Mock Test', score: 41, total: 50 },
 ];
 
 export default function ProgressScreen() {
   return (
-    <ScrollView className="flex-1 bg-gray-50">
-      <View className="px-4 pt-5">
-        <View className="flex-row flex-wrap gap-3 mb-6">
-          {STATS.map(({ label, value, sub }) => (
-            <ThemedView
-              key={label}
-              className="flex-1 min-w-[44%] bg-white rounded-2xl p-4 border border-gray-100"
-            >
-              <ThemedText className="text-3xl font-bold text-blue-600">{value}</ThemedText>
-              <ThemedText className="text-gray-800 font-medium text-sm mt-0.5">{label}</ThemedText>
-              <ThemedText className="text-gray-400 text-xs">{sub}</ThemedText>
-            </ThemedView>
-          ))}
-        </View>
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <Text style={styles.screenTitle}>Your Progress</Text>
+      <Text style={styles.screenSub}>Keep the streak going — you're doing great!</Text>
 
-        <ThemedText className="text-gray-700 font-semibold text-base mb-3">
-          Recent Sessions
-        </ThemedText>
+      <View style={styles.statGrid}>
+        {STATS.map(({ label, value, icon, color, border }) => (
+          <View
+            key={label}
+            style={[styles.statCard, { backgroundColor: color, borderColor: border }]}
+          >
+            <Text style={styles.statIcon}>{icon}</Text>
+            <Text style={styles.statValue}>{value}</Text>
+            <Text style={styles.statLabel}>{label}</Text>
+          </View>
+        ))}
+      </View>
 
-        <View className="gap-y-2 mb-8">
-          {RECENT_SESSIONS.map(({ date, topic, score, pct }) => (
-            <ThemedView key={topic} className="bg-white rounded-xl px-4 py-3.5 border border-gray-100">
-              <View className="flex-row justify-between items-start mb-2">
-                <View>
-                  <ThemedText className="text-gray-800 font-semibold">{topic}</ThemedText>
-                  <ThemedText className="text-gray-400 text-xs">{date}</ThemedText>
+      <Text style={styles.sectionLabel}>Recent Sessions</Text>
+
+      <View style={styles.sessionList}>
+        {RECENT.map(({ date, topic, score, total }) => {
+          const pct = Math.round((score / total) * 100);
+          return (
+            <View key={topic} style={styles.sessionCard}>
+              <View style={styles.sessionHeader}>
+                <View style={styles.sessionMeta}>
+                  <Text style={styles.sessionTopic}>{topic}</Text>
+                  <Text style={styles.sessionDate}>{date}</Text>
                 </View>
-                <ThemedText className="text-gray-700 font-bold">{score}</ThemedText>
+                <Text style={styles.sessionScore}>
+                  {score}/{total}
+                </Text>
               </View>
-              <View className="bg-gray-100 rounded-full h-1.5">
-                <View
-                  className="bg-blue-500 rounded-full h-1.5"
-                  style={{ width: `${pct}%` }}
-                />
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressFill, { width: `${pct}%` }]} />
               </View>
-            </ThemedView>
-          ))}
-        </View>
+            </View>
+          );
+        })}
       </View>
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  scroll: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  content: {
+    padding: 20,
+    paddingBottom: 36,
+  },
+  screenTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  screenSub: {
+    fontSize: 14,
+    color: '#64748B',
+    marginBottom: 20,
+  },
+  statGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 28,
+  },
+  statCard: {
+    flex: 1,
+    minWidth: '44%',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  statIcon: {
+    fontSize: 26,
+    marginBottom: 8,
+  },
+  statValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#94A3B8',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 12,
+  },
+  sessionList: {
+    gap: 10,
+  },
+  sessionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  sessionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  sessionMeta: {
+    flex: 1,
+  },
+  sessionTopic: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 2,
+  },
+  sessionDate: {
+    fontSize: 12,
+    color: '#94A3B8',
+  },
+  sessionScore: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#012169',
+  },
+  progressTrack: {
+    height: 6,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: 6,
+    backgroundColor: '#22C55E',
+    borderRadius: 3,
+  },
+});

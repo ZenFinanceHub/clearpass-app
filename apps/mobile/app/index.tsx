@@ -1,31 +1,84 @@
-import { Pressable, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 
-export default function Onboarding() {
+export default function OnboardingScreen() {
   return (
-    <View className="flex-1 items-center justify-center bg-white px-6">
-      <View className="items-center mb-12">
-        <Text className="text-5xl font-bold text-blue-600 mb-3">ClearPass</Text>
-        <Text className="text-lg text-gray-500 text-center leading-relaxed">
-          Your UK driving theory{'\n'}test companion
-        </Text>
+    <View style={styles.container}>
+      <View style={styles.hero}>
+        <Text style={styles.title}>ClearPass</Text>
+        <Text style={styles.subtitle}>Pass your UK theory test</Text>
       </View>
 
-      <View className="w-full gap-y-3">
-        <Pressable
-          className="bg-blue-600 rounded-xl px-8 py-4 w-full items-center active:opacity-80"
+      <View style={styles.actions}>
+        <TouchableOpacity
+          style={styles.primaryButton}
           onPress={() => router.replace('/(tabs)/home')}
+          activeOpacity={0.85}
         >
-          <Text className="text-white text-lg font-semibold">Get Started</Text>
-        </Pressable>
+          <Text style={styles.primaryButtonText}>Get Started</Text>
+        </TouchableOpacity>
 
-        <Pressable
-          className="border border-blue-600 rounded-xl px-8 py-4 w-full items-center active:opacity-80"
+        <TouchableOpacity
+          style={styles.secondaryButton}
           onPress={() => router.replace('/(tabs)/home')}
+          activeOpacity={0.85}
         >
-          <Text className="text-blue-600 text-lg font-semibold">Sign In</Text>
-        </Pressable>
+          <Text style={styles.secondaryButtonText}>Sign In</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#012169',
+    paddingHorizontal: 28,
+    justifyContent: 'space-between',
+    paddingTop: 120,
+    paddingBottom: 56,
+  },
+  hero: {
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 52,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -1,
+    marginBottom: 12,
+  },
+  subtitle: {
+    fontSize: 18,
+    color: '#A5B4CC',
+    textAlign: 'center',
+    lineHeight: 26,
+  },
+  actions: {
+    gap: 12,
+  },
+  primaryButton: {
+    backgroundColor: '#22C55E',
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  secondaryButton: {
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#334B7A',
+  },
+  secondaryButtonText: {
+    color: '#A5B4CC',
+    fontSize: 17,
+    fontWeight: '600',
+  },
+});
