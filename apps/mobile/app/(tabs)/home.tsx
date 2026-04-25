@@ -4,7 +4,10 @@ const READINESS_SCORE = 72;
 
 export default function HomeScreen() {
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.content}
+    >
       <View style={styles.scoreSection}>
         <Text style={styles.scoreSectionLabel}>Your Readiness Score</Text>
         <View style={styles.scoreCircle}>
@@ -16,12 +19,14 @@ export default function HomeScreen() {
 
       <View style={styles.actionsSection}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
+
         <TouchableOpacity style={[styles.actionCard, styles.actionCardPrimary]} activeOpacity={0.85}>
           <Text style={styles.actionIcon}>📖</Text>
           <View style={styles.actionText}>
             <Text style={styles.actionTitle}>Start Practice</Text>
             <Text style={styles.actionSub}>Random questions from all topics</Text>
           </View>
+          <Text style={styles.actionChevron}>›</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={[styles.actionCard, styles.actionCardSecondary]} activeOpacity={0.85}>
@@ -30,6 +35,7 @@ export default function HomeScreen() {
             <Text style={[styles.actionTitle, styles.actionTitleDark]}>Take Mock Test</Text>
             <Text style={styles.actionSub}>50 questions · 57 minutes</Text>
           </View>
+          <Text style={[styles.actionChevron, styles.actionChevronDark]}>›</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -39,9 +45,11 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   scroll: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F5F5F5',
   },
   content: {
+    flexGrow: 1,
+    backgroundColor: '#F5F5F5',
     paddingBottom: 32,
   },
   scoreSection: {
@@ -88,6 +96,7 @@ const styles = StyleSheet.create({
   actionsSection: {
     padding: 20,
     gap: 12,
+    backgroundColor: '#F5F5F5',
   },
   sectionTitle: {
     fontSize: 17,
@@ -101,14 +110,17 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 18,
     gap: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
   actionCardPrimary: {
     backgroundColor: '#012169',
   },
   actionCardSecondary: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   actionIcon: {
     fontSize: 28,
@@ -128,5 +140,13 @@ const styles = StyleSheet.create({
   actionSub: {
     fontSize: 13,
     color: '#94A3B8',
+  },
+  actionChevron: {
+    fontSize: 24,
+    color: 'rgba(255,255,255,0.5)',
+    fontWeight: '300',
+  },
+  actionChevronDark: {
+    color: '#CBD5E1',
   },
 });

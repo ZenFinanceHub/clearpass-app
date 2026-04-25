@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -24,10 +25,22 @@ export default function TabLayout() {
       screenOptions={{
         tabBarActiveTintColor: '#012169',
         tabBarInactiveTintColor: '#9CA3AF',
-        tabBarStyle: {
-          borderTopColor: '#E5E7EB',
-          backgroundColor: '#FFFFFF',
-        },
+        // Web collapses the tab bar to zero height without an explicit height value.
+        // Platform.select keeps native behaviour untouched while fixing the web case.
+        tabBarStyle: Platform.select({
+          web: {
+            height: 60,
+            paddingTop: 6,
+            paddingBottom: 10,
+            borderTopWidth: 1,
+            borderTopColor: '#E5E7EB',
+            backgroundColor: '#FFFFFF',
+          },
+          default: {
+            borderTopColor: '#E5E7EB',
+            backgroundColor: '#FFFFFF',
+          },
+        }),
         headerStyle: {
           backgroundColor: '#012169',
         },
