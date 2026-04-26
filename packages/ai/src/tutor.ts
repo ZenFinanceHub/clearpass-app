@@ -1,4 +1,3 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { TUTOR_SYSTEM_PROMPT } from './systemPrompt';
 
 export async function explainAnswer(
@@ -23,19 +22,23 @@ export async function explainAnswer(
     `Please explain why "${correctOption}" is the correct answer, and why the learner's choice was incorrect.`;
 
   try {
-    const client = new Anthropic({ apiKey });
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 256,
-      system: TUTOR_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMessage }],
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 300,
+        system: TUTOR_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: userMessage }],
+      }),
     });
 
-    const block = message.content[0];
-    if (block.type === 'text') {
-      return block.text.trim();
-    }
-    return fallback(correctOption);
+    const data = await response.json() as { content: Array<{ type: string; text: string }> };
+    return data.content[0].text.trim();
   } catch {
     return fallback(correctOption);
   }
