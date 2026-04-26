@@ -136,6 +136,7 @@ export default function PracticeScreen() {
       selectedIndex,
       ANTHROPIC_API_KEY,
     );
+    console.log('explainAnswer result:', result);
     setAiExplanation(result);
     setAiLoading(false);
   }, [aiLoading, aiExplanation, questions, currentIndex, selectedIndex]);

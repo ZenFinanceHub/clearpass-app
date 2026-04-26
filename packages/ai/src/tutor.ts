@@ -22,12 +22,10 @@ export async function explainAnswer(
     `Please explain why "${correctOption}" is the correct answer, and why the learner's choice was incorrect.`;
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('http://localhost:3001/api/explain', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
@@ -37,9 +35,18 @@ export async function explainAnswer(
       }),
     });
 
+    console.log('Proxy response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log('Proxy error body:', errorText);
+      return fallback(correctOption);
+    }
+
     const data = await response.json() as { content: Array<{ type: string; text: string }> };
     return data.content[0].text.trim();
-  } catch {
+  } catch (err) {
+    console.log('explainAnswer fetch error:', err);
     return fallback(correctOption);
   }
 }
