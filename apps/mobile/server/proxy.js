@@ -6,19 +6,18 @@ const cors = require('cors');
 const app = express();
 const PORT = 3001;
 
-const ALLOWED_ORIGINS = [
-  'http://localhost:8081',
-  'http://localhost:8082',
-  'http://localhost:8083',
-  'http://localhost:8084',
-  'http://localhost:8085',
-  'http://localhost:8086',
-  'http://localhost:8087',
-  'http://localhost:8088',
-  'http://localhost:8089',
-];
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin || origin.startsWith('http://localhost')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+};
 
-app.use(cors({ origin: ALLOWED_ORIGINS }));
+app.use(cors(corsOptions));
 app.use(express.json());
 
 app.post('/api/explain', async (req, res) => {

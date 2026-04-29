@@ -15,6 +15,7 @@ const TABS: TabConfig[] = [
   { name: 'home', title: 'Home', icon: 'home-outline', iconFocused: 'home' },
   { name: 'practice', title: 'Practice', icon: 'book-outline', iconFocused: 'book' },
   { name: 'mock', title: 'Mock Test', icon: 'clipboard-outline', iconFocused: 'clipboard' },
+  { name: 'learn', title: 'Learn', icon: 'library-outline', iconFocused: 'library' },
   { name: 'hazard', title: 'Hazard', icon: 'warning-outline', iconFocused: 'warning' },
   { name: 'progress', title: 'Progress', icon: 'stats-chart-outline', iconFocused: 'stats-chart' },
 ];
