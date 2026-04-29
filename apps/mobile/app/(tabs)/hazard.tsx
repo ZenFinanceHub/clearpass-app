@@ -1,10 +1,10 @@
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const FACTS = [
-  { icon: '🎬', label: 'Video Clips', value: '14' },
-  { icon: '⏱️', label: 'Approx. Time', value: '20 min' },
-  { icon: '🎯', label: 'Pass Mark', value: '44 / 75' },
-  { icon: '⚡', label: 'Points per Clip', value: '0 – 5' },
+  { label: 'Video Clips', value: '14' },
+  { label: 'Approx. Time', value: '20 min' },
+  { label: 'Pass Mark', value: '44 / 75' },
+  { label: 'Points per Clip', value: '0 - 5' },
 ];
 
 export default function HazardScreen() {
@@ -14,9 +14,8 @@ export default function HazardScreen() {
       <Text style={styles.screenSub}>Spot developing hazards in real driving footage</Text>
 
       <View style={styles.factsRow}>
-        {FACTS.map(({ icon, label, value }) => (
+        {FACTS.map(({ label, value }) => (
           <View key={label} style={styles.factCard}>
-            <Text style={styles.factIcon}>{icon}</Text>
             <Text style={styles.factValue}>{value}</Text>
             <Text style={styles.factLabel}>{label}</Text>
           </View>
@@ -26,14 +25,14 @@ export default function HazardScreen() {
       <View style={styles.infoBox}>
         <Text style={styles.infoTitle}>How it works</Text>
         <Text style={styles.infoText}>
-          Watch 14 video clips shot from a driver's perspective. Tap the screen as soon as you spot a developing hazard — the sooner you respond, the higher your score. You can score up to 5 points per clip (75 total).
+          Watch 14 video clips shot from a driver's perspective. Tap the screen as soon as you spot a developing hazard - the sooner you respond, the higher your score. You can score up to 5 points per clip (75 total).
         </Text>
       </View>
 
       <View style={styles.tipBox}>
-        <Text style={styles.tipTitle}>💡 Key Tip</Text>
+        <Text style={styles.tipTitle}>Key Tip</Text>
         <Text style={styles.tipText}>
-          Don't tap repeatedly — the system will penalise you for clicking patterns that suggest guessing.
+          Don't tap repeatedly - the system will penalise you for clicking patterns that suggest guessing.
         </Text>
       </View>
 
@@ -47,7 +46,7 @@ export default function HazardScreen() {
 const styles = StyleSheet.create({
   scroll: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F8F7FF',
   },
   content: {
     padding: 20,
@@ -71,41 +70,35 @@ const styles = StyleSheet.create({
   },
   factCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#6C63FF',
     borderRadius: 14,
     padding: 14,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  factIcon: {
-    fontSize: 20,
-    marginBottom: 6,
   },
   factValue: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#012169',
+    color: '#FFFFFF',
     marginBottom: 2,
   },
   factLabel: {
     fontSize: 10,
-    color: '#94A3B8',
+    color: 'rgba(255,255,255,0.75)',
     fontWeight: '500',
     textAlign: 'center',
   },
   infoBox: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#F0EEFF',
     borderRadius: 14,
     padding: 18,
     marginBottom: 12,
     borderLeftWidth: 4,
-    borderLeftColor: '#012169',
+    borderLeftColor: '#6C63FF',
   },
   infoTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#012169',
+    color: '#6C63FF',
     marginBottom: 6,
   },
   infoText: {
@@ -133,7 +126,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   startButton: {
-    backgroundColor: '#012169',
+    backgroundColor: '#6C63FF',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',

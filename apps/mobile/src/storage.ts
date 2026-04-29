@@ -47,3 +47,18 @@ export function createFreshUserProgress(): UserProgress {
     studyStreakDays: 0,
   };
 }
+
+export function updateStudyStreak(progress: UserProgress): UserProgress {
+  const now = new Date();
+  const last = new Date(progress.lastStudied);
+  const nowDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const lastDay = new Date(last.getFullYear(), last.getMonth(), last.getDate());
+  const diffDays = Math.round((nowDay.getTime() - lastDay.getTime()) / 86400000);
+  let streak = progress.studyStreakDays;
+  if (diffDays === 1) {
+    streak = streak + 1;
+  } else if (diffDays > 1) {
+    streak = 1;
+  }
+  return { ...progress, studyStreakDays: streak };
+}

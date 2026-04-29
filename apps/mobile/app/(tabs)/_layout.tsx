@@ -24,8 +24,9 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#012169',
-        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarActiveTintColor: '#6C63FF',
+        tabBarInactiveTintColor: '#C4C4D4',
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
         // Web collapses the tab bar to zero height without an explicit height value.
         // Platform.select keeps native behaviour untouched while fixing the web case.
         tabBarStyle: Platform.select({
@@ -43,7 +44,7 @@ export default function TabLayout() {
           },
         }),
         headerStyle: {
-          backgroundColor: '#012169',
+          backgroundColor: '#6C63FF',
         },
         headerTintColor: '#FFFFFF',
         headerTitleStyle: {

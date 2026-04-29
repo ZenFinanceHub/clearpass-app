@@ -25,6 +25,7 @@ import {
   loadUserProgress,
   saveQuestionStates,
   saveUserProgress,
+  updateStudyStreak,
 } from '@/src/storage';
 import { explainAnswer } from '@clearpass/ai';
 
@@ -164,8 +165,11 @@ export default function PracticeScreen() {
           : Math.round(existing * 0.6 + sessionAccuracy * 0.4);
     }
 
+    // updateStudyStreak uses the old lastStudied before we overwrite it
+    const streaked = updateStudyStreak(progress);
+
     const updated: UserProgress = {
-      ...progress,
+      ...streaked,
       topicScores: updatedScores,
       totalQuestionsAnswered: progress.totalQuestionsAnswered + results.length,
       lastStudied: new Date().toISOString(),
@@ -176,22 +180,22 @@ export default function PracticeScreen() {
     await saveUserProgress(updated);
   }
 
-  // ─── Loading ────────────────────────────────────────────────────────────────
+  // Loading
   if (phase === 'loading') {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#012169" />
-        <Text style={styles.loadingText}>Loading questions…</Text>
+        <ActivityIndicator size="large" color="#6C63FF" />
+        <Text style={styles.loadingText}>Loading questions...</Text>
       </View>
     );
   }
 
-  // ─── Results ────────────────────────────────────────────────────────────────
+  // Results
   if (phase === 'results') {
     return <ResultsScreen results={sessionResults} />;
   }
 
-  // ─── Quiz ───────────────────────────────────────────────────────────────────
+  // Quiz
   const question = questions[currentIndex];
   const isAnswered = selectedIndex !== null;
   const answeredCorrectly = isAnswered && selectedIndex === question.correctIndex;
@@ -261,7 +265,7 @@ export default function PracticeScreen() {
       {isAnswered && (
         <View style={[styles.explanation, answeredCorrectly ? styles.explanationGreen : styles.explanationRed]}>
           <Text style={styles.explanationTitle}>
-            {answeredCorrectly ? '✓  Correct!' : '✗  Incorrect'}
+            {answeredCorrectly ? 'Correct!' : 'Incorrect'}
           </Text>
           <Text style={styles.explanationBody}>{question.explanation}</Text>
         </View>
@@ -277,7 +281,7 @@ export default function PracticeScreen() {
             </View>
           ) : aiLoading ? (
             <View style={styles.aiLoadingRow}>
-              <ActivityIndicator size="small" color="#012169" />
+              <ActivityIndicator size="small" color="#6C63FF" />
               <Text style={styles.aiLoadingText}>Getting explanation...</Text>
             </View>
           ) : (
@@ -296,7 +300,7 @@ export default function PracticeScreen() {
       {isAnswered && (
         <TouchableOpacity style={styles.primaryButton} onPress={handleNext} activeOpacity={0.85}>
           <Text style={styles.primaryButtonText}>
-            {currentIndex + 1 >= questions.length ? 'See Results' : 'Next Question →'}
+            {currentIndex + 1 >= questions.length ? 'See Results' : 'Next Question ->'}
           </Text>
         </TouchableOpacity>
       )}
@@ -304,7 +308,7 @@ export default function PracticeScreen() {
   );
 }
 
-// ─── Results screen ──────────────────────────────────────────────────────────
+// Results screen
 
 function ResultsScreen({ results }: { results: SessionResult[] }) {
   const correct = results.filter((r) => r.correct).length;
@@ -312,7 +316,7 @@ function ResultsScreen({ results }: { results: SessionResult[] }) {
   const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
 
   const verdict =
-    pct >= 86 ? '🎉 Excellent work!' : pct >= 60 ? '👍 Good effort!' : '📚 Keep practising';
+    pct >= 86 ? 'Excellent work!' : pct >= 60 ? 'Good effort!' : 'Keep practising';
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
@@ -331,7 +335,7 @@ function ResultsScreen({ results }: { results: SessionResult[] }) {
         {results.map(({ question, correct: isCorrect }, i) => (
           <View key={question.id} style={styles.breakdownRow}>
             <View style={[styles.breakdownDot, isCorrect ? styles.dotGreen : styles.dotRed]}>
-              <Text style={styles.dotText}>{isCorrect ? '✓' : '✗'}</Text>
+              <Text style={styles.dotText}>{isCorrect ? '+' : 'x'}</Text>
             </View>
             <Text style={styles.breakdownText} numberOfLines={2}>
               {i + 1}.{'  '}{question.questionText}
@@ -351,10 +355,10 @@ function ResultsScreen({ results }: { results: SessionResult[] }) {
   );
 }
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
+// Styles
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: '#F5F5F5' },
+  scroll: { flex: 1, backgroundColor: '#F8F7FF' },
   content: { padding: 16, paddingBottom: 48 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadingText: { color: '#64748B', fontSize: 15 },
@@ -362,16 +366,18 @@ const styles = StyleSheet.create({
   // Progress bar
   progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   progressLabel: { fontSize: 13, color: '#64748B', fontWeight: '500' },
-  progressPct: { fontSize: 13, color: '#012169', fontWeight: '700' },
+  progressPct: { fontSize: 13, color: '#6C63FF', fontWeight: '700' },
   progressTrack: { height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, marginBottom: 16, overflow: 'hidden' },
-  progressFill: { height: 6, backgroundColor: '#012169', borderRadius: 3 },
+  progressFill: { height: 6, backgroundColor: '#6C63FF', borderRadius: 3 },
 
   // Question
   questionCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 20,
     marginBottom: 14,
+    borderLeftWidth: 4,
+    borderLeftColor: '#6C63FF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -385,38 +391,38 @@ const styles = StyleSheet.create({
   option: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1.5,
     padding: 14,
     gap: 12,
   },
   optionDefault: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' },
-  optionCorrect: { backgroundColor: '#DCFCE7', borderColor: '#16A34A' },
-  optionWrong: { backgroundColor: '#FEE2E2', borderColor: '#DC2626' },
+  optionCorrect: { backgroundColor: '#51CF66', borderColor: '#51CF66' },
+  optionWrong: { backgroundColor: '#FF6B6B', borderColor: '#FF6B6B' },
   optionDimmed: { backgroundColor: '#F8FAFC', borderColor: '#F1F5F9' },
 
   badge: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  badgeDefault: { backgroundColor: '#012169' },
-  badgeCorrect: { backgroundColor: '#16A34A' },
-  badgeWrong: { backgroundColor: '#DC2626' },
+  badgeDefault: { backgroundColor: '#6C63FF' },
+  badgeCorrect: { backgroundColor: '#3DAF55' },
+  badgeWrong: { backgroundColor: '#E84E4E' },
   badgeText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
 
   optionText: { flex: 1, fontSize: 15, lineHeight: 22 },
   optionTextDefault: { color: '#1E293B' },
-  optionTextCorrect: { color: '#15803D', fontWeight: '600' },
-  optionTextWrong: { color: '#B91C1C', fontWeight: '600' },
+  optionTextCorrect: { color: '#FFFFFF', fontWeight: '600' },
+  optionTextWrong: { color: '#FFFFFF', fontWeight: '600' },
   optionTextDimmed: { color: '#94A3B8' },
 
   // Explanation
   explanation: { borderRadius: 12, padding: 16, marginBottom: 14, borderLeftWidth: 4 },
-  explanationGreen: { backgroundColor: '#F0FDF4', borderLeftColor: '#16A34A' },
-  explanationRed: { backgroundColor: '#FFF1F2', borderLeftColor: '#DC2626' },
+  explanationGreen: { backgroundColor: '#E8FFF0', borderLeftColor: '#51CF66' },
+  explanationRed: { backgroundColor: '#FFF0F0', borderLeftColor: '#FF6B6B' },
   explanationTitle: { fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
   explanationBody: { fontSize: 14, color: '#334155', lineHeight: 21 },
 
   // Buttons
   primaryButton: {
-    backgroundColor: '#012169',
+    backgroundColor: '#6C63FF',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
@@ -426,14 +432,14 @@ const styles = StyleSheet.create({
 
   // Results
   scoreBanner: {
-    backgroundColor: '#012169',
+    backgroundColor: '#6C63FF',
     borderRadius: 20,
     paddingVertical: 32,
     alignItems: 'center',
     marginBottom: 24,
   },
   scoreValue: { fontSize: 56, fontWeight: '800', color: '#FFFFFF', lineHeight: 62 },
-  scorePct: { fontSize: 22, color: '#A5B4CC', fontWeight: '600', marginBottom: 6 },
+  scorePct: { fontSize: 22, color: 'rgba(255,255,255,0.8)', fontWeight: '600', marginBottom: 6 },
   scoreVerdict: { fontSize: 17, color: '#FFFFFF', fontWeight: '600' },
 
   sectionLabel: {
@@ -464,23 +470,23 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     marginTop: 1,
   },
-  dotGreen: { backgroundColor: '#16A34A' },
-  dotRed: { backgroundColor: '#DC2626' },
+  dotGreen: { backgroundColor: '#51CF66' },
+  dotRed: { backgroundColor: '#FF6B6B' },
   dotText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
   breakdownText: { flex: 1, fontSize: 14, color: '#334155', lineHeight: 20 },
 
   // AI tutor
   explainButton: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F8F7FF',
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#012169',
+    borderColor: '#6C63FF',
     paddingVertical: 12,
     alignItems: 'center',
     marginBottom: 8,
   },
   explainButtonText: {
-    color: '#012169',
+    color: '#6C63FF',
     fontSize: 14,
     fontWeight: '700',
   },
@@ -497,17 +503,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   aiCard: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#F0EEFF',
     borderRadius: 12,
     padding: 14,
     marginBottom: 8,
     borderLeftWidth: 4,
-    borderLeftColor: '#3B82F6',
+    borderLeftColor: '#6C63FF',
   },
   aiCardTitle: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#1D4ED8',
+    color: '#6C63FF',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     marginBottom: 6,

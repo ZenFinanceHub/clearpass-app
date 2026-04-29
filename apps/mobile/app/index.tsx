@@ -1,29 +1,56 @@
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 
+const ONBOARDING_KEY = '@clearpass/onboarding_complete';
+
 export default function OnboardingScreen() {
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    AsyncStorage.getItem(ONBOARDING_KEY).then((val) => {
+      if (val) {
+        router.replace('/(tabs)/home');
+      } else {
+        setChecking(false);
+      }
+    });
+  }, []);
+
+  const handleGetStarted = async () => {
+    await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
+    router.replace('/(tabs)/home');
+  };
+
+  const handleSignIn = async () => {
+    await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
+    router.replace('/(tabs)/home');
+  };
+
+  if (checking) return null;
+
   return (
     <View style={styles.container}>
       <View style={styles.hero}>
+        <View style={styles.mascot}>
+          <Text style={styles.mascotText}>CP</Text>
+        </View>
         <Text style={styles.title}>ClearPass</Text>
-        <Text style={styles.subtitle}>Pass your UK theory test</Text>
+        <Text style={styles.subtitle}>Pass your theory test. First time.</Text>
       </View>
 
       <View style={styles.actions}>
         <TouchableOpacity
           style={styles.primaryButton}
-          onPress={() => router.replace('/(tabs)/home')}
+          onPress={handleGetStarted}
           activeOpacity={0.85}
         >
           <Text style={styles.primaryButtonText}>Get Started</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={() => router.replace('/(tabs)/home')}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.secondaryButtonText}>Sign In</Text>
+        <TouchableOpacity onPress={handleSignIn} activeOpacity={0.75}>
+          <Text style={styles.signInLink}>Sign In</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -33,7 +60,7 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#012169',
+    backgroundColor: '#6C63FF',
     paddingHorizontal: 28,
     justifyContent: 'space-between',
     paddingTop: 120,
@@ -42,43 +69,53 @@ const styles = StyleSheet.create({
   hero: {
     alignItems: 'center',
   },
+  mascot: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 28,
+  },
+  mascotText: {
+    fontSize: 40,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
   title: {
-    fontSize: 52,
-    fontWeight: '800',
+    fontSize: 36,
+    fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: -1,
     marginBottom: 12,
   },
   subtitle: {
     fontSize: 18,
-    color: '#A5B4CC',
+    color: 'rgba(255,255,255,0.85)',
     textAlign: 'center',
     lineHeight: 26,
   },
   actions: {
-    gap: 12,
+    gap: 16,
+    alignItems: 'stretch',
   },
   primaryButton: {
-    backgroundColor: '#22C55E',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: '#6C63FF',
     fontSize: 17,
     fontWeight: '700',
   },
-  secondaryButton: {
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#334B7A',
-  },
-  secondaryButtonText: {
-    color: '#A5B4CC',
-    fontSize: 17,
+  signInLink: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 15,
     fontWeight: '600',
+    textAlign: 'center',
+    textDecorationLine: 'underline',
   },
 });

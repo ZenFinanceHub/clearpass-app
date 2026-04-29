@@ -50,9 +50,9 @@ function bestScore(history: MockTestResult[]): string {
 }
 
 function barColor(pct: number): string {
-  if (pct >= 80) return '#16A34A';
+  if (pct >= 80) return '#6C63FF';
   if (pct >= 50) return '#F59E0B';
-  return '#DC2626';
+  return '#FF6B6B';
 }
 
 export default function ProgressScreen() {
@@ -187,19 +187,19 @@ export default function ProgressScreen() {
 const styles = StyleSheet.create({
   scroll: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#F8F7FF',
   },
   content: {
     flexGrow: 1,
     padding: 20,
     paddingBottom: 40,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#F8F7FF',
   },
 
   // Empty state
   emptyContainer: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#F8F7FF',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
   },
   emptyButton: {
     marginTop: 8,
-    backgroundColor: '#012169',
+    backgroundColor: '#6C63FF',
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 32,
@@ -252,22 +252,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statBlue: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: '#E8E4FF',
+    borderLeftWidth: 4,
+    borderLeftColor: '#6C63FF',
   },
   statGreen: {
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#BBF7D0',
+    borderColor: '#E8E4FF',
+    borderLeftWidth: 4,
+    borderLeftColor: '#6C63FF',
   },
   statAmber: {
-    backgroundColor: '#FFF7ED',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#FED7AA',
+    borderColor: '#E8E4FF',
+    borderLeftWidth: 4,
+    borderLeftColor: '#6C63FF',
   },
   statNavy: {
-    backgroundColor: '#012169',
+    backgroundColor: '#6C63FF',
   },
   statValue: {
     fontSize: 26,
@@ -286,7 +292,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   statLabelLight: {
-    color: '#A5B4CC',
+    color: 'rgba(255,255,255,0.8)',
   },
 
   // Section heading
@@ -375,7 +381,7 @@ const styles = StyleSheet.create({
   sessionScore: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#012169',
+    color: '#6C63FF',
   },
   badge: {
     borderRadius: 6,

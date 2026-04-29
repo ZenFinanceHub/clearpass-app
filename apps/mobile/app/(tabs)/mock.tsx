@@ -20,7 +20,7 @@ import {
   saveUserProgress,
 } from '@/src/storage';
 
-// ─── Constants ───────────────────────────────────────────────────────────────
+// Constants
 
 const TOTAL_QUESTIONS = 50;
 const TIME_LIMIT_SECONDS = 57 * 60; // 3420
@@ -45,7 +45,7 @@ const TOPIC_LABELS: Record<TopicCategory, string> = {
   [TopicCategory.VehicleLoading]: 'Vehicle Loading',
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// Helpers
 
 // PLACEHOLDER: only 30 questions exist in the content package right now.
 // To fill the 50-question slot we repeat questions; each appears at most twice.
@@ -89,12 +89,12 @@ function scoreTest(
   return { correct, byTopic };
 }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 type Phase = 'start' | 'test' | 'results';
 type ResultData = { correct: number; timeTaken: number; byTopic: ByTopic };
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// Main component
 
 export default function MockScreen() {
   const [phase, setPhase] = useState<Phase>('start');
@@ -110,7 +110,7 @@ export default function MockScreen() {
   const timeRemainingRef = useRef(TIME_LIMIT_SECONDS);
   const hasSubmittedRef = useRef(false);
 
-  // ── Timer ──────────────────────────────────────────────────────────────────
+  // Timer
   useEffect(() => {
     if (phase !== 'test') return;
     const id = setInterval(() => {
@@ -131,7 +131,7 @@ export default function MockScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeRemaining, phase]);
 
-  // ── Handlers ───────────────────────────────────────────────────────────────
+  // Handlers
 
   function handleStart() {
     hasSubmittedRef.current = false;
@@ -199,7 +199,7 @@ export default function MockScreen() {
     setPhase('results');
   }
 
-  // ── Phase routing ──────────────────────────────────────────────────────────
+  // Phase routing
 
   if (phase === 'start') {
     return <StartView onStart={handleStart} />;
@@ -209,7 +209,7 @@ export default function MockScreen() {
     return <ResultsView data={resultData} onRetry={() => setPhase('start')} />;
   }
 
-  // ── Test view ──────────────────────────────────────────────────────────────
+  // Test view
   const q = questions[currentIndex];
   if (!q) return null;
 
@@ -222,7 +222,7 @@ export default function MockScreen() {
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
-      {/* ── Header bar ─────────────────────────────────────────────────────── */}
+      {/* Header bar */}
       <View style={styles.headerRow}>
         <Text style={[styles.timer, isWarning && styles.timerWarning]}>
           {formatTime(timeRemaining)}
@@ -232,17 +232,17 @@ export default function MockScreen() {
         </Text>
       </View>
 
-      {/* ── Progress bar ───────────────────────────────────────────────────── */}
+      {/* Progress bar */}
       <View style={styles.progressTrack}>
         <View style={[styles.progressFill, { width: `${fillPct}%` as any }]} />
       </View>
 
-      {/* ── Question card ──────────────────────────────────────────────────── */}
+      {/* Question card */}
       <View style={styles.questionCard}>
         <Text style={styles.questionText}>{q.questionText}</Text>
       </View>
 
-      {/* ── Options ────────────────────────────────────────────────────────── */}
+      {/* Options */}
       <View style={styles.optionList}>
         {q.options.map((option, idx) => {
           const isSelected = idx === selectedOption;
@@ -254,7 +254,9 @@ export default function MockScreen() {
               activeOpacity={0.75}
             >
               <View style={[styles.badge, isSelected && styles.badgeSelected]}>
-                <Text style={styles.badgeText}>{LABELS[idx]}</Text>
+                <Text style={[styles.badgeText, isSelected && styles.badgeTextSelected]}>
+                  {LABELS[idx]}
+                </Text>
               </View>
               <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
                 {option}
@@ -264,7 +266,7 @@ export default function MockScreen() {
         })}
       </View>
 
-      {/* ── Prev / Next ────────────────────────────────────────────────────── */}
+      {/* Prev / Next */}
       <View style={styles.navRow}>
         <TouchableOpacity
           style={[styles.navBtn, currentIndex === 0 && styles.navBtnDisabled]}
@@ -301,7 +303,7 @@ export default function MockScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* ── Navigator grid ─────────────────────────────────────────────────── */}
+      {/* Navigator grid */}
       <View style={styles.gridSection}>
         <Text style={styles.gridLabel}>Question Navigator</Text>
         <View style={styles.grid}>
@@ -333,7 +335,7 @@ export default function MockScreen() {
         </View>
       </View>
 
-      {/* ── Submit button (visible when all answered) ──────────────────────── */}
+      {/* Submit button (visible when all answered) */}
       {allAnswered && (
         <TouchableOpacity
           style={styles.submitButton}
@@ -347,7 +349,7 @@ export default function MockScreen() {
   );
 }
 
-// ─── Start view ───────────────────────────────────────────────────────────────
+// Start view
 
 const DETAILS = [
   { label: 'Questions', value: '50' },
@@ -386,7 +388,7 @@ function StartView({ onStart }: { onStart: () => void }) {
   );
 }
 
-// ─── Results view ─────────────────────────────────────────────────────────────
+// Results view
 
 function ResultsView({
   data,
@@ -407,7 +409,7 @@ function ResultsView({
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
-      {/* ── Pass / Fail banner ─────────────────────────────────────────────── */}
+      {/* Pass / Fail banner */}
       <View style={[styles.resultBanner, passed ? styles.bannerPass : styles.bannerFail]}>
         <Text style={styles.resultVerdict}>{passed ? 'PASS' : 'FAIL'}</Text>
         <Text style={styles.resultScore}>{correct} / {TOTAL_QUESTIONS}</Text>
@@ -417,7 +419,7 @@ function ResultsView({
         </Text>
       </View>
 
-      {/* ── Topic breakdown ────────────────────────────────────────────────── */}
+      {/* Topic breakdown */}
       <Text style={styles.sectionLabel}>Topic Breakdown</Text>
       <View style={styles.topicTable}>
         {topicRows.map(([cat, tally]) => {
@@ -445,7 +447,7 @@ function ResultsView({
         })}
       </View>
 
-      {/* ── Action buttons ─────────────────────────────────────────────────── */}
+      {/* Action buttons */}
       <TouchableOpacity style={styles.startButton} onPress={onRetry} activeOpacity={0.85}>
         <Text style={styles.startButtonText}>Try Again</Text>
       </TouchableOpacity>
@@ -461,45 +463,45 @@ function ResultsView({
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// Styles
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: '#F5F5F5' },
+  scroll: { flex: 1, backgroundColor: '#F8F7FF' },
   content: { padding: 16, paddingBottom: 48 },
 
-  // ── Start screen ────────────────────────────────────────────────────────────
+  // Start screen
   screenTitle: { fontSize: 26, fontWeight: '800', color: '#0F172A', marginBottom: 4 },
   screenSub: { fontSize: 14, color: '#64748B', marginBottom: 20 },
   detailGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 16 },
   detailCard: {
     flex: 1,
     minWidth: '44%',
-    backgroundColor: '#012169',
+    backgroundColor: '#6C63FF',
     borderRadius: 14,
     padding: 16,
     alignItems: 'center',
   },
   detailValue: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', marginBottom: 2 },
-  detailLabel: { fontSize: 12, color: '#A5B4CC', fontWeight: '500' },
+  detailLabel: { fontSize: 12, color: 'rgba(255,255,255,0.75)', fontWeight: '500' },
   infoBox: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#F0EEFF',
     borderRadius: 14,
     padding: 18,
     marginBottom: 20,
     borderLeftWidth: 4,
-    borderLeftColor: '#012169',
+    borderLeftColor: '#6C63FF',
   },
-  infoTitle: { fontSize: 14, fontWeight: '700', color: '#012169', marginBottom: 6 },
+  infoTitle: { fontSize: 14, fontWeight: '700', color: '#6C63FF', marginBottom: 6 },
   infoText: { fontSize: 14, color: '#334155', lineHeight: 21 },
 
-  // ── Test screen header ───────────────────────────────────────────────────────
+  // Test screen header
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 6,
   },
-  timer: { fontSize: 22, fontWeight: '800', color: '#012169', fontVariant: ['tabular-nums'] },
+  timer: { fontSize: 22, fontWeight: '800', color: '#6C63FF', fontVariant: ['tabular-nums'] },
   timerWarning: { color: '#DC2626' },
   questionCounter: { fontSize: 14, fontWeight: '600', color: '#64748B' },
   progressTrack: {
@@ -509,9 +511,9 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     overflow: 'hidden',
   },
-  progressFill: { height: 6, backgroundColor: '#012169', borderRadius: 3 },
+  progressFill: { height: 6, backgroundColor: '#6C63FF', borderRadius: 3 },
 
-  // ── Question card ────────────────────────────────────────────────────────────
+  // Question card
   questionCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -525,7 +527,7 @@ const styles = StyleSheet.create({
   },
   questionText: { fontSize: 17, fontWeight: '600', color: '#0F172A', lineHeight: 26 },
 
-  // ── Options ──────────────────────────────────────────────────────────────────
+  // Options
   optionList: { gap: 8, marginBottom: 14 },
   option: {
     flexDirection: 'row',
@@ -537,7 +539,7 @@ const styles = StyleSheet.create({
     padding: 13,
     gap: 12,
   },
-  optionSelected: { borderColor: '#012169', backgroundColor: '#EFF6FF' },
+  optionSelected: { borderColor: '#6C63FF', backgroundColor: '#6C63FF' },
   badge: {
     width: 30,
     height: 30,
@@ -547,12 +549,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
-  badgeSelected: { backgroundColor: '#012169' },
+  badgeSelected: { backgroundColor: '#5550CC' },
   badgeText: { fontSize: 13, fontWeight: '800', color: '#475569' },
+  badgeTextSelected: { color: '#FFFFFF' },
   optionText: { flex: 1, fontSize: 15, color: '#1E293B', lineHeight: 21 },
-  optionTextSelected: { color: '#012169', fontWeight: '600' },
+  optionTextSelected: { color: '#FFFFFF', fontWeight: '600' },
 
-  // ── Prev / Next ───────────────────────────────────────────────────────────────
+  // Prev / Next
   navRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -568,11 +571,11 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   navBtnDisabled: { borderColor: '#F1F5F9', backgroundColor: '#F8FAFC' },
-  navBtnText: { fontSize: 14, fontWeight: '700', color: '#012169' },
+  navBtnText: { fontSize: 14, fontWeight: '700', color: '#6C63FF' },
   navBtnTextDisabled: { color: '#CBD5E1' },
   answeredBadge: { fontSize: 13, fontWeight: '600', color: '#64748B' },
 
-  // ── Grid ─────────────────────────────────────────────────────────────────────
+  // Grid
   gridSection: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -600,14 +603,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  gridCellAnswered: { backgroundColor: '#012169', borderColor: '#012169' },
+  gridCellAnswered: { backgroundColor: '#6C63FF', borderColor: '#6C63FF' },
   gridCellCurrent: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
   gridCellText: { fontSize: 10, fontWeight: '700', color: '#64748B' },
   gridCellTextLight: { color: '#FFFFFF' },
 
-  // ── Submit ────────────────────────────────────────────────────────────────────
+  // Submit
   submitButton: {
-    backgroundColor: '#22C55E',
+    backgroundColor: '#6C63FF',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
@@ -615,7 +618,7 @@ const styles = StyleSheet.create({
   },
   submitButtonText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
   startButton: {
-    backgroundColor: '#22C55E',
+    backgroundColor: '#6C63FF',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
@@ -632,15 +635,15 @@ const styles = StyleSheet.create({
   },
   outlineButtonText: { color: '#475569', fontSize: 16, fontWeight: '600' },
 
-  // ── Results ───────────────────────────────────────────────────────────────────
+  // Results
   resultBanner: {
     borderRadius: 20,
     paddingVertical: 28,
     alignItems: 'center',
     marginBottom: 24,
   },
-  bannerPass: { backgroundColor: '#16A34A' },
-  bannerFail: { backgroundColor: '#DC2626' },
+  bannerPass: { backgroundColor: '#51CF66' },
+  bannerFail: { backgroundColor: '#FF6B6B' },
   resultVerdict: { fontSize: 36, fontWeight: '900', color: '#FFFFFF', letterSpacing: 4 },
   resultScore: { fontSize: 48, fontWeight: '800', color: '#FFFFFF', lineHeight: 56 },
   resultPct: { fontSize: 20, color: 'rgba(255,255,255,0.8)', fontWeight: '600', marginBottom: 6 },
@@ -674,7 +677,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   topicBarFill: { height: 8, borderRadius: 4 },
-  topicBarStrong: { backgroundColor: '#16A34A' },
+  topicBarStrong: { backgroundColor: '#51CF66' },
   topicBarWeak: { backgroundColor: '#F59E0B' },
   topicScore: { width: 32, fontSize: 12, fontWeight: '700', color: '#475569', textAlign: 'right' },
 });
