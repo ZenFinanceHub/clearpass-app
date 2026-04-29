@@ -19,7 +19,8 @@ export async function explainAnswer(
     `Options:\n${optionsList}\n\n` +
     `The learner chose: ${String.fromCharCode(65 + selectedIndex)}. ${selectedOption}\n` +
     `The correct answer is: ${String.fromCharCode(65 + correctIndex)}. ${correctOption}\n\n` +
-    `Please explain why "${correctOption}" is the correct answer, and why the learner's choice was incorrect.`;
+    `Please explain why "${correctOption}" is the correct answer, and why the learner's choice was incorrect.\n\n` +
+    `Keep your response under 60 words. Do not use markdown formatting - no asterisks, no bold, no bullet points. Write in plain conversational sentences only.`;
 
   try {
     const response = await fetch('http://localhost:3001/api/explain', {
@@ -35,18 +36,14 @@ export async function explainAnswer(
       }),
     });
 
-    console.log('Proxy response status:', response.status);
-
     if (!response.ok) {
-      const errorText = await response.text();
-      console.log('Proxy error body:', errorText);
+      await response.text();
       return fallback(correctOption);
     }
 
     const data = await response.json() as { content: Array<{ type: string; text: string }> };
     return data.content[0].text.trim();
-  } catch (err) {
-    console.log('explainAnswer fetch error:', err);
+  } catch {
     return fallback(correctOption);
   }
 }

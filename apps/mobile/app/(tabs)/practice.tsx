@@ -515,6 +515,6 @@ const styles = StyleSheet.create({
   aiCardBody: {
     fontSize: 14,
     color: '#1E3A5F',
-    lineHeight: 21,
+    lineHeight: 22,
   },
 });
