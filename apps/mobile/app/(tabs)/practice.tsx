@@ -130,6 +130,7 @@ export default function PracticeScreen() {
     const q = questions[currentIndex];
     if (selectedIndex === null) return;
     setAiLoading(true);
+    console.log('Calling AI with question:', q.questionText);
     const result = await explainAnswer(
       q.questionText,
       q.options,

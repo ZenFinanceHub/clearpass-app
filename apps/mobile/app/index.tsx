@@ -62,12 +62,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#6C63FF',
     paddingHorizontal: 28,
-    justifyContent: 'space-between',
-    paddingTop: 120,
-    paddingBottom: 56,
   },
   hero: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   mascot: {
     width: 100,
@@ -99,6 +98,7 @@ const styles = StyleSheet.create({
   actions: {
     gap: 16,
     alignItems: 'stretch',
+    paddingBottom: 48,
   },
   primaryButton: {
     backgroundColor: '#FFFFFF',
