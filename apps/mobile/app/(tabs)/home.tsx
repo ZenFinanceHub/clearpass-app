@@ -10,6 +10,14 @@ const DAILY_TIPS = [
   'The hazard perception test has 14 clips. You need 44 out of 75 to pass.',
 ];
 
+function getXpLevel(score: number): { label: string; pct: number; msg: string } {
+  if (score <= 20) return { label: 'LEVEL 1', pct: score / 20, msg: `${20 - score} more points to Level 2` };
+  if (score <= 40) return { label: 'LEVEL 2', pct: (score - 20) / 20, msg: `${40 - score} more points to Level 3` };
+  if (score <= 60) return { label: 'LEVEL 3', pct: (score - 40) / 20, msg: `${60 - score} more points to Level 4` };
+  if (score <= 80) return { label: 'LEVEL 4', pct: (score - 60) / 20, msg: `${80 - score} more points to Test Ready!` };
+  return { label: 'TEST READY!', pct: 1, msg: "You're ready to book your test!" };
+}
+
 export default function HomeScreen() {
   const [progress, setProgress] = useState<UserProgress | null>(null);
 
@@ -18,79 +26,81 @@ export default function HomeScreen() {
   }, []);
 
   const score = progress?.readinessScore ?? 0;
-  const hasActivity = score > 0;
+  const streak = progress?.studyStreakDays ?? 0;
+  const xp = getXpLevel(score);
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-      {/* Score banner */}
-      <View style={styles.scoreSection}>
-        <Text style={styles.greeting}>Hey there!</Text>
-        <Text style={styles.scoreSectionLabel}>Your Readiness Score</Text>
-        <View style={styles.scoreCircle}>
-          <Text style={styles.scoreNumber}>{score}</Text>
-          <Text style={styles.scoreOutOf}>/ 100</Text>
-        </View>
-        <Text style={styles.scoreHint}>
-          {hasActivity
-            ? score >= 80
-              ? "You're ready to book!"
-              : "Keep practising - you're almost ready!"
-            : 'Answer some questions to see your score'}
-        </Text>
+      {/* Road emoji banner */}
+      <View style={styles.emojiBanner}>
+        <Text style={styles.emojiRow}>{'🚗  🛣  🚦  🛑  🚧'}</Text>
       </View>
 
-      {/* Quick actions */}
-      <View style={styles.actionsSection}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
+      {/* XP level card */}
+      <View style={styles.xpCard}>
+        <Text style={styles.xpLevelLabel}>{xp.label}</Text>
+        <Text style={styles.xpScore}>{score}</Text>
+        <View style={styles.xpBarTrack}>
+          <View style={[styles.xpBarFill, { width: `${Math.round(xp.pct * 100)}%` as any }]} />
+        </View>
+        <Text style={styles.xpMsg}>{xp.msg}</Text>
+      </View>
 
+      {/* Streak banner */}
+      {streak > 0 && (
+        <View style={styles.streakBanner}>
+          <Text style={styles.streakText}>{'🔥  '}{streak}{' day streak - keep it up!'}</Text>
+        </View>
+      )}
+
+      {/* 2x2 action grid */}
+      <View style={styles.actionGrid}>
         <TouchableOpacity
-          style={[styles.actionCard, styles.actionCardPrimary]}
+          style={[styles.actionCard, styles.actionPractice]}
           onPress={() => router.push('/(tabs)/practice')}
           activeOpacity={0.85}
         >
-          <View style={styles.actionText}>
-            <Text style={styles.actionTitle}>Start Practice</Text>
-            <Text style={[styles.actionSub, styles.actionSubLight]}>Random questions from all topics</Text>
-          </View>
-          <Text style={styles.actionChevron}>{'>'}</Text>
+          <Text style={styles.actionEmoji}>{'📝'}</Text>
+          <Text style={styles.actionTitle}>Practice</Text>
+          <Text style={styles.actionSub}>Random questions</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.actionCard, styles.actionCardSecondary]}
+          style={[styles.actionCard, styles.actionMock]}
           onPress={() => router.push('/(tabs)/mock')}
           activeOpacity={0.85}
         >
-          <View style={styles.actionText}>
-            <Text style={[styles.actionTitle, styles.actionTitleDark]}>Take Mock Test</Text>
-            <Text style={styles.actionSub}>50 questions - 57 minutes</Text>
-          </View>
-          <Text style={[styles.actionChevron, styles.actionChevronDark]}>{'>'}</Text>
+          <Text style={styles.actionEmoji}>{'⏱'}</Text>
+          <Text style={styles.actionTitle}>Mock Test</Text>
+          <Text style={styles.actionSub}>50 questions</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionCard, styles.actionLearn]}
+          onPress={() => router.push('/(tabs)/learn')}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.actionEmoji}>{'📖'}</Text>
+          <Text style={[styles.actionTitle, styles.actionTitleDark]}>Learn</Text>
+          <Text style={[styles.actionSub, styles.actionSubDark]}>Theory guides</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionCard, styles.actionHazard]}
+          onPress={() => router.push('/(tabs)/hazard')}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.actionEmoji}>{'⚠'}</Text>
+          <Text style={[styles.actionTitle, styles.actionTitleDark]}>Hazard</Text>
+          <Text style={[styles.actionSub, styles.actionSubDark]}>Video clips</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Daily tip */}
+      {/* Tip card */}
       <View style={styles.tipCard}>
         <Text style={styles.tipCardTitle}>Did you know?</Text>
         <Text style={styles.tipCardBody}>{DAILY_TIPS[new Date().getDay() % 3]}</Text>
       </View>
-
-      {/* Stats row (only once user has answered questions) */}
-      {progress && progress.totalQuestionsAnswered > 0 && (
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{progress.totalQuestionsAnswered}</Text>
-            <Text style={styles.statLabel}>Questions</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{progress.studyStreakDays}</Text>
-            <Text style={styles.statLabel}>Day streak</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{progress.mockTestHistory.length}</Text>
-            <Text style={styles.statLabel}>Mock tests</Text>
-          </View>
-        </View>
-      )}
     </ScrollView>
   );
 }
@@ -105,87 +115,99 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F7FF',
     paddingBottom: 32,
   },
-  greeting: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginBottom: 16,
-  },
-  scoreSection: {
+
+  // Road emoji banner
+  emojiBanner: {
     backgroundColor: '#6C63FF',
-    paddingTop: 48,
-    paddingBottom: 44,
+    paddingVertical: 18,
     alignItems: 'center',
+  },
+  emojiRow: {
+    fontSize: 28,
+    letterSpacing: 2,
+  },
+
+  // XP level card
+  xpCard: {
+    backgroundColor: '#6C63FF',
     paddingHorizontal: 24,
-  },
-  scoreSectionLabel: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 20,
-    letterSpacing: 0.5,
-  },
-  scoreCircle: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderWidth: 6,
-    borderColor: '#FFFFFF',
+    paddingTop: 12,
+    paddingBottom: 28,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
   },
-  scoreNumber: {
-    fontSize: 56,
+  xpLevelLabel: {
+    fontSize: 11,
     fontWeight: '800',
+    color: 'rgba(255,255,255,0.7)',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  xpScore: {
+    fontSize: 64,
+    fontWeight: '900',
     color: '#FFFFFF',
-    lineHeight: 60,
+    lineHeight: 72,
+    marginBottom: 12,
   },
-  scoreOutOf: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.75)',
-    fontWeight: '500',
+  xpBarTrack: {
+    width: '100%',
+    height: 8,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 8,
   },
-  scoreHint: {
-    color: 'rgba(255,255,255,0.85)',
+  xpBarFill: {
+    height: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 4,
+  },
+  xpMsg: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '600',
+  },
+
+  // Streak banner
+  streakBanner: {
+    backgroundColor: '#FF9500',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  streakText: {
     fontSize: 14,
-    textAlign: 'center',
-  },
-  actionsSection: {
-    padding: 20,
-    gap: 12,
-  },
-  sectionTitle: {
-    fontSize: 17,
     fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 4,
+    color: '#FFFFFF',
+  },
+
+  // 2x2 action grid
+  actionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    padding: 16,
   },
   actionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flex: 1,
+    minWidth: '44%',
+    minHeight: 110,
     borderRadius: 20,
     padding: 18,
-    gap: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
+    justifyContent: 'flex-end',
   },
-  actionCardPrimary: {
-    backgroundColor: '#6C63FF',
-  },
-  actionCardSecondary: {
-    backgroundColor: '#FFFFFF',
-  },
-  actionText: {
-    flex: 1,
+  actionPractice: { backgroundColor: '#FF6B6B' },
+  actionMock: { backgroundColor: '#6C63FF' },
+  actionLearn: { backgroundColor: '#51CF66' },
+  actionHazard: { backgroundColor: '#FFD43B' },
+  actionEmoji: {
+    fontSize: 32,
+    marginBottom: 8,
   },
   actionTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#FFFFFF',
     marginBottom: 2,
   },
@@ -193,66 +215,33 @@ const styles = StyleSheet.create({
     color: '#1E293B',
   },
   actionSub: {
-    fontSize: 13,
-    color: '#94A3B8',
-  },
-  actionSubLight: {
-    color: 'rgba(255,255,255,0.7)',
-  },
-  actionChevron: {
-    fontSize: 20,
-    color: 'rgba(255,255,255,0.6)',
-    fontWeight: '600',
-  },
-  actionChevronDark: {
-    color: '#CBD5E1',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 20,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  statValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#6C63FF',
-  },
-  statLabel: {
-    fontSize: 11,
-    color: '#94A3B8',
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.8)',
     fontWeight: '500',
-    marginTop: 2,
   },
+  actionSubDark: {
+    color: 'rgba(0,0,0,0.5)',
+  },
+
+  // Tip card
   tipCard: {
-    marginHorizontal: 20,
+    marginHorizontal: 16,
     marginBottom: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF9DB',
     borderRadius: 14,
     padding: 16,
     borderLeftWidth: 4,
-    borderLeftColor: '#6C63FF',
+    borderLeftColor: '#FFD43B',
   },
   tipCardTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#6C63FF',
+    color: '#92400E',
     marginBottom: 6,
   },
   tipCardBody: {
     fontSize: 14,
-    color: '#334155',
+    color: '#78350F',
     lineHeight: 21,
   },
 });

@@ -33,10 +33,25 @@ export default function OnboardingScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.hero}>
-        <Text style={styles.mascotEmoji}>🚗</Text>
+        <Text style={styles.mascotEmoji}>{'🚗'}</Text>
         <Text style={styles.title}>ClearPass</Text>
         <Text style={styles.subtitle}>Pass your theory test. First time.</Text>
         <Text style={styles.tagline}>Join thousands of learners who passed first time</Text>
+
+        <View style={styles.featureRow}>
+          <View style={styles.featureItem}>
+            <Text style={styles.featureEmoji}>{'🧠'}</Text>
+            <Text style={styles.featureLabel}>Smart Practice</Text>
+          </View>
+          <View style={styles.featureItem}>
+            <Text style={styles.featureEmoji}>{'⚡'}</Text>
+            <Text style={styles.featureLabel}>Instant Feedback</Text>
+          </View>
+          <View style={styles.featureItem}>
+            <Text style={styles.featureEmoji}>{'🏆'}</Text>
+            <Text style={styles.featureLabel}>Track Progress</Text>
+          </View>
+        </View>
       </View>
 
       <View style={styles.actions}>
@@ -68,7 +83,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   mascotEmoji: {
-    fontSize: 80,
+    fontSize: 100,
     marginBottom: 16,
   },
   title: {
@@ -90,6 +105,25 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
     textAlign: 'center',
     marginTop: 12,
+    marginBottom: 32,
+  },
+  featureRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 4,
+  },
+  featureItem: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  featureEmoji: {
+    fontSize: 32,
+  },
+  featureLabel: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.75)',
+    fontWeight: '600',
+    textAlign: 'center',
   },
   actions: {
     gap: 16,

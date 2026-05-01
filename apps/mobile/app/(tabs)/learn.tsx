@@ -9,10 +9,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { TopicCategory } from '@clearpass/core';
 
+const PALETTE = ['#6C63FF', '#FF6B6B', '#51CF66', '#F59E0B', '#3B82F6', '#EC4899'];
+
 type TopicEntry = {
   category: TopicCategory;
   label: string;
-  iconName: string;
+  emoji: string;
   accentColor: string;
   facts: string[];
 };
@@ -21,7 +23,7 @@ const TOPICS: TopicEntry[] = [
   {
     category: TopicCategory.Alertness,
     label: 'Alertness',
-    iconName: 'eye-outline',
+    emoji: '👁',
     accentColor: '#3B82F6',
     facts: [
       'Rule 91: if you feel tired, stop at a safe place. Opening a window or turning up the radio only delays the problem - rest is the only cure.',
@@ -34,7 +36,7 @@ const TOPICS: TopicEntry[] = [
   {
     category: TopicCategory.Attitude,
     label: 'Attitude',
-    iconName: 'heart-outline',
+    emoji: '❤',
     accentColor: '#EC4899',
     facts: [
       'Flashing your headlights means only "I am here" - it does not give way to another driver and should not be used to intimidate.',
@@ -47,7 +49,7 @@ const TOPICS: TopicEntry[] = [
   {
     category: TopicCategory.SafetyMargins,
     label: 'Safety Margins',
-    iconName: 'resize-outline',
+    emoji: '📏',
     accentColor: '#F59E0B',
     facts: [
       'The two-second rule: in dry conditions, leave at least a two-second gap to the vehicle ahead - double it in wet weather.',
@@ -60,7 +62,7 @@ const TOPICS: TopicEntry[] = [
   {
     category: TopicCategory.HazardAwareness,
     label: 'Hazard Awareness',
-    iconName: 'warning-outline',
+    emoji: '⚠',
     accentColor: '#EF4444',
     facts: [
       'Use the limit point of vision ahead to judge safe speed - if the road curves and you cannot see far, slow down.',
@@ -73,7 +75,7 @@ const TOPICS: TopicEntry[] = [
   {
     category: TopicCategory.RoadAndTrafficSigns,
     label: 'Road and Traffic Signs',
-    iconName: 'navigate-outline',
+    emoji: '🚦',
     accentColor: '#8B5CF6',
     facts: [
       'Circular signs give orders: red border = prohibition (e.g. speed limits), blue background = positive instruction (e.g. keep left).',
@@ -86,7 +88,7 @@ const TOPICS: TopicEntry[] = [
   {
     category: TopicCategory.RulesOfTheRoad,
     label: 'Rules of the Road',
-    iconName: 'list-outline',
+    emoji: '📋',
     accentColor: '#10B981',
     facts: [
       'At roundabouts, give way to traffic already on the roundabout from the right, unless signs or markings state otherwise.',
@@ -113,7 +115,7 @@ export default function LearnScreen() {
     return (
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <TouchableOpacity style={styles.backRow} onPress={() => setPhase('topics')} activeOpacity={0.7}>
-          <Ionicons name="chevron-back" size={20} color="#012169" />
+          <Ionicons name="chevron-back" size={20} color="#6C63FF" />
           <Text style={styles.backText}>All Topics</Text>
         </TouchableOpacity>
 
@@ -140,15 +142,15 @@ export default function LearnScreen() {
       <Text style={styles.screenSub}>Highway Code rules and key theory by topic</Text>
 
       <View style={styles.topicList}>
-        {TOPICS.map((topic) => (
+        {TOPICS.map((topic, i) => (
           <TouchableOpacity
             key={topic.category}
             style={styles.topicCard}
             onPress={() => openTopic(topic)}
             activeOpacity={0.8}
           >
-            <View style={[styles.topicIcon, { backgroundColor: topic.accentColor + '22' }]}>
-              <Ionicons name={topic.iconName as any} size={22} color={topic.accentColor} />
+            <View style={[styles.topicIcon, { backgroundColor: PALETTE[i % PALETTE.length] }]}>
+              <Text style={styles.topicEmoji}>{topic.emoji}</Text>
             </View>
             <View style={styles.topicBody}>
               <Text style={styles.topicLabel}>{topic.label}</Text>
@@ -187,12 +189,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  topicEmoji: {
+    fontSize: 22,
+  },
   topicBody: { flex: 1 },
   topicLabel: { fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 2 },
   topicMeta: { fontSize: 13, color: '#64748B' },
 
   backRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 20 },
-  backText: { fontSize: 15, color: '#012169', fontWeight: '600' },
+  backText: { fontSize: 15, color: '#6C63FF', fontWeight: '600' },
 
   detailTitle: { fontSize: 24, fontWeight: '800', color: '#0F172A', marginBottom: 4 },
   detailSub: { fontSize: 14, color: '#64748B', marginBottom: 20 },

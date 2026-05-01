@@ -27,20 +27,27 @@ export default function TabLayout() {
         tabBarActiveTintColor: '#6C63FF',
         tabBarInactiveTintColor: '#C4C4D4',
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
-        // Web collapses the tab bar to zero height without an explicit height value.
-        // Platform.select keeps native behaviour untouched while fixing the web case.
         tabBarStyle: Platform.select({
           web: {
             height: 60,
             paddingTop: 6,
             paddingBottom: 10,
-            borderTopWidth: 1,
-            borderTopColor: '#E5E7EB',
+            borderTopWidth: 0,
             backgroundColor: '#FFFFFF',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.06,
+            shadowRadius: 8,
+            elevation: 8,
           },
           default: {
-            borderTopColor: '#E5E7EB',
+            borderTopWidth: 0,
             backgroundColor: '#FFFFFF',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.06,
+            shadowRadius: 8,
+            elevation: 8,
           },
         }),
         headerStyle: {

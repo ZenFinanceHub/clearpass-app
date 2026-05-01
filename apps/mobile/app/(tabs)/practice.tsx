@@ -34,6 +34,40 @@ const LABELS = ['A', 'B', 'C', 'D'];
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? '';
 
+const TOPIC_EMOJI: Record<TopicCategory, string> = {
+  [TopicCategory.Alertness]: '👁',
+  [TopicCategory.Attitude]: '❤',
+  [TopicCategory.SafetyAndYourVehicle]: '🔧',
+  [TopicCategory.SafetyMargins]: '📏',
+  [TopicCategory.HazardAwareness]: '⚠',
+  [TopicCategory.VulnerableRoadUsers]: '🚶',
+  [TopicCategory.OtherTypes]: '🚛',
+  [TopicCategory.VehicleHandling]: '🚗',
+  [TopicCategory.MotorwayRules]: '🛣',
+  [TopicCategory.RulesOfTheRoad]: '📋',
+  [TopicCategory.RoadAndTrafficSigns]: '🚦',
+  [TopicCategory.DocumentsAndRegulations]: '📄',
+  [TopicCategory.AccidentsAndEmergencies]: '🚨',
+  [TopicCategory.VehicleLoading]: '📦',
+};
+
+const TOPIC_COLOR: Record<TopicCategory, string> = {
+  [TopicCategory.Alertness]: '#3B82F6',
+  [TopicCategory.Attitude]: '#EC4899',
+  [TopicCategory.SafetyAndYourVehicle]: '#10B981',
+  [TopicCategory.SafetyMargins]: '#F59E0B',
+  [TopicCategory.HazardAwareness]: '#EF4444',
+  [TopicCategory.VulnerableRoadUsers]: '#8B5CF6',
+  [TopicCategory.OtherTypes]: '#6B7280',
+  [TopicCategory.VehicleHandling]: '#6C63FF',
+  [TopicCategory.MotorwayRules]: '#0EA5E9',
+  [TopicCategory.RulesOfTheRoad]: '#10B981',
+  [TopicCategory.RoadAndTrafficSigns]: '#8B5CF6',
+  [TopicCategory.DocumentsAndRegulations]: '#F59E0B',
+  [TopicCategory.AccidentsAndEmergencies]: '#DC2626',
+  [TopicCategory.VehicleLoading]: '#92400E',
+};
+
 type Phase = 'loading' | 'quiz' | 'results';
 
 type SessionResult = {
@@ -51,8 +85,6 @@ export default function PracticeScreen() {
   const [aiExplanation, setAiExplanation] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
-  // Refs hold mutable state that doesn't need to trigger re-renders but must
-  // be current inside async callbacks.
   const questionStatesRef = useRef<Record<string, QuestionState>>({});
   const userProgressRef = useRef<UserProgress | null>(null);
   const resultsRef = useRef<SessionResult[]>([]);
@@ -80,8 +112,19 @@ export default function PracticeScreen() {
       .map((id) => getQuestionById(id))
       .filter((q): q is Question => q !== undefined);
 
+    resultsRef.current = [];
+    setSessionResults([]);
+    setCurrentIndex(0);
+    setSelectedIndex(null);
+    setAiExplanation(null);
+    setAiLoading(false);
     setQuestions(sessionQuestions);
     setPhase(sessionQuestions.length > 0 ? 'quiz' : 'results');
+  }
+
+  async function handlePlayAgain() {
+    setPhase('loading');
+    await startSession();
   }
 
   const handleAnswer = useCallback(
@@ -91,7 +134,6 @@ export default function PracticeScreen() {
       const question = questions[currentIndex];
       const correct = optionIndex === question.correctIndex;
 
-      // SM-2 update
       const existing =
         questionStatesRef.current[question.id] ?? initQuestionState(question.id);
       const updated = updateQuestionState(existing, correct, correct ? 4 : 1);
@@ -146,7 +188,6 @@ export default function PracticeScreen() {
     const results = resultsRef.current;
     const progress = userProgressRef.current ?? createFreshUserProgress();
 
-    // Compute per-topic accuracy for this session
     const topicData: Partial<Record<TopicCategory, { correct: number; total: number }>> = {};
     for (const { question, correct } of results) {
       const cat = question.topicCategory;
@@ -155,7 +196,6 @@ export default function PracticeScreen() {
       if (correct) topicData[cat]!.correct += 1;
     }
 
-    // Blend session accuracy into the rolling topic scores (60/40 weighted average)
     const updatedScores = { ...progress.topicScores };
     for (const [cat, data] of Object.entries(topicData) as [TopicCategory, { correct: number; total: number }][]) {
       const sessionAccuracy = Math.round((data.correct / data.total) * 100);
@@ -166,7 +206,6 @@ export default function PracticeScreen() {
           : Math.round(existing * 0.6 + sessionAccuracy * 0.4);
     }
 
-    // updateStudyStreak uses the old lastStudied before we overwrite it
     const streaked = updateStudyStreak(progress);
 
     const updated: UserProgress = {
@@ -181,7 +220,6 @@ export default function PracticeScreen() {
     await saveUserProgress(updated);
   }
 
-  // Loading
   if (phase === 'loading') {
     return (
       <View style={styles.centered}>
@@ -191,16 +229,16 @@ export default function PracticeScreen() {
     );
   }
 
-  // Results
   if (phase === 'results') {
-    return <ResultsScreen results={sessionResults} />;
+    return <ResultsScreen results={sessionResults} onPlayAgain={handlePlayAgain} />;
   }
 
-  // Quiz
   const question = questions[currentIndex];
   const isAnswered = selectedIndex !== null;
   const answeredCorrectly = isAnswered && selectedIndex === question.correctIndex;
   const progress = ((currentIndex + (isAnswered ? 1 : 0)) / questions.length) * 100;
+  const topicColor = TOPIC_COLOR[question.topicCategory];
+  const topicEmoji = TOPIC_EMOJI[question.topicCategory];
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
@@ -217,6 +255,9 @@ export default function PracticeScreen() {
 
       {/* Question card */}
       <View style={styles.questionCard}>
+        <View style={[styles.topicBadge, { backgroundColor: topicColor }]}>
+          <Text style={styles.topicBadgeEmoji}>{topicEmoji}</Text>
+        </View>
         <Text style={styles.questionText}>{question.questionText}</Text>
       </View>
 
@@ -272,7 +313,7 @@ export default function PracticeScreen() {
         </View>
       )}
 
-      {/* AI tutor explanation - wrong answers only */}
+      {/* AI tutor - wrong answers only */}
       {isAnswered && !answeredCorrectly && (
         <>
           {aiExplanation !== null ? (
@@ -311,6 +352,13 @@ export default function PracticeScreen() {
 
 // Results screen
 
+function resultConfig(pct: number): { color: string; label: string; emoji: string } {
+  if (pct === 100) return { color: '#51CF66', label: 'PERFECT!', emoji: '🏆' };
+  if (pct >= 80) return { color: '#6C63FF', label: 'GREAT JOB!', emoji: '⭐' };
+  if (pct >= 60) return { color: '#F59E0B', label: 'NOT BAD!', emoji: '👍' };
+  return { color: '#FF6B6B', label: 'KEEP GOING!', emoji: '💪' };
+}
+
 function motivationalMessage(correct: number, total: number): string {
   if (correct === total) return "Perfect score! You're a theory test legend!";
   const pct = Math.round((correct / total) * 100);
@@ -319,23 +367,28 @@ function motivationalMessage(correct: number, total: number): string {
   return "Keep going - every question you get wrong is one you'll definitely know next time!";
 }
 
-function ResultsScreen({ results }: { results: SessionResult[] }) {
+function ResultsScreen({
+  results,
+  onPlayAgain,
+}: {
+  results: SessionResult[];
+  onPlayAgain: () => void;
+}) {
   const correct = results.filter((r) => r.correct).length;
   const total = results.length;
   const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
-
-  const verdict =
-    pct >= 86 ? 'Excellent work!' : pct >= 60 ? 'Good effort!' : 'Keep practising';
+  const cfg = resultConfig(pct);
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       {/* Score banner */}
-      <View style={styles.scoreBanner}>
+      <View style={[styles.scoreBanner, { backgroundColor: cfg.color }]}>
+        <Text style={styles.resultEmoji}>{cfg.emoji}</Text>
+        <Text style={styles.resultLabel}>{cfg.label}</Text>
         <Text style={styles.scoreValue}>
           {correct} / {total}
         </Text>
         <Text style={styles.scorePct}>{pct}%</Text>
-        <Text style={styles.scoreVerdict}>{verdict}</Text>
       </View>
 
       <Text style={styles.motivationalMsg}>{motivationalMessage(correct, total)}</Text>
@@ -344,7 +397,13 @@ function ResultsScreen({ results }: { results: SessionResult[] }) {
       <Text style={styles.sectionLabel}>Question Breakdown</Text>
       <View style={styles.breakdownList}>
         {results.map(({ question, correct: isCorrect }, i) => (
-          <View key={question.id} style={styles.breakdownRow}>
+          <View
+            key={question.id}
+            style={[
+              styles.breakdownRow,
+              isCorrect ? styles.breakdownRowCorrect : styles.breakdownRowWrong,
+            ]}
+          >
             <View style={[styles.breakdownDot, isCorrect ? styles.dotGreen : styles.dotRed]}>
               <Text style={styles.dotText}>{isCorrect ? '+' : 'x'}</Text>
             </View>
@@ -357,10 +416,18 @@ function ResultsScreen({ results }: { results: SessionResult[] }) {
 
       <TouchableOpacity
         style={styles.primaryButton}
+        onPress={onPlayAgain}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.primaryButtonText}>Play Again</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.outlineButton}
         onPress={() => router.replace('/(tabs)/home')}
         activeOpacity={0.85}
       >
-        <Text style={styles.primaryButtonText}>Back to Home</Text>
+        <Text style={styles.outlineButtonText}>Back to Home</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -394,6 +461,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 8,
     elevation: 2,
+  },
+  topicBadge: {
+    alignSelf: 'flex-end',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginBottom: 10,
+  },
+  topicBadgeEmoji: {
+    fontSize: 16,
   },
   questionText: { fontSize: 17, fontWeight: '600', color: '#0F172A', lineHeight: 26 },
 
@@ -438,20 +515,39 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 4,
+    marginBottom: 10,
   },
   primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  outlineButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  outlineButtonText: { color: '#475569', fontSize: 16, fontWeight: '600' },
 
   // Results
   scoreBanner: {
-    backgroundColor: '#6C63FF',
     borderRadius: 20,
     paddingVertical: 32,
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
   },
-  scoreValue: { fontSize: 56, fontWeight: '800', color: '#FFFFFF', lineHeight: 62 },
-  scorePct: { fontSize: 22, color: 'rgba(255,255,255,0.8)', fontWeight: '600', marginBottom: 6 },
-  scoreVerdict: { fontSize: 17, color: '#FFFFFF', fontWeight: '600' },
+  resultEmoji: {
+    fontSize: 52,
+    marginBottom: 4,
+  },
+  resultLabel: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 2,
+    marginBottom: 8,
+  },
+  scoreValue: { fontSize: 72, fontWeight: '900', color: '#FFFFFF', lineHeight: 80 },
+  scorePct: { fontSize: 20, color: 'rgba(255,255,255,0.8)', fontWeight: '600', marginTop: 4 },
   motivationalMsg: {
     fontSize: 16,
     color: '#334155',
@@ -473,12 +569,18 @@ const styles = StyleSheet.create({
   breakdownRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 12,
+    padding: 14,
     gap: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderLeftWidth: 3,
+  },
+  breakdownRowCorrect: {
+    backgroundColor: '#F0FFF4',
+    borderLeftColor: '#51CF66',
+  },
+  breakdownRowWrong: {
+    backgroundColor: '#FFF5F5',
+    borderLeftColor: '#FF6B6B',
   },
   breakdownDot: {
     width: 26,

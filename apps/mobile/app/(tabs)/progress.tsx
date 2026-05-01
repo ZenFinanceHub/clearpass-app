@@ -61,6 +61,14 @@ function barColor(pct: number): string {
   return '#FF6B6B';
 }
 
+function getRank(score: number): { label: string; color: string } {
+  if (score >= 80) return { label: 'Test Ready!', color: '#51CF66' };
+  if (score >= 60) return { label: 'Advanced', color: '#6C63FF' };
+  if (score >= 40) return { label: 'Intermediate', color: '#F59E0B' };
+  if (score >= 20) return { label: 'Improving', color: '#FF6B6B' };
+  return { label: 'Learner', color: '#94A3B8' };
+}
+
 export default function ProgressScreen() {
   const [progress, setProgress] = useState<UserProgress | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -99,10 +107,16 @@ export default function ProgressScreen() {
     .slice(0, 5);
 
   const topics = Object.values(TopicCategory);
+  const rank = getRank(progress.readinessScore);
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <Text style={styles.screenTitle}>Your Progress</Text>
+
+      {/* Rank badge */}
+      <View style={[styles.rankBadge, { backgroundColor: rank.color }]}>
+        <Text style={styles.rankText}>{rank.label}</Text>
+      </View>
 
       {/* Your Goal card */}
       <View style={styles.goalCard}>
@@ -120,25 +134,27 @@ export default function ProgressScreen() {
 
       {/* 2x2 stat grid */}
       <View style={styles.statGrid}>
-        <View style={[styles.statCard, styles.statBlue]}>
+        <View style={[styles.statCard, styles.statCoral]}>
+          <Text style={styles.statEmoji}>{'📝'}</Text>
           <Text style={styles.statValue}>{progress.totalQuestionsAnswered}</Text>
           <Text style={styles.statLabel}>Questions{'\n'}Answered</Text>
         </View>
-        <View style={[styles.statCard, styles.statGreen]}>
+        <View style={[styles.statCard, styles.statPurple]}>
+          <Text style={styles.statEmoji}>{'📋'}</Text>
           <Text style={styles.statValue}>{progress.mockTestHistory.length}</Text>
           <Text style={styles.statLabel}>Mock Tests{'\n'}Taken</Text>
         </View>
-        <View style={[styles.statCard, styles.statAmber]}>
+        <View style={[styles.statCard, styles.statOrange]}>
+          <Text style={styles.statEmoji}>{'🔥'}</Text>
           <Text style={styles.statValue}>{progress.studyStreakDays}</Text>
           <Text style={styles.statLabel}>Day{'\n'}Streak</Text>
         </View>
-        <View style={[styles.statCard, styles.statNavy]}>
-          <Text style={[styles.statValue, styles.statValueLight]}>
+        <View style={[styles.statCard, styles.statGreen]}>
+          <Text style={styles.statEmoji}>{'🏆'}</Text>
+          <Text style={[styles.statValue, styles.statValueSmall]}>
             {bestScore(progress.mockTestHistory)}
           </Text>
-          <Text style={[styles.statLabel, styles.statLabelLight]}>
-            Best Mock{'\n'}Score
-          </Text>
+          <Text style={styles.statLabel}>Best Mock{'\n'}Score</Text>
         </View>
       </View>
 
@@ -254,7 +270,22 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 20,
+    marginBottom: 12,
+  },
+
+  // Rank badge
+  rankBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    marginBottom: 16,
+  },
+  rankText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
 
   // Goal card
@@ -316,48 +347,28 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
   },
-  statBlue: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E8E4FF',
-    borderLeftWidth: 4,
-    borderLeftColor: '#6C63FF',
-  },
-  statGreen: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E8E4FF',
-    borderLeftWidth: 4,
-    borderLeftColor: '#6C63FF',
-  },
-  statAmber: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E8E4FF',
-    borderLeftWidth: 4,
-    borderLeftColor: '#6C63FF',
-  },
-  statNavy: {
-    backgroundColor: '#6C63FF',
+  statCoral: { backgroundColor: '#FF6B6B' },
+  statPurple: { backgroundColor: '#6C63FF' },
+  statOrange: { backgroundColor: '#F59E0B' },
+  statGreen: { backgroundColor: '#51CF66' },
+  statEmoji: {
+    fontSize: 24,
+    marginBottom: 4,
   },
   statValue: {
     fontSize: 26,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#FFFFFF',
     marginBottom: 4,
   },
-  statValueLight: {
-    color: '#FFFFFF',
+  statValueSmall: {
     fontSize: 20,
   },
   statLabel: {
     fontSize: 12,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.85)',
     fontWeight: '500',
     textAlign: 'center',
-  },
-  statLabelLight: {
-    color: 'rgba(255,255,255,0.8)',
   },
 
   // Section heading

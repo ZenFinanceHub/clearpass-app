@@ -364,6 +364,16 @@ function StartView({ onStart }: { onStart: () => void }) {
       <Text style={styles.screenTitle}>Mock Test</Text>
       <Text style={styles.screenSub}>Simulates the real DVSA theory test</Text>
 
+      {/* Illustration card */}
+      <View style={styles.illustrationCard}>
+        <View style={styles.illustrationRow}>
+          <Text style={styles.illustrationEmoji}>{'📝'}</Text>
+          <Text style={styles.illustrationEmoji}>{'⏱'}</Text>
+          <Text style={styles.illustrationEmoji}>{'🎯'}</Text>
+        </View>
+        <Text style={styles.illustrationText}>Are you ready for the real thing?</Text>
+      </View>
+
       <View style={styles.detailGrid}>
         {DETAILS.map(({ label, value }) => (
           <View key={label} style={styles.detailCard}>
@@ -472,6 +482,31 @@ const styles = StyleSheet.create({
   // Start screen
   screenTitle: { fontSize: 26, fontWeight: '800', color: '#0F172A', marginBottom: 4 },
   screenSub: { fontSize: 14, color: '#64748B', marginBottom: 20 },
+
+  illustrationCard: {
+    backgroundColor: '#F0EEFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E8E4FF',
+  },
+  illustrationRow: {
+    flexDirection: 'row',
+    gap: 20,
+    marginBottom: 10,
+  },
+  illustrationEmoji: {
+    fontSize: 36,
+  },
+  illustrationText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#6C63FF',
+    textAlign: 'center',
+  },
+
   detailGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 16 },
   detailCard: {
     flex: 1,
