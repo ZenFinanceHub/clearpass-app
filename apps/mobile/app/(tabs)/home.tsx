@@ -4,6 +4,12 @@ import { router } from 'expo-router';
 import { UserProgress } from '@clearpass/core';
 import { loadUserProgress } from '@/src/storage';
 
+const DAILY_TIPS = [
+  "Stopping distance at 70mph is 96 metres - that's 24 car lengths!",
+  'Over 50% of learners fail their theory test first time. Practice daily to beat the odds.',
+  'The hazard perception test has 14 clips. You need 44 out of 75 to pass.',
+];
+
 export default function HomeScreen() {
   const [progress, setProgress] = useState<UserProgress | null>(null);
 
@@ -16,13 +22,9 @@ export default function HomeScreen() {
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-      {/* Greeting */}
-      <View style={styles.greetingRow}>
-        <Text style={styles.greeting}>Hey there!</Text>
-      </View>
-
       {/* Score banner */}
       <View style={styles.scoreSection}>
+        <Text style={styles.greeting}>Hey there!</Text>
         <Text style={styles.scoreSectionLabel}>Your Readiness Score</Text>
         <View style={styles.scoreCircle}>
           <Text style={styles.scoreNumber}>{score}</Text>
@@ -66,6 +68,12 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Daily tip */}
+      <View style={styles.tipCard}>
+        <Text style={styles.tipCardTitle}>Did you know?</Text>
+        <Text style={styles.tipCardBody}>{DAILY_TIPS[new Date().getDay() % 3]}</Text>
+      </View>
+
       {/* Stats row (only once user has answered questions) */}
       {progress && progress.totalQuestionsAnswered > 0 && (
         <View style={styles.statsRow}>
@@ -97,15 +105,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F7FF',
     paddingBottom: 32,
   },
-  greetingRow: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 8,
-  },
   greeting: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#6C63FF',
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 16,
   },
   scoreSection: {
     backgroundColor: '#6C63FF',
@@ -230,5 +234,25 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontWeight: '500',
     marginTop: 2,
+  },
+  tipCard: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#6C63FF',
+  },
+  tipCardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#6C63FF',
+    marginBottom: 6,
+  },
+  tipCardBody: {
+    fontSize: 14,
+    color: '#334155',
+    lineHeight: 21,
   },
 });

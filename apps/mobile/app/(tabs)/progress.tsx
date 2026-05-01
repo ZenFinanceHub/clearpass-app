@@ -49,6 +49,12 @@ function bestScore(history: MockTestResult[]): string {
   return `${Math.max(...history.map((r) => r.score))} / 50`;
 }
 
+function goalDate(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 56);
+  return `${d.getDate()} ${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+}
+
 function barColor(pct: number): string {
   if (pct >= 80) return '#6C63FF';
   if (pct >= 50) return '#F59E0B';
@@ -97,6 +103,20 @@ export default function ProgressScreen() {
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <Text style={styles.screenTitle}>Your Progress</Text>
+
+      {/* Your Goal card */}
+      <View style={styles.goalCard}>
+        <Text style={styles.goalCardLabel}>Your Goal</Text>
+        <Text style={styles.goalTarget}>Target: Pass by {goalDate()}</Text>
+        <View style={styles.goalBarTrack}>
+          <View style={[styles.goalBarFill, { width: `${Math.min(progress.readinessScore, 100)}%` as any }]} />
+        </View>
+        <Text style={[styles.goalStatus, { color: progress.readinessScore >= 80 ? '#51CF66' : '#6C63FF' }]}>
+          {progress.readinessScore >= 80
+            ? "You're ready to book your test!"
+            : "Keep practising - you're getting there!"}
+        </Text>
+      </View>
 
       {/* 2x2 stat grid */}
       <View style={styles.statGrid}>
@@ -235,6 +255,51 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0F172A',
     marginBottom: 20,
+  },
+
+  // Goal card
+  goalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: '#6C63FF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  goalCardLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  goalTarget: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 12,
+  },
+  goalBarTrack: {
+    height: 8,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  goalBarFill: {
+    height: 8,
+    backgroundColor: '#6C63FF',
+    borderRadius: 4,
+  },
+  goalStatus: {
+    fontSize: 13,
+    fontWeight: '600',
   },
 
   // Stat grid

@@ -311,6 +311,14 @@ export default function PracticeScreen() {
 
 // Results screen
 
+function motivationalMessage(correct: number, total: number): string {
+  if (correct === total) return "Perfect score! You're a theory test legend!";
+  const pct = Math.round((correct / total) * 100);
+  if (pct >= 80) return 'Almost perfect - keep it up!';
+  if (pct >= 60) return "Good effort - a bit more practice and you'll nail it!";
+  return "Keep going - every question you get wrong is one you'll definitely know next time!";
+}
+
 function ResultsScreen({ results }: { results: SessionResult[] }) {
   const correct = results.filter((r) => r.correct).length;
   const total = results.length;
@@ -329,6 +337,8 @@ function ResultsScreen({ results }: { results: SessionResult[] }) {
         <Text style={styles.scorePct}>{pct}%</Text>
         <Text style={styles.scoreVerdict}>{verdict}</Text>
       </View>
+
+      <Text style={styles.motivationalMsg}>{motivationalMessage(correct, total)}</Text>
 
       {/* Breakdown */}
       <Text style={styles.sectionLabel}>Question Breakdown</Text>
@@ -442,6 +452,14 @@ const styles = StyleSheet.create({
   scoreValue: { fontSize: 56, fontWeight: '800', color: '#FFFFFF', lineHeight: 62 },
   scorePct: { fontSize: 22, color: 'rgba(255,255,255,0.8)', fontWeight: '600', marginBottom: 6 },
   scoreVerdict: { fontSize: 17, color: '#FFFFFF', fontWeight: '600' },
+  motivationalMsg: {
+    fontSize: 16,
+    color: '#334155',
+    textAlign: 'center',
+    lineHeight: 24,
+    paddingHorizontal: 8,
+    marginBottom: 20,
+  },
 
   sectionLabel: {
     fontSize: 12,

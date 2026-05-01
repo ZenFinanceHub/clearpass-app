@@ -33,11 +33,10 @@ export default function OnboardingScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.hero}>
-        <View style={styles.mascot}>
-          <Text style={styles.mascotText}>CP</Text>
-        </View>
+        <Text style={styles.mascotEmoji}>🚗</Text>
         <Text style={styles.title}>ClearPass</Text>
         <Text style={styles.subtitle}>Pass your theory test. First time.</Text>
+        <Text style={styles.tagline}>Join thousands of learners who passed first time</Text>
       </View>
 
       <View style={styles.actions}>
@@ -68,19 +67,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  mascot: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 28,
-  },
-  mascotText: {
-    fontSize: 40,
-    fontWeight: '900',
-    color: '#FFFFFF',
+  mascotEmoji: {
+    fontSize: 80,
+    marginBottom: 16,
   },
   title: {
     fontSize: 36,
@@ -94,6 +83,13 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.85)',
     textAlign: 'center',
     lineHeight: 26,
+    marginBottom: 4,
+  },
+  tagline: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.7)',
+    textAlign: 'center',
+    marginTop: 12,
   },
   actions: {
     gap: 16,
