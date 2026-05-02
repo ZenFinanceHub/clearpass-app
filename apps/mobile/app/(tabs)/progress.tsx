@@ -282,9 +282,11 @@ function AchievementCard({
   return (
     <View style={[styles.achievementCard, unlocked ? styles.achievementUnlocked : styles.achievementLocked]}>
       <View style={styles.achievementCardTop}>
-        <Text style={styles.achievementCardIcon}>
-          {unlocked ? '★' : '[ ]'}
-        </Text>
+        {unlocked ? (
+          <View />
+        ) : (
+          <Text style={styles.achievementLockedText}>LOCKED</Text>
+        )}
         <View style={[styles.achievementXpBadge, unlocked ? styles.achievementXpBadgeUnlocked : styles.achievementXpBadgeLocked]}>
           <Text style={[styles.achievementXpText, unlocked ? styles.achievementXpTextUnlocked : styles.achievementXpTextLocked]}>
             {'+' + achievement.xpReward + ' XP'}
@@ -422,7 +424,8 @@ const styles = StyleSheet.create({
   achievementCardPlaceholder: { flex: 1 },
   achievementUnlocked: {
     backgroundColor: '#13131A',
-    borderColor: '#7B5EA7',
+    borderColor: '#A78BFA',
+    borderWidth: 1,
   },
   achievementLocked: {
     backgroundColor: '#0D0D12',
@@ -434,7 +437,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
-  achievementCardIcon: { fontSize: 18, color: '#A78BFA' },
+  achievementLockedText: { fontSize: 10, fontWeight: '700', color: '#374151', letterSpacing: 1 },
   achievementXpBadge: {
     borderRadius: 6,
     paddingHorizontal: 6,
@@ -446,9 +449,9 @@ const styles = StyleSheet.create({
   achievementXpText: { fontSize: 10, fontWeight: '700' },
   achievementXpTextUnlocked: { color: '#A78BFA' },
   achievementXpTextLocked: { color: '#374151' },
-  achievementTitle: { fontSize: 13, fontWeight: '700', marginBottom: 4 },
-  achievementTitleUnlocked: { color: '#F1F0FF' },
-  achievementTitleLocked: { color: '#374151' },
+  achievementTitle: { fontWeight: '700', marginBottom: 4 },
+  achievementTitleUnlocked: { color: '#F1F0FF', fontSize: 15 },
+  achievementTitleLocked: { color: '#374151', fontSize: 13 },
   achievementDesc: { fontSize: 11, lineHeight: 16 },
   achievementDescUnlocked: { color: '#6B7280' },
   achievementDescLocked: { color: '#1F1F2E' },

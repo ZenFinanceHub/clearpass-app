@@ -14,7 +14,7 @@ import {
   generateDailyChallenge,
   getXpLevel,
 } from '@clearpass/core';
-import { loadUserProgress, saveUserProgress } from '@/src/storage';
+import { createFreshUserProgress, loadUserProgress, saveUserProgress } from '@/src/storage';
 
 const DAILY_TIPS = [
   "Stopping distance at 70mph is 96 metres - that's 24 car lengths!",
@@ -49,15 +49,15 @@ export default function HomeScreen() {
 
   useEffect(() => {
     void (async () => {
-      const p = await loadUserProgress();
-      if (!p) return;
+      const raw = await loadUserProgress();
+      const p = raw ?? createFreshUserProgress();
 
       const today = new Date().toISOString().split('T')[0];
       let updated = p;
       if (!p.dailyChallenge || p.dailyChallenge.date !== today) {
         const fresh = generateDailyChallenge(new Date());
         updated = { ...p, dailyChallenge: fresh };
-        await saveUserProgress(updated);
+        if (raw !== null) await saveUserProgress(updated);
       }
       setProgress(updated);
     })();
@@ -442,7 +442,7 @@ const styles = StyleSheet.create({
   // Daily Challenge Card
   dcCard: {
     marginHorizontal: 16,
-    marginBottom: 4,
+    marginBottom: 12,
     backgroundColor: '#13131A',
     borderRadius: 16,
     borderWidth: 0.5,
@@ -488,6 +488,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1C1C27',
     borderRadius: 3,
     overflow: 'hidden',
+    marginTop: 10,
     marginBottom: 6,
   },
   dcBarFill: { height: 6, backgroundColor: '#34D399', borderRadius: 3 },

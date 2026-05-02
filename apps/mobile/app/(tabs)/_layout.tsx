@@ -7,12 +7,13 @@ type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 type TabConfig = {
   name: string;
   title: string;
+  headerTitle?: string;
   icon: IoniconName;
   iconFocused: IoniconName;
 };
 
 const TABS: TabConfig[] = [
-  { name: 'home', title: 'Home', icon: 'home-outline', iconFocused: 'home' },
+  { name: 'home', title: 'Home', headerTitle: 'ClearPass', icon: 'home-outline', iconFocused: 'home' },
   { name: 'practice', title: 'Practice', icon: 'book-outline', iconFocused: 'book' },
   { name: 'mock', title: 'Mock Test', icon: 'clipboard-outline', iconFocused: 'clipboard' },
   { name: 'learn', title: 'Learn', icon: 'library-outline', iconFocused: 'library' },
@@ -53,12 +54,13 @@ export default function TabLayout() {
         },
       }}
     >
-      {TABS.map(({ name, title, icon, iconFocused }) => (
+      {TABS.map(({ name, title, headerTitle, icon, iconFocused }) => (
         <Tabs.Screen
           key={name}
           name={name}
           options={{
             title,
+            ...(headerTitle ? { headerTitle } : {}),
             tabBarIcon: ({ color, size, focused }) => (
               <Ionicons name={focused ? iconFocused : icon} size={size} color={color} />
             ),

@@ -229,7 +229,6 @@ export default function PracticeScreen() {
 
   async function finaliseBattle() {
     const score = battleScoreRef.current;
-    const maxCombo = battleMaxComboRef.current;
     const xpEarned = score >= 10 ? XP_REWARDS.BATTLE_MODE_WIN : 0;
 
     let progress = userProgressRef.current ?? createFreshUserProgress();
@@ -621,8 +620,9 @@ function StartView({
 
       <TouchableOpacity style={styles.battleButton} onPress={onBattle} activeOpacity={0.85}>
         <Text style={styles.battleButtonTitle}>{'⚔'}{' Battle Mode'}</Text>
+        <Text style={styles.battleButtonSubtitle}>Race through your 3 weakest topics</Text>
         <Text style={styles.battleButtonSub}>
-          Race through your 3 weakest topics with a combo multiplier!
+          Build combos for bonus points - how high can you score?
         </Text>
       </TouchableOpacity>
     </ScrollView>
@@ -972,9 +972,15 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     color: '#F87171',
+    marginBottom: 4,
+  },
+  battleButtonSubtitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
     marginBottom: 6,
   },
-  battleButtonSub: { fontSize: 13, color: '#6B7280', lineHeight: 18 },
+  battleButtonSub: { fontSize: 12, color: '#6B7280', lineHeight: 18 },
 
   // Progress bar
   progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
