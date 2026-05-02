@@ -1,5 +1,6 @@
 import { TopicCategory } from './TopicCategory';
 import { MockTestResult } from './MockTestResult';
+import { DailyChallenge } from './DailyChallenge';
 
 export interface UserProgress {
   userId: string;
@@ -9,4 +10,9 @@ export interface UserProgress {
   readinessScore: number;
   lastStudied: string;
   studyStreakDays: number;
+  xp: number;
+  achievements: string[];
+  dailyChallenge: DailyChallenge | null;
+  testDate: string | null;
+  battleModeHistory: { date: string; score: number; topicsUsed: string[] }[];
 }

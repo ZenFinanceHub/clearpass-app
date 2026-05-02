@@ -7,7 +7,13 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
-import { MockTestResult, TopicCategory, UserProgress } from '@clearpass/core';
+import {
+  ACHIEVEMENTS,
+  Achievement,
+  MockTestResult,
+  TopicCategory,
+  UserProgress,
+} from '@clearpass/core';
 import { loadUserProgress } from '@/src/storage';
 
 const TOPIC_LABELS: Record<TopicCategory, string> = {
@@ -69,6 +75,9 @@ function getRank(score: number): { label: string; color: string } {
   return { label: 'Learner', color: '#6B7280' };
 }
 
+// Filter out internal eligibility flags from the display list
+const DISPLAY_ACHIEVEMENTS = ACHIEVEMENTS.filter((a) => !a.id.endsWith('_eligible'));
+
 export default function ProgressScreen() {
   const [progress, setProgress] = useState<UserProgress | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -109,6 +118,18 @@ export default function ProgressScreen() {
   const topics = Object.values(TopicCategory);
   const rank = getRank(progress.readinessScore);
 
+  const unlockedIds = new Set(progress.achievements ?? []);
+  const unlockedCount = DISPLAY_ACHIEVEMENTS.filter((a) => unlockedIds.has(a.id)).length;
+
+  // Pair achievements into rows of 2
+  const achievementPairs: [Achievement, Achievement | null][] = [];
+  for (let i = 0; i < DISPLAY_ACHIEVEMENTS.length; i += 2) {
+    achievementPairs.push([
+      DISPLAY_ACHIEVEMENTS[i],
+      DISPLAY_ACHIEVEMENTS[i + 1] ?? null,
+    ]);
+  }
+
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <Text style={styles.screenTitle}>Your Progress</Text>
@@ -121,9 +142,19 @@ export default function ProgressScreen() {
         <Text style={styles.goalCardLabel}>YOUR GOAL</Text>
         <Text style={styles.goalTarget}>Target: Pass by {goalDate()}</Text>
         <View style={styles.goalBarTrack}>
-          <View style={[styles.goalBarFill, { width: `${Math.min(progress.readinessScore, 100)}%` as any }]} />
+          <View
+            style={[
+              styles.goalBarFill,
+              { width: `${Math.min(progress.readinessScore, 100)}%` as any },
+            ]}
+          />
         </View>
-        <Text style={[styles.goalStatus, { color: progress.readinessScore >= 80 ? '#34D399' : '#6B7280' }]}>
+        <Text
+          style={[
+            styles.goalStatus,
+            { color: progress.readinessScore >= 80 ? '#34D399' : '#6B7280' },
+          ]}
+        >
           {progress.readinessScore >= 80
             ? "You're ready to book your test!"
             : "Keep practising - you're getting there!"}
@@ -155,6 +186,27 @@ export default function ProgressScreen() {
         </View>
       </View>
 
+      {/* Achievements */}
+      <View style={styles.achievementsHeader}>
+        <Text style={styles.sectionLabel}>ACHIEVEMENTS</Text>
+        <Text style={styles.achievementsCount}>
+          {unlockedCount}{' / '}{DISPLAY_ACHIEVEMENTS.length}{' unlocked'}
+        </Text>
+      </View>
+
+      <View style={styles.achievementGrid}>
+        {achievementPairs.map(([a, b], rowIdx) => (
+          <View key={rowIdx} style={styles.achievementRow}>
+            <AchievementCard achievement={a} unlocked={unlockedIds.has(a.id)} />
+            {b ? (
+              <AchievementCard achievement={b} unlocked={unlockedIds.has(b.id)} />
+            ) : (
+              <View style={styles.achievementCardPlaceholder} />
+            )}
+          </View>
+        ))}
+      </View>
+
       <Text style={styles.sectionLabel}>Topic Mastery</Text>
       <View style={styles.topicList}>
         {topics.map((cat) => {
@@ -164,7 +216,7 @@ export default function ProgressScreen() {
             <View key={cat} style={styles.topicRow}>
               <View style={styles.topicHeader}>
                 <Text style={styles.topicName}>{TOPIC_LABELS[cat]}</Text>
-                <Text style={[styles.topicPct, { color }]}>{pct}%</Text>
+                <Text style={[styles.topicPct, { color }]}>{pct}{'%'}</Text>
               </View>
               <View style={styles.barTrack}>
                 <View
@@ -193,14 +245,19 @@ export default function ProgressScreen() {
                     </Text>
                   </View>
                   <View style={styles.sessionRight}>
-                    <Text style={styles.sessionScore}>{test.score} / 50</Text>
+                    <Text style={styles.sessionScore}>{test.score}{' / 50'}</Text>
                     <View
                       style={[
                         styles.badge,
                         test.passed ? styles.badgePass : styles.badgeFail,
                       ]}
                     >
-                      <Text style={[styles.badgeText, test.passed ? styles.badgePassText : styles.badgeFailText]}>
+                      <Text
+                        style={[
+                          styles.badgeText,
+                          test.passed ? styles.badgePassText : styles.badgeFailText,
+                        ]}
+                      >
                         {test.passed ? 'PASS' : 'FAIL'}
                       </Text>
                     </View>
@@ -212,6 +269,47 @@ export default function ProgressScreen() {
         </>
       )}
     </ScrollView>
+  );
+}
+
+function AchievementCard({
+  achievement,
+  unlocked,
+}: {
+  achievement: Achievement;
+  unlocked: boolean;
+}) {
+  return (
+    <View style={[styles.achievementCard, unlocked ? styles.achievementUnlocked : styles.achievementLocked]}>
+      <View style={styles.achievementCardTop}>
+        <Text style={styles.achievementCardIcon}>
+          {unlocked ? '★' : '[ ]'}
+        </Text>
+        <View style={[styles.achievementXpBadge, unlocked ? styles.achievementXpBadgeUnlocked : styles.achievementXpBadgeLocked]}>
+          <Text style={[styles.achievementXpText, unlocked ? styles.achievementXpTextUnlocked : styles.achievementXpTextLocked]}>
+            {'+' + achievement.xpReward + ' XP'}
+          </Text>
+        </View>
+      </View>
+      <Text
+        style={[
+          styles.achievementTitle,
+          unlocked ? styles.achievementTitleUnlocked : styles.achievementTitleLocked,
+        ]}
+        numberOfLines={1}
+      >
+        {achievement.title}
+      </Text>
+      <Text
+        style={[
+          styles.achievementDesc,
+          unlocked ? styles.achievementDescUnlocked : styles.achievementDescLocked,
+        ]}
+        numberOfLines={2}
+      >
+        {achievement.description}
+      </Text>
+    </View>
   );
 }
 
@@ -304,6 +402,56 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 28, fontWeight: '800', color: '#F1F0FF', marginBottom: 4 },
   statValueSmall: { fontSize: 20 },
   statLabel: { fontSize: 11, color: '#6B7280', fontWeight: '500', textAlign: 'center' },
+
+  // Achievements
+  achievementsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  achievementsCount: { fontSize: 12, color: '#6B7280', fontWeight: '500' },
+  achievementGrid: { gap: 10, marginBottom: 28 },
+  achievementRow: { flexDirection: 'row', gap: 10 },
+  achievementCard: {
+    flex: 1,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+  },
+  achievementCardPlaceholder: { flex: 1 },
+  achievementUnlocked: {
+    backgroundColor: '#13131A',
+    borderColor: '#7B5EA7',
+  },
+  achievementLocked: {
+    backgroundColor: '#0D0D12',
+    borderColor: '#1F1F2E',
+  },
+  achievementCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  achievementCardIcon: { fontSize: 18, color: '#A78BFA' },
+  achievementXpBadge: {
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 0.5,
+  },
+  achievementXpBadgeUnlocked: { backgroundColor: '#1C1C27', borderColor: '#7B5EA7' },
+  achievementXpBadgeLocked: { backgroundColor: '#0D0D12', borderColor: '#1F1F2E' },
+  achievementXpText: { fontSize: 10, fontWeight: '700' },
+  achievementXpTextUnlocked: { color: '#A78BFA' },
+  achievementXpTextLocked: { color: '#374151' },
+  achievementTitle: { fontSize: 13, fontWeight: '700', marginBottom: 4 },
+  achievementTitleUnlocked: { color: '#F1F0FF' },
+  achievementTitleLocked: { color: '#374151' },
+  achievementDesc: { fontSize: 11, lineHeight: 16 },
+  achievementDescUnlocked: { color: '#6B7280' },
+  achievementDescLocked: { color: '#1F1F2E' },
 
   sectionLabel: {
     fontSize: 12,

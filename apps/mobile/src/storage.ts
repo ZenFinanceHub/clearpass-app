@@ -13,7 +13,10 @@ export async function saveUserProgress(progress: UserProgress): Promise<void> {
 export async function loadUserProgress(): Promise<UserProgress | null> {
   const raw = await AsyncStorage.getItem(KEYS.USER_PROGRESS);
   if (!raw) return null;
-  return JSON.parse(raw) as UserProgress;
+  const loaded = JSON.parse(raw) as Partial<UserProgress>;
+  // Merge with defaults to handle old data that pre-dates new fields
+  const defaults = createFreshUserProgress();
+  return { ...defaults, ...loaded } as UserProgress;
 }
 
 export async function saveQuestionStates(
@@ -45,6 +48,11 @@ export function createFreshUserProgress(): UserProgress {
     readinessScore: 0,
     lastStudied: new Date().toISOString(),
     studyStreakDays: 0,
+    xp: 0,
+    achievements: [],
+    dailyChallenge: null,
+    testDate: null,
+    battleModeHistory: [],
   };
 }
 

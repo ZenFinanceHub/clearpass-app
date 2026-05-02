@@ -8,10 +8,14 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import {
+  Achievement,
   MockTestResult,
   Question,
   TopicCategory,
+  XP_REWARDS,
+  awardXp,
   calculateReadiness,
+  checkAchievements,
 } from '@clearpass/core';
 import { allQuestions } from '@clearpass/content';
 import {
@@ -82,7 +86,13 @@ function scoreTest(
 }
 
 type Phase = 'start' | 'test' | 'results';
-type ResultData = { correct: number; timeTaken: number; byTopic: ByTopic };
+type ResultData = {
+  correct: number;
+  timeTaken: number;
+  byTopic: ByTopic;
+  xpEarned: number;
+  newAchievements: Achievement[];
+};
 
 export default function MockScreen() {
   const [phase, setPhase] = useState<Phase>('start');
@@ -148,6 +158,7 @@ export default function MockScreen() {
     const ans = answersRef.current;
     const timeTaken = TIME_LIMIT_SECONDS - Math.max(0, timeRemainingRef.current);
     const { correct, byTopic } = scoreTest(qs, ans);
+    const passed = correct >= PASS_MARK;
 
     const topicBreakdown = Object.values(TopicCategory).reduce(
       (acc, cat) => {
@@ -161,23 +172,44 @@ export default function MockScreen() {
     const mockResult: MockTestResult = {
       id: String(Date.now()),
       score: correct,
-      passed: correct >= PASS_MARK,
+      passed,
       takenAt: new Date().toISOString(),
       timeTakenSeconds: timeTaken,
       topicBreakdown,
     };
 
     const existing = await loadUserProgress();
-    const progress = existing ?? createFreshUserProgress();
-    const updated = {
+    let progress = existing ?? createFreshUserProgress();
+
+    progress = {
       ...progress,
       mockTestHistory: [...progress.mockTestHistory, mockResult],
       lastStudied: new Date().toISOString(),
     };
-    updated.readinessScore = calculateReadiness(updated).score;
-    await saveUserProgress(updated);
+    progress.readinessScore = calculateReadiness(progress).score;
 
-    setResultData({ correct, timeTaken, byTopic });
+    // Award XP
+    let xpEarned = XP_REWARDS.MOCK_COMPLETED;
+    if (passed) xpEarned += XP_REWARDS.MOCK_PASSED;
+    progress = awardXp(progress, xpEarned);
+
+    // Update daily challenge (mock type)
+    const today = new Date().toISOString().split('T')[0];
+    const dc = progress.dailyChallenge;
+    if (dc && dc.date === today && !dc.completed && dc.challengeType === 'mock') {
+      const newCount = dc.targetCount;
+      progress = awardXp(progress, XP_REWARDS.DAILY_CHALLENGE);
+      xpEarned += XP_REWARDS.DAILY_CHALLENGE;
+      progress = {
+        ...progress,
+        dailyChallenge: { ...dc, currentCount: newCount, completed: true },
+      };
+    }
+
+    const { newAchievements, updatedProgress } = checkAchievements(progress);
+    await saveUserProgress(updatedProgress);
+
+    setResultData({ correct, timeTaken, byTopic, xpEarned, newAchievements });
     setPhase('results');
   }
 
@@ -186,7 +218,12 @@ export default function MockScreen() {
   }
 
   if (phase === 'results' && resultData) {
-    return <ResultsView data={resultData} onRetry={() => setPhase('start')} />;
+    return (
+      <ResultsView
+        data={resultData}
+        onRetry={() => setPhase('start')}
+      />
+    );
   }
 
   const q = questions[currentIndex];
@@ -254,7 +291,7 @@ export default function MockScreen() {
         </TouchableOpacity>
 
         <Text style={styles.answeredBadge}>
-          {answeredCount} / {questions.length}
+          {answeredCount}{' / '}{questions.length}
         </Text>
 
         <TouchableOpacity
@@ -374,7 +411,7 @@ function ResultsView({
   data: ResultData;
   onRetry: () => void;
 }) {
-  const { correct, timeTaken, byTopic } = data;
+  const { correct, timeTaken, byTopic, xpEarned, newAchievements } = data;
   const passed = correct >= PASS_MARK;
   const pct = Math.round((correct / TOTAL_QUESTIONS) * 100);
 
@@ -385,15 +422,29 @@ function ResultsView({
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
+      {newAchievements.length > 0 && (
+        <View style={styles.achievementBanner}>
+          <Text style={styles.achievementBannerTitle}>ACHIEVEMENT UNLOCKED</Text>
+          {newAchievements.map((a) => (
+            <Text key={a.id} style={styles.achievementBannerItem}>
+              {a.title}{'  +' + a.xpReward + ' XP'}
+            </Text>
+          ))}
+        </View>
+      )}
+
       <View style={[styles.resultBanner, passed ? styles.bannerPass : styles.bannerFail]}>
         <Text style={[styles.resultVerdict, { color: passed ? '#34D399' : '#F87171' }]}>
           {passed ? 'PASS' : 'FAIL'}
         </Text>
-        <Text style={styles.resultScore}>{correct} / {TOTAL_QUESTIONS}</Text>
-        <Text style={styles.resultPct}>{pct}%</Text>
+        <Text style={styles.resultScore}>{correct}{' / '}{TOTAL_QUESTIONS}</Text>
+        <Text style={styles.resultPct}>{pct}{'%'}</Text>
         <Text style={styles.resultMeta}>
           {'Time: '}{formatTime(timeTaken)}{'   Pass mark: '}{PASS_MARK}
         </Text>
+        {xpEarned > 0 && (
+          <Text style={styles.xpNotif}>{'+'}{xpEarned}{' XP earned!'}</Text>
+        )}
       </View>
 
       <Text style={styles.sectionLabel}>Topic Breakdown</Text>
@@ -416,7 +467,7 @@ function ResultsView({
                 />
               </View>
               <Text style={styles.topicScore}>
-                {tally.correct}/{tally.total}
+                {tally.correct}{'/'}{tally.total}
               </Text>
             </View>
           );
@@ -456,7 +507,12 @@ const styles = StyleSheet.create({
   },
   illustrationRow: { flexDirection: 'row', gap: 20, marginBottom: 10 },
   illustrationEmoji: { fontSize: 36 },
-  illustrationText: { fontSize: 15, fontWeight: '700', color: '#A78BFA', textAlign: 'center' },
+  illustrationText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#A78BFA',
+    textAlign: 'center',
+  },
 
   detailGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 16 },
   detailCard: {
@@ -621,6 +677,30 @@ const styles = StyleSheet.create({
   },
   outlineButtonText: { color: '#6B7280', fontSize: 16, fontWeight: '600' },
 
+  achievementBanner: {
+    backgroundColor: '#1C1C27',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#A78BFA',
+    borderLeftWidth: 4,
+    borderLeftColor: '#A78BFA',
+  },
+  achievementBannerTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#A78BFA',
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  achievementBannerItem: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#F1F0FF',
+    marginBottom: 2,
+  },
+
   resultBanner: {
     borderRadius: 20,
     borderWidth: 1,
@@ -635,6 +715,7 @@ const styles = StyleSheet.create({
   resultScore: { fontSize: 48, fontWeight: '800', color: '#F1F0FF', lineHeight: 56 },
   resultPct: { fontSize: 20, color: '#6B7280', fontWeight: '600', marginBottom: 6 },
   resultMeta: { fontSize: 13, color: '#6B7280' },
+  xpNotif: { fontSize: 16, fontWeight: '700', color: '#A78BFA', marginTop: 10 },
 
   sectionLabel: {
     fontSize: 12,
@@ -666,5 +747,11 @@ const styles = StyleSheet.create({
   topicBarFill: { height: 8, borderRadius: 4 },
   topicBarStrong: { backgroundColor: '#34D399' },
   topicBarWeak: { backgroundColor: '#FBBF24' },
-  topicScore: { width: 32, fontSize: 12, fontWeight: '700', color: '#6B7280', textAlign: 'right' },
+  topicScore: {
+    width: 32,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#6B7280',
+    textAlign: 'right',
+  },
 });
