@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -112,6 +112,7 @@ export default function PracticeScreen() {
   const battleMaxComboRef = useRef(0);
   const battleScoreRef = useRef(0);
   const battleAnsweredRef = useRef(false);
+  const battleCancelledRef = useRef(false);
 
   async function startSession() {
     const [statesMap, progress] = await Promise.all([
@@ -172,6 +173,7 @@ export default function PracticeScreen() {
     battleMaxComboRef.current = 0;
     battleScoreRef.current = 0;
     battleAnsweredRef.current = false;
+    battleCancelledRef.current = false;
 
     setBattleDisplay({ idx: 0, selected: null, combo: 0, maxCombo: 0, score: 0 });
     setBattleXpEarned(0);
@@ -207,6 +209,7 @@ export default function PracticeScreen() {
     });
 
     setTimeout(() => {
+      if (battleCancelledRef.current) return;
       const nextIdx = capturedIdx + 1;
       if (nextIdx >= battleQsRef.current.length) {
         void finaliseBattle();
@@ -255,6 +258,11 @@ export default function PracticeScreen() {
   }
 
   async function handlePlayAgain() {
+    setPhase('start');
+  }
+
+  function exitBattle() {
+    battleCancelledRef.current = true;
     setPhase('start');
   }
 
@@ -439,6 +447,7 @@ export default function PracticeScreen() {
         score={battleDisplay.score}
         weakTopics={battleWeakTopicsRef.current}
         onAnswer={handleBattleAnswer}
+        onExit={exitBattle}
       />
     );
   }
@@ -451,7 +460,8 @@ export default function PracticeScreen() {
         totalQuestions={battleQsRef.current.length}
         xpEarned={battleXpEarned}
         newAchievements={battleNewAchievements}
-        onPlayAgain={handlePlayAgain}
+        onPlayAgain={() => void startBattle()}
+        onBackToPractice={handlePlayAgain}
       />
     );
   }
@@ -731,6 +741,7 @@ function BattleView({
   score,
   weakTopics,
   onAnswer,
+  onExit,
 }: {
   question: Question;
   questionIndex: number;
@@ -740,6 +751,7 @@ function BattleView({
   score: number;
   weakTopics: TopicCategory[];
   onAnswer: (idx: number) => void;
+  onExit: () => void;
 }) {
   const multiplier = Math.min(Math.max(combo, 1), 5);
   const comboColor =
@@ -748,6 +760,9 @@ function BattleView({
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <View style={styles.battleHeader}>
+        <TouchableOpacity style={styles.battleExitButton} onPress={onExit} activeOpacity={0.85}>
+          <Text style={styles.battleExitText}>Exit</Text>
+        </TouchableOpacity>
         <View style={styles.battleHeaderLeft}>
           <Text style={styles.battleLabel}>{'BATTLE MODE'}</Text>
           <Text style={styles.battleProgress}>
@@ -841,6 +856,7 @@ function BattleResultsScreen({
   xpEarned,
   newAchievements,
   onPlayAgain,
+  onBackToPractice,
 }: {
   score: number;
   maxCombo: number;
@@ -848,6 +864,7 @@ function BattleResultsScreen({
   xpEarned: number;
   newAchievements: Achievement[];
   onPlayAgain: () => void;
+  onBackToPractice: () => void;
 }) {
   const excellent = score >= 12;
   const good = score >= 8;
@@ -904,6 +921,10 @@ function BattleResultsScreen({
 
       <TouchableOpacity style={styles.primaryButton} onPress={onPlayAgain} activeOpacity={0.85}>
         <Text style={styles.primaryButtonText}>Play Again</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.outlineButton} onPress={onBackToPractice} activeOpacity={0.85}>
+        <Text style={styles.outlineButtonText}>Back to Practice</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -1269,4 +1290,13 @@ const styles = StyleSheet.create({
     borderLeftColor: '#FBBF24',
   },
   battleHintText: { fontSize: 13, color: '#FBBF24', fontWeight: '600' },
+  battleExitButton: {
+    backgroundColor: '#13131A',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#374151',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  battleExitText: { fontSize: 12, fontWeight: '600', color: '#6B7280' },
 });
