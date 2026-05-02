@@ -20,14 +20,11 @@ import {
   saveUserProgress,
 } from '@/src/storage';
 
-// Constants
-
 const TOTAL_QUESTIONS = 50;
-const TIME_LIMIT_SECONDS = 57 * 60; // 3420
+const TIME_LIMIT_SECONDS = 57 * 60;
 const PASS_MARK = 43;
 const LABELS = ['A', 'B', 'C', 'D'];
 
-// Human-readable labels for the results topic breakdown.
 const TOPIC_LABELS: Record<TopicCategory, string> = {
   [TopicCategory.Alertness]: 'Alertness',
   [TopicCategory.Attitude]: 'Attitude',
@@ -45,11 +42,6 @@ const TOPIC_LABELS: Record<TopicCategory, string> = {
   [TopicCategory.VehicleLoading]: 'Vehicle Loading',
 };
 
-// Helpers
-
-// PLACEHOLDER: only 30 questions exist in the content package right now.
-// To fill the 50-question slot we repeat questions; each appears at most twice.
-// Remove this padding once a full licensed DVSA bank is loaded.
 function buildTestQuestions(pool: Question[]): Question[] {
   const shuffled = [...pool].sort(() => Math.random() - 0.5);
   const result: Question[] = [...shuffled];
@@ -89,12 +81,8 @@ function scoreTest(
   return { correct, byTopic };
 }
 
-// Types
-
 type Phase = 'start' | 'test' | 'results';
 type ResultData = { correct: number; timeTaken: number; byTopic: ByTopic };
-
-// Main component
 
 export default function MockScreen() {
   const [phase, setPhase] = useState<Phase>('start');
@@ -104,13 +92,11 @@ export default function MockScreen() {
   const [timeRemaining, setTimeRemaining] = useState(TIME_LIMIT_SECONDS);
   const [resultData, setResultData] = useState<ResultData | null>(null);
 
-  // Refs hold values that must be current inside timer/async callbacks.
   const questionsRef = useRef<Question[]>([]);
   const answersRef = useRef<Record<number, number>>({});
   const timeRemainingRef = useRef(TIME_LIMIT_SECONDS);
   const hasSubmittedRef = useRef(false);
 
-  // Timer
   useEffect(() => {
     if (phase !== 'test') return;
     const id = setInterval(() => {
@@ -123,15 +109,12 @@ export default function MockScreen() {
     return () => clearInterval(id);
   }, [phase]);
 
-  // Auto-submit when time reaches zero.
   useEffect(() => {
     if (phase === 'test' && timeRemaining === 0) {
       void doSubmit();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeRemaining, phase]);
-
-  // Handlers
 
   function handleStart() {
     hasSubmittedRef.current = false;
@@ -166,7 +149,6 @@ export default function MockScreen() {
     const timeTaken = TIME_LIMIT_SECONDS - Math.max(0, timeRemainingRef.current);
     const { correct, byTopic } = scoreTest(qs, ans);
 
-    // Build full Record<TopicCategory, number> required by MockTestResult.
     const topicBreakdown = Object.values(TopicCategory).reduce(
       (acc, cat) => {
         const t = byTopic[cat];
@@ -199,8 +181,6 @@ export default function MockScreen() {
     setPhase('results');
   }
 
-  // Phase routing
-
   if (phase === 'start') {
     return <StartView onStart={handleStart} />;
   }
@@ -209,7 +189,6 @@ export default function MockScreen() {
     return <ResultsView data={resultData} onRetry={() => setPhase('start')} />;
   }
 
-  // Test view
   const q = questions[currentIndex];
   if (!q) return null;
 
@@ -222,7 +201,6 @@ export default function MockScreen() {
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
-      {/* Header bar */}
       <View style={styles.headerRow}>
         <Text style={[styles.timer, isWarning && styles.timerWarning]}>
           {formatTime(timeRemaining)}
@@ -232,17 +210,14 @@ export default function MockScreen() {
         </Text>
       </View>
 
-      {/* Progress bar */}
       <View style={styles.progressTrack}>
         <View style={[styles.progressFill, { width: `${fillPct}%` as any }]} />
       </View>
 
-      {/* Question card */}
       <View style={styles.questionCard}>
         <Text style={styles.questionText}>{q.questionText}</Text>
       </View>
 
-      {/* Options */}
       <View style={styles.optionList}>
         {q.options.map((option, idx) => {
           const isSelected = idx === selectedOption;
@@ -266,7 +241,6 @@ export default function MockScreen() {
         })}
       </View>
 
-      {/* Prev / Next */}
       <View style={styles.navRow}>
         <TouchableOpacity
           style={[styles.navBtn, currentIndex === 0 && styles.navBtnDisabled]}
@@ -303,7 +277,6 @@ export default function MockScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Navigator grid */}
       <View style={styles.gridSection}>
         <Text style={styles.gridLabel}>Question Navigator</Text>
         <View style={styles.grid}>
@@ -335,7 +308,6 @@ export default function MockScreen() {
         </View>
       </View>
 
-      {/* Submit button (visible when all answered) */}
       {allAnswered && (
         <TouchableOpacity
           style={styles.submitButton}
@@ -348,8 +320,6 @@ export default function MockScreen() {
     </ScrollView>
   );
 }
-
-// Start view
 
 const DETAILS = [
   { label: 'Questions', value: '50' },
@@ -364,7 +334,6 @@ function StartView({ onStart }: { onStart: () => void }) {
       <Text style={styles.screenTitle}>Mock Test</Text>
       <Text style={styles.screenSub}>Simulates the real DVSA theory test</Text>
 
-      {/* Illustration card */}
       <View style={styles.illustrationCard}>
         <View style={styles.illustrationRow}>
           <Text style={styles.illustrationEmoji}>{'📝'}</Text>
@@ -398,8 +367,6 @@ function StartView({ onStart }: { onStart: () => void }) {
   );
 }
 
-// Results view
-
 function ResultsView({
   data,
   onRetry,
@@ -411,7 +378,6 @@ function ResultsView({
   const passed = correct >= PASS_MARK;
   const pct = Math.round((correct / TOTAL_QUESTIONS) * 100);
 
-  // Only show topics that actually appeared in this test.
   const topicRows = (Object.entries(byTopic) as [TopicCategory, TopicTally][])
     .filter(([, t]) => t.total > 0)
     .sort(([a], [b]) => a.localeCompare(b));
@@ -419,9 +385,10 @@ function ResultsView({
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
-      {/* Pass / Fail banner */}
       <View style={[styles.resultBanner, passed ? styles.bannerPass : styles.bannerFail]}>
-        <Text style={styles.resultVerdict}>{passed ? 'PASS' : 'FAIL'}</Text>
+        <Text style={[styles.resultVerdict, { color: passed ? '#34D399' : '#F87171' }]}>
+          {passed ? 'PASS' : 'FAIL'}
+        </Text>
         <Text style={styles.resultScore}>{correct} / {TOTAL_QUESTIONS}</Text>
         <Text style={styles.resultPct}>{pct}%</Text>
         <Text style={styles.resultMeta}>
@@ -429,12 +396,11 @@ function ResultsView({
         </Text>
       </View>
 
-      {/* Topic breakdown */}
       <Text style={styles.sectionLabel}>Topic Breakdown</Text>
       <View style={styles.topicTable}>
         {topicRows.map(([cat, tally]) => {
           const topicPct = Math.round((tally.correct / tally.total) * 100);
-          const isWeak = topicPct < 86;
+          const isStrong = topicPct >= 86;
           return (
             <View key={cat} style={styles.topicRow}>
               <Text style={styles.topicName} numberOfLines={1}>
@@ -445,7 +411,7 @@ function ResultsView({
                   style={[
                     styles.topicBarFill,
                     { width: `${topicPct}%` as any },
-                    isWeak ? styles.topicBarWeak : styles.topicBarStrong,
+                    isStrong ? styles.topicBarStrong : styles.topicBarWeak,
                   ]}
                 />
               </View>
@@ -457,7 +423,6 @@ function ResultsView({
         })}
       </View>
 
-      {/* Action buttons */}
       <TouchableOpacity style={styles.startButton} onPress={onRetry} activeOpacity={0.85}>
         <Text style={styles.startButtonText}>Try Again</Text>
       </TouchableOpacity>
@@ -473,124 +438,111 @@ function ResultsView({
   );
 }
 
-// Styles
-
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: '#F8F7FF' },
+  scroll: { flex: 1, backgroundColor: '#0A0A0F' },
   content: { padding: 16, paddingBottom: 48 },
 
-  // Start screen
-  screenTitle: { fontSize: 26, fontWeight: '800', color: '#0F172A', marginBottom: 4 },
-  screenSub: { fontSize: 14, color: '#64748B', marginBottom: 20 },
+  screenTitle: { fontSize: 26, fontWeight: '800', color: '#F1F0FF', marginBottom: 4 },
+  screenSub: { fontSize: 14, color: '#6B7280', marginBottom: 20 },
 
   illustrationCard: {
-    backgroundColor: '#F0EEFF',
-    borderRadius: 16,
+    backgroundColor: '#13131A',
+    borderRadius: 20,
     padding: 20,
     marginBottom: 16,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E8E4FF',
+    borderWidth: 0.5,
+    borderColor: '#1F1F2E',
   },
-  illustrationRow: {
-    flexDirection: 'row',
-    gap: 20,
-    marginBottom: 10,
-  },
-  illustrationEmoji: {
-    fontSize: 36,
-  },
-  illustrationText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#6C63FF',
-    textAlign: 'center',
-  },
+  illustrationRow: { flexDirection: 'row', gap: 20, marginBottom: 10 },
+  illustrationEmoji: { fontSize: 36 },
+  illustrationText: { fontSize: 15, fontWeight: '700', color: '#A78BFA', textAlign: 'center' },
 
   detailGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 16 },
   detailCard: {
     flex: 1,
     minWidth: '44%',
-    backgroundColor: '#6C63FF',
+    backgroundColor: '#13131A',
     borderRadius: 14,
     padding: 16,
     alignItems: 'center',
+    borderWidth: 0.5,
+    borderColor: '#1F1F2E',
   },
-  detailValue: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', marginBottom: 2 },
-  detailLabel: { fontSize: 12, color: 'rgba(255,255,255,0.75)', fontWeight: '500' },
+  detailValue: { fontSize: 22, fontWeight: '800', color: '#F1F0FF', marginBottom: 2 },
+  detailLabel: { fontSize: 12, color: '#6B7280', fontWeight: '500' },
+
   infoBox: {
-    backgroundColor: '#F0EEFF',
+    backgroundColor: '#13131A',
     borderRadius: 14,
     padding: 18,
     marginBottom: 20,
-    borderLeftWidth: 4,
-    borderLeftColor: '#6C63FF',
+    borderLeftWidth: 3,
+    borderLeftColor: '#A78BFA',
+    borderWidth: 0.5,
+    borderColor: '#1F1F2E',
   },
-  infoTitle: { fontSize: 14, fontWeight: '700', color: '#6C63FF', marginBottom: 6 },
-  infoText: { fontSize: 14, color: '#334155', lineHeight: 21 },
+  infoTitle: { fontSize: 14, fontWeight: '700', color: '#A78BFA', marginBottom: 6 },
+  infoText: { fontSize: 14, color: '#6B7280', lineHeight: 21 },
 
-  // Test screen header
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 6,
   },
-  timer: { fontSize: 22, fontWeight: '800', color: '#6C63FF', fontVariant: ['tabular-nums'] },
-  timerWarning: { color: '#DC2626' },
-  questionCounter: { fontSize: 14, fontWeight: '600', color: '#64748B' },
+  timer: { fontSize: 22, fontWeight: '800', color: '#A78BFA', fontVariant: ['tabular-nums'] },
+  timerWarning: { color: '#F87171' },
+  questionCounter: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
+
   progressTrack: {
     height: 6,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#1C1C27',
     borderRadius: 3,
     marginBottom: 14,
     overflow: 'hidden',
   },
-  progressFill: { height: 6, backgroundColor: '#6C63FF', borderRadius: 3 },
+  progressFill: { height: 6, backgroundColor: '#A78BFA', borderRadius: 3 },
 
-  // Question card
   questionCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#13131A',
     borderRadius: 16,
     padding: 20,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    borderWidth: 0.5,
+    borderColor: '#1F1F2E',
+    borderLeftWidth: 3,
+    borderLeftColor: '#A78BFA',
   },
-  questionText: { fontSize: 17, fontWeight: '600', color: '#0F172A', lineHeight: 26 },
+  questionText: { fontSize: 17, fontWeight: '600', color: '#F1F0FF', lineHeight: 26 },
 
-  // Options
   optionList: { gap: 8, marginBottom: 14 },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#1F1F2E',
+    backgroundColor: '#13131A',
     padding: 13,
     gap: 12,
   },
-  optionSelected: { borderColor: '#6C63FF', backgroundColor: '#6C63FF' },
+  optionSelected: { borderColor: '#A78BFA', backgroundColor: '#1C1C27' },
   badge: {
     width: 30,
     height: 30,
     borderRadius: 8,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#1C1C27',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  badgeSelected: { backgroundColor: '#5550CC' },
-  badgeText: { fontSize: 13, fontWeight: '800', color: '#475569' },
+  badgeSelected: { backgroundColor: '#A78BFA' },
+  badgeText: { fontSize: 13, fontWeight: '800', color: '#6B7280' },
   badgeTextSelected: { color: '#FFFFFF' },
-  optionText: { flex: 1, fontSize: 15, color: '#1E293B', lineHeight: 21 },
-  optionTextSelected: { color: '#FFFFFF', fontWeight: '600' },
+  optionText: { flex: 1, fontSize: 15, color: '#F1F0FF', lineHeight: 21 },
+  optionTextSelected: { color: '#F1F0FF', fontWeight: '600' },
 
-  // Prev / Next
   navRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -598,31 +550,30 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   navBtn: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#13131A',
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#1F1F2E',
   },
-  navBtnDisabled: { borderColor: '#F1F5F9', backgroundColor: '#F8FAFC' },
-  navBtnText: { fontSize: 14, fontWeight: '700', color: '#6C63FF' },
-  navBtnTextDisabled: { color: '#CBD5E1' },
-  answeredBadge: { fontSize: 13, fontWeight: '600', color: '#64748B' },
+  navBtnDisabled: { borderColor: '#1F1F2E', backgroundColor: '#0D0D14' },
+  navBtnText: { fontSize: 14, fontWeight: '700', color: '#A78BFA' },
+  navBtnTextDisabled: { color: '#374151' },
+  answeredBadge: { fontSize: 13, fontWeight: '600', color: '#6B7280' },
 
-  // Grid
   gridSection: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#13131A',
     borderRadius: 16,
     padding: 14,
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderWidth: 0.5,
+    borderColor: '#1F1F2E',
   },
   gridLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#94A3B8',
+    color: '#6B7280',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     marginBottom: 10,
@@ -632,28 +583,28 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#1F1F2E',
+    backgroundColor: '#13131A',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  gridCellAnswered: { backgroundColor: '#6C63FF', borderColor: '#6C63FF' },
-  gridCellCurrent: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
-  gridCellText: { fontSize: 10, fontWeight: '700', color: '#64748B' },
+  gridCellAnswered: { backgroundColor: '#7B5EA7', borderColor: '#7B5EA7' },
+  gridCellCurrent: { backgroundColor: '#A78BFA', borderColor: '#A78BFA' },
+  gridCellText: { fontSize: 10, fontWeight: '700', color: '#6B7280' },
   gridCellTextLight: { color: '#FFFFFF' },
 
-  // Submit
   submitButton: {
-    backgroundColor: '#6C63FF',
+    backgroundColor: '#34D399',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
     marginBottom: 10,
   },
-  submitButtonText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
+  submitButtonText: { color: '#0A0A0F', fontSize: 17, fontWeight: '700' },
+
   startButton: {
-    backgroundColor: '#6C63FF',
+    backgroundColor: '#7B5EA7',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
@@ -661,33 +612,34 @@ const styles = StyleSheet.create({
   },
   startButtonText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
   outlineButton: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#13131A',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#1F1F2E',
   },
-  outlineButtonText: { color: '#475569', fontSize: 16, fontWeight: '600' },
+  outlineButtonText: { color: '#6B7280', fontSize: 16, fontWeight: '600' },
 
-  // Results
   resultBanner: {
     borderRadius: 20,
+    borderWidth: 1,
     paddingVertical: 28,
     alignItems: 'center',
     marginBottom: 24,
+    backgroundColor: '#13131A',
   },
-  bannerPass: { backgroundColor: '#51CF66' },
-  bannerFail: { backgroundColor: '#FF6B6B' },
-  resultVerdict: { fontSize: 36, fontWeight: '900', color: '#FFFFFF', letterSpacing: 4 },
-  resultScore: { fontSize: 48, fontWeight: '800', color: '#FFFFFF', lineHeight: 56 },
-  resultPct: { fontSize: 20, color: 'rgba(255,255,255,0.8)', fontWeight: '600', marginBottom: 6 },
-  resultMeta: { fontSize: 13, color: 'rgba(255,255,255,0.7)' },
+  bannerPass: { borderColor: '#34D399' },
+  bannerFail: { borderColor: '#F87171' },
+  resultVerdict: { fontSize: 36, fontWeight: '900', letterSpacing: 4 },
+  resultScore: { fontSize: 48, fontWeight: '800', color: '#F1F0FF', lineHeight: 56 },
+  resultPct: { fontSize: 20, color: '#6B7280', fontWeight: '600', marginBottom: 6 },
+  resultMeta: { fontSize: 13, color: '#6B7280' },
 
   sectionLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#94A3B8',
+    color: '#6B7280',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     marginBottom: 10,
@@ -696,23 +648,23 @@ const styles = StyleSheet.create({
   topicRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#13131A',
     borderRadius: 10,
     padding: 10,
     gap: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderWidth: 0.5,
+    borderColor: '#1F1F2E',
   },
-  topicName: { width: 110, fontSize: 12, fontWeight: '600', color: '#334155' },
+  topicName: { width: 110, fontSize: 12, fontWeight: '600', color: '#F1F0FF' },
   topicBarTrack: {
     flex: 1,
     height: 8,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#1C1C27',
     borderRadius: 4,
     overflow: 'hidden',
   },
   topicBarFill: { height: 8, borderRadius: 4 },
-  topicBarStrong: { backgroundColor: '#51CF66' },
-  topicBarWeak: { backgroundColor: '#F59E0B' },
-  topicScore: { width: 32, fontSize: 12, fontWeight: '700', color: '#475569', textAlign: 'right' },
+  topicBarStrong: { backgroundColor: '#34D399' },
+  topicBarWeak: { backgroundColor: '#FBBF24' },
+  topicScore: { width: 32, fontSize: 12, fontWeight: '700', color: '#6B7280', textAlign: 'right' },
 });

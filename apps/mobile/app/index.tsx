@@ -5,6 +5,12 @@ import { router } from 'expo-router';
 
 const ONBOARDING_KEY = '@clearpass/onboarding_complete';
 
+const FEATURES = [
+  { emoji: '🧠', label: 'Smart Practice' },
+  { emoji: '⚡', label: 'Instant Feedback' },
+  { emoji: '🏆', label: 'Track Progress' },
+];
+
 export default function OnboardingScreen() {
   const [checking, setChecking] = useState(true);
 
@@ -33,24 +39,21 @@ export default function OnboardingScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.hero}>
-        <Text style={styles.mascotEmoji}>{'🚗'}</Text>
+        <View style={styles.glowCircle}>
+          <Text style={styles.carEmoji}>{'🚗'}</Text>
+        </View>
+
         <Text style={styles.title}>ClearPass</Text>
+        <View style={styles.titleAccent} />
         <Text style={styles.subtitle}>Pass your theory test. First time.</Text>
-        <Text style={styles.tagline}>Join thousands of learners who passed first time</Text>
 
         <View style={styles.featureRow}>
-          <View style={styles.featureItem}>
-            <Text style={styles.featureEmoji}>{'🧠'}</Text>
-            <Text style={styles.featureLabel}>Smart Practice</Text>
-          </View>
-          <View style={styles.featureItem}>
-            <Text style={styles.featureEmoji}>{'⚡'}</Text>
-            <Text style={styles.featureLabel}>Instant Feedback</Text>
-          </View>
-          <View style={styles.featureItem}>
-            <Text style={styles.featureEmoji}>{'🏆'}</Text>
-            <Text style={styles.featureLabel}>Track Progress</Text>
-          </View>
+          {FEATURES.map(({ emoji, label }) => (
+            <View key={label} style={styles.featureItem}>
+              <Text style={styles.featureEmoji}>{emoji}</Text>
+              <Text style={styles.featureLabel}>{label}</Text>
+            </View>
+          ))}
         </View>
       </View>
 
@@ -74,7 +77,7 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#6C63FF',
+    backgroundColor: '#0A0A0F',
     paddingHorizontal: 28,
   },
   hero: {
@@ -82,46 +85,58 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  mascotEmoji: {
-    fontSize: 100,
-    marginBottom: 16,
+  glowCircle: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: '#1C1C27',
+    borderWidth: 1,
+    borderColor: '#A78BFA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 32,
+  },
+  carEmoji: {
+    fontSize: 72,
   },
   title: {
-    fontSize: 36,
+    fontSize: 40,
     fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: -1,
+    color: '#F1F0FF',
+    letterSpacing: 2,
+  },
+  titleAccent: {
+    height: 3,
+    width: 60,
+    backgroundColor: '#A78BFA',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 6,
     marginBottom: 12,
   },
   subtitle: {
-    fontSize: 18,
-    color: 'rgba(255,255,255,0.85)',
+    fontSize: 15,
+    color: '#6B7280',
     textAlign: 'center',
-    lineHeight: 26,
-    marginBottom: 4,
-  },
-  tagline: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.7)',
-    textAlign: 'center',
-    marginTop: 12,
     marginBottom: 32,
   },
   featureRow: {
     flexDirection: 'row',
-    gap: 16,
-    marginTop: 4,
+    gap: 24,
+    backgroundColor: '#13131A',
+    borderRadius: 16,
+    padding: 16,
   },
   featureItem: {
     alignItems: 'center',
     gap: 6,
   },
   featureEmoji: {
-    fontSize: 32,
+    fontSize: 24,
   },
   featureLabel: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.75)',
+    color: '#6B7280',
     fontWeight: '600',
     textAlign: 'center',
   },
@@ -131,21 +146,20 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
   },
   primaryButton: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#7B5EA7',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
   },
   primaryButtonText: {
-    color: '#6C63FF',
-    fontSize: 17,
+    color: '#FFFFFF',
+    fontSize: 16,
     fontWeight: '700',
+    letterSpacing: 0.5,
   },
   signInLink: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 15,
-    fontWeight: '600',
+    color: '#6B7280',
+    fontSize: 14,
     textAlign: 'center',
-    textDecorationLine: 'underline',
   },
 });

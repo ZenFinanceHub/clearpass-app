@@ -1,5 +1,7 @@
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+const STAT_TOP_COLORS = ['#F87171', '#A78BFA', '#34D399', '#FBBF24'];
+
 const FACTS = [
   { label: 'Video Clips', value: '14', emoji: '🎬' },
   { label: 'Approx. Time', value: '20 min', emoji: '⏱' },
@@ -20,8 +22,8 @@ export default function HazardScreen() {
       <Text style={styles.screenSub}>Spot developing hazards in real driving footage</Text>
 
       <View style={styles.factsRow}>
-        {FACTS.map(({ label, value, emoji }) => (
-          <View key={label} style={styles.factCard}>
+        {FACTS.map(({ label, value, emoji }, i) => (
+          <View key={label} style={[styles.factCard, { borderTopColor: STAT_TOP_COLORS[i % STAT_TOP_COLORS.length] }]}>
             <Text style={styles.factEmoji}>{emoji}</Text>
             <Text style={styles.factValue}>{value}</Text>
             <Text style={styles.factLabel}>{label}</Text>
@@ -63,138 +65,82 @@ export default function HazardScreen() {
 }
 
 const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-    backgroundColor: '#F8F7FF',
-  },
-  content: {
-    padding: 20,
-    paddingBottom: 36,
-  },
-  screenTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 4,
-  },
-  screenSub: {
-    fontSize: 14,
-    color: '#64748B',
-    marginBottom: 20,
-  },
-  factsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
-  },
+  scroll: { flex: 1, backgroundColor: '#0A0A0F' },
+  content: { padding: 20, paddingBottom: 36 },
+
+  screenTitle: { fontSize: 26, fontWeight: '800', color: '#F1F0FF', marginBottom: 4 },
+  screenSub: { fontSize: 14, color: '#6B7280', marginBottom: 20 },
+
+  factsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   factCard: {
     flex: 1,
-    backgroundColor: '#6C63FF',
+    backgroundColor: '#13131A',
     borderRadius: 14,
     padding: 14,
     alignItems: 'center',
+    borderWidth: 0.5,
+    borderColor: '#1F1F2E',
+    borderTopWidth: 3,
   },
-  factEmoji: {
-    fontSize: 22,
-    marginBottom: 4,
-  },
-  factValue: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginBottom: 2,
-  },
-  factLabel: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.75)',
-    fontWeight: '500',
-    textAlign: 'center',
-  },
+  factEmoji: { fontSize: 22, marginBottom: 4 },
+  factValue: { fontSize: 16, fontWeight: '800', color: '#F1F0FF', marginBottom: 2 },
+  factLabel: { fontSize: 10, color: '#6B7280', fontWeight: '500', textAlign: 'center' },
+
   infoBox: {
-    backgroundColor: '#F0EEFF',
+    backgroundColor: '#13131A',
     borderRadius: 14,
     padding: 18,
     marginBottom: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: '#6C63FF',
+    borderLeftWidth: 3,
+    borderLeftColor: '#A78BFA',
+    borderWidth: 0.5,
+    borderColor: '#1F1F2E',
   },
-  infoTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#6C63FF',
-    marginBottom: 6,
-  },
-  infoText: {
-    fontSize: 14,
-    color: '#334155',
-    lineHeight: 21,
-  },
-  stepList: {
-    gap: 10,
-    marginBottom: 16,
-  },
+  infoTitle: { fontSize: 14, fontWeight: '700', color: '#A78BFA', marginBottom: 6 },
+  infoText: { fontSize: 14, color: '#6B7280', lineHeight: 21 },
+
+  stepList: { gap: 10, marginBottom: 16 },
   stepRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#13131A',
     borderRadius: 12,
     padding: 14,
     gap: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderWidth: 0.5,
+    borderColor: '#1F1F2E',
   },
   stepNum: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#6C63FF',
+    backgroundColor: '#7B5EA7',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  stepNumText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  stepEmoji: {
-    fontSize: 20,
-    flexShrink: 0,
-  },
-  stepText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#334155',
-    lineHeight: 20,
-  },
+  stepNumText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+  stepEmoji: { fontSize: 20, flexShrink: 0 },
+  stepText: { flex: 1, fontSize: 14, color: '#6B7280', lineHeight: 20 },
+
   tipBox: {
-    backgroundColor: '#FFFBEB',
+    backgroundColor: '#13131A',
     borderRadius: 14,
     padding: 16,
     marginBottom: 24,
-    borderLeftWidth: 4,
-    borderLeftColor: '#F59E0B',
+    borderLeftWidth: 3,
+    borderLeftColor: '#FBBF24',
+    borderWidth: 0.5,
+    borderColor: '#1F1F2E',
   },
-  tipTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#92400E',
-    marginBottom: 4,
-  },
-  tipText: {
-    fontSize: 14,
-    color: '#78350F',
-    lineHeight: 20,
-  },
+  tipTitle: { fontSize: 14, fontWeight: '700', color: '#FBBF24', marginBottom: 4 },
+  tipText: { fontSize: 14, color: '#6B7280', lineHeight: 20 },
+
   startButton: {
-    backgroundColor: '#6C63FF',
+    backgroundColor: '#7B5EA7',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
   },
-  startButtonText: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '700',
-  },
+  startButtonText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
 });

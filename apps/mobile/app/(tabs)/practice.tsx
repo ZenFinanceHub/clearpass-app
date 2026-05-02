@@ -51,23 +51,6 @@ const TOPIC_EMOJI: Record<TopicCategory, string> = {
   [TopicCategory.VehicleLoading]: '📦',
 };
 
-const TOPIC_COLOR: Record<TopicCategory, string> = {
-  [TopicCategory.Alertness]: '#3B82F6',
-  [TopicCategory.Attitude]: '#EC4899',
-  [TopicCategory.SafetyAndYourVehicle]: '#10B981',
-  [TopicCategory.SafetyMargins]: '#F59E0B',
-  [TopicCategory.HazardAwareness]: '#EF4444',
-  [TopicCategory.VulnerableRoadUsers]: '#8B5CF6',
-  [TopicCategory.OtherTypes]: '#6B7280',
-  [TopicCategory.VehicleHandling]: '#6C63FF',
-  [TopicCategory.MotorwayRules]: '#0EA5E9',
-  [TopicCategory.RulesOfTheRoad]: '#10B981',
-  [TopicCategory.RoadAndTrafficSigns]: '#8B5CF6',
-  [TopicCategory.DocumentsAndRegulations]: '#F59E0B',
-  [TopicCategory.AccidentsAndEmergencies]: '#DC2626',
-  [TopicCategory.VehicleLoading]: '#92400E',
-};
-
 type Phase = 'loading' | 'quiz' | 'results';
 
 type SessionResult = {
@@ -172,7 +155,6 @@ export default function PracticeScreen() {
     const q = questions[currentIndex];
     if (selectedIndex === null) return;
     setAiLoading(true);
-    console.log('Calling AI with question:', q.questionText);
     const result = await explainAnswer(
       q.questionText,
       q.options,
@@ -223,7 +205,7 @@ export default function PracticeScreen() {
   if (phase === 'loading') {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6C63FF" />
+        <ActivityIndicator size="large" color="#A78BFA" />
         <Text style={styles.loadingText}>Loading questions...</Text>
       </View>
     );
@@ -237,12 +219,10 @@ export default function PracticeScreen() {
   const isAnswered = selectedIndex !== null;
   const answeredCorrectly = isAnswered && selectedIndex === question.correctIndex;
   const progress = ((currentIndex + (isAnswered ? 1 : 0)) / questions.length) * 100;
-  const topicColor = TOPIC_COLOR[question.topicCategory];
   const topicEmoji = TOPIC_EMOJI[question.topicCategory];
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-      {/* Progress */}
       <View style={styles.progressRow}>
         <Text style={styles.progressLabel}>
           Question {currentIndex + 1} of {questions.length}
@@ -253,15 +233,13 @@ export default function PracticeScreen() {
         <View style={[styles.progressFill, { width: `${progress}%` as any }]} />
       </View>
 
-      {/* Question card */}
       <View style={styles.questionCard}>
-        <View style={[styles.topicBadge, { backgroundColor: topicColor }]}>
+        <View style={styles.topicBadge}>
           <Text style={styles.topicBadgeEmoji}>{topicEmoji}</Text>
         </View>
         <Text style={styles.questionText}>{question.questionText}</Text>
       </View>
 
-      {/* Options */}
       <View style={styles.optionList}>
         {question.options.map((option, idx) => {
           const isCorrect = idx === question.correctIndex;
@@ -270,16 +248,19 @@ export default function PracticeScreen() {
           let cardStyle = styles.optionDefault;
           let badgeStyle = styles.badgeDefault;
           let textStyle = styles.optionTextDefault;
+          let badgeTextStyle = styles.badgeTextDefault;
 
           if (isAnswered) {
             if (isCorrect) {
               cardStyle = styles.optionCorrect;
               badgeStyle = styles.badgeCorrect;
               textStyle = styles.optionTextCorrect;
+              badgeTextStyle = styles.badgeTextColored;
             } else if (isSelected) {
               cardStyle = styles.optionWrong;
               badgeStyle = styles.badgeWrong;
               textStyle = styles.optionTextWrong;
+              badgeTextStyle = styles.badgeTextColored;
             } else {
               cardStyle = styles.optionDimmed;
               textStyle = styles.optionTextDimmed;
@@ -295,7 +276,7 @@ export default function PracticeScreen() {
               disabled={isAnswered}
             >
               <View style={[styles.badge, badgeStyle]}>
-                <Text style={styles.badgeText}>{LABELS[idx]}</Text>
+                <Text style={[styles.badgeText, badgeTextStyle]}>{LABELS[idx]}</Text>
               </View>
               <Text style={[styles.optionText, textStyle]}>{option}</Text>
             </TouchableOpacity>
@@ -303,27 +284,27 @@ export default function PracticeScreen() {
         })}
       </View>
 
-      {/* Explanation */}
       {isAnswered && (
         <View style={[styles.explanation, answeredCorrectly ? styles.explanationGreen : styles.explanationRed]}>
-          <Text style={styles.explanationTitle}>
+          <Text style={[styles.explanationTitle, answeredCorrectly ? styles.explanationTitleGreen : styles.explanationTitleRed]}>
             {answeredCorrectly ? 'Correct!' : 'Incorrect'}
           </Text>
-          <Text style={styles.explanationBody}>{question.explanation}</Text>
+          <Text style={[styles.explanationBody, answeredCorrectly ? styles.explanationBodyGreen : styles.explanationBodyRed]}>
+            {question.explanation}
+          </Text>
         </View>
       )}
 
-      {/* AI tutor - wrong answers only */}
       {isAnswered && !answeredCorrectly && (
         <>
           {aiExplanation !== null ? (
             <View style={styles.aiCard}>
-              <Text style={styles.aiCardTitle}>AI Tutor</Text>
+              <Text style={styles.aiCardTitle}>AI TUTOR</Text>
               <Text style={styles.aiCardBody}>{aiExplanation}</Text>
             </View>
           ) : aiLoading ? (
             <View style={styles.aiLoadingRow}>
-              <ActivityIndicator size="small" color="#6C63FF" />
+              <ActivityIndicator size="small" color="#A78BFA" />
               <Text style={styles.aiLoadingText}>Getting explanation...</Text>
             </View>
           ) : (
@@ -338,7 +319,6 @@ export default function PracticeScreen() {
         </>
       )}
 
-      {/* Next / See Results */}
       {isAnswered && (
         <TouchableOpacity style={styles.primaryButton} onPress={handleNext} activeOpacity={0.85}>
           <Text style={styles.primaryButtonText}>
@@ -350,13 +330,11 @@ export default function PracticeScreen() {
   );
 }
 
-// Results screen
-
-function resultConfig(pct: number): { color: string; label: string; emoji: string } {
-  if (pct === 100) return { color: '#51CF66', label: 'PERFECT!', emoji: '🏆' };
-  if (pct >= 80) return { color: '#6C63FF', label: 'GREAT JOB!', emoji: '⭐' };
-  if (pct >= 60) return { color: '#F59E0B', label: 'NOT BAD!', emoji: '👍' };
-  return { color: '#FF6B6B', label: 'KEEP GOING!', emoji: '💪' };
+function resultConfig(pct: number): { borderColor: string; accentColor: string; label: string; emoji: string } {
+  if (pct === 100) return { borderColor: '#34D399', accentColor: '#34D399', label: 'PERFECT!', emoji: '🏆' };
+  if (pct >= 80) return { borderColor: '#A78BFA', accentColor: '#A78BFA', label: 'GREAT JOB!', emoji: '⭐' };
+  if (pct >= 60) return { borderColor: '#FBBF24', accentColor: '#FBBF24', label: 'NOT BAD!', emoji: '👍' };
+  return { borderColor: '#F87171', accentColor: '#F87171', label: 'KEEP GOING!', emoji: '💪' };
 }
 
 function motivationalMessage(correct: number, total: number): string {
@@ -364,7 +342,7 @@ function motivationalMessage(correct: number, total: number): string {
   const pct = Math.round((correct / total) * 100);
   if (pct >= 80) return 'Almost perfect - keep it up!';
   if (pct >= 60) return "Good effort - a bit more practice and you'll nail it!";
-  return "Keep going - every question you get wrong is one you'll definitely know next time!";
+  return "Keep going - every wrong answer is one you'll definitely know next time!";
 }
 
 function ResultsScreen({
@@ -381,19 +359,19 @@ function ResultsScreen({
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-      {/* Score banner */}
-      <View style={[styles.scoreBanner, { backgroundColor: cfg.color }]}>
+      <View style={[styles.scoreBanner, { borderColor: cfg.borderColor }]}>
         <Text style={styles.resultEmoji}>{cfg.emoji}</Text>
-        <Text style={styles.resultLabel}>{cfg.label}</Text>
+        <Text style={[styles.resultLabel, { color: cfg.accentColor }]}>{cfg.label}</Text>
         <Text style={styles.scoreValue}>
           {correct} / {total}
         </Text>
         <Text style={styles.scorePct}>{pct}%</Text>
       </View>
 
-      <Text style={styles.motivationalMsg}>{motivationalMessage(correct, total)}</Text>
+      <Text style={[styles.motivationalMsg, { color: cfg.accentColor }]}>
+        {motivationalMessage(correct, total)}
+      </Text>
 
-      {/* Breakdown */}
       <Text style={styles.sectionLabel}>Question Breakdown</Text>
       <View style={styles.breakdownList}>
         {results.map(({ question, correct: isCorrect }, i) => (
@@ -433,34 +411,27 @@ function ResultsScreen({
   );
 }
 
-// Styles
-
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: '#F8F7FF' },
+  scroll: { flex: 1, backgroundColor: '#0A0A0F' },
   content: { padding: 16, paddingBottom: 48 },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  loadingText: { color: '#64748B', fontSize: 15 },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: '#0A0A0F' },
+  loadingText: { color: '#6B7280', fontSize: 15 },
 
-  // Progress bar
   progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  progressLabel: { fontSize: 13, color: '#64748B', fontWeight: '500' },
-  progressPct: { fontSize: 13, color: '#6C63FF', fontWeight: '700' },
-  progressTrack: { height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, marginBottom: 16, overflow: 'hidden' },
-  progressFill: { height: 6, backgroundColor: '#6C63FF', borderRadius: 3 },
+  progressLabel: { fontSize: 13, color: '#6B7280', fontWeight: '500' },
+  progressPct: { fontSize: 13, color: '#A78BFA', fontWeight: '700' },
+  progressTrack: { height: 6, backgroundColor: '#1C1C27', borderRadius: 3, marginBottom: 16, overflow: 'hidden' },
+  progressFill: { height: 6, backgroundColor: '#A78BFA', borderRadius: 3 },
 
-  // Question
   questionCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#13131A',
     borderRadius: 20,
     padding: 20,
     marginBottom: 14,
-    borderLeftWidth: 4,
-    borderLeftColor: '#6C63FF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    borderWidth: 0.5,
+    borderColor: '#1F1F2E',
+    borderLeftWidth: 3,
+    borderLeftColor: '#A78BFA',
   },
   topicBadge: {
     alignSelf: 'flex-end',
@@ -468,49 +439,53 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     marginBottom: 10,
+    backgroundColor: '#1C1C27',
+    borderWidth: 0.5,
+    borderColor: '#1F1F2E',
   },
-  topicBadgeEmoji: {
-    fontSize: 16,
-  },
-  questionText: { fontSize: 17, fontWeight: '600', color: '#0F172A', lineHeight: 26 },
+  topicBadgeEmoji: { fontSize: 16 },
+  questionText: { fontSize: 17, fontWeight: '600', color: '#F1F0FF', lineHeight: 26 },
 
-  // Options
   optionList: { gap: 10, marginBottom: 14 },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 16,
-    borderWidth: 1.5,
+    borderWidth: 1,
     padding: 14,
     gap: 12,
   },
-  optionDefault: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' },
-  optionCorrect: { backgroundColor: '#51CF66', borderColor: '#51CF66' },
-  optionWrong: { backgroundColor: '#FF6B6B', borderColor: '#FF6B6B' },
-  optionDimmed: { backgroundColor: '#F8FAFC', borderColor: '#F1F5F9' },
+  optionDefault: { backgroundColor: '#13131A', borderColor: '#1F1F2E' },
+  optionCorrect: { backgroundColor: '#064E3B', borderColor: '#34D399' },
+  optionWrong: { backgroundColor: '#450A0A', borderColor: '#F87171' },
+  optionDimmed: { backgroundColor: '#13131A', borderColor: '#1F1F2E' },
 
   badge: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  badgeDefault: { backgroundColor: '#6C63FF' },
-  badgeCorrect: { backgroundColor: '#3DAF55' },
-  badgeWrong: { backgroundColor: '#E84E4E' },
-  badgeText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
+  badgeDefault: { backgroundColor: '#1C1C27' },
+  badgeCorrect: { backgroundColor: '#34D399' },
+  badgeWrong: { backgroundColor: '#F87171' },
+  badgeText: { fontSize: 13, fontWeight: '800' },
+  badgeTextDefault: { color: '#6B7280' },
+  badgeTextColored: { color: '#FFFFFF' },
 
   optionText: { flex: 1, fontSize: 15, lineHeight: 22 },
-  optionTextDefault: { color: '#1E293B' },
-  optionTextCorrect: { color: '#FFFFFF', fontWeight: '600' },
-  optionTextWrong: { color: '#FFFFFF', fontWeight: '600' },
-  optionTextDimmed: { color: '#94A3B8' },
+  optionTextDefault: { color: '#F1F0FF' },
+  optionTextCorrect: { color: '#34D399', fontWeight: '600' },
+  optionTextWrong: { color: '#F87171', fontWeight: '600' },
+  optionTextDimmed: { color: '#374151' },
 
-  // Explanation
-  explanation: { borderRadius: 12, padding: 16, marginBottom: 14, borderLeftWidth: 4 },
-  explanationGreen: { backgroundColor: '#E8FFF0', borderLeftColor: '#51CF66' },
-  explanationRed: { backgroundColor: '#FFF0F0', borderLeftColor: '#FF6B6B' },
-  explanationTitle: { fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
-  explanationBody: { fontSize: 14, color: '#334155', lineHeight: 21 },
+  explanation: { borderRadius: 12, padding: 16, marginBottom: 14, borderLeftWidth: 3 },
+  explanationGreen: { backgroundColor: '#064E3B', borderLeftColor: '#34D399' },
+  explanationRed: { backgroundColor: '#450A0A', borderLeftColor: '#F87171' },
+  explanationTitle: { fontSize: 15, fontWeight: '700', marginBottom: 4 },
+  explanationTitleGreen: { color: '#34D399' },
+  explanationTitleRed: { color: '#F87171' },
+  explanationBody: { fontSize: 14, lineHeight: 21 },
+  explanationBodyGreen: { color: '#D1FAE5' },
+  explanationBodyRed: { color: '#FEE2E2' },
 
-  // Buttons
   primaryButton: {
-    backgroundColor: '#6C63FF',
+    backgroundColor: '#7B5EA7',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
@@ -519,48 +494,40 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   outlineButton: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#13131A',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#1F1F2E',
   },
-  outlineButtonText: { color: '#475569', fontSize: 16, fontWeight: '600' },
+  outlineButtonText: { color: '#6B7280', fontSize: 16, fontWeight: '600' },
 
-  // Results
   scoreBanner: {
+    backgroundColor: '#13131A',
     borderRadius: 20,
+    borderWidth: 1,
     paddingVertical: 32,
     alignItems: 'center',
     marginBottom: 16,
   },
-  resultEmoji: {
-    fontSize: 52,
-    marginBottom: 4,
-  },
-  resultLabel: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: 2,
-    marginBottom: 8,
-  },
-  scoreValue: { fontSize: 72, fontWeight: '900', color: '#FFFFFF', lineHeight: 80 },
-  scorePct: { fontSize: 20, color: 'rgba(255,255,255,0.8)', fontWeight: '600', marginTop: 4 },
+  resultEmoji: { fontSize: 56, marginBottom: 8 },
+  resultLabel: { fontSize: 22, fontWeight: '900', letterSpacing: 2, marginBottom: 8 },
+  scoreValue: { fontSize: 72, fontWeight: '900', color: '#F1F0FF', lineHeight: 80 },
+  scorePct: { fontSize: 20, color: '#6B7280', fontWeight: '600', marginTop: 4 },
   motivationalMsg: {
     fontSize: 16,
-    color: '#334155',
     textAlign: 'center',
     lineHeight: 24,
     paddingHorizontal: 8,
     marginBottom: 20,
+    fontWeight: '600',
   },
 
   sectionLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#94A3B8',
+    color: '#6B7280',
     letterSpacing: 1,
     textTransform: 'uppercase',
     marginBottom: 10,
@@ -574,14 +541,8 @@ const styles = StyleSheet.create({
     gap: 10,
     borderLeftWidth: 3,
   },
-  breakdownRowCorrect: {
-    backgroundColor: '#F0FFF4',
-    borderLeftColor: '#51CF66',
-  },
-  breakdownRowWrong: {
-    backgroundColor: '#FFF5F5',
-    borderLeftColor: '#FF6B6B',
-  },
+  breakdownRowCorrect: { backgroundColor: '#064E3B', borderLeftColor: '#34D399' },
+  breakdownRowWrong: { backgroundColor: '#450A0A', borderLeftColor: '#F87171' },
   breakdownDot: {
     width: 26,
     height: 26,
@@ -591,26 +552,21 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     marginTop: 1,
   },
-  dotGreen: { backgroundColor: '#51CF66' },
-  dotRed: { backgroundColor: '#FF6B6B' },
+  dotGreen: { backgroundColor: '#34D399' },
+  dotRed: { backgroundColor: '#F87171' },
   dotText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
-  breakdownText: { flex: 1, fontSize: 14, color: '#334155', lineHeight: 20 },
+  breakdownText: { flex: 1, fontSize: 13, color: '#F1F0FF', lineHeight: 20 },
 
-  // AI tutor
   explainButton: {
-    backgroundColor: '#F8F7FF',
+    backgroundColor: '#1C1C27',
     borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#6C63FF',
+    borderWidth: 1,
+    borderColor: '#A78BFA',
     paddingVertical: 12,
     alignItems: 'center',
     marginBottom: 8,
   },
-  explainButtonText: {
-    color: '#6C63FF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
+  explainButtonText: { color: '#A78BFA', fontSize: 14, fontWeight: '700' },
   aiLoadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -619,29 +575,21 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginBottom: 8,
   },
-  aiLoadingText: {
-    color: '#64748B',
-    fontSize: 14,
-  },
+  aiLoadingText: { color: '#6B7280', fontSize: 14 },
   aiCard: {
-    backgroundColor: '#F0EEFF',
+    backgroundColor: '#1C1C27',
     borderRadius: 12,
     padding: 14,
     marginBottom: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#6C63FF',
+    borderLeftWidth: 3,
+    borderLeftColor: '#A78BFA',
   },
   aiCardTitle: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#6C63FF',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
+    color: '#A78BFA',
+    letterSpacing: 1,
     marginBottom: 6,
   },
-  aiCardBody: {
-    fontSize: 14,
-    color: '#1E3A5F',
-    lineHeight: 22,
-  },
+  aiCardBody: { fontSize: 14, color: '#9CA3AF', lineHeight: 22 },
 });

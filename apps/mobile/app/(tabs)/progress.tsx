@@ -56,17 +56,17 @@ function goalDate(): string {
 }
 
 function barColor(pct: number): string {
-  if (pct >= 80) return '#6C63FF';
-  if (pct >= 50) return '#F59E0B';
-  return '#FF6B6B';
+  if (pct >= 80) return '#A78BFA';
+  if (pct >= 50) return '#FBBF24';
+  return '#F87171';
 }
 
 function getRank(score: number): { label: string; color: string } {
-  if (score >= 80) return { label: 'Test Ready!', color: '#51CF66' };
-  if (score >= 60) return { label: 'Advanced', color: '#6C63FF' };
-  if (score >= 40) return { label: 'Intermediate', color: '#F59E0B' };
-  if (score >= 20) return { label: 'Improving', color: '#FF6B6B' };
-  return { label: 'Learner', color: '#94A3B8' };
+  if (score >= 80) return { label: 'Test Ready!', color: '#FBBF24' };
+  if (score >= 60) return { label: 'Advanced', color: '#A78BFA' };
+  if (score >= 40) return { label: 'Intermediate', color: '#34D399' };
+  if (score >= 20) return { label: 'Improving', color: '#378ADD' };
+  return { label: 'Learner', color: '#6B7280' };
 }
 
 export default function ProgressScreen() {
@@ -113,52 +113,48 @@ export default function ProgressScreen() {
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <Text style={styles.screenTitle}>Your Progress</Text>
 
-      {/* Rank badge */}
-      <View style={[styles.rankBadge, { backgroundColor: rank.color }]}>
-        <Text style={styles.rankText}>{rank.label}</Text>
+      <View style={[styles.rankBadge, { borderColor: rank.color }]}>
+        <Text style={[styles.rankText, { color: rank.color }]}>{rank.label}</Text>
       </View>
 
-      {/* Your Goal card */}
       <View style={styles.goalCard}>
-        <Text style={styles.goalCardLabel}>Your Goal</Text>
+        <Text style={styles.goalCardLabel}>YOUR GOAL</Text>
         <Text style={styles.goalTarget}>Target: Pass by {goalDate()}</Text>
         <View style={styles.goalBarTrack}>
           <View style={[styles.goalBarFill, { width: `${Math.min(progress.readinessScore, 100)}%` as any }]} />
         </View>
-        <Text style={[styles.goalStatus, { color: progress.readinessScore >= 80 ? '#51CF66' : '#6C63FF' }]}>
+        <Text style={[styles.goalStatus, { color: progress.readinessScore >= 80 ? '#34D399' : '#6B7280' }]}>
           {progress.readinessScore >= 80
             ? "You're ready to book your test!"
             : "Keep practising - you're getting there!"}
         </Text>
       </View>
 
-      {/* 2x2 stat grid */}
       <View style={styles.statGrid}>
-        <View style={[styles.statCard, styles.statCoral]}>
+        <View style={[styles.statCard, styles.statQuestions]}>
           <Text style={styles.statEmoji}>{'📝'}</Text>
           <Text style={styles.statValue}>{progress.totalQuestionsAnswered}</Text>
-          <Text style={styles.statLabel}>Questions{'\n'}Answered</Text>
+          <Text style={styles.statLabel}>{'Questions\nAnswered'}</Text>
         </View>
-        <View style={[styles.statCard, styles.statPurple]}>
+        <View style={[styles.statCard, styles.statMocks]}>
           <Text style={styles.statEmoji}>{'📋'}</Text>
           <Text style={styles.statValue}>{progress.mockTestHistory.length}</Text>
-          <Text style={styles.statLabel}>Mock Tests{'\n'}Taken</Text>
+          <Text style={styles.statLabel}>{'Mock Tests\nTaken'}</Text>
         </View>
-        <View style={[styles.statCard, styles.statOrange]}>
+        <View style={[styles.statCard, styles.statStreak]}>
           <Text style={styles.statEmoji}>{'🔥'}</Text>
           <Text style={styles.statValue}>{progress.studyStreakDays}</Text>
-          <Text style={styles.statLabel}>Day{'\n'}Streak</Text>
+          <Text style={styles.statLabel}>{'Day\nStreak'}</Text>
         </View>
-        <View style={[styles.statCard, styles.statGreen]}>
+        <View style={[styles.statCard, styles.statBest]}>
           <Text style={styles.statEmoji}>{'🏆'}</Text>
           <Text style={[styles.statValue, styles.statValueSmall]}>
             {bestScore(progress.mockTestHistory)}
           </Text>
-          <Text style={styles.statLabel}>Best Mock{'\n'}Score</Text>
+          <Text style={styles.statLabel}>{'Best Mock\nScore'}</Text>
         </View>
       </View>
 
-      {/* Topic mastery */}
       <Text style={styles.sectionLabel}>Topic Mastery</Text>
       <View style={styles.topicList}>
         {topics.map((cat) => {
@@ -183,7 +179,6 @@ export default function ProgressScreen() {
         })}
       </View>
 
-      {/* Recent mock tests */}
       {recentTests.length > 0 && (
         <>
           <Text style={styles.sectionLabel}>Recent Mock Tests</Text>
@@ -205,7 +200,7 @@ export default function ProgressScreen() {
                         test.passed ? styles.badgePass : styles.badgeFail,
                       ]}
                     >
-                      <Text style={styles.badgeText}>
+                      <Text style={[styles.badgeText, test.passed ? styles.badgePassText : styles.badgeFailText]}>
                         {test.passed ? 'PASS' : 'FAIL'}
                       </Text>
                     </View>
@@ -221,177 +216,111 @@ export default function ProgressScreen() {
 }
 
 const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-    backgroundColor: '#F8F7FF',
-  },
+  scroll: { flex: 1, backgroundColor: '#0A0A0F' },
   content: {
     flexGrow: 1,
     padding: 20,
     paddingBottom: 40,
-    backgroundColor: '#F8F7FF',
+    backgroundColor: '#0A0A0F',
   },
 
-  // Empty state
   emptyContainer: {
     flex: 1,
-    backgroundColor: '#F8F7FF',
+    backgroundColor: '#0A0A0F',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
     gap: 12,
   },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  emptyBody: {
-    fontSize: 15,
-    color: '#64748B',
-    textAlign: 'center',
-    lineHeight: 22,
-  },
+  emptyTitle: { fontSize: 20, fontWeight: '700', color: '#F1F0FF' },
+  emptyBody: { fontSize: 15, color: '#6B7280', textAlign: 'center', lineHeight: 22 },
   emptyButton: {
     marginTop: 8,
-    backgroundColor: '#6C63FF',
+    backgroundColor: '#7B5EA7',
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 32,
   },
-  emptyButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
+  emptyButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
 
-  // Header
-  screenTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 12,
-  },
+  screenTitle: { fontSize: 26, fontWeight: '800', color: '#F1F0FF', marginBottom: 12 },
 
-  // Rank badge
   rankBadge: {
     alignSelf: 'flex-start',
     borderRadius: 20,
+    borderWidth: 1.5,
     paddingHorizontal: 16,
     paddingVertical: 6,
     marginBottom: 16,
+    backgroundColor: '#13131A',
   },
-  rankText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
+  rankText: { fontSize: 13, fontWeight: '800', letterSpacing: 0.5 },
 
-  // Goal card
   goalCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#13131A',
     borderRadius: 16,
     padding: 18,
     marginBottom: 20,
-    borderLeftWidth: 4,
-    borderLeftColor: '#6C63FF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    borderWidth: 0.5,
+    borderColor: '#1F1F2E',
+    borderLeftWidth: 3,
+    borderLeftColor: '#A78BFA',
   },
   goalCardLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#94A3B8',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
+    color: '#6B7280',
+    letterSpacing: 1,
     marginBottom: 6,
   },
-  goalTarget: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 12,
-  },
+  goalTarget: { fontSize: 16, fontWeight: '700', color: '#F1F0FF', marginBottom: 12 },
   goalBarTrack: {
     height: 8,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#1C1C27',
     borderRadius: 4,
     overflow: 'hidden',
     marginBottom: 8,
   },
-  goalBarFill: {
-    height: 8,
-    backgroundColor: '#6C63FF',
-    borderRadius: 4,
-  },
-  goalStatus: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  goalBarFill: { height: 8, backgroundColor: '#A78BFA', borderRadius: 4 },
+  goalStatus: { fontSize: 13, fontWeight: '600' },
 
-  // Stat grid
-  statGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 28,
-  },
+  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 28 },
   statCard: {
     flex: 1,
     minWidth: '44%',
     borderRadius: 16,
     padding: 16,
     alignItems: 'center',
+    backgroundColor: '#13131A',
+    borderWidth: 0.5,
+    borderColor: '#1F1F2E',
+    borderTopWidth: 3,
   },
-  statCoral: { backgroundColor: '#FF6B6B' },
-  statPurple: { backgroundColor: '#6C63FF' },
-  statOrange: { backgroundColor: '#F59E0B' },
-  statGreen: { backgroundColor: '#51CF66' },
-  statEmoji: {
-    fontSize: 24,
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  statValueSmall: {
-    fontSize: 20,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.85)',
-    fontWeight: '500',
-    textAlign: 'center',
-  },
+  statQuestions: { borderTopColor: '#F87171' },
+  statMocks: { borderTopColor: '#A78BFA' },
+  statStreak: { borderTopColor: '#FBBF24' },
+  statBest: { borderTopColor: '#34D399' },
+  statEmoji: { fontSize: 24, marginBottom: 4 },
+  statValue: { fontSize: 28, fontWeight: '800', color: '#F1F0FF', marginBottom: 4 },
+  statValueSmall: { fontSize: 20 },
+  statLabel: { fontSize: 11, color: '#6B7280', fontWeight: '500', textAlign: 'center' },
 
-  // Section heading
   sectionLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#94A3B8',
-    letterSpacing: 0.8,
+    color: '#6B7280',
+    letterSpacing: 1,
     textTransform: 'uppercase',
     marginBottom: 12,
   },
 
-  // Topic mastery
-  topicList: {
-    gap: 10,
-    marginBottom: 28,
-  },
+  topicList: { gap: 10, marginBottom: 28 },
   topicRow: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#13131A',
     borderRadius: 12,
     padding: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderWidth: 0.5,
+    borderColor: '#1F1F2E',
   },
   topicHeader: {
     flexDirection: 'row',
@@ -399,81 +328,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
-  topicName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1E293B',
-    flex: 1,
-  },
-  topicPct: {
-    fontSize: 13,
-    fontWeight: '700',
-    marginLeft: 8,
-  },
-  barTrack: {
-    height: 6,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  barFill: {
-    height: 6,
-    borderRadius: 3,
-  },
+  topicName: { fontSize: 14, fontWeight: '600', color: '#F1F0FF', flex: 1 },
+  topicPct: { fontSize: 13, fontWeight: '700', marginLeft: 8 },
+  barTrack: { height: 6, backgroundColor: '#1C1C27', borderRadius: 3, overflow: 'hidden' },
+  barFill: { height: 6, borderRadius: 3 },
 
-  // Recent mock tests
-  sessionList: {
-    gap: 10,
-  },
+  sessionList: { gap: 10 },
   sessionCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#13131A',
     borderRadius: 14,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderWidth: 0.5,
+    borderColor: '#1F1F2E',
   },
-  sessionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  sessionInfo: {
-    flex: 1,
-  },
-  sessionDate: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 2,
-  },
-  sessionDuration: {
-    fontSize: 12,
-    color: '#94A3B8',
-  },
-  sessionRight: {
-    alignItems: 'flex-end',
-    gap: 6,
-  },
-  sessionScore: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#6C63FF',
-  },
-  badge: {
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  badgePass: {
-    backgroundColor: '#DCFCE7',
-  },
-  badgeFail: {
-    backgroundColor: '#FEE2E2',
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#1E293B',
-    letterSpacing: 0.5,
-  },
+  sessionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  sessionInfo: { flex: 1 },
+  sessionDate: { fontSize: 15, fontWeight: '700', color: '#6B7280', marginBottom: 2 },
+  sessionDuration: { fontSize: 12, color: '#374151' },
+  sessionRight: { alignItems: 'flex-end', gap: 6 },
+  sessionScore: { fontSize: 18, fontWeight: '800', color: '#F1F0FF' },
+  badge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
+  badgePass: { backgroundColor: '#064E3B' },
+  badgeFail: { backgroundColor: '#450A0A' },
+  badgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+  badgePassText: { color: '#34D399' },
+  badgeFailText: { color: '#F87171' },
 });
