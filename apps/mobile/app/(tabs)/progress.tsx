@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -7,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import { supabase } from '@/src/supabase';
 import {
   ACHIEVEMENTS,
   Achievement,
@@ -89,6 +91,25 @@ export default function ProgressScreen() {
     });
   }, []);
 
+  async function handleUpgrade() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { router.push('/auth'); return; }
+    try {
+      const proxyUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+        ? 'https://clearpass-app-production.up.railway.app'
+        : 'http://localhost:3001';
+      const res = await fetch(`${proxyUrl}/api/create-checkout-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      });
+      const data = await res.json() as { url?: string };
+      if (data.url) await Linking.openURL(data.url);
+    } catch {
+      router.push('/auth');
+    }
+  }
+
   if (!loaded) return null;
 
   const hasActivity = progress !== null && progress.totalQuestionsAnswered > 0;
@@ -133,6 +154,16 @@ export default function ProgressScreen() {
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <Text style={styles.screenTitle}>Your Progress</Text>
+
+      {!(progress.isPro ?? false) && (
+        <TouchableOpacity style={styles.proBanner} onPress={() => void handleUpgrade()} activeOpacity={0.85}>
+          <View style={styles.proBannerContent}>
+            <Text style={styles.proBannerTitle}>Go Pro for £4.99</Text>
+            <Text style={styles.proBannerSub}>Unlock unlimited questions, AI tutor and more</Text>
+          </View>
+          <Text style={styles.proBannerArrow}>{'→'}</Text>
+        </TouchableOpacity>
+      )}
 
       <View style={[styles.rankBadge, { borderColor: rank.color }]}>
         <Text style={[styles.rankText, { color: rank.color }]}>{rank.label}</Text>
@@ -504,4 +535,21 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
   badgePassText: { color: '#34D399' },
   badgeFailText: { color: '#F87171' },
+
+  proBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#13131A',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#FBBF24',
+    borderLeftWidth: 4,
+    borderLeftColor: '#FBBF24',
+  },
+  proBannerContent: { flex: 1 },
+  proBannerTitle: { fontSize: 15, fontWeight: '800', color: '#FBBF24', marginBottom: 2 },
+  proBannerSub: { fontSize: 12, color: '#6B7280' },
+  proBannerArrow: { fontSize: 18, color: '#FBBF24', fontWeight: '700', marginLeft: 8 },
 });

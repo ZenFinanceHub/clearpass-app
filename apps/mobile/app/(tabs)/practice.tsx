@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -8,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import { supabase } from '@/src/supabase';
 import {
   Achievement,
   TopicCategory,
@@ -58,7 +60,7 @@ const TOPIC_EMOJI: Record<TopicCategory, string> = {
   [TopicCategory.VehicleLoading]: '📦',
 };
 
-type Phase = 'start' | 'loading' | 'quiz' | 'results' | 'battle' | 'battleResults';
+type Phase = 'start' | 'loading' | 'quiz' | 'results' | 'battle' | 'battleResults' | 'dailyLimit';
 
 type SessionResult = {
   question: Question;
@@ -115,14 +117,42 @@ export default function PracticeScreen() {
   const battleAnsweredRef = useRef(false);
   const battleCancelledRef = useRef(false);
 
+  async function handleProUpgrade() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { router.push('/auth'); return; }
+    try {
+      const proxyUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+        ? 'https://clearpass-app-production.up.railway.app'
+        : 'http://localhost:3001';
+      const res = await fetch(`${proxyUrl}/api/create-checkout-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      });
+      const data = await res.json() as { url?: string };
+      if (data.url) await Linking.openURL(data.url);
+    } catch {
+      router.push('/auth');
+    }
+  }
+
   async function startSession() {
-    const [statesMap, progress] = await Promise.all([
+    const [statesMap, loaded] = await Promise.all([
       loadQuestionStates(),
       loadUserProgress(),
     ]);
 
     questionStatesRef.current = statesMap;
-    userProgressRef.current = progress ?? createFreshUserProgress();
+    const today = new Date().toISOString().split('T')[0];
+    const base = loaded ?? createFreshUserProgress();
+    const isNewDay = base.lastStudied.split('T')[0] !== today;
+    const progress = isNewDay ? { ...base, dailyQuestionsAnswered: 0 } : base;
+    userProgressRef.current = progress;
+
+    if (!(progress.isPro ?? false) && (progress.dailyQuestionsAnswered ?? 0) >= 10) {
+      setPhase('dailyLimit');
+      return;
+    }
 
     const sessionIds = getQuestionsForSession(
       Object.values(statesMap),
@@ -355,6 +385,7 @@ export default function PracticeScreen() {
       topicScores: updatedScores,
       totalQuestionsAnswered: progress.totalQuestionsAnswered + results.length,
       lastStudied: new Date().toISOString(),
+      dailyQuestionsAnswered: (progress.dailyQuestionsAnswered ?? 0) + results.length,
     };
     updated.readinessScore = calculateReadiness(updated).score;
 
@@ -422,6 +453,15 @@ export default function PracticeScreen() {
         <ActivityIndicator size="large" color="#A78BFA" />
         <Text style={styles.loadingText}>Loading questions...</Text>
       </View>
+    );
+  }
+
+  if (phase === 'dailyLimit') {
+    return (
+      <DailyLimitView
+        onUpgrade={() => void handleProUpgrade()}
+        onBack={() => setPhase('start')}
+      />
     );
   }
 
@@ -941,6 +981,26 @@ function BattleResultsScreen({
   );
 }
 
+function DailyLimitView({ onUpgrade, onBack }: { onUpgrade: () => void; onBack: () => void }) {
+  return (
+    <View style={styles.centered}>
+      <View style={styles.limitCard}>
+        <Text style={styles.limitTitle}>Daily limit reached</Text>
+        <Text style={styles.limitBody}>
+          {'You have used your 10 free questions today.'}
+        </Text>
+        <TouchableOpacity style={styles.limitUpgradeBtn} onPress={onUpgrade} activeOpacity={0.85}>
+          <Text style={styles.limitUpgradeBtnText}>Upgrade to Pro - £4.99</Text>
+        </TouchableOpacity>
+        <Text style={styles.limitNote}>Come back tomorrow for more free questions</Text>
+        <TouchableOpacity style={styles.limitBackBtn} onPress={onBack} activeOpacity={0.75}>
+          <Text style={styles.limitBackText}>Back</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: '#0A0A0F' },
   content: { padding: 16, paddingBottom: 48 },
@@ -1308,4 +1368,35 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   battleExitText: { fontSize: 12, fontWeight: '600', color: '#6B7280' },
+
+  // Daily limit gate
+  limitCard: {
+    backgroundColor: '#13131A',
+    borderRadius: 20,
+    padding: 28,
+    marginHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#1F1F2E',
+    borderTopWidth: 3,
+    borderTopColor: '#FBBF24',
+    alignItems: 'center',
+    gap: 12,
+    maxWidth: 400,
+    width: '100%',
+  },
+  limitTitle: { fontSize: 22, fontWeight: '800', color: '#FBBF24', textAlign: 'center' },
+  limitBody: { fontSize: 15, color: '#6B7280', textAlign: 'center', lineHeight: 22 },
+  limitUpgradeBtn: {
+    backgroundColor: '#7B5EA7',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    marginTop: 4,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+  },
+  limitUpgradeBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  limitNote: { fontSize: 13, color: '#374151', textAlign: 'center' },
+  limitBackBtn: { paddingVertical: 8 },
+  limitBackText: { color: '#6B7280', fontSize: 14, fontWeight: '600' },
 });

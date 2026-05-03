@@ -123,6 +123,8 @@ export function createFreshUserProgress(): UserProgress {
     dailyChallenge: null,
     testDate: null,
     battleModeHistory: [],
+    isPro: false,
+    dailyQuestionsAnswered: 0,
   };
 }
 

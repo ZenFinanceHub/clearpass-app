@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -7,6 +8,26 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import { supabase } from '@/src/supabase';
+
+async function handleGetPro() {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) { router.push('/auth'); return; }
+  try {
+    const proxyUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+      ? 'https://clearpass-app-production.up.railway.app'
+      : 'http://localhost:3001';
+    const res = await fetch(`${proxyUrl}/api/create-checkout-session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.id }),
+    });
+    const data = await res.json() as { url?: string };
+    if (data.url) await Linking.openURL(data.url);
+  } catch {
+    router.push('/auth');
+  }
+}
 
 const NAVBAR_H = 64;
 
@@ -167,7 +188,7 @@ export default function LandingPage() {
                   <Text style={styles.planFeatureTextPro}>{f}</Text>
                 </View>
               ))}
-              <TouchableOpacity style={styles.planCtaPro} onPress={() => router.push('/auth')} activeOpacity={0.85}>
+              <TouchableOpacity style={styles.planCtaPro} onPress={() => void handleGetPro()} activeOpacity={0.85}>
                 <Text style={styles.planCtaProText}>Get Pro</Text>
               </TouchableOpacity>
             </View>

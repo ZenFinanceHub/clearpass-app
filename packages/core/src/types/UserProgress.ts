@@ -15,4 +15,6 @@ export interface UserProgress {
   dailyChallenge: DailyChallenge | null;
   testDate: string | null;
   battleModeHistory: { date: string; score: number; topicsUsed: string[] }[];
+  isPro: boolean;
+  dailyQuestionsAnswered: number;
 }
