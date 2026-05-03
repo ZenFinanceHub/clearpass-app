@@ -8,7 +8,13 @@ const PORT = 3001;
 
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin || origin.startsWith('http://localhost')) {
+    if (
+      !origin ||
+      origin.startsWith('http://localhost') ||
+      origin.includes('vercel.app') ||
+      origin.includes('railway.app') ||
+      origin.includes('clearpass')
+    ) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));

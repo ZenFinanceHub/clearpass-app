@@ -22,8 +22,10 @@ export async function explainAnswer(
     `Please explain why "${correctOption}" is the correct answer, and why the learner's choice was incorrect.\n\n` +
     `Keep your response under 60 words. Do not use markdown formatting - no asterisks, no bold, no bullet points. Write in plain conversational sentences only.`;
 
+  const PROXY_URL = process.env.EXPO_PUBLIC_PROXY_URL || 'http://localhost:3001';
+
   try {
-    const response = await fetch('http://localhost:3001/api/explain', {
+    const response = await fetch(`${PROXY_URL}/api/explain`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
