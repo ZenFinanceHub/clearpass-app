@@ -50,35 +50,36 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     const userId = session.metadata?.userId;
-    console.log('[webhook] checkout.session.completed userId:', userId);
+    console.log('Webhook - userId from metadata:', userId);
 
-    if (userId) {
-      try {
-        const { createClient } = require('@supabase/supabase-js');
-        const supabaseAdmin = createClient(
-          process.env.SUPABASE_URL,
-          process.env.SUPABASE_SERVICE_KEY,
-        );
+    if (!userId) {
+      console.log('No userId in metadata, skipping Supabase update');
+      return res.json({ received: true });
+    }
 
-        const { data } = await supabaseAdmin
-          .from('user_progress')
-          .select('progress')
-          .eq('id', userId)
-          .single();
+    try {
+      const { createClient } = require('@supabase/supabase-js');
+      const supabaseAdmin = createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_KEY,
+      );
 
-        const existing = data?.progress ?? {};
-        const { error } = await supabaseAdmin.from('user_progress').upsert(
-          {
-            id: userId,
-            progress: { ...existing, isPro: true },
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'id' },
-        );
-        console.log('[webhook] isPro upsert:', error ?? 'ok');
-      } catch (e) {
-        console.error('[webhook] Supabase error:', e);
-      }
+      const { data: existing } = await supabaseAdmin
+        .from('user_progress')
+        .select('progress')
+        .eq('id', userId)
+        .single();
+
+      const updatedProgress = { ...(existing?.progress || {}), isPro: true };
+
+      const { error } = await supabaseAdmin
+        .from('user_progress')
+        .upsert({ id: userId, progress: updatedProgress, updated_at: new Date().toISOString() })
+        .eq('id', userId);
+
+      console.log('Supabase update result:', error ? error.message : 'success');
+    } catch (e) {
+      console.error('[webhook] Supabase error:', e);
     }
   }
 
@@ -118,6 +119,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
   }
 
   const { userId } = req.body;
+  console.log('Creating checkout session for userId:', userId);
 
   try {
     const session = await stripe.checkout.sessions.create({
