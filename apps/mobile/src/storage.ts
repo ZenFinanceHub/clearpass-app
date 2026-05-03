@@ -1,20 +1,61 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QuestionState, TopicCategory, UserProgress } from '@clearpass/core';
+import { supabase } from './supabase';
 
 const KEYS = {
   USER_PROGRESS: '@clearpass/user_progress',
   QUESTION_STATES: '@clearpass/question_states',
 } as const;
 
+export async function syncProgressToCloud(progress: UserProgress): Promise<void> {
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('user_progress').upsert({
+      id: user.id,
+      progress: progress as unknown as Record<string, unknown>,
+      updated_at: new Date().toISOString(),
+    });
+  } catch {
+    // Silently skip — offline mode still works
+  }
+}
+
+export async function loadProgressFromCloud(): Promise<UserProgress | null> {
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data } = await supabase
+      .from('user_progress')
+      .select('progress')
+      .eq('id', user.id)
+      .single();
+    if (!data) return null;
+    const loaded = data.progress as Partial<UserProgress>;
+    return { ...createFreshUserProgress(), ...loaded } as UserProgress;
+  } catch {
+    return null;
+  }
+}
+
 export async function saveUserProgress(progress: UserProgress): Promise<void> {
   await AsyncStorage.setItem(KEYS.USER_PROGRESS, JSON.stringify(progress));
+  void syncProgressToCloud(progress);
 }
 
 export async function loadUserProgress(): Promise<UserProgress | null> {
+  const cloud = await loadProgressFromCloud();
+  if (cloud) {
+    await AsyncStorage.setItem(KEYS.USER_PROGRESS, JSON.stringify(cloud));
+    return cloud;
+  }
   const raw = await AsyncStorage.getItem(KEYS.USER_PROGRESS);
   if (!raw) return null;
   const loaded = JSON.parse(raw) as Partial<UserProgress>;
-  // Merge with defaults to handle old data that pre-dates new fields
   const defaults = createFreshUserProgress();
   return { ...defaults, ...loaded } as UserProgress;
 }

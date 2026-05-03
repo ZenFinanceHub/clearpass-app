@@ -19,6 +19,7 @@ const TABS: TabConfig[] = [
   { name: 'learn', title: 'Learn', icon: 'library-outline', iconFocused: 'library' },
   { name: 'hazard', title: 'Hazard', icon: 'warning-outline', iconFocused: 'warning' },
   { name: 'progress', title: 'Progress', icon: 'stats-chart-outline', iconFocused: 'stats-chart' },
+  { name: 'leaderboard', title: 'Leaderboard', icon: 'trophy-outline', iconFocused: 'trophy' },
 ];
 
 export default function TabLayout() {

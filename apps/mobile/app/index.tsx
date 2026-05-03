@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import { supabase } from '@/src/supabase';
 
 const ONBOARDING_KEY = '@clearpass/onboarding_complete';
 
@@ -15,24 +16,32 @@ export default function OnboardingScreen() {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    AsyncStorage.getItem(ONBOARDING_KEY).then((val) => {
-      if (val) {
+    void (async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session) {
         router.replace('/(tabs)/home');
-      } else {
-        setChecking(false);
+        return;
       }
-    });
+      const val = await AsyncStorage.getItem(ONBOARDING_KEY);
+      if (val) {
+        router.replace('/auth');
+        return;
+      }
+      setChecking(false);
+    })();
   }, []);
 
-  const handleGetStarted = async () => {
+  async function handleGetStarted() {
     await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-    router.replace('/(tabs)/home');
-  };
+    router.replace('/auth');
+  }
 
-  const handleSignIn = async () => {
+  async function handleSignIn() {
     await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-    router.replace('/(tabs)/home');
-  };
+    router.replace('/auth');
+  }
 
   if (checking) return null;
 
@@ -60,13 +69,13 @@ export default function OnboardingScreen() {
       <View style={styles.actions}>
         <TouchableOpacity
           style={styles.primaryButton}
-          onPress={handleGetStarted}
+          onPress={() => void handleGetStarted()}
           activeOpacity={0.85}
         >
           <Text style={styles.primaryButtonText}>Get Started</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={handleSignIn} activeOpacity={0.75}>
+        <TouchableOpacity onPress={() => void handleSignIn()} activeOpacity={0.75}>
           <Text style={styles.signInLink}>Sign In</Text>
         </TouchableOpacity>
       </View>
@@ -96,9 +105,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 32,
   },
-  carEmoji: {
-    fontSize: 72,
-  },
+  carEmoji: { fontSize: 72 },
   title: {
     fontSize: 40,
     fontWeight: '900',
@@ -127,13 +134,8 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
   },
-  featureItem: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  featureEmoji: {
-    fontSize: 24,
-  },
+  featureItem: { alignItems: 'center', gap: 6 },
+  featureEmoji: { fontSize: 24 },
   featureLabel: {
     fontSize: 11,
     color: '#6B7280',

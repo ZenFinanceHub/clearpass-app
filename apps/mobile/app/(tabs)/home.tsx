@@ -15,6 +15,7 @@ import {
   getXpLevel,
 } from '@clearpass/core';
 import { createFreshUserProgress, loadUserProgress, saveUserProgress } from '@/src/storage';
+import { supabase } from '@/src/supabase';
 
 const DAILY_TIPS = [
   "Stopping distance at 70mph is 96 metres - that's 24 car lengths!",
@@ -43,6 +44,7 @@ function getDaysRemaining(testDateIso: string): number {
 
 export default function HomeScreen() {
   const [progress, setProgress] = useState<UserProgress | null>(null);
+  const [username, setUsername] = useState<string | null>(null);
   const [showDateModal, setShowDateModal] = useState(false);
   const [dateInput, setDateInput] = useState('');
   const [dateError, setDateError] = useState('');
@@ -60,6 +62,19 @@ export default function HomeScreen() {
         if (raw !== null) await saveUserProgress(updated);
       }
       setProgress(updated);
+    })();
+
+    void (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('id', user.id)
+        .single();
+      if (profile?.username) setUsername(profile.username as string);
     })();
   }, []);
 
@@ -132,6 +147,13 @@ export default function HomeScreen() {
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+
+      {/* Greeting */}
+      <View style={styles.greeting}>
+        <Text style={styles.greetingText}>
+          {'Hey, '}{username ? username + '!' : 'there!'}
+        </Text>
+      </View>
 
       {/* XP Card */}
       <View style={styles.xpCard}>
@@ -303,6 +325,10 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: '#0A0A0F' },
   content: { flexGrow: 1, paddingBottom: 40 },
+
+  // Greeting
+  greeting: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
+  greetingText: { fontSize: 22, fontWeight: '800', color: '#F1F0FF' },
 
   // XP Card
   xpCard: {
