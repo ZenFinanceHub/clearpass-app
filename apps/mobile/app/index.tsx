@@ -16,21 +16,40 @@ export default function OnboardingScreen() {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    void (async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session) {
-        router.replace('/(tabs)/home');
-        return;
-      }
+    let resolved = false;
+
+    async function resolveNoSession() {
+      if (resolved) return;
+      resolved = true;
       const val = await AsyncStorage.getItem(ONBOARDING_KEY);
       if (val) {
         router.replace('/auth');
-        return;
+      } else {
+        setChecking(false);
       }
-      setChecking(false);
-    })();
+    }
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (resolved) return;
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+        if (session) {
+          resolved = true;
+          router.replace('/(tabs)/home');
+        } else if (event === 'INITIAL_SESSION') {
+          void resolveNoSession();
+        }
+      }
+    });
+
+    // Safety fallback: if INITIAL_SESSION never fires within 2 seconds, proceed normally
+    const timer = setTimeout(() => void resolveNoSession(), 2000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timer);
+    };
   }, []);
 
   async function handleGetStarted() {

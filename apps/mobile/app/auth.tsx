@@ -51,6 +51,7 @@ export default function AuthScreen() {
       if (authError) {
         setError(authError.message);
       } else {
+        await new Promise<void>((res) => setTimeout(res, 500));
         router.replace('/(tabs)/home');
       }
     } catch {
@@ -113,7 +114,8 @@ export default function AuthScreen() {
         }
       }
 
-      // Always navigate — a missing username is not critical
+      // Wait briefly for the session to persist to storage before navigating
+      await new Promise<void>((res) => setTimeout(res, 500));
       router.replace('/(tabs)/home');
     } catch {
       setError('An unexpected error occurred.');
