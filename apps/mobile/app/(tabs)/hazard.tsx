@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Platform,
@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import WebView from 'react-native-webview';
 import { router, useFocusEffect } from 'expo-router';
 import { HazardClipResult, HazardWindow, calculateHazardTotal, scoreClip } from '@clearpass/core';
 import { hazardClips } from '@clearpass/content';
@@ -46,6 +45,50 @@ v.play().catch(function() {});
 </script>
 </body>
 </html>`;
+}
+
+interface WebVideoPlayerProps {
+  url: string;
+  muted: boolean;
+  onEnded: () => void;
+  onTimeUpdate: (t: number) => void;
+}
+
+function WebVideoPlayer({ url, muted, onEnded, onTimeUpdate }: WebVideoPlayerProps) {
+  const ref = useRef<any>(null);
+  const lastSecRef = useRef(-1);
+
+  useEffect(() => {
+    if (ref.current) ref.current.muted = muted;
+  }, [muted]);
+
+  return React.createElement('video' as any, {
+    ref,
+    src: url,
+    autoPlay: true,
+    muted: true,
+    playsInline: true,
+    controls: false,
+    style: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: '100%',
+      objectFit: 'cover',
+      display: 'block',
+      pointerEvents: 'none',
+    } as any,
+    onTimeUpdate: (e: any) => {
+      const t = e.target.currentTime as number;
+      const sec = Math.floor(t);
+      if (sec !== lastSecRef.current) {
+        lastSecRef.current = sec;
+        onTimeUpdate(t);
+      }
+    },
+    onEnded,
+  });
 }
 
 export default function HazardScreen() {
@@ -217,29 +260,43 @@ export default function HazardScreen() {
   // ── PLAYER ───────────────────────────────────────────────────────────────
 
   if (phase === 'player') {
-    const videoHtml = makeVideoHtml(clip.videoUrl);
+    let videoContent: React.ReactElement;
+    if (Platform.OS !== 'web') {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const WebView = (require('react-native-webview') as { default: React.ComponentType<any> }).default;
+      videoContent = (
+        <WebView
+          ref={webViewRef}
+          key={clipIndex}
+          source={{ html: makeVideoHtml(clip.videoUrl) }}
+          style={StyleSheet.absoluteFillObject}
+          scrollEnabled={false}
+          allowsInlineMediaPlayback
+          mediaPlaybackRequiresUserAction={false}
+          onMessage={(e: any) => {
+            const data = JSON.parse(e.nativeEvent.data) as { type: string; currentTime?: number };
+            if (data.type === 'ended') handleVideoEnded();
+            if (data.type === 'timeupdate' && data.currentTime !== undefined) {
+              setCurrentTime(data.currentTime);
+            }
+          }}
+        />
+      );
+    } else {
+      videoContent = (
+        <WebVideoPlayer
+          url={clip.videoUrl}
+          muted={muted}
+          onEnded={handleVideoEnded}
+          onTimeUpdate={setCurrentTime}
+        />
+      );
+    }
+
     return (
       <View style={styles.playerScreen}>
         <View style={styles.videoWrap}>
-          <WebView
-            ref={webViewRef}
-            key={clipIndex}
-            source={{ html: videoHtml }}
-            style={StyleSheet.absoluteFillObject}
-            scrollEnabled={false}
-            allowsInlineMediaPlayback
-            mediaPlaybackRequiresUserAction={false}
-            onMessage={(e) => {
-              const data = JSON.parse(e.nativeEvent.data) as {
-                type: string;
-                currentTime?: number;
-              };
-              if (data.type === 'ended') handleVideoEnded();
-              if (data.type === 'timeupdate' && data.currentTime !== undefined) {
-                setCurrentTime(data.currentTime);
-              }
-            }}
-          />
+          {videoContent}
 
           {/* Tap overlay */}
           <TouchableOpacity
