@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import WebView from 'react-native-webview';
 import { router, useFocusEffect } from 'expo-router';
 import { HazardClipResult, HazardWindow, calculateHazardTotal, scoreClip } from '@clearpass/core';
 import { hazardClips } from '@clearpass/content';
@@ -15,14 +16,47 @@ import { loadUserProgress, saveUserProgress } from '@/src/storage';
 
 type Phase = 'info' | 'pre-clip' | 'player' | 'clip-result' | 'results';
 
+function makeVideoHtml(url: string): string {
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; width: 100vw; height: 100vh; overflow: hidden; }
+video { width: 100%; height: 100%; object-fit: cover; display: block; }
+</style>
+</head>
+<body>
+<video id="v" src="${url}" autoplay playsinline muted></video>
+<script>
+var v = document.getElementById('v');
+var lastSecond = -1;
+v.addEventListener('ended', function() {
+  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ended' }));
+});
+v.addEventListener('timeupdate', function() {
+  var sec = Math.floor(v.currentTime);
+  if (sec !== lastSecond) {
+    lastSecond = sec;
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'timeupdate', currentTime: v.currentTime }));
+  }
+});
+v.play().catch(function() {});
+</script>
+</body>
+</html>`;
+}
+
 export default function HazardScreen() {
   const [phase, setPhase] = useState<Phase>('info');
   const [clipIndex, setClipIndex] = useState(0);
   const [clicks, setClicks] = useState<number[]>([]);
   const [currentTime, setCurrentTime] = useState(0);
   const [clipResults, setClipResults] = useState<HazardClipResult[]>([]);
+  const [muted, setMuted] = useState(true);
   const flashAnim = useRef(new Animated.Value(0)).current;
-  const videoRef = useRef<any>(null);
+  const webViewRef = useRef<any>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -33,8 +67,7 @@ export default function HazardScreen() {
   const clip = hazardClips[clipIndex];
 
   function handleVideoTap() {
-    const t: number = videoRef.current?.currentTime ?? currentTime;
-    setClicks((prev) => [...prev, t]);
+    setClicks((prev) => [...prev, currentTime]);
     flashAnim.setValue(0.5);
     Animated.timing(flashAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
   }
@@ -45,11 +78,18 @@ export default function HazardScreen() {
     setPhase('clip-result');
   }
 
+  function handleMuteToggle() {
+    const next = !muted;
+    setMuted(next);
+    webViewRef.current?.injectJavaScript(`document.getElementById('v').muted = ${String(next)}; void(0);`);
+  }
+
   function handleNextClip() {
     if (clipIndex + 1 < hazardClips.length) {
       setClipIndex((i) => i + 1);
       setClicks([]);
       setCurrentTime(0);
+      setMuted(true);
       setPhase('pre-clip');
     } else {
       setPhase('results');
@@ -84,6 +124,7 @@ export default function HazardScreen() {
     setClicks([]);
     setCurrentTime(0);
     setClipResults([]);
+    setMuted(true);
   }
 
   // ── INFO ─────────────────────────────────────────────────────────────────
@@ -176,55 +217,53 @@ export default function HazardScreen() {
   // ── PLAYER ───────────────────────────────────────────────────────────────
 
   if (phase === 'player') {
+    const videoHtml = makeVideoHtml(clip.videoUrl);
     return (
       <View style={styles.playerScreen}>
         <View style={styles.videoWrap}>
-          {Platform.OS === 'web'
-            ? React.createElement('video' as any, {
-                ref: videoRef,
-                src: clip.videoUrl,
-                autoPlay: true,
-                muted: true,
-                playsInline: true,
-                controls: false,
-                style: {
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  display: 'block',
-                  pointerEvents: 'none',
-                } as any,
-                onTimeUpdate: (e: any) => setCurrentTime(e.target.currentTime as number),
-                onEnded: handleVideoEnded,
-              })
-            : (
-              <View style={styles.nativePlaceholder}>
-                <Text style={styles.nativePlaceholderText}>{'[ Video Clip ]'}</Text>
-                <Text style={styles.nativePlaceholderSub}>{'Open in browser for video'}</Text>
-                <TouchableOpacity
-                  style={[styles.primaryBtn, { marginTop: 24 }]}
-                  onPress={handleVideoEnded}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.primaryBtnText}>{'Skip (demo)'}</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-          <TouchableOpacity
+          <WebView
+            ref={webViewRef}
+            key={clipIndex}
+            source={{ html: videoHtml }}
             style={StyleSheet.absoluteFillObject}
+            scrollEnabled={false}
+            allowsInlineMediaPlayback
+            mediaPlaybackRequiresUserAction={false}
+            onMessage={(e) => {
+              const data = JSON.parse(e.nativeEvent.data) as {
+                type: string;
+                currentTime?: number;
+              };
+              if (data.type === 'ended') handleVideoEnded();
+              if (data.type === 'timeupdate' && data.currentTime !== undefined) {
+                setCurrentTime(data.currentTime);
+              }
+            }}
+          />
+
+          {/* Tap overlay */}
+          <TouchableOpacity
+            style={[StyleSheet.absoluteFillObject, { zIndex: 10 }]}
             activeOpacity={1}
             onPress={handleVideoTap}
           />
 
+          {/* Click flash */}
           <Animated.View
-            style={[StyleSheet.absoluteFillObject, styles.flashOverlay, { opacity: flashAnim }]}
+            style={[
+              StyleSheet.absoluteFillObject,
+              styles.flashOverlay,
+              { opacity: flashAnim, zIndex: 11 },
+            ]}
             pointerEvents="none"
           />
 
+          {/* Mute toggle */}
+          <TouchableOpacity style={styles.muteBtn} onPress={handleMuteToggle}>
+            <Text style={styles.muteBtnText}>{muted ? '[ mute ]' : '[ sound ]'}</Text>
+          </TouchableOpacity>
+
+          {/* HUD */}
           <View style={styles.hud} pointerEvents="none">
             <Text style={styles.hudText}>
               {clipIndex + 1}
@@ -441,11 +480,23 @@ const styles = StyleSheet.create({
   playerScreen: { flex: 1, backgroundColor: '#000000' },
   videoWrap: { flex: 1, backgroundColor: '#000000', overflow: 'hidden' },
   flashOverlay: { backgroundColor: '#FCD34D' },
+  muteBtn: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 12,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  muteBtnText: { fontSize: 11, fontWeight: '700', color: '#FFFFFF' },
   hud: {
     position: 'absolute',
     bottom: 16,
     left: 16,
     right: 16,
+    zIndex: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -456,14 +507,6 @@ const styles = StyleSheet.create({
   hudText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
   tapHintBar: { backgroundColor: '#111827', paddingVertical: 12, alignItems: 'center' },
   tapHintText: { fontSize: 13, color: '#9CA3AF' },
-  nativePlaceholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#111827',
-  },
-  nativePlaceholderText: { fontSize: 28, color: '#374151', fontWeight: '800' },
-  nativePlaceholderSub: { fontSize: 13, color: '#6B7280', marginTop: 8 },
 
   // Clip result
   resultCard: {
