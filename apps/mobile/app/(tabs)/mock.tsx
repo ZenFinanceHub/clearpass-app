@@ -46,15 +46,15 @@ const TOPIC_LABELS: Record<TopicCategory, string> = {
   [TopicCategory.VehicleLoading]: 'Vehicle Loading',
 };
 
+// We have 210 questions — more than the 50 needed for a test.
+// The real DVSA uses a licensed bank; we pick 50 unique questions per session.
 function buildTestQuestions(pool: Question[]): Question[] {
-  const shuffled = [...pool].sort(() => Math.random() - 0.5);
-  const result: Question[] = [...shuffled];
-  let i = 0;
-  while (result.length < TOTAL_QUESTIONS) {
-    result.push(shuffled[i % shuffled.length]);
-    i++;
+  const arr = [...pool];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
   }
-  return result.sort(() => Math.random() - 0.5);
+  return arr.slice(0, TOTAL_QUESTIONS);
 }
 
 function formatTime(totalSeconds: number): string {
