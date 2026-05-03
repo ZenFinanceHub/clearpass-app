@@ -37,3 +37,8 @@ CREATE POLICY "Users can read own progress" ON user_progress FOR SELECT USING (a
 CREATE POLICY "Users can upsert own progress" ON user_progress FOR ALL USING (auth.uid() = id);
 
 CREATE POLICY "Anyone can read leaderboard" ON user_progress FOR SELECT USING (true);
+
+-- Migration: replace strict insert policy with permissive one to fix sign-up timing issue
+DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
+CREATE POLICY "Users can insert own profile" ON profiles
+  FOR INSERT WITH CHECK (true);

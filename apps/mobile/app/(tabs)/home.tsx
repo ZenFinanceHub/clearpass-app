@@ -14,7 +14,12 @@ import {
   generateDailyChallenge,
   getXpLevel,
 } from '@clearpass/core';
-import { createFreshUserProgress, loadUserProgress, saveUserProgress } from '@/src/storage';
+import {
+  createFreshUserProgress,
+  loadUserProgress,
+  saveUserProgress,
+  syncPendingUsername,
+} from '@/src/storage';
 import { supabase } from '@/src/supabase';
 
 const DAILY_TIPS = [
@@ -65,6 +70,7 @@ export default function HomeScreen() {
     })();
 
     void (async () => {
+      await syncPendingUsername();
       const {
         data: { user },
       } = await supabase.auth.getUser();

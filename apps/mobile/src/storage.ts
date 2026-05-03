@@ -5,7 +5,27 @@ import { supabase } from './supabase';
 const KEYS = {
   USER_PROGRESS: '@clearpass/user_progress',
   QUESTION_STATES: '@clearpass/question_states',
+  PENDING_USERNAME: '@clearpass/pending_username',
 } as const;
+
+export async function syncPendingUsername(): Promise<void> {
+  try {
+    const username = await AsyncStorage.getItem(KEYS.PENDING_USERNAME);
+    if (!username) return;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    const { error } = await supabase
+      .from('profiles')
+      .upsert({ id: user.id, username });
+    if (!error || error.code === '23505') {
+      await AsyncStorage.removeItem(KEYS.PENDING_USERNAME);
+    }
+  } catch {
+    // Silent fail — will retry on next app load
+  }
+}
 
 export async function syncProgressToCloud(progress: UserProgress): Promise<void> {
   try {

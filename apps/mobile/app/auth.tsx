@@ -10,8 +10,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
+
+const PENDING_USERNAME_KEY = '@clearpass/pending_username';
 
 type Tab = 'signin' | 'signup';
 
@@ -57,6 +60,11 @@ export default function AuthScreen() {
     }
   }
 
+  async function tryInsertProfile(userId: string, username: string): Promise<boolean> {
+    const { error } = await supabase.from('profiles').insert({ id: userId, username });
+    return !error || error.code === '23505';
+  }
+
   async function handleSignUp() {
     setError('');
     if (suUsername.trim().length < 3) {
@@ -77,7 +85,7 @@ export default function AuthScreen() {
     }
     setLoading(true);
     try {
-      const { data, error: authError } = await supabase.auth.signUp({
+      const { error: authError } = await supabase.auth.signUp({
         email: suEmail.trim(),
         password: suPassword,
       });
@@ -85,17 +93,27 @@ export default function AuthScreen() {
         setError(authError.message);
         return;
       }
-      const userId = data.user?.id;
+
+      // Wait for session to be confirmed before inserting profile
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+
       if (userId) {
-        const { error: profileError } = await supabase.from('profiles').insert({
-          id: userId,
-          username: suUsername.trim(),
-        });
-        if (profileError && profileError.code !== '23505') {
-          setError('Account created but failed to save username.');
-          return;
+        const username = suUsername.trim();
+        let ok = await tryInsertProfile(userId, username);
+        if (!ok) {
+          await new Promise<void>((res) => setTimeout(res, 1000));
+          ok = await tryInsertProfile(userId, username);
+        }
+        if (!ok) {
+          // Non-critical: save locally and sync on next app load
+          await AsyncStorage.setItem(PENDING_USERNAME_KEY, username);
         }
       }
+
+      // Always navigate — a missing username is not critical
       router.replace('/(tabs)/home');
     } catch {
       setError('An unexpected error occurred.');
