@@ -12,11 +12,11 @@ const NAVBAR_H = 64;
 
 type Feature = { emoji: string; title: string; desc: string; accent: string };
 const FEATURES: Feature[] = [
-  { emoji: '🧠', title: 'Smart Practice', desc: 'AI selects questions based on your weak areas so every session counts.', accent: '#F87171' },
-  { emoji: '🤖', title: 'AI Tutor', desc: 'Get instant explanations for every wrong answer from Claude AI.', accent: '#A78BFA' },
-  { emoji: '⏱', title: 'Mock Tests', desc: 'Full 57-minute timed tests matching the real DVSA format.', accent: '#34D399' },
+  { emoji: '[ AI ]', title: 'Smart Practice', desc: 'AI selects questions based on your weak areas so every session counts.', accent: '#F87171' },
+  { emoji: '[ ? ]', title: 'AI Tutor', desc: 'Get instant explanations for every wrong answer from Claude AI.', accent: '#A78BFA' },
+  { emoji: '[ 57 ]', title: 'Mock Tests', desc: 'Full 57-minute timed tests matching the real DVSA format.', accent: '#34D399' },
   { emoji: '⚡', title: 'Battle Mode', desc: 'Race through your weakest topics with a combo score multiplier.', accent: '#FBBF24' },
-  { emoji: '📊', title: 'Progress Tracking', desc: 'Track your readiness score and see exactly where to improve.', accent: '#F87171' },
+  { emoji: '[ % ]', title: 'Progress Tracking', desc: 'Track your readiness score and see exactly where to improve.', accent: '#F87171' },
   { emoji: '🏆', title: 'Leaderboard', desc: 'Compete with friends and see who is most prepared to pass.', accent: '#A78BFA' },
 ];
 
@@ -205,7 +205,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
+    paddingLeft: 24,
+    paddingRight: 24,
     backgroundColor: '#0D0D14',
     borderBottomWidth: 0.5,
     borderBottomColor: '#1F1F2E',
@@ -231,7 +232,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 100,
+    paddingTop: 40,
+    paddingBottom: 80,
     overflow: 'hidden',
   },
   heroBgWrap: {
@@ -418,7 +420,15 @@ const styles = StyleSheet.create({
     minWidth: 260,
     maxWidth: 360,
   },
-  pricingCardPro: { backgroundColor: '#7B5EA7', borderColor: '#9775D0' },
+  pricingCardPro: {
+    backgroundColor: '#7B5EA7',
+    borderWidth: 2,
+    borderColor: '#A78BFA',
+    shadowColor: '#A78BFA',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+  },
   popularBadge: {
     alignSelf: 'flex-start',
     backgroundColor: '#FBBF24',
