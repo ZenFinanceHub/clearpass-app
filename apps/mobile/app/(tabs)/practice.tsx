@@ -29,6 +29,7 @@ import {
   loadUserProgress,
   saveQuestionStates,
   saveUserProgress,
+  syncProgressToCloud,
   updateStudyStreak,
 } from '@/src/storage';
 import { explainAnswer } from '@clearpass/ai';
@@ -250,6 +251,7 @@ export default function PracticeScreen() {
     const { newAchievements: unlocked, updatedProgress } = checkAchievements(progress);
     userProgressRef.current = updatedProgress;
     await saveUserProgress(updatedProgress);
+    await syncProgressToCloud(updatedProgress);
 
     setBattleXpEarned(xpEarned);
     setBattleNewAchievements(unlocked);
@@ -402,6 +404,7 @@ export default function PracticeScreen() {
     const { newAchievements: unlocked, updatedProgress: final } = checkAchievements(updated);
     userProgressRef.current = final;
     await saveUserProgress(final);
+    await syncProgressToCloud(final);
 
     setXpGained(xpThisSession);
     setNewAchievements(unlocked);

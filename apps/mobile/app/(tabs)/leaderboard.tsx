@@ -10,6 +10,7 @@ import {
 import { router } from 'expo-router';
 import { getXpLevel } from '@clearpass/core';
 import { supabase } from '@/src/supabase';
+import { loadUserProgress, syncProgressToCloud } from '@/src/storage';
 
 type LeaderboardEntry = {
   username: string;
@@ -46,6 +47,11 @@ export default function LeaderboardScreen() {
           .eq('id', user.id)
           .single();
         setCurrentUsername(profile?.username ?? null);
+
+        const progress = await loadUserProgress();
+        if (progress) {
+          await syncProgressToCloud(progress);
+        }
       }
 
       const { data } = await supabase

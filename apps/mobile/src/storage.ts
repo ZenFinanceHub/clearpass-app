@@ -34,14 +34,21 @@ export async function syncProgressToCloud(progress: UserProgress): Promise<void>
     const {
       data: { user },
     } = await supabase.auth.getUser();
+    console.log('[syncProgressToCloud] user:', user?.id ?? 'none');
     if (!user) return;
-    await supabase.from('user_progress').upsert({
-      id: user.id,
-      progress: progress as unknown as Record<string, unknown>,
-      updated_at: new Date().toISOString(),
-    });
-  } catch {
-    // Silently skip — offline mode still works
+    const { error } = await supabase
+      .from('user_progress')
+      .upsert(
+        {
+          id: user.id,
+          progress: progress as unknown as Record<string, unknown>,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' },
+      );
+    console.log('[syncProgressToCloud] result:', error ?? 'ok');
+  } catch (e) {
+    console.log('[syncProgressToCloud] caught error:', e);
   }
 }
 
