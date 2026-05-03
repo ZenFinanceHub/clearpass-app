@@ -50,3 +50,5 @@ for (const question of allQuestions) {
 export function getQuestionById(id: string): Question | undefined {
   return allQuestions.find((q) => q.id === id);
 }
+
+export { hazardClips } from './hazardClips';

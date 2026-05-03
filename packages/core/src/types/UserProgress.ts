@@ -1,6 +1,7 @@
 import { TopicCategory } from './TopicCategory';
 import { MockTestResult } from './MockTestResult';
 import { DailyChallenge } from './DailyChallenge';
+import { HazardSessionResult } from './HazardClip';
 
 export interface UserProgress {
   userId: string;
@@ -17,4 +18,5 @@ export interface UserProgress {
   battleModeHistory: { date: string; score: number; topicsUsed: string[] }[];
   isPro: boolean;
   dailyQuestionsAnswered: number;
+  hazardPerceptionHistory: HazardSessionResult[];
 }

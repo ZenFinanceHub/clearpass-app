@@ -125,6 +125,7 @@ export function createFreshUserProgress(): UserProgress {
     battleModeHistory: [],
     isPro: false,
     dailyQuestionsAnswered: 0,
+    hazardPerceptionHistory: [],
   };
 }
 
