@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Modal,
   ScrollView,
@@ -8,7 +8,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router, useFocusEffect } from 'expo-router';
 import {
   UserProgress,
   generateDailyChallenge,
@@ -68,21 +69,41 @@ export default function HomeScreen() {
       }
       setProgress(updated);
     })();
-
-    void (async () => {
-      await syncPendingUsername();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('username')
-        .eq('id', user.id)
-        .single();
-      if (profile?.username) setUsername(profile.username as string);
-    })();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void (async () => {
+        await syncPendingUsername();
+
+        console.log('[HomeScreen] fetching user session...');
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        console.log('[HomeScreen] getUser ->', user?.id ?? 'no user', userError ?? 'no error');
+
+        if (!user) {
+          const pending = await AsyncStorage.getItem('@clearpass/pending_username');
+          console.log('[HomeScreen] no session, pending username:', pending);
+          if (pending) setUsername(pending);
+          return;
+        }
+
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('id', user.id)
+          .single();
+        console.log('[HomeScreen] profile fetch ->', profile, profileError ?? 'no error');
+
+        if (profile?.username) {
+          setUsername(profile.username as string);
+        } else {
+          const pending = await AsyncStorage.getItem('@clearpass/pending_username');
+          console.log('[HomeScreen] no profile username, pending:', pending);
+          if (pending) setUsername(pending);
+        }
+      })();
+    }, []),
+  );
 
   function handleOpenModal() {
     const current = progress?.testDate;

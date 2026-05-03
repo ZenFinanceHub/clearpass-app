@@ -11,19 +11,21 @@ const KEYS = {
 export async function syncPendingUsername(): Promise<void> {
   try {
     const username = await AsyncStorage.getItem(KEYS.PENDING_USERNAME);
+    console.log('[syncPendingUsername] pending username:', username);
     if (!username) return;
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    console.log('[syncPendingUsername] user:', user?.id ?? 'none', userError ?? 'no error');
     if (!user) return;
     const { error } = await supabase
       .from('profiles')
       .upsert({ id: user.id, username });
+    console.log('[syncPendingUsername] upsert result:', error ?? 'ok');
     if (!error || error.code === '23505') {
       await AsyncStorage.removeItem(KEYS.PENDING_USERNAME);
+      console.log('[syncPendingUsername] cleared pending username');
     }
-  } catch {
-    // Silent fail — will retry on next app load
+  } catch (e) {
+    console.log('[syncPendingUsername] caught error:', e);
   }
 }
 
