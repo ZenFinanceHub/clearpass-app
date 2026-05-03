@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
@@ -21,6 +21,10 @@ export default function OnboardingScreen() {
     async function resolveNoSession() {
       if (resolved) return;
       resolved = true;
+      if (Platform.OS === 'web') {
+        router.replace('/landing');
+        return;
+      }
       const val = await AsyncStorage.getItem(ONBOARDING_KEY);
       if (val) {
         router.replace('/auth');
