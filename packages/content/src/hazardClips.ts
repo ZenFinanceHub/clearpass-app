@@ -3,52 +3,52 @@ import { HazardClip } from '@clearpass/core';
 export const hazardClips: HazardClip[] = [
   {
     id: 'haz_001',
-    title: 'Busy Town Centre',
+    title: 'Town Centre Hazards',
     description:
-      'A busy shopping area with pedestrians and parked vehicles. Watch for unexpected hazards from the pavement.',
-    videoUrl:
-      'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    durationSec: 15,
-    hazards: [{ startSec: 4, endSec: 10 }],
+      'UK town centre driving with pedestrians and unpredictable road users. Watch for developing hazards.',
+    videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
+    youtubeId: 'Hwv999MX1Dc',
+    durationSec: 60,
+    hazards: [{ startSec: 8, endSec: 18 }],
   },
   {
     id: 'haz_002',
-    title: 'Rural Junction',
+    title: 'Residential Roads',
     description:
-      'Approaching a rural crossroads. Be alert for vehicles emerging from side roads without warning.',
-    videoUrl:
-      'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    durationSec: 15,
-    hazards: [{ startSec: 3, endSec: 9 }],
+      'Driving through UK residential streets. Be alert for cyclists, pedestrians and vehicles pulling out.',
+    videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
+    youtubeId: 'EGwh9PeMZBY',
+    durationSec: 60,
+    hazards: [{ startSec: 8, endSec: 18 }],
   },
   {
     id: 'haz_003',
-    title: 'Residential Street',
+    title: 'Junction Hazards',
     description:
-      'Driving through a residential area. Look out for cyclists and children near parked cars.',
-    videoUrl:
-      'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    durationSec: 15,
-    hazards: [{ startSec: 5, endSec: 11 }],
+      'Approaching busy UK junctions. Watch for vehicles failing to give way.',
+    videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
+    youtubeId: 'SREjn6XfKp8',
+    durationSec: 60,
+    hazards: [{ startSec: 8, endSec: 18 }],
   },
   {
     id: 'haz_004',
     title: 'Dual Carriageway',
     description:
-      'Travelling on a dual carriageway. Watch for vehicles merging and sudden lane changes ahead.',
-    videoUrl:
-      'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-    durationSec: 15,
-    hazards: [{ startSec: 4, endSec: 10 }],
+      'UK dual carriageway driving. Watch for sudden lane changes and merging vehicles.',
+    videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
+    youtubeId: 'FlX50lZ3vNk',
+    durationSec: 60,
+    hazards: [{ startSec: 8, endSec: 18 }],
   },
   {
     id: 'haz_005',
-    title: 'Country Road',
+    title: 'Country Roads',
     description:
-      'Navigating a winding country road. Be ready for hazards emerging around blind bends.',
-    videoUrl:
-      'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-    durationSec: 15,
-    hazards: [{ startSec: 5, endSec: 11 }],
+      'Rural UK roads with blind bends and emerging vehicles from side roads.',
+    videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
+    youtubeId: 'xTzMF-aoK2s',
+    durationSec: 60,
+    hazards: [{ startSec: 8, endSec: 18 }],
   },
 ];

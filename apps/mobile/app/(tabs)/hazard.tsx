@@ -12,6 +12,8 @@ import { router, useFocusEffect } from 'expo-router';
 import { HazardClipResult, HazardWindow, calculateHazardTotal, scoreClip } from '@clearpass/core';
 import { hazardClips } from '@clearpass/content';
 import { loadUserProgress, saveUserProgress } from '@/src/storage';
+import { isPremium } from '@/src/subscription';
+import { useTheme } from '@/src/theme';
 
 type Phase = 'info' | 'pre-clip' | 'player' | 'clip-result' | 'results';
 
@@ -48,46 +50,43 @@ v.play().catch(function() {});
 }
 
 interface WebVideoPlayerProps {
-  url: string;
-  muted: boolean;
+  youtubeId: string;
+  durationSec: number;
   onEnded: () => void;
   onTimeUpdate: (t: number) => void;
 }
 
-function WebVideoPlayer({ url, muted, onEnded, onTimeUpdate }: WebVideoPlayerProps) {
-  const ref = useRef<any>(null);
-  const lastSecRef = useRef(-1);
+function WebVideoPlayer({ youtubeId, durationSec, onEnded, onTimeUpdate }: WebVideoPlayerProps) {
+  useEffect(() => {
+    let elapsed = 0;
+    const tick = setInterval(() => {
+      elapsed += 1;
+      onTimeUpdate(elapsed);
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [onTimeUpdate]);
 
   useEffect(() => {
-    if (ref.current) ref.current.muted = muted;
-  }, [muted]);
+    const timer = setTimeout(onEnded, durationSec * 1000);
+    return () => clearTimeout(timer);
+  }, [durationSec, onEnded]);
 
-  return React.createElement('video' as any, {
-    ref,
-    src: url,
-    autoPlay: true,
-    muted: true,
-    playsInline: true,
-    controls: false,
+  const src = `https://www.youtube.com/embed/${youtubeId}?autoplay=1&mute=1&controls=0&modestbranding=1&playsinline=1`;
+
+  return React.createElement('iframe' as any, {
+    src,
+    title: 'Hazard clip',
+    allow: 'autoplay',
+    frameBorder: '0',
     style: {
       position: 'absolute',
       top: 0,
       left: 0,
       width: '100%',
       height: '100%',
-      objectFit: 'cover',
-      display: 'block',
+      border: 'none',
       pointerEvents: 'none',
     } as any,
-    onTimeUpdate: (e: any) => {
-      const t = e.target.currentTime as number;
-      const sec = Math.floor(t);
-      if (sec !== lastSecRef.current) {
-        lastSecRef.current = sec;
-        onTimeUpdate(t);
-      }
-    },
-    onEnded,
   });
 }
 
@@ -100,6 +99,7 @@ export default function HazardScreen() {
   const [muted, setMuted] = useState(true);
   const flashAnim = useRef(new Animated.Value(0)).current;
   const webViewRef = useRef<any>(null);
+  const theme = useTheme();
 
   useFocusEffect(
     useCallback(() => {
@@ -175,9 +175,9 @@ export default function HazardScreen() {
   if (phase === 'info') {
     const maxPts = hazardClips.reduce((s, c) => s + c.hazards.length * 5, 0);
     return (
-      <ScrollView style={styles.bg} contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.heading}>{'Hazard Perception'}</Text>
-        <Text style={styles.sub}>{'UK Theory Test Practice'}</Text>
+      <ScrollView style={[styles.bg, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.scrollContent}>
+        <Text style={[styles.heading, { fontSize: theme.fontSize(26), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Hazard Perception'}</Text>
+        <Text style={[styles.sub, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>{'UK Theory Test Practice'}</Text>
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>{'How it works'}</Text>
@@ -215,7 +215,11 @@ export default function HazardScreen() {
 
         <TouchableOpacity
           style={styles.primaryBtn}
-          onPress={() => setPhase('pre-clip')}
+          onPress={() => void (async () => {
+            const premium = await isPremium();
+            if (!premium) { router.push('/paywall'); return; }
+            setPhase('pre-clip');
+          })()}
           activeOpacity={0.85}
         >
           <Text style={styles.primaryBtnText}>{'Start Practice'}</Text>
@@ -228,15 +232,15 @@ export default function HazardScreen() {
 
   if (phase === 'pre-clip') {
     return (
-      <View style={[styles.bg, styles.centerFill]}>
+      <View style={[styles.bg, styles.centerFill, { backgroundColor: theme.backgroundColor }]}>
         <Text style={styles.clipCounter}>
           {'Clip '}
           {clipIndex + 1}
           {' of '}
           {hazardClips.length}
         </Text>
-        <Text style={styles.heading}>{clip.title}</Text>
-        <Text style={styles.bodyText}>{clip.description}</Text>
+        <Text style={[styles.heading, { fontSize: theme.fontSize(26), fontFamily: theme.fontFamily, color: theme.textColor }]}>{clip.title}</Text>
+        <Text style={[styles.bodyText, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, color: theme.subTextColor }]}>{clip.description}</Text>
         <View style={styles.reminderBox}>
           <Text style={styles.reminderText}>
             {'Tap anywhere on screen as soon as you spot a developing hazard.'}
@@ -285,8 +289,8 @@ export default function HazardScreen() {
     } else {
       videoContent = (
         <WebVideoPlayer
-          url={clip.videoUrl}
-          muted={muted}
+          youtubeId={clip.youtubeId ?? ''}
+          durationSec={clip.durationSec}
           onEnded={handleVideoEnded}
           onTimeUpdate={setCurrentTime}
         />
@@ -348,14 +352,14 @@ export default function HazardScreen() {
     const result = clipResults[clipResults.length - 1];
     const isLast = clipIndex + 1 === hazardClips.length;
     return (
-      <View style={[styles.bg, styles.centerFill]}>
+      <View style={[styles.bg, styles.centerFill, { backgroundColor: theme.backgroundColor }]}>
         <Text style={styles.clipCounter}>
           {'Clip '}
           {clipIndex + 1}
           {' of '}
           {hazardClips.length}
         </Text>
-        <Text style={styles.heading}>{clip.title}</Text>
+        <Text style={[styles.heading, { fontSize: theme.fontSize(26), fontFamily: theme.fontFamily, color: theme.textColor }]}>{clip.title}</Text>
 
         <View style={styles.resultCard}>
           <Text style={styles.resultScore}>
@@ -401,12 +405,12 @@ export default function HazardScreen() {
   const xpEarned = 20 + (total.passed ? 50 : 0);
 
   return (
-    <ScrollView style={styles.bg} contentContainerStyle={styles.scrollContent}>
+    <ScrollView style={[styles.bg, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.scrollContent}>
       <View style={[styles.resultBadge, total.passed ? styles.passBadge : styles.failBadge]}>
         <Text style={styles.resultBadgeText}>{total.passed ? 'PASS' : 'FAIL'}</Text>
       </View>
 
-      <Text style={styles.heading}>{'Practice Complete'}</Text>
+      <Text style={[styles.heading, { fontSize: theme.fontSize(26), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Practice Complete'}</Text>
       <Text style={[styles.totalScore, total.passed ? styles.passText : styles.failText]}>
         {total.score}
         {'/'}

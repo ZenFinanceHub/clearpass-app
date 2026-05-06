@@ -8,6 +8,7 @@ export interface HazardClip {
   title: string;
   description: string;
   videoUrl: string;
+  youtubeId?: string;
   durationSec: number;
   hazards: HazardWindow[];
 }

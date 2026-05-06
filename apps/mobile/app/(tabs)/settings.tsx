@@ -1,6 +1,7 @@
 import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useAccessibility } from '@/src/AccessibilityContext';
 import type { AccessibilitySettings } from '@/src/AccessibilityContext';
+import { useTheme } from '@/src/theme';
 
 type SettingKey = keyof AccessibilitySettings;
 
@@ -52,11 +53,12 @@ const SETTINGS: SettingConfig[] = [
 
 export default function SettingsScreen() {
   const { settings, setSetting } = useAccessibility();
+  const theme = useTheme();
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-      <Text style={styles.sectionHeader}>{'Accessibility'}</Text>
-      <Text style={styles.sectionSub}>
+    <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
+      <Text style={[styles.sectionHeader, { fontSize: theme.fontSize(22), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Accessibility'}</Text>
+      <Text style={[styles.sectionSub, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(20), color: theme.subTextColor }]}>
         {'Customise the app to suit your reading and learning needs.'}
       </Text>
 
@@ -70,8 +72,8 @@ export default function SettingsScreen() {
               <Text style={styles.iconText}>{item.icon}</Text>
             </View>
             <View style={styles.textWrap}>
-              <Text style={styles.label}>{item.label}</Text>
-              <Text style={styles.description}>{item.description}</Text>
+              <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{item.label}</Text>
+              <Text style={[styles.description, { fontSize: theme.fontSize(12), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(17), color: theme.subTextColor }]}>{item.description}</Text>
             </View>
             <Switch
               value={settings[item.key]}

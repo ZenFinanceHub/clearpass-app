@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import {
   Achievement,
   MockTestResult,
@@ -23,6 +23,8 @@ import {
   loadUserProgress,
   saveUserProgress,
 } from '@/src/storage';
+import { isPremium } from '@/src/subscription';
+import { useTheme } from '@/src/theme';
 
 const TOTAL_QUESTIONS = 50;
 const TIME_LIMIT_SECONDS = 57 * 60;
@@ -106,6 +108,16 @@ export default function MockScreen() {
   const answersRef = useRef<Record<number, number>>({});
   const timeRemainingRef = useRef(TIME_LIMIT_SECONDS);
   const hasSubmittedRef = useRef(false);
+  const theme = useTheme();
+
+  useFocusEffect(
+    useCallback(() => {
+      void (async () => {
+        const premium = await isPremium();
+        if (!premium) router.replace('/paywall');
+      })();
+    }, []),
+  );
 
   useEffect(() => {
     if (phase !== 'test') return;
@@ -236,7 +248,7 @@ export default function MockScreen() {
   const fillPct = ((currentIndex + 1) / questions.length) * 100;
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+    <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
 
       <View style={styles.headerRow}>
         <Text style={[styles.timer, isWarning && styles.timerWarning]}>
@@ -252,7 +264,7 @@ export default function MockScreen() {
       </View>
 
       <View style={styles.questionCard}>
-        <Text style={styles.questionText}>{q.questionText}</Text>
+        <Text style={[styles.questionText, { fontSize: theme.fontSize(17), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(26), color: theme.textColor }]}>{q.questionText}</Text>
       </View>
 
       <View style={styles.optionList}>
@@ -270,7 +282,7 @@ export default function MockScreen() {
                   {LABELS[idx]}
                 </Text>
               </View>
-              <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
+              <Text style={[styles.optionText, isSelected && styles.optionTextSelected, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing }]}>
                 {option}
               </Text>
             </TouchableOpacity>
@@ -366,10 +378,11 @@ const DETAILS = [
 ];
 
 function StartView({ onStart }: { onStart: () => void }) {
+  const theme = useTheme();
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-      <Text style={styles.screenTitle}>Mock Test</Text>
-      <Text style={styles.screenSub}>Simulates the real DVSA theory test</Text>
+    <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
+      <Text style={[styles.screenTitle, { fontSize: theme.fontSize(26), fontFamily: theme.fontFamily, color: theme.textColor }]}>Mock Test</Text>
+      <Text style={[styles.screenSub, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>Simulates the real DVSA theory test</Text>
 
       <View style={styles.illustrationCard}>
         <View style={styles.illustrationRow}>
@@ -377,7 +390,7 @@ function StartView({ onStart }: { onStart: () => void }) {
           <Text style={styles.illustrationEmoji}>{'⏱'}</Text>
           <Text style={styles.illustrationEmoji}>{'🎯'}</Text>
         </View>
-        <Text style={styles.illustrationText}>Are you ready for the real thing?</Text>
+        <Text style={[styles.illustrationText, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>Are you ready for the real thing?</Text>
       </View>
 
       <View style={styles.detailGrid}>
@@ -391,7 +404,7 @@ function StartView({ onStart }: { onStart: () => void }) {
 
       <View style={styles.infoBox}>
         <Text style={styles.infoTitle}>What to expect</Text>
-        <Text style={styles.infoText}>
+        <Text style={[styles.infoText, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(21), color: theme.subTextColor }]}>
           {'50 multiple-choice questions drawn from all DVSA topic areas. ' +
             'The test is timed at 57 minutes. A score of 43 or more is required to pass.'}
         </Text>
@@ -414,13 +427,14 @@ function ResultsView({
   const { correct, timeTaken, byTopic, xpEarned, newAchievements } = data;
   const passed = correct >= PASS_MARK;
   const pct = Math.round((correct / TOTAL_QUESTIONS) * 100);
+  const theme = useTheme();
 
   const topicRows = (Object.entries(byTopic) as [TopicCategory, TopicTally][])
     .filter(([, t]) => t.total > 0)
     .sort(([a], [b]) => a.localeCompare(b));
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+    <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
 
       {newAchievements.length > 0 && (
         <View style={styles.achievementBanner}>
@@ -454,7 +468,7 @@ function ResultsView({
           const isStrong = topicPct >= 86;
           return (
             <View key={cat} style={styles.topicRow}>
-              <Text style={styles.topicName} numberOfLines={1}>
+              <Text style={[styles.topicName, { fontSize: theme.fontSize(12), fontFamily: theme.fontFamily, color: theme.textColor }]} numberOfLines={1}>
                 {TOPIC_LABELS[cat]}
               </Text>
               <View style={styles.topicBarTrack}>

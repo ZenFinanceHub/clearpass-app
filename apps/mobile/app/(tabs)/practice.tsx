@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -34,7 +34,15 @@ import {
   syncProgressToCloud,
   updateStudyStreak,
 } from '@/src/storage';
+import {
+  FREE_QUESTION_LIMIT,
+  incrementFreeQuestionsAnswered,
+  isPremium,
+} from '@/src/subscription';
 import { explainAnswer } from '@clearpass/ai';
+import * as Speech from 'expo-speech';
+import { useAccessibility } from '@/src/AccessibilityContext';
+import { useTheme } from '@/src/theme';
 
 const SESSION_SIZE = 10;
 const BATTLE_PER_TOPIC = 5;
@@ -102,6 +110,9 @@ export default function PracticeScreen() {
   const [battleXpEarned, setBattleXpEarned] = useState(0);
   const [battleNewAchievements, setBattleNewAchievements] = useState<Achievement[]>([]);
 
+  const { settings } = useAccessibility();
+  const theme = useTheme();
+
   // Refs
   const questionStatesRef = useRef<Record<string, QuestionState>>({});
   const userProgressRef = useRef<UserProgress | null>(null);
@@ -116,6 +127,16 @@ export default function PracticeScreen() {
   const battleScoreRef = useRef(0);
   const battleAnsweredRef = useRef(false);
   const battleCancelledRef = useRef(false);
+
+  useEffect(() => {
+    if (phase !== 'quiz' || !settings.textToSpeech || questions.length === 0) return;
+    const q = questions[currentIndex];
+    if (!q) return;
+    const opts = q.options.map((opt, i) => `Option ${LABELS[i]}: ${opt}`).join('. ');
+    Speech.stop();
+    Speech.speak(`${q.questionText}. ${opts}`, { language: 'en-GB' });
+    return () => { Speech.stop(); };
+  }, [phase, currentIndex, questions, settings.textToSpeech]);
 
   async function handleProUpgrade() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -324,6 +345,14 @@ export default function PracticeScreen() {
   );
 
   const handleNext = useCallback(async () => {
+    const count = await incrementFreeQuestionsAnswered();
+    if (count >= FREE_QUESTION_LIMIT) {
+      const premium = await isPremium();
+      if (!premium) {
+        router.push('/paywall');
+        return;
+      }
+    }
     const isLast = currentIndex + 1 >= questions.length;
     if (isLast) {
       await finaliseSession();
@@ -449,7 +478,7 @@ export default function PracticeScreen() {
 
   if (phase === 'loading') {
     return (
-      <View style={styles.centered}>
+      <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}>
         <ActivityIndicator size="large" color="#A78BFA" />
         <Text style={styles.loadingText}>Loading questions...</Text>
       </View>
@@ -516,7 +545,7 @@ export default function PracticeScreen() {
   const topicEmoji = TOPIC_EMOJI[question.topicCategory];
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+    <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
       <View style={styles.progressRow}>
         <Text style={styles.progressLabel}>
           {'Question '}{currentIndex + 1}{' of '}{questions.length}
@@ -531,7 +560,16 @@ export default function PracticeScreen() {
         <View style={styles.topicBadge}>
           <Text style={styles.topicBadgeEmoji}>{topicEmoji}</Text>
         </View>
-        <Text style={styles.questionText}>{question.questionText}</Text>
+        {settings.textToSpeech && (
+          <TouchableOpacity
+            style={styles.speakerBtn}
+            onPress={() => { const opts = question.options.map((o, i) => `Option ${LABELS[i]}: ${o}`).join('. '); Speech.stop(); Speech.speak(`${question.questionText}. ${opts}`, { language: 'en-GB' }); }}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.speakerBtnText}>{'[ >> ]'}</Text>
+          </TouchableOpacity>
+        )}
+        <Text style={[styles.questionText, { fontSize: theme.fontSize(17), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(26), color: theme.textColor }]}>{question.questionText}</Text>
       </View>
 
       <View style={styles.optionList}>
@@ -564,7 +602,7 @@ export default function PracticeScreen() {
           return (
             <TouchableOpacity
               key={idx}
-              style={[styles.option, cardStyle]}
+              style={[styles.option, cardStyle, settings.highContrast ? { borderWidth: 2, borderColor: isAnswered ? undefined : theme.borderColor } : undefined]}
               onPress={() => handleAnswer(idx)}
               activeOpacity={isAnswered ? 1 : 0.75}
               disabled={isAnswered}
@@ -572,7 +610,7 @@ export default function PracticeScreen() {
               <View style={[styles.badge, badgeStyle]}>
                 <Text style={[styles.badgeText, badgeTextStyle]}>{LABELS[idx]}</Text>
               </View>
-              <Text style={[styles.optionText, textStyle]}>{option}</Text>
+              <Text style={[styles.optionText, textStyle, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing }]}>{option}</Text>
             </TouchableOpacity>
           );
         })}
@@ -648,8 +686,9 @@ function StartView({
   onStart: () => void;
   onBattle: () => void;
 }) {
+  const theme = useTheme();
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.startContent}>
+    <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.startContent}>
       <Text style={styles.startTitle}>Practice Mode</Text>
       <Text style={styles.startSub}>
         Adaptive questions based on your progress
@@ -710,9 +749,10 @@ function ResultsScreen({
   const total = results.length;
   const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
   const cfg = resultConfig(pct);
+  const theme = useTheme();
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+    <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
       {newAchievements.length > 0 && (
         <View style={styles.achievementBanner}>
           <Text style={styles.achievementBannerTitle}>ACHIEVEMENT UNLOCKED</Text>
@@ -799,9 +839,10 @@ function BattleView({
   const multiplier = Math.min(Math.max(combo, 1), 5);
   const comboColor =
     combo >= 5 ? '#F87171' : combo >= 3 ? '#FBBF24' : combo >= 2 ? '#34D399' : '#6B7280';
+  const theme = useTheme();
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+    <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
       <View style={styles.battleHeader}>
         <TouchableOpacity style={styles.battleExitButton} onPress={onExit} activeOpacity={0.85}>
           <Text style={styles.battleExitText}>Exit</Text>
@@ -835,7 +876,7 @@ function BattleView({
       </View>
 
       <View style={styles.questionCard}>
-        <Text style={styles.questionText}>{question.questionText}</Text>
+        <Text style={[styles.questionText, { fontSize: theme.fontSize(17), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(26), color: theme.textColor }]}>{question.questionText}</Text>
       </View>
 
       <View style={styles.optionList}>
@@ -869,7 +910,7 @@ function BattleView({
           return (
             <TouchableOpacity
               key={idx}
-              style={[styles.option, cardStyle]}
+              style={[styles.option, cardStyle, theme.highContrast ? { borderWidth: 2, borderColor: isAnswered ? undefined : theme.borderColor } : undefined]}
               onPress={() => onAnswer(idx)}
               activeOpacity={isAnswered ? 1 : 0.75}
               disabled={isAnswered}
@@ -877,7 +918,7 @@ function BattleView({
               <View style={[styles.badge, badgeStyle]}>
                 <Text style={[styles.badgeText, badgeTextStyle]}>{LABELS[idx]}</Text>
               </View>
-              <Text style={[styles.optionText, textStyle]}>{option}</Text>
+              <Text style={[styles.optionText, textStyle, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing }]}>{option}</Text>
             </TouchableOpacity>
           );
         })}
@@ -913,9 +954,10 @@ function BattleResultsScreen({
   const good = score >= 8;
   const bannerColor = excellent ? '#34D399' : good ? '#FBBF24' : '#F87171';
   const label = excellent ? 'EXCELLENT!' : good ? 'GOOD FIGHT!' : 'KEEP TRAINING!';
+  const theme = useTheme();
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+    <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
       {newAchievements.length > 0 && (
         <View style={styles.achievementBanner}>
           <Text style={styles.achievementBannerTitle}>ACHIEVEMENT UNLOCKED</Text>
@@ -982,8 +1024,9 @@ function BattleResultsScreen({
 }
 
 function DailyLimitView({ onUpgrade, onBack }: { onUpgrade: () => void; onBack: () => void }) {
+  const theme = useTheme();
   return (
-    <View style={styles.centered}>
+    <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}>
       <View style={styles.limitCard}>
         <Text style={styles.limitTitle}>Daily limit reached</Text>
         <Text style={styles.limitBody}>
@@ -1368,6 +1411,16 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   battleExitText: { fontSize: 12, fontWeight: '600', color: '#6B7280' },
+
+  speakerBtn: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#1C1C27',
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  speakerBtnText: { fontSize: 11, fontWeight: '700' as const, color: '#A78BFA' },
 
   // Daily limit gate
   limitCard: {

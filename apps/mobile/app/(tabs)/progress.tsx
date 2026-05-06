@@ -17,6 +17,7 @@ import {
   UserProgress,
 } from '@clearpass/core';
 import { loadUserProgress } from '@/src/storage';
+import { useTheme } from '@/src/theme';
 
 const TOPIC_LABELS: Record<TopicCategory, string> = {
   [TopicCategory.Alertness]: 'Alertness',
@@ -83,6 +84,7 @@ const DISPLAY_ACHIEVEMENTS = ACHIEVEMENTS.filter((a) => !a.id.endsWith('_eligibl
 export default function ProgressScreen() {
   const [progress, setProgress] = useState<UserProgress | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const theme = useTheme();
 
   useEffect(() => {
     loadUserProgress().then((p) => {
@@ -116,9 +118,9 @@ export default function ProgressScreen() {
 
   if (!hasActivity) {
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyTitle}>No activity yet</Text>
-        <Text style={styles.emptyBody}>
+      <View style={[styles.emptyContainer, { backgroundColor: theme.backgroundColor }]}>
+        <Text style={[styles.emptyTitle, { fontSize: theme.fontSize(20), fontFamily: theme.fontFamily, color: theme.textColor }]}>No activity yet</Text>
+        <Text style={[styles.emptyBody, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(22), color: theme.subTextColor }]}>
           Start practising to see your progress here
         </Text>
         <TouchableOpacity
@@ -152,8 +154,8 @@ export default function ProgressScreen() {
   }
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-      <Text style={styles.screenTitle}>Your Progress</Text>
+    <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={[styles.content, { backgroundColor: theme.backgroundColor }]}>
+      <Text style={[styles.screenTitle, { fontSize: theme.fontSize(26), fontFamily: theme.fontFamily, color: theme.textColor }]}>Your Progress</Text>
 
       {!(progress.isPro ?? false) && (
         <TouchableOpacity style={styles.proBanner} onPress={() => void handleUpgrade()} activeOpacity={0.85}>
@@ -171,7 +173,7 @@ export default function ProgressScreen() {
 
       <View style={styles.goalCard}>
         <Text style={styles.goalCardLabel}>YOUR GOAL</Text>
-        <Text style={styles.goalTarget}>Target: Pass by {goalDate()}</Text>
+        <Text style={[styles.goalTarget, { fontSize: theme.fontSize(16), fontFamily: theme.fontFamily, color: theme.textColor }]}>Target: Pass by {goalDate()}</Text>
         <View style={styles.goalBarTrack}>
           <View
             style={[
@@ -246,7 +248,7 @@ export default function ProgressScreen() {
           return (
             <View key={cat} style={styles.topicRow}>
               <View style={styles.topicHeader}>
-                <Text style={styles.topicName}>{TOPIC_LABELS[cat]}</Text>
+                <Text style={[styles.topicName, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.textColor }]}>{TOPIC_LABELS[cat]}</Text>
                 <Text style={[styles.topicPct, { color }]}>{pct}{'%'}</Text>
               </View>
               <View style={styles.barTrack}>
@@ -310,6 +312,7 @@ function AchievementCard({
   achievement: Achievement;
   unlocked: boolean;
 }) {
+  const theme = useTheme();
   return (
     <View style={[styles.achievementCard, unlocked ? styles.achievementUnlocked : styles.achievementLocked]}>
       <View style={styles.achievementCardTop}>
@@ -328,6 +331,7 @@ function AchievementCard({
         style={[
           styles.achievementTitle,
           unlocked ? styles.achievementTitleUnlocked : styles.achievementTitleLocked,
+          { fontFamily: theme.fontFamily, fontSize: theme.fontSize(unlocked ? 15 : 13) },
         ]}
         numberOfLines={1}
       >
@@ -337,6 +341,7 @@ function AchievementCard({
         style={[
           styles.achievementDesc,
           unlocked ? styles.achievementDescUnlocked : styles.achievementDescLocked,
+          { fontFamily: theme.fontFamily, fontSize: theme.fontSize(11), letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(16) },
         ]}
         numberOfLines={2}
       >

@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { TopicCategory } from '@clearpass/core';
+import { useTheme } from '@/src/theme';
 
 type TopicEntry = {
   category: TopicCategory;
@@ -103,6 +104,7 @@ type Phase = 'topics' | 'detail';
 export default function LearnScreen() {
   const [phase, setPhase] = useState<Phase>('topics');
   const [selectedTopic, setSelectedTopic] = useState<TopicEntry | null>(null);
+  const theme = useTheme();
 
   function openTopic(topic: TopicEntry) {
     setSelectedTopic(topic);
@@ -111,14 +113,14 @@ export default function LearnScreen() {
 
   if (phase === 'detail' && selectedTopic !== null) {
     return (
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
         <TouchableOpacity style={styles.backRow} onPress={() => setPhase('topics')} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={20} color="#A78BFA" />
           <Text style={styles.backText}>All Topics</Text>
         </TouchableOpacity>
 
-        <Text style={styles.detailTitle}>{selectedTopic.label}</Text>
-        <Text style={styles.detailSub}>{selectedTopic.facts.length} key rules to remember</Text>
+        <Text style={[styles.detailTitle, { fontSize: theme.fontSize(24), fontFamily: theme.fontFamily, color: theme.textColor }]}>{selectedTopic.label}</Text>
+        <Text style={[styles.detailSub, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>{selectedTopic.facts.length} key rules to remember</Text>
 
         <View style={styles.factList}>
           {selectedTopic.facts.map((fact, i) => (
@@ -126,7 +128,7 @@ export default function LearnScreen() {
               <View style={[styles.factNum, { backgroundColor: selectedTopic.accentColor }]}>
                 <Text style={styles.factNumText}>{i + 1}</Text>
               </View>
-              <Text style={styles.factText}>{fact}</Text>
+              <Text style={[styles.factText, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(21), color: theme.subTextColor }]}>{fact}</Text>
             </View>
           ))}
         </View>
@@ -135,9 +137,9 @@ export default function LearnScreen() {
   }
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-      <Text style={styles.screenTitle}>Learn</Text>
-      <Text style={styles.screenSub}>Highway Code rules and key theory by topic</Text>
+    <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
+      <Text style={[styles.screenTitle, { fontSize: theme.fontSize(26), fontFamily: theme.fontFamily, color: theme.textColor }]}>Learn</Text>
+      <Text style={[styles.screenSub, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>Highway Code rules and key theory by topic</Text>
 
       <View style={styles.topicList}>
         {TOPICS.map((topic) => (
@@ -151,8 +153,8 @@ export default function LearnScreen() {
               <Text style={styles.topicEmoji}>{topic.emoji}</Text>
             </View>
             <View style={styles.topicBody}>
-              <Text style={styles.topicLabel}>{topic.label}</Text>
-              <Text style={styles.topicMeta}>{topic.facts.length} key rules</Text>
+              <Text style={[styles.topicLabel, { fontSize: theme.fontSize(16), fontFamily: theme.fontFamily, color: theme.textColor }]}>{topic.label}</Text>
+              <Text style={[styles.topicMeta, { fontSize: theme.fontSize(13), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>{topic.facts.length} key rules</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#374151" />
           </TouchableOpacity>

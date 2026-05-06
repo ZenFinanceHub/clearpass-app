@@ -11,6 +11,7 @@ import { router } from 'expo-router';
 import { getXpLevel } from '@clearpass/core';
 import { supabase } from '@/src/supabase';
 import { loadUserProgress, syncProgressToCloud } from '@/src/storage';
+import { useTheme } from '@/src/theme';
 
 type LeaderboardEntry = {
   username: string;
@@ -27,6 +28,7 @@ export default function LeaderboardScreen() {
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
+  const theme = useTheme();
 
   useEffect(() => {
     void loadData();
@@ -69,7 +71,7 @@ export default function LeaderboardScreen() {
 
   if (loggedIn === null || loading) {
     return (
-      <View style={styles.centered}>
+      <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}>
         <ActivityIndicator size="large" color="#A78BFA" />
       </View>
     );
@@ -77,9 +79,9 @@ export default function LeaderboardScreen() {
 
   if (!loggedIn) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.noAuthTitle}>Sign in to compete</Text>
-        <Text style={styles.noAuthSub}>
+      <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}>
+        <Text style={[styles.noAuthTitle, { fontSize: theme.fontSize(20), fontFamily: theme.fontFamily, color: theme.textColor }]}>Sign in to compete</Text>
+        <Text style={[styles.noAuthSub, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(22), color: theme.subTextColor }]}>
           Sign in to appear on the leaderboard and compare your progress
         </Text>
         <TouchableOpacity
@@ -101,9 +103,9 @@ export default function LeaderboardScreen() {
   const userInTopTen = userIdx >= 0 && userIdx < 10;
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>LEADERBOARD</Text>
-      <Text style={styles.subtitle}>Top learners this week</Text>
+    <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
+      <Text style={[styles.title, { fontFamily: theme.fontFamily }]}>LEADERBOARD</Text>
+      <Text style={[styles.subtitle, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>Top learners this week</Text>
 
       <View style={styles.list}>
         {topTen.map((entry, idx) => {
@@ -122,10 +124,10 @@ export default function LeaderboardScreen() {
                 {'#'}{idx + 1}
               </Text>
               <View style={styles.rowMid}>
-                <Text style={styles.rowUsername} numberOfLines={1}>
+                <Text style={[styles.rowUsername, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]} numberOfLines={1}>
                   {entry.username}
                 </Text>
-                <Text style={styles.rowLevel}>{'Level '}{level.level}{' - '}{level.label}</Text>
+                <Text style={[styles.rowLevel, { fontSize: theme.fontSize(11), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>{'Level '}{level.level}{' - '}{level.label}</Text>
               </View>
               <View style={styles.rowRight}>
                 <Text style={styles.rowXp}>{xp}{' XP'}</Text>
