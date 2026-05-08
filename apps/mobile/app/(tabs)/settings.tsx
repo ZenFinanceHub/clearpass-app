@@ -1,4 +1,6 @@
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { router } from 'expo-router';
+import { supabase } from '@/src/supabase';
 import { useAccessibility } from '@/src/AccessibilityContext';
 import type { AccessibilitySettings } from '@/src/AccessibilityContext';
 import { useTheme } from '@/src/theme';
@@ -55,6 +57,11 @@ export default function SettingsScreen() {
   const { settings, setSetting } = useAccessibility();
   const theme = useTheme();
 
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    router.replace('/onboarding');
+  }
+
   return (
     <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
       <Text style={[styles.sectionHeader, { fontSize: theme.fontSize(22), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Accessibility'}</Text>
@@ -91,6 +98,14 @@ export default function SettingsScreen() {
           {'Settings are saved automatically and restored each time you open the app.'}
         </Text>
       </View>
+
+      <TouchableOpacity style={styles.manageBtn} onPress={() => router.push('/paywall')} activeOpacity={0.85}>
+        <Text style={styles.manageBtnText}>{'Manage Subscription'}</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.signOutBtn} onPress={() => void handleSignOut()} activeOpacity={0.85}>
+        <Text style={styles.signOutBtnText}>{'Sign Out'}</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -145,4 +160,24 @@ const styles = StyleSheet.create({
     borderLeftColor: '#374151',
   },
   noteText: { fontSize: 13, color: '#4B5563', lineHeight: 18 },
+
+  manageBtn: {
+    backgroundColor: '#7B5EA7',
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    width: '100%',
+  },
+  manageBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+
+  signOutBtn: {
+    backgroundColor: '#1F0A0A',
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#7F1D1D',
+  },
+  signOutBtnText: { color: '#F87171', fontSize: 16, fontWeight: '700' },
 });

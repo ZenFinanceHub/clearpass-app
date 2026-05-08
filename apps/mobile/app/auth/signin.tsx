@@ -81,6 +81,10 @@ export default function SignInScreen() {
           </TouchableOpacity>
         </View>
 
+        <TouchableOpacity style={styles.forgotLink} onPress={() => router.push('/auth/forgot-password')} activeOpacity={0.75}>
+          <Text style={styles.forgotText}>{'Forgot password?'}</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.switchLink} onPress={() => router.replace('/auth/signup')} activeOpacity={0.75}>
           <Text style={styles.switchText}>{"Don't have an account? "}<Text style={styles.switchAccent}>{'Sign up'}</Text></Text>
         </TouchableOpacity>
@@ -116,6 +120,9 @@ const styles = StyleSheet.create({
   },
   submitBtnDisabled: { opacity: 0.6 },
   submitBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+
+  forgotLink: { alignItems: 'center', paddingVertical: 8 },
+  forgotText: { fontSize: 14, color: '#A78BFA', fontWeight: '600' },
 
   switchLink: { alignItems: 'center', paddingVertical: 8 },
   switchText: { fontSize: 14, color: '#6B7280' },
