@@ -633,6 +633,21 @@ function ReviewView({
                       {q.explanation}
                     </Text>
                   </View>
+                  <TouchableOpacity
+                    style={styles.tutorBtn}
+                    onPress={() => router.push({
+                      pathname: '/(tabs)/tutor',
+                      params: {
+                        questionText: q.questionText,
+                        userAnswerText: userAnswer !== null ? q.options[userAnswer] : 'No answer selected',
+                        correctAnswerText: q.options[q.correctIndex],
+                        explanation: q.explanation,
+                      },
+                    })}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.tutorBtnText}>{'Ask AI Tutor 🤖'}</Text>
+                  </TouchableOpacity>
                 </View>
               )}
             </View>
@@ -810,4 +825,14 @@ const styles = StyleSheet.create({
   reviewOptTextWrong: { color: '#F87171', fontWeight: '600' },
   explanationBox: { backgroundColor: '#1C1C27', borderRadius: 10, padding: 12, borderLeftWidth: 3, borderLeftColor: '#374151' },
   explanationText: { fontSize: 13, color: '#9CA3AF', lineHeight: 19 },
+
+  tutorBtn: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#7B5EA7',
+    backgroundColor: '#0D0D14',
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  tutorBtnText: { color: '#A78BFA', fontSize: 14, fontWeight: '700' },
 });

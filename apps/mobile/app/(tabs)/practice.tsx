@@ -667,6 +667,24 @@ export default function PracticeScreen() {
       )}
 
       {isAnswered && (
+        <TouchableOpacity
+          style={styles.tutorButton}
+          onPress={() => router.push({
+            pathname: '/(tabs)/tutor',
+            params: {
+              questionText: question.questionText,
+              userAnswerText: selectedIndex !== null ? question.options[selectedIndex] : '',
+              correctAnswerText: question.options[question.correctIndex],
+              explanation: question.explanation,
+            },
+          })}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.tutorButtonText}>{'Ask AI Tutor 🤖'}</Text>
+        </TouchableOpacity>
+      )}
+
+      {isAnswered && (
         <TouchableOpacity style={styles.primaryButton} onPress={handleNext} activeOpacity={0.85}>
           <Text style={styles.primaryButtonText}>
             {currentIndex + 1 >= questions.length ? 'See Results' : 'Next Question ->'}
@@ -1249,6 +1267,17 @@ const styles = StyleSheet.create({
   dotRed: { backgroundColor: '#F87171' },
   dotText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
   breakdownText: { flex: 1, fontSize: 13, color: '#F1F0FF', lineHeight: 20 },
+
+  tutorButton: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#7B5EA7',
+    backgroundColor: '#13131A',
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  tutorButtonText: { color: '#A78BFA', fontSize: 15, fontWeight: '700' },
 
   // AI tutor
   explainButton: {

@@ -20,6 +20,7 @@ const TABS: TabConfig[] = [
   { name: 'hazard', title: 'Hazard', icon: 'warning-outline', iconFocused: 'warning' },
   { name: 'progress', title: 'Progress', icon: 'stats-chart-outline', iconFocused: 'stats-chart' },
   { name: 'leaderboard', title: 'Leaderboard', icon: 'trophy-outline', iconFocused: 'trophy' },
+  { name: 'tutor', title: 'AI Tutor', icon: 'chatbubble-ellipses-outline', iconFocused: 'chatbubble-ellipses' },
   { name: 'settings', title: 'Settings', icon: 'settings-outline', iconFocused: 'settings' },
 ];
 

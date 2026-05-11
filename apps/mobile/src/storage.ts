@@ -129,6 +129,22 @@ export function createFreshUserProgress(): UserProgress {
   };
 }
 
+const TUTOR_QUESTIONS_KEY = '@clearpass/tutor_questions_used';
+
+export async function getTutorQuestionsUsed(): Promise<number> {
+  try {
+    const raw = await AsyncStorage.getItem(TUTOR_QUESTIONS_KEY);
+    return raw ? parseInt(raw, 10) : 0;
+  } catch { return 0; }
+}
+
+export async function incrementTutorQuestionsUsed(): Promise<number> {
+  const current = await getTutorQuestionsUsed();
+  const next = current + 1;
+  await AsyncStorage.setItem(TUTOR_QUESTIONS_KEY, String(next));
+  return next;
+}
+
 export function updateStudyStreak(progress: UserProgress): UserProgress {
   const now = new Date();
   const last = new Date(progress.lastStudied);
