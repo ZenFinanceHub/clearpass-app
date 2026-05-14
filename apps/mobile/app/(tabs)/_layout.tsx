@@ -16,6 +16,7 @@ const TABS: TabConfig[] = [
   { name: 'home', title: 'Home', headerTitle: 'ClearPass', icon: 'home-outline', iconFocused: 'home' },
   { name: 'practice', title: 'Practice', icon: 'book-outline', iconFocused: 'book' },
   { name: 'highwaycode', title: 'HC Rules', icon: 'document-text-outline', iconFocused: 'document-text' },
+  { name: 'roadsigns', title: 'Signs', icon: 'stop-circle-outline', iconFocused: 'stop-circle' },
   { name: 'mock', title: 'Mock Test', icon: 'clipboard-outline', iconFocused: 'clipboard' },
   { name: 'learn', title: 'Learn', icon: 'library-outline', iconFocused: 'library' },
   { name: 'hazard', title: 'Hazard', icon: 'warning-outline', iconFocused: 'warning' },

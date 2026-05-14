@@ -54,3 +54,5 @@ export function getQuestionById(id: string): Question | undefined {
 export { hazardClips } from './hazardClips';
 export { highwayCodeChapters, getChapterByNumber, getRuleByNumber, searchHighwayCode } from './highwayCode';
 export type { HCChapter, HCRule } from './highwayCode';
+export { roadSigns, getSignsByCategory, getSignById, searchRoadSigns, generateQuiz, SignCategory } from './roadSigns';
+export type { RoadSign, QuizQuestion, SignShape } from './roadSigns';
