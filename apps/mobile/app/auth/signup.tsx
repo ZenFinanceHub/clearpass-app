@@ -71,7 +71,7 @@ export default function SignUpScreen() {
             value={username}
             onChangeText={setUsername}
             placeholder="Username"
-            placeholderTextColor="#374151"
+            placeholderTextColor="#9CA3AF"
             autoCapitalize="none"
             autoComplete="username"
           />
@@ -80,7 +80,7 @@ export default function SignUpScreen() {
             value={email}
             onChangeText={setEmail}
             placeholder="Email"
-            placeholderTextColor="#374151"
+            placeholderTextColor="#9CA3AF"
             keyboardType="email-address"
             autoCapitalize="none"
             autoComplete="email"
@@ -90,7 +90,7 @@ export default function SignUpScreen() {
             value={password}
             onChangeText={setPassword}
             placeholder="Password (6+ characters)"
-            placeholderTextColor="#374151"
+            placeholderTextColor="#9CA3AF"
             secureTextEntry
             autoComplete="new-password"
           />
@@ -116,25 +116,25 @@ export default function SignUpScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0A0F' },
+  container: { flex: 1, backgroundColor: '#F7F8FA' },
   inner: { flexGrow: 1, paddingHorizontal: 28, paddingTop: 80, paddingBottom: 48 },
 
-  logo: { fontSize: 36, fontWeight: '900', color: '#F1F0FF', letterSpacing: 2, marginBottom: 6 },
+  logo: { fontSize: 36, fontWeight: '900', color: '#0D9488', letterSpacing: 2, marginBottom: 6 },
   tagline: { fontSize: 14, color: '#6B7280', marginBottom: 40 },
 
   form: { gap: 12, marginBottom: 24 },
   input: {
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
     borderRadius: 12,
     padding: 14,
-    color: '#F1F0FF',
+    color: '#111827',
     fontSize: 15,
   },
-  errorText: { fontSize: 13, color: '#F87171', marginTop: 2 },
+  errorText: { fontSize: 13, color: '#EF4444', marginTop: 2 },
   submitBtn: {
-    backgroundColor: '#7B5EA7',
+    backgroundColor: '#0D9488',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
@@ -145,5 +145,5 @@ const styles = StyleSheet.create({
 
   switchLink: { alignItems: 'center', paddingVertical: 8 },
   switchText: { fontSize: 14, color: '#6B7280' },
-  switchAccent: { color: '#A78BFA', fontWeight: '600' },
+  switchAccent: { color: '#0D9488', fontWeight: '600' },
 });

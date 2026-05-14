@@ -116,7 +116,7 @@ export default function PaywallScreen() {
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: '#0A0A0F' },
+  scroll: { flex: 1, backgroundColor: '#F7F8FA' },
   content: {
     paddingHorizontal: 24,
     paddingTop: 60,
@@ -127,42 +127,42 @@ const styles = StyleSheet.create({
 
   header: { alignItems: 'center', gap: 10 },
   headerEmoji: { fontSize: 64 },
-  headerTitle: { fontSize: 32, fontWeight: '900', color: '#F1F0FF', textAlign: 'center' },
+  headerTitle: { fontSize: 32, fontWeight: '900', color: '#111827', textAlign: 'center' },
   headerSub: { fontSize: 15, color: '#6B7280', textAlign: 'center', lineHeight: 22 },
 
   featureList: {
     width: '100%',
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 0.5,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
     padding: 20,
     gap: 14,
   },
   featureRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   featureCheck: { fontSize: 18 },
-  featureText: { fontSize: 15, color: '#F1F0FF', fontWeight: '500', flex: 1 },
+  featureText: { fontSize: 15, color: '#111827', fontWeight: '500', flex: 1 },
 
   pricingBox: {
     alignItems: 'center',
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#7B5EA7',
+    borderWidth: 2,
+    borderColor: '#0D9488',
     paddingVertical: 24,
     paddingHorizontal: 40,
     width: '100%',
     gap: 6,
   },
   priceRow: { flexDirection: 'row', alignItems: 'baseline' },
-  priceAmount: { fontSize: 48, fontWeight: '900', color: '#F1F0FF' },
+  priceAmount: { fontSize: 48, fontWeight: '900', color: '#111827' },
   pricePeriod: { fontSize: 18, color: '#6B7280', fontWeight: '500' },
-  priceSub: { fontSize: 13, color: '#A78BFA', fontWeight: '600' },
+  priceSub: { fontSize: 13, color: '#0D9488', fontWeight: '600' },
 
-  errorText: { fontSize: 13, color: '#F87171', textAlign: 'center' },
+  errorText: { fontSize: 13, color: '#EF4444', textAlign: 'center' },
 
   ctaBtn: {
-    backgroundColor: '#7B5EA7',
+    backgroundColor: '#0D9488',
     borderRadius: 14,
     paddingVertical: 18,
     alignItems: 'center',
@@ -172,5 +172,5 @@ const styles = StyleSheet.create({
   ctaBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
 
   skipBtn: { paddingVertical: 8 },
-  skipText: { fontSize: 14, color: '#4B5563' },
+  skipText: { fontSize: 14, color: '#9CA3AF' },
 });

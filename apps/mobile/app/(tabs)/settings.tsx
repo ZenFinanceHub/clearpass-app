@@ -48,7 +48,7 @@ const SETTINGS: SettingConfig[] = [
   {
     key: 'creamBackground',
     label: 'Cream Background',
-    description: 'Replaces the dark background with a warm cream tone, easier on the eyes.',
+    description: 'Replaces the light background with a warm cream tone, easier on the eyes.',
     icon: '[ bg ]',
   },
 ];
@@ -85,9 +85,9 @@ export default function SettingsScreen() {
             <Switch
               value={settings[item.key]}
               onValueChange={(val) => setSetting(item.key, val)}
-              trackColor={{ false: '#1F2937', true: '#6D28D9' }}
-              thumbColor={settings[item.key] ? '#A78BFA' : '#6B7280'}
-              ios_backgroundColor={'#1F2937'}
+              trackColor={{ false: '#E5E7EB', true: '#0D9488' }}
+              thumbColor={settings[item.key] ? '#FFFFFF' : '#9CA3AF'}
+              ios_backgroundColor={'#E5E7EB'}
             />
           </View>
         ))}
@@ -111,18 +111,18 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: '#0A0A0F' },
+  scroll: { flex: 1 },
   content: { padding: 20, paddingBottom: 40, gap: 16 },
 
-  sectionHeader: { fontSize: 22, fontWeight: '800', color: '#FFFFFF' },
+  sectionHeader: { fontSize: 22, fontWeight: '800', color: '#111827' },
   sectionSub: { fontSize: 14, color: '#6B7280', lineHeight: 20 },
 
   group: {
-    backgroundColor: '#111827',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 0.5,
-    borderColor: '#1F2937',
+    borderColor: '#E5E7EB',
   },
 
   row: {
@@ -134,35 +134,35 @@ const styles = StyleSheet.create({
   },
   rowBorder: {
     borderBottomWidth: 0.5,
-    borderBottomColor: '#1F2937',
+    borderBottomColor: '#E5E7EB',
   },
 
   iconWrap: {
     width: 44,
     height: 44,
     borderRadius: 10,
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#EEF2FF',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  iconText: { fontSize: 10, fontWeight: '700', color: '#60A5FA' },
+  iconText: { fontSize: 10, fontWeight: '700', color: '#6366F1' },
 
   textWrap: { flex: 1, gap: 2 },
-  label: { fontSize: 15, fontWeight: '600', color: '#F1F0FF' },
+  label: { fontSize: 15, fontWeight: '600', color: '#111827' },
   description: { fontSize: 12, color: '#6B7280', lineHeight: 17 },
 
   noteBox: {
-    backgroundColor: '#111827',
+    backgroundColor: '#F3F4F6',
     borderRadius: 12,
     padding: 16,
     borderLeftWidth: 3,
-    borderLeftColor: '#374151',
+    borderLeftColor: '#0D9488',
   },
-  noteText: { fontSize: 13, color: '#4B5563', lineHeight: 18 },
+  noteText: { fontSize: 13, color: '#6B7280', lineHeight: 18 },
 
   manageBtn: {
-    backgroundColor: '#7B5EA7',
+    backgroundColor: '#0D9488',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
@@ -171,13 +171,13 @@ const styles = StyleSheet.create({
   manageBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
 
   signOutBtn: {
-    backgroundColor: '#1F0A0A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
     width: '100%',
     borderWidth: 1,
-    borderColor: '#7F1D1D',
+    borderColor: '#EF4444',
   },
-  signOutBtnText: { color: '#F87171', fontSize: 16, fontWeight: '700' },
+  signOutBtnText: { color: '#EF4444', fontSize: 16, fontWeight: '700' },
 });

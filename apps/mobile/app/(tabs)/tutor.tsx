@@ -67,20 +67,17 @@ export default function TutorScreen() {
     setMessages(msgs);
   }
 
-  // Typing dots animation
   useEffect(() => {
     if (!isLoading) return;
     const id = setInterval(() => setDotCount((d) => (d >= 3 ? 1 : d + 1)), 400);
     return () => clearInterval(id);
   }, [isLoading]);
 
-  // Auto-scroll on new messages
   useEffect(() => {
     const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
     return () => clearTimeout(t);
   }, [messages, isLoading]);
 
-  // Init on focus — either welcome message or question context
   useFocusEffect(
     useCallback(() => {
       const q = params.questionText;
@@ -212,7 +209,7 @@ export default function TutorScreen() {
           value={input}
           onChangeText={setInput}
           placeholder="Ask anything about driving theory..."
-          placeholderTextColor="#4B5563"
+          placeholderTextColor="#9CA3AF"
           multiline
           maxLength={500}
           returnKeyType="send"
@@ -225,7 +222,7 @@ export default function TutorScreen() {
           disabled={!canSend}
           activeOpacity={0.8}
         >
-          <Ionicons name="arrow-up-circle" size={36} color={canSend ? '#7B5EA7' : '#1F1F2E'} />
+          <Ionicons name="arrow-up-circle" size={36} color={canSend ? '#0D9488' : '#E5E7EB'} />
         </TouchableOpacity>
       </View>
 
@@ -264,17 +261,15 @@ const styles = StyleSheet.create({
     gap: 12,
   },
 
-  // Bubble rows
   bubbleRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, maxWidth: '100%' },
   rowUser: { justifyContent: 'flex-end' },
   rowTutor: { justifyContent: 'flex-start' },
 
-  // Avatar
   avatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#1C1C27',
+    backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -282,7 +277,6 @@ const styles = StyleSheet.create({
   },
   avatarEmoji: { fontSize: 16 },
 
-  // Bubbles
   bubble: {
     maxWidth: '80%',
     borderRadius: 18,
@@ -291,76 +285,73 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   bubbleUser: {
-    backgroundColor: '#7B5EA7',
+    backgroundColor: '#0D9488',
     borderBottomRightRadius: 4,
   },
   bubbleTutor: {
-    backgroundColor: '#111827',
+    backgroundColor: '#FFFFFF',
     borderBottomLeftRadius: 4,
     borderWidth: 0.5,
-    borderColor: '#1F2937',
+    borderColor: '#E5E7EB',
   },
   bubbleTyping: { paddingVertical: 14, minWidth: 60, alignItems: 'center' },
   bubbleText: { fontSize: 14, lineHeight: 21 },
   bubbleTextUser: { color: '#FFFFFF' },
-  bubbleTextTutor: { color: '#F1F0FF' },
-  typingDots: { fontSize: 20, fontWeight: '800', color: '#7B5EA7', letterSpacing: 2 },
+  bubbleTextTutor: { color: '#111827' },
+  typingDots: { fontSize: 20, fontWeight: '800', color: '#0D9488', letterSpacing: 2 },
 
-  // Timestamps
   bubbleTime: { fontSize: 10, fontWeight: '500', alignSelf: 'flex-end' },
-  timeUser: { color: 'rgba(255,255,255,0.5)' },
-  timeTutor: { color: '#374151' },
+  timeUser: { color: 'rgba(255,255,255,0.6)' },
+  timeTutor: { color: '#9CA3AF' },
 
-  // Input bar
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: '#111827',
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 0.5,
-    borderTopColor: '#1F2937',
+    borderTopColor: '#E5E7EB',
     gap: 8,
   },
   textInput: {
     flex: 1,
-    backgroundColor: '#1C1C27',
+    backgroundColor: '#F3F4F6',
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
     fontSize: 14,
-    color: '#F1F0FF',
+    color: '#111827',
     maxHeight: 120,
     borderWidth: 0.5,
-    borderColor: '#374151',
+    borderColor: '#E5E7EB',
   },
   sendBtn: { paddingBottom: 2 },
   sendBtnDisabled: { opacity: 0.4 },
 
-  // Paywall modal
   paywallOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
   },
   paywallCard: {
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 28,
     alignItems: 'center',
     gap: 12,
     width: '100%',
     maxWidth: 380,
-    borderWidth: 1,
-    borderColor: '#7B5EA7',
+    borderWidth: 1.5,
+    borderColor: '#0D9488',
   },
   paywallEmoji: { fontSize: 48, marginBottom: 4 },
-  paywallTitle: { fontSize: 18, fontWeight: '800', color: '#F1F0FF', textAlign: 'center' },
-  paywallBody: { fontSize: 14, color: '#9CA3AF', textAlign: 'center', lineHeight: 21 },
+  paywallTitle: { fontSize: 18, fontWeight: '800', color: '#111827', textAlign: 'center' },
+  paywallBody: { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 21 },
   upgradeBtn: {
-    backgroundColor: '#7B5EA7',
+    backgroundColor: '#0D9488',
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
@@ -369,5 +360,5 @@ const styles = StyleSheet.create({
   },
   upgradeBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   dismissBtn: { paddingVertical: 8 },
-  dismissText: { fontSize: 14, color: '#4B5563' },
+  dismissText: { fontSize: 14, color: '#9CA3AF' },
 });

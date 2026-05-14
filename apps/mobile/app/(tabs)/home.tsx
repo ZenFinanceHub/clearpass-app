@@ -10,10 +10,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
 import {
   UserProgress,
+  calculateReadiness,
   generateDailyChallenge,
   getXpLevel,
 } from '@clearpass/core';
@@ -86,8 +88,6 @@ function computeMilestone(p: UserProgress | null): number {
 }
 
 // ─── RoadSegment ─────────────────────────────────────────────────────────────
-// Draws one road strip between two milestone positions.
-// Uses overflow:hidden to clip the animated dashes inside the strip.
 
 function RoadSegment({
   from,
@@ -114,12 +114,12 @@ function RoadSegment({
         top: cy - ROAD_W / 2,
         width: len,
         height: ROAD_W,
-        backgroundColor: '#1F2937',
+        backgroundColor: '#0D9488',
         overflow: 'hidden',
         transform: [{ rotate: `${angle}deg` }],
       }}
     >
-      {/* Subtle centre highlight — "lighter in the middle" effect */}
+      {/* Centre highlight */}
       <View
         style={{
           position: 'absolute',
@@ -127,7 +127,7 @@ function RoadSegment({
           right: 0,
           top: ROAD_W / 2 - 5,
           height: 10,
-          backgroundColor: 'rgba(255,255,255,0.04)',
+          backgroundColor: 'rgba(255,255,255,0.5)',
         }}
       />
       {/* Animated amber dashes scrolling along the road */}
@@ -135,7 +135,7 @@ function RoadSegment({
         style={{
           position: 'absolute',
           top: ROAD_W / 2 - 2,
-          left: -DASH_STEP,           // start one step before clip boundary
+          left: -DASH_STEP,
           flexDirection: 'row',
           transform: [{ translateX: dashPhase }],
         }}
@@ -191,22 +191,14 @@ function MilestoneMarker({
   const isHigh = pos.y < 145;
 
   const ringColor =
-    state === 'complete' ? '#34D399' :
-    state === 'current'  ? '#7B5EA7' :
-    '#374151';
-
-  const labelColor =
-    state === 'complete' ? '#34D399' :
-    state === 'current'  ? '#A78BFA' :
-    '#374151';
+    state === 'complete' ? '#0D9488' :
+    state === 'current'  ? '#6366F1' :
+    '#E5E7EB';
 
   const glowOpacity = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.15, 0.52] });
   const glowScale   = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [1.0,  1.28] });
 
-  // "YOU ARE HERE" sits above the circle; for low milestones (!isHigh) it goes
-  // higher still to avoid clashing with the name label (also above circle).
   const youAreHereTop = isHigh ? pos.y - CIRCLE_R - 26 : pos.y - CIRCLE_R - 50;
-  // Name label: high milestones → below circle; low milestones → above circle
   const nameLabelTop  = isHigh ? pos.y + CIRCLE_R + 8  : pos.y - CIRCLE_R - 20;
 
   return (
@@ -221,7 +213,7 @@ function MilestoneMarker({
             width:  (CIRCLE_R + 12) * 2,
             height: (CIRCLE_R + 12) * 2,
             borderRadius: CIRCLE_R + 12,
-            backgroundColor: '#7B5EA7',
+            backgroundColor: '#6366F1',
             opacity: glowOpacity,
             transform: [{ scale: glowScale }],
           }}
@@ -237,13 +229,13 @@ function MilestoneMarker({
           width:  CIRCLE_R * 2,
           height: CIRCLE_R * 2,
           borderRadius: CIRCLE_R,
-          backgroundColor: '#0D0D14',
+          backgroundColor: '#FFFFFF',
           borderWidth: 3,
           borderColor: ringColor,
           alignItems: 'center',
           justifyContent: 'center',
           transform: state === 'current' ? [{ scale: 1.15 }] : undefined,
-          shadowColor: state === 'current' ? '#7B5EA7' : '#000',
+          shadowColor: state === 'current' ? '#6366F1' : '#D1D5DB',
           shadowOffset: { width: 0, height: 4 },
           shadowOpacity: state === 'current' ? 0.55 : 0.3,
           shadowRadius: state === 'current' ? 10 : 4,
@@ -282,15 +274,15 @@ function MilestoneMarker({
         >
           <View
             style={{
-              backgroundColor: '#1A0B38',
+              backgroundColor: '#EEF2FF',
               borderRadius: 6,
               paddingHorizontal: 7,
               paddingVertical: 3,
               borderWidth: 1,
-              borderColor: '#7B5EA7',
+              borderColor: '#6366F1',
             }}
           >
-            <Text style={{ fontSize: 8, fontWeight: '800', color: '#A78BFA', letterSpacing: 0.5 }}>
+            <Text style={{ fontSize: 8, fontWeight: '800', color: '#6366F1', letterSpacing: 0.5 }}>
               {'YOU ARE HERE'}
             </Text>
           </View>
@@ -309,7 +301,7 @@ function MilestoneMarker({
       >
         <View
           style={{
-            backgroundColor: 'rgba(0,0,0,0.6)',
+            backgroundColor: 'rgba(255,255,255,0.9)',
             borderRadius: 6,
             paddingHorizontal: 6,
             paddingVertical: 2,
@@ -320,7 +312,7 @@ function MilestoneMarker({
             style={{
               fontSize: 13,
               fontWeight: '700',
-              color: '#FFFFFF',
+              color: '#111827',
               textAlign: 'center',
             }}
           >
@@ -341,7 +333,6 @@ function RoadMapHero({ progress }: { progress: UserProgress | null }) {
   const bobAnim          = useRef(new Animated.Value(0)).current;
   const dashPhaseAnim    = useRef(new Animated.Value(0)).current;
 
-  // Drive: 0.5 s delay then ease-in-out over 1.5 s
   useEffect(() => {
     driveAnim.setValue(0);
     const tid = setTimeout(() => {
@@ -355,7 +346,6 @@ function RoadMapHero({ progress }: { progress: UserProgress | null }) {
     return () => clearTimeout(tid);
   }, [currentMilestone, driveAnim]);
 
-  // Bob: smooth sine-like float
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
@@ -367,7 +357,6 @@ function RoadMapHero({ progress }: { progress: UserProgress | null }) {
     return () => loop.stop();
   }, [bobAnim]);
 
-  // Dashes: linear scroll — one STEP every 600 ms
   useEffect(() => {
     const loop = Animated.loop(
       Animated.timing(dashPhaseAnim, {
@@ -394,7 +383,6 @@ function RoadMapHero({ progress }: { progress: UserProgress | null }) {
   });
   const carY = Animated.add(carYBase, bobAnim);
 
-  // Edge fades blend to card background
   const edgeColor = theme.cardColor;
 
   return (
@@ -402,15 +390,12 @@ function RoadMapHero({ progress }: { progress: UserProgress | null }) {
       <View style={[styles.roadContainer, { backgroundColor: theme.cardColor }]}>
         <Text style={[styles.roadTitle, { color: theme.subTextColor }]}>{'YOUR JOURNEY'}</Text>
 
-        {/* Canvas + edge overlays */}
         <View style={styles.roadCanvas}>
           <View style={{ width: CANVAS_W, height: CANVAS_H, alignSelf: 'center' }}>
-            {/* Road segments */}
             {POSITIONS.slice(0, -1).map((pos, i) => (
               <RoadSegment key={i} from={pos} to={POSITIONS[i + 1]} dashPhase={dashPhaseAnim} />
             ))}
 
-            {/* Milestone badges */}
             {POSITIONS.map((pos, i) => (
               <MilestoneMarker
                 key={i}
@@ -425,7 +410,6 @@ function RoadMapHero({ progress }: { progress: UserProgress | null }) {
               />
             ))}
 
-            {/* Car + shadow */}
             <Animated.View
               style={{
                 position: 'absolute',
@@ -440,7 +424,6 @@ function RoadMapHero({ progress }: { progress: UserProgress | null }) {
             </Animated.View>
           </View>
 
-        {/* Left edge fade — 4-slice step gradient */}
         <View pointerEvents="none" style={styles.edgeFadeLeft}>
           <View style={[styles.edgeSlice, { opacity: 0.92, backgroundColor: edgeColor }]} />
           <View style={[styles.edgeSlice, { opacity: 0.62, backgroundColor: edgeColor }]} />
@@ -448,7 +431,6 @@ function RoadMapHero({ progress }: { progress: UserProgress | null }) {
           <View style={[styles.edgeSlice, { opacity: 0.10, backgroundColor: edgeColor }]} />
         </View>
 
-        {/* Right edge fade */}
         <View pointerEvents="none" style={styles.edgeFadeRight}>
           <View style={[styles.edgeSlice, { opacity: 0.10, backgroundColor: edgeColor }]} />
           <View style={[styles.edgeSlice, { opacity: 0.30, backgroundColor: edgeColor }]} />
@@ -533,12 +515,13 @@ export default function HomeScreen() {
 
         const { data: profile } = await supabase
           .from('profiles')
-          .select('username')
+          .select('full_name, username')
           .eq('id', user.id)
           .single();
 
-        if (profile?.username) {
-          setUsername(profile.username as string);
+        const displayName = (profile?.full_name as string | null) || (profile?.username as string | null);
+        if (displayName) {
+          setUsername(displayName);
         } else {
           const pending = await AsyncStorage.getItem('@clearpass/pending_username');
           if (pending) setUsername(pending);
@@ -578,6 +561,7 @@ export default function HomeScreen() {
   const xpData  = getXpLevel(xp);
   const streak  = progress?.studyStreakDays ?? 0;
   const tip     = DAILY_TIPS[new Date().getDay() % 3];
+  const readinessPct = progress ? calculateReadiness(progress).score : 0;
 
   const xpBadgeLabel = xpData.level === 5 ? 'TEST READY' : `LEVEL ${xpData.level}`;
   const xpMsg =
@@ -589,20 +573,20 @@ export default function HomeScreen() {
   const daysLeft = testDate ? getDaysRemaining(testDate) : null;
 
   let countdownMsg   = '';
-  let countdownColor = '#34D399';
+  let countdownColor = '#0D9488';
   if (daysLeft !== null) {
     if (daysLeft <= 0) {
       countdownMsg = 'Good luck on your test today!';
-      countdownColor = '#A78BFA';
+      countdownColor = '#6366F1';
     } else if (daysLeft <= 7) {
       countdownMsg = 'Almost there! Make sure you are ready!';
-      countdownColor = '#F87171';
+      countdownColor = '#EF4444';
     } else if (daysLeft <= 30) {
       countdownMsg = 'Keep practising hard!';
-      countdownColor = '#FBBF24';
+      countdownColor = '#F59E0B';
     } else {
       countdownMsg = 'You have got plenty of time - stay consistent!';
-      countdownColor = '#34D399';
+      countdownColor = '#0D9488';
     }
   }
 
@@ -616,12 +600,32 @@ export default function HomeScreen() {
       style={[styles.scroll, { backgroundColor: theme.backgroundColor }]}
       contentContainerStyle={styles.content}
     >
-      {/* Greeting */}
-      <View style={styles.greeting}>
-        <Text style={[styles.greetingText, { fontSize: theme.fontSize(22), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, color: theme.textColor }]}>
-          {'Hey, '}{username ? username + '!' : 'there!'}
+      {/* Hero Header */}
+      <LinearGradient colors={['#0D9488', '#6366F1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroHeader}>
+        <View style={styles.heroTopRow}>
+          <Text style={[styles.heroGreeting, { fontSize: theme.fontSize(22), fontFamily: theme.fontFamily }]}>
+            {'Hey, '}{username ? username + '!' : 'there!'}{' 👋'}
+          </Text>
+          {streak > 0 && (
+            <View style={styles.heroStreakBadge}>
+              <Text style={[styles.heroStreakText, { fontSize: theme.fontSize(12), fontFamily: theme.fontFamily }]}>
+                {'🔥 '}{streak}{' day streak'}
+              </Text>
+            </View>
+          )}
+        </View>
+        <Text style={[styles.heroSub, { fontSize: theme.fontSize(13), fontFamily: theme.fontFamily }]}>
+          {daysLeft !== null && daysLeft >= 0
+            ? `Your test is in ${daysLeft} day${daysLeft === 1 ? '' : 's'}. Keep it up!`
+            : 'Set your test date to see countdown'}
         </Text>
-      </View>
+        <View style={styles.heroBarTrack}>
+          <View style={[styles.heroBarFill, { width: `${readinessPct}%` as any }]} />
+        </View>
+        <Text style={[styles.heroBarLabel, { fontSize: theme.fontSize(11), fontFamily: theme.fontFamily }]}>
+          {'Readiness: '}{readinessPct}{'%'}
+        </Text>
+      </LinearGradient>
 
       {/* Road Map Hero */}
       <RoadMapHero progress={progress} />
@@ -640,15 +644,6 @@ export default function HomeScreen() {
         </View>
         <Text style={styles.xpMsg}>{xpMsg}</Text>
       </View>
-
-      {/* Streak Banner */}
-      {streak > 0 && (
-        <View style={styles.streakBanner}>
-          <Text style={styles.streakLabel}>STREAK</Text>
-          <Text style={styles.streakNum}>{streak}</Text>
-          <Text style={styles.streakDays}>days</Text>
-        </View>
-      )}
 
       {/* Test Date Countdown */}
       {daysLeft !== null && daysLeft >= 0 && (
@@ -676,29 +671,33 @@ export default function HomeScreen() {
 
       {/* Action Grid */}
       <View style={styles.actionGrid}>
-        <TouchableOpacity style={[styles.actionCard, styles.accPractice]} onPress={() => router.push('/(tabs)/practice')} activeOpacity={0.8}>
-          <Text style={styles.actionEmoji}>{'🎯'}</Text>
-          <Text style={[styles.actionTitle, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>Practice</Text>
-          <Text style={[styles.actionSub, { fontSize: theme.fontSize(12), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>Random questions</Text>
-        </TouchableOpacity>
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={styles.actionCard} onPress={() => router.push('/(tabs)/practice')} activeOpacity={0.8}>
+            <Text style={styles.actionEmoji}>{'🎯'}</Text>
+            <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.textColor }]}>Practice</Text>
+            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>Random questions</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.actionCard, styles.accMock]} onPress={() => router.push('/(tabs)/mock')} activeOpacity={0.8}>
-          <Text style={styles.actionEmoji}>{'📋'}</Text>
-          <Text style={[styles.actionTitle, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>Mock Test</Text>
-          <Text style={[styles.actionSub, { fontSize: theme.fontSize(12), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>57 minutes</Text>
-        </TouchableOpacity>
+          <TouchableOpacity style={styles.actionCard} onPress={() => router.push('/(tabs)/mock')} activeOpacity={0.8}>
+            <Text style={styles.actionEmoji}>{'📋'}</Text>
+            <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.textColor }]}>Mock Test</Text>
+            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>57 minutes</Text>
+          </TouchableOpacity>
+        </View>
 
-        <TouchableOpacity style={[styles.actionCard, styles.accLearn]} onPress={() => router.push('/(tabs)/learn')} activeOpacity={0.8}>
-          <Text style={styles.actionEmoji}>{'📚'}</Text>
-          <Text style={[styles.actionTitle, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>Learn</Text>
-          <Text style={[styles.actionSub, { fontSize: theme.fontSize(12), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>Highway Code</Text>
-        </TouchableOpacity>
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={styles.actionCard} onPress={() => router.push('/(tabs)/learn')} activeOpacity={0.8}>
+            <Text style={styles.actionEmoji}>{'📚'}</Text>
+            <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.textColor }]}>Learn</Text>
+            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>Highway Code</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.actionCard, styles.accHazard]} onPress={() => router.push('/(tabs)/hazard')} activeOpacity={0.8}>
-          <Text style={styles.actionEmoji}>{'⚠'}</Text>
-          <Text style={[styles.actionTitle, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>Hazard</Text>
-          <Text style={[styles.actionSub, { fontSize: theme.fontSize(12), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>14 clips</Text>
-        </TouchableOpacity>
+          <TouchableOpacity style={styles.actionCard} onPress={() => router.push('/(tabs)/hazard')} activeOpacity={0.8}>
+            <Text style={styles.actionEmoji}>{'⚠'}</Text>
+            <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.textColor }]}>Hazard</Text>
+            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>14 clips</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Daily Challenge Card */}
@@ -746,7 +745,7 @@ export default function HomeScreen() {
               value={dateInput}
               onChangeText={setDateInput}
               placeholder="DD/MM/YYYY"
-              placeholderTextColor="#374151"
+              placeholderTextColor="#9CA3AF"
               keyboardType="numbers-and-punctuation"
               maxLength={10}
             />
@@ -767,12 +766,62 @@ export default function HomeScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  scroll:   { flex: 1, backgroundColor: '#0A0A0F' },
+  scroll:   { flex: 1 },
   content:  { flexGrow: 1, paddingBottom: 40 },
 
-  // Greeting
-  greeting:     { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
-  greetingText: { fontSize: 22, fontWeight: '800', color: '#F1F0FF' },
+  // Hero Header
+  heroHeader: {
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 20,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  heroGreeting: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    flex: 1,
+    marginRight: 8,
+  },
+  heroStreakBadge: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  heroStreakText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  heroSub: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.85)',
+    marginBottom: 14,
+    lineHeight: 18,
+  },
+  heroBarTrack: {
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  heroBarFill: {
+    height: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 3,
+  },
+  heroBarLabel: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.75)',
+    fontWeight: '600',
+  },
 
   // ── Road Map Hero ────────────────────────────────────────────────────────────
   roadContainer: {
@@ -784,7 +833,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     borderTopWidth: 0.5,
     borderBottomWidth: 0.5,
-    borderColor: '#1F2937',
+    borderColor: '#E5E7EB',
     height: 320,
     overflow: 'hidden',
   },
@@ -794,9 +843,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     paddingLeft: 16,
     marginBottom: 4,
-    color: '#6B7280',
   },
-  // Wrapper so edge overlays are positioned relative to the scroll area only
   roadCanvas: {
     height: CANVAS_H,
     position: 'relative',
@@ -806,16 +853,14 @@ const styles = StyleSheet.create({
   },
   roadScroll: { flex: 1, width: '100%' },
 
-  // Car shadow oval
   carShadow: {
     width: 18,
     height: 5,
     borderRadius: 9,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.15)',
     marginTop: -4,
   },
 
-  // Edge fade — four equal slices per side
   edgeFadeLeft: {
     position: 'absolute',
     left: 0,
@@ -838,10 +883,10 @@ const styles = StyleSheet.create({
 
   // ── XP Card ──────────────────────────────────────────────────────────────────
   xpCard: {
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     borderWidth: 0.5,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
     margin: 16,
     padding: 24,
     overflow: 'hidden',
@@ -849,52 +894,32 @@ const styles = StyleSheet.create({
   xpDecorCar: { position: 'absolute', top: 12, right: 16, fontSize: 40, opacity: 0.06 },
   xpTopRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
   xpBadge: {
-    backgroundColor: '#1C1C27',
+    backgroundColor: '#EEF2FF',
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderWidth: 0.5,
-    borderColor: '#A78BFA',
+    borderColor: '#6366F1',
   },
-  xpBadgeText: { fontSize: 11, fontWeight: '700', color: '#A78BFA', letterSpacing: 1 },
-  xpScore:     { fontSize: 48, fontWeight: '900', color: '#F1F0FF', lineHeight: 56 },
+  xpBadgeText: { fontSize: 11, fontWeight: '700', color: '#6366F1', letterSpacing: 1 },
+  xpScore:     { fontSize: 48, fontWeight: '900', color: '#111827', lineHeight: 56 },
   xpBarTrack: {
     width: '100%',
     height: 6,
-    backgroundColor: '#1C1C27',
+    backgroundColor: '#F3F4F6',
     borderRadius: 3,
     overflow: 'hidden',
     marginBottom: 10,
   },
-  xpBarFill: { height: 6, backgroundColor: '#A78BFA', borderRadius: 3 },
+  xpBarFill: { height: 6, backgroundColor: '#0D9488', borderRadius: 3 },
   xpMsg:     { fontSize: 12, color: '#6B7280', fontWeight: '500' },
-
-  // ── Streak Banner ─────────────────────────────────────────────────────────────
-  streakBanner: {
-    backgroundColor: '#13131A',
-    borderRadius: 14,
-    borderWidth: 0.5,
-    borderColor: '#1F1F2E',
-    borderTopWidth: 3,
-    borderTopColor: '#FBBF24',
-    marginHorizontal: 16,
-    marginBottom: 4,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  streakLabel: { fontSize: 11, fontWeight: '700', color: '#FBBF24', letterSpacing: 1 },
-  streakNum:   { fontSize: 22, fontWeight: '900', color: '#F1F0FF' },
-  streakDays:  { fontSize: 12, color: '#6B7280' },
 
   // ── Countdown Card ────────────────────────────────────────────────────────────
   countdownCard: {
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     borderWidth: 0.5,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
     borderTopWidth: 3,
     borderTopColor: '#FBBF24',
     marginHorizontal: 16,
@@ -905,129 +930,123 @@ const styles = StyleSheet.create({
   countdownLabel:    { fontSize: 11, fontWeight: '700', color: '#FBBF24', letterSpacing: 1 },
   countdownChange:   { fontSize: 12, color: '#6B7280', fontWeight: '500' },
   countdownBody:     { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 6 },
-  countdownDays:     { fontSize: 48, fontWeight: '900', color: '#F1F0FF', lineHeight: 56 },
+  countdownDays:     { fontSize: 48, fontWeight: '900', color: '#111827', lineHeight: 56 },
   countdownDaysLabel: { fontSize: 16, color: '#6B7280', fontWeight: '500' },
   countdownMsg:      { fontSize: 13, fontWeight: '600' },
 
-  // Set date link
   setDateRow:  { marginHorizontal: 16, marginBottom: 4, paddingVertical: 8 },
   setDateText: { fontSize: 13, color: '#6B7280', fontWeight: '500' },
 
   // ── Action Grid ───────────────────────────────────────────────────────────────
   actionGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
+    gap: 12,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 12,
   },
   actionCard: {
     flex: 1,
-    minWidth: '44%',
-    minHeight: 110,
-    borderRadius: 16,
-    padding: 18,
-    justifyContent: 'flex-end',
-    backgroundColor: '#13131A',
-    borderWidth: 0.5,
-    borderColor: '#1F1F2E',
-    borderTopWidth: 3,
+    borderRadius: 14,
+    padding: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    gap: 4,
   },
-  accPractice: { borderTopColor: '#F87171' },
-  accMock:     { borderTopColor: '#A78BFA' },
-  accLearn:    { borderTopColor: '#34D399' },
-  accHazard:   { borderTopColor: '#FBBF24' },
-  actionEmoji: { fontSize: 28, marginBottom: 8 },
-  actionTitle: { fontSize: 15, fontWeight: '700', color: '#F1F0FF', marginBottom: 2 },
-  actionSub:   { fontSize: 12, color: '#6B7280', fontWeight: '500' },
+  actionEmoji: { fontSize: 22, marginBottom: 4 },
+  actionTitle: { fontSize: 14, fontWeight: '700', marginBottom: 0 },
+  actionSub:   { fontSize: 11, fontWeight: '500' },
 
   // ── Daily Challenge Card ──────────────────────────────────────────────────────
   dcCard: {
     marginHorizontal: 16,
     marginBottom: 12,
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 0.5,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
     borderTopWidth: 3,
-    borderTopColor: '#34D399',
+    borderTopColor: '#0D9488',
     padding: 16,
   },
   dcCardComplete: { opacity: 0.6 },
   dcTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  dcLabel:  { fontSize: 11, fontWeight: '700', color: '#34D399', letterSpacing: 1, flex: 1 },
-  dcCompleteBadge: { backgroundColor: '#064E3B', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
-  dcCompleteText:  { fontSize: 10, fontWeight: '800', color: '#34D399', letterSpacing: 0.5 },
+  dcLabel:  { fontSize: 11, fontWeight: '700', color: '#0D9488', letterSpacing: 1, flex: 1 },
+  dcCompleteBadge: { backgroundColor: '#ECFDF5', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
+  dcCompleteText:  { fontSize: 10, fontWeight: '800', color: '#0D9488', letterSpacing: 0.5 },
   dcXpBadge: {
-    backgroundColor: '#1C1C27',
+    backgroundColor: '#F0FDFA',
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderWidth: 0.5,
-    borderColor: '#34D399',
+    borderColor: '#0D9488',
   },
-  dcXpText:        { fontSize: 11, fontWeight: '700', color: '#34D399' },
-  dcDesc:          { fontSize: 14, fontWeight: '600', color: '#F1F0FF', marginBottom: 10, lineHeight: 20 },
+  dcXpText:        { fontSize: 11, fontWeight: '700', color: '#0D9488' },
+  dcDesc:          { fontSize: 14, fontWeight: '600', marginBottom: 10, lineHeight: 20 },
   dcDescComplete:  { color: '#6B7280' },
   dcBarTrack: {
     height: 6,
-    backgroundColor: '#1C1C27',
+    backgroundColor: '#F3F4F6',
     borderRadius: 3,
     overflow: 'hidden',
     marginTop: 10,
     marginBottom: 6,
   },
-  dcBarFill:    { height: 6, backgroundColor: '#34D399', borderRadius: 3 },
+  dcBarFill:    { height: 6, backgroundColor: '#0D9488', borderRadius: 3 },
   dcProgress:   { fontSize: 12, color: '#6B7280', fontWeight: '500' },
 
   // ── Tip Card ──────────────────────────────────────────────────────────────────
   tipCard: {
     marginHorizontal: 16,
     marginTop: 4,
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 0.5,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
     borderLeftWidth: 3,
-    borderLeftColor: '#A78BFA',
+    borderLeftColor: '#6366F1',
     padding: 16,
   },
-  tipTitle: { fontSize: 11, fontWeight: '700', color: '#A78BFA', letterSpacing: 1, marginBottom: 6 },
-  tipBody:  { fontSize: 13, color: '#6B7280', lineHeight: 20 },
+  tipTitle: { fontSize: 11, fontWeight: '700', color: '#6366F1', letterSpacing: 1, marginBottom: 6 },
+  tipBody:  { fontSize: 13, lineHeight: 20 },
 
   // ── Modal ─────────────────────────────────────────────────────────────────────
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.75)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
   },
   modalCard: {
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 24,
     width: '100%',
     borderWidth: 0.5,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
   },
-  modalTitle:    { fontSize: 20, fontWeight: '800', color: '#F1F0FF', marginBottom: 6 },
-  modalSub:      { fontSize: 14, color: '#6B7280', marginBottom: 16, lineHeight: 20 },
+  modalTitle:    { fontSize: 20, fontWeight: '800', marginBottom: 6 },
+  modalSub:      { fontSize: 14, marginBottom: 16, lineHeight: 20 },
   dateInput: {
-    backgroundColor: '#1C1C27',
+    backgroundColor: '#F3F4F6',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#1F1F2E',
-    color: '#F1F0FF',
+    borderColor: '#E5E7EB',
+    color: '#111827',
     fontSize: 18,
     fontWeight: '600',
     padding: 14,
     marginBottom: 8,
     letterSpacing: 2,
   },
-  dateError:      { fontSize: 13, color: '#F87171', marginBottom: 10 },
+  dateError:      { fontSize: 13, color: '#EF4444', marginBottom: 10 },
   modalSave: {
-    backgroundColor: '#7B5EA7',
+    backgroundColor: '#0D9488',
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
@@ -1036,12 +1055,12 @@ const styles = StyleSheet.create({
   },
   modalSaveText:  { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   modalCancel: {
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
   },
   modalCancelText: { color: '#6B7280', fontSize: 15, fontWeight: '600' },
 });

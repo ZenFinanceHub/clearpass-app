@@ -15,6 +15,7 @@ type TabConfig = {
 const TABS: TabConfig[] = [
   { name: 'home', title: 'Home', headerTitle: 'ClearPass', icon: 'home-outline', iconFocused: 'home' },
   { name: 'practice', title: 'Practice', icon: 'book-outline', iconFocused: 'book' },
+  { name: 'highwaycode', title: 'HC Rules', icon: 'document-text-outline', iconFocused: 'document-text' },
   { name: 'mock', title: 'Mock Test', icon: 'clipboard-outline', iconFocused: 'clipboard' },
   { name: 'learn', title: 'Learn', icon: 'library-outline', iconFocused: 'library' },
   { name: 'hazard', title: 'Hazard', icon: 'warning-outline', iconFocused: 'warning' },
@@ -28,29 +29,29 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#A78BFA',
-        tabBarInactiveTintColor: '#374151',
+        tabBarActiveTintColor: '#0D9488',
+        tabBarInactiveTintColor: '#9CA3AF',
         tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
         tabBarStyle: Platform.select({
           web: {
             height: 60,
             paddingBottom: 8,
             borderTopWidth: 0.5,
-            borderTopColor: '#1F1F2E',
-            backgroundColor: '#0D0D14',
+            borderTopColor: '#E5E7EB',
+            backgroundColor: '#FFFFFF',
           },
           default: {
             height: 60,
             paddingBottom: 8,
             borderTopWidth: 0.5,
-            borderTopColor: '#1F1F2E',
-            backgroundColor: '#0D0D14',
+            borderTopColor: '#E5E7EB',
+            backgroundColor: '#FFFFFF',
           },
         }),
         headerStyle: {
-          backgroundColor: '#0D0D14',
+          backgroundColor: '#FFFFFF',
         },
-        headerTintColor: '#F1F0FF',
+        headerTintColor: '#111827',
         headerShadowVisible: false,
         headerTitleStyle: {
           fontWeight: '700',

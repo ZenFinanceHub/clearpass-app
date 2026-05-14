@@ -52,3 +52,5 @@ export function getQuestionById(id: string): Question | undefined {
 }
 
 export { hazardClips } from './hazardClips';
+export { highwayCodeChapters, getChapterByNumber, getRuleByNumber, searchHighwayCode } from './highwayCode';
+export type { HCChapter, HCRule } from './highwayCode';

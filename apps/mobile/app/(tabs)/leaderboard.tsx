@@ -72,7 +72,7 @@ export default function LeaderboardScreen() {
   if (loggedIn === null || loading) {
     return (
       <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}>
-        <ActivityIndicator size="large" color="#A78BFA" />
+        <ActivityIndicator size="large" color="#0D9488" />
       </View>
     );
   }
@@ -166,13 +166,12 @@ export default function LeaderboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: '#0A0A0F' },
+  scroll: { flex: 1 },
   content: { padding: 20, paddingBottom: 48 },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0A0A0F',
     gap: 12,
     paddingHorizontal: 32,
   },
@@ -180,7 +179,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#A78BFA',
+    color: '#0D9488',
     letterSpacing: 2,
     marginBottom: 4,
     textTransform: 'uppercase',
@@ -191,16 +190,16 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 14,
     borderWidth: 0.5,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
     gap: 12,
   },
   rowCurrentUser: {
     borderLeftWidth: 3,
-    borderLeftColor: '#A78BFA',
+    borderLeftColor: '#0D9488',
   },
   rankNum: {
     fontSize: 15,
@@ -209,37 +208,37 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   rowMid: { flex: 1 },
-  rowUsername: { fontSize: 15, fontWeight: '700', color: '#F1F0FF', marginBottom: 2 },
+  rowUsername: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 2 },
   rowLevel: { fontSize: 11, color: '#6B7280' },
   rowRight: { alignItems: 'flex-end', gap: 4 },
-  rowXp: { fontSize: 15, fontWeight: '800', color: '#A78BFA' },
+  rowXp: { fontSize: 15, fontWeight: '800', color: '#0D9488' },
   streakBadge: {
-    backgroundColor: '#1C1C27',
+    backgroundColor: '#FFFBEB',
     borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderWidth: 0.5,
-    borderColor: '#FBBF24',
+    borderColor: '#F59E0B',
   },
-  streakText: { fontSize: 11, fontWeight: '700', color: '#FBBF24' },
+  streakText: { fontSize: 11, fontWeight: '700', color: '#D97706' },
 
   emptyList: { padding: 20, alignItems: 'center' },
-  emptyListText: { fontSize: 14, color: '#374151' },
+  emptyListText: { fontSize: 14, color: '#9CA3AF' },
 
   yourRankCard: {
     marginTop: 20,
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 14,
     alignItems: 'center',
     borderWidth: 0.5,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
     borderLeftWidth: 3,
-    borderLeftColor: '#A78BFA',
+    borderLeftColor: '#0D9488',
   },
-  yourRankText: { fontSize: 14, fontWeight: '700', color: '#A78BFA' },
+  yourRankText: { fontSize: 14, fontWeight: '700', color: '#0D9488' },
 
-  noAuthTitle: { fontSize: 20, fontWeight: '800', color: '#F1F0FF' },
+  noAuthTitle: { fontSize: 20, fontWeight: '800', color: '#111827' },
   noAuthSub: {
     fontSize: 14,
     color: '#6B7280',
@@ -247,7 +246,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   signInBtn: {
-    backgroundColor: '#7B5EA7',
+    backgroundColor: '#0D9488',
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 32,

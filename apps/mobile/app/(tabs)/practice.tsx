@@ -87,7 +87,6 @@ type BattleDisplay = {
 export default function PracticeScreen() {
   const [phase, setPhase] = useState<Phase>('start');
 
-  // Normal quiz state
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -95,11 +94,9 @@ export default function PracticeScreen() {
   const [aiExplanation, setAiExplanation] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
-  // XP / achievements for results screen
   const [xpGained, setXpGained] = useState(0);
   const [newAchievements, setNewAchievements] = useState<Achievement[]>([]);
 
-  // Battle mode display state
   const [battleDisplay, setBattleDisplay] = useState<BattleDisplay>({
     idx: 0,
     selected: null,
@@ -113,12 +110,10 @@ export default function PracticeScreen() {
   const { settings } = useAccessibility();
   const theme = useTheme();
 
-  // Refs
   const questionStatesRef = useRef<Record<string, QuestionState>>({});
   const userProgressRef = useRef<UserProgress | null>(null);
   const resultsRef = useRef<SessionResult[]>([]);
 
-  // Battle refs (mutable without re-render)
   const battleQsRef = useRef<Question[]>([]);
   const battleWeakTopicsRef = useRef<TopicCategory[]>([]);
   const battleIdxRef = useRef(0);
@@ -201,14 +196,12 @@ export default function PracticeScreen() {
     const progress = (await loadUserProgress()) ?? createFreshUserProgress();
     userProgressRef.current = progress;
 
-    // Pick 3 weakest topics by topicScore
     const weakTopics = Object.values(TopicCategory)
       .sort((a, b) => (progress.topicScores[a] ?? 0) - (progress.topicScores[b] ?? 0))
       .slice(0, 3);
 
     battleWeakTopicsRef.current = weakTopics;
 
-    // 5 questions per weak topic, shuffled
     const qs: Question[] = [];
     for (const topic of weakTopics) {
       const pool = allQuestions
@@ -418,7 +411,6 @@ export default function PracticeScreen() {
     };
     updated.readinessScore = calculateReadiness(updated).score;
 
-    // Award practice XP
     let xpThisSession = XP_REWARDS.PRACTICE_COMPLETED;
     if (correctCount === SESSION_SIZE) {
       xpThisSession += XP_REWARDS.PRACTICE_PERFECT;
@@ -431,7 +423,6 @@ export default function PracticeScreen() {
     }
     updated = awardXp(updated, xpThisSession);
 
-    // Update daily challenge progress
     const today = new Date().toISOString().split('T')[0];
     const dc = updated.dailyChallenge;
     if (dc && dc.date === today && !dc.completed) {
@@ -479,7 +470,7 @@ export default function PracticeScreen() {
   if (phase === 'loading') {
     return (
       <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}>
-        <ActivityIndicator size="large" color="#A78BFA" />
+        <ActivityIndicator size="large" color="#0D9488" />
         <Text style={styles.loadingText}>Loading questions...</Text>
       </View>
     );
@@ -631,14 +622,10 @@ export default function PracticeScreen() {
           >
             {answeredCorrectly ? 'Correct!' : 'Incorrect'}
           </Text>
-          <Text
-            style={[
-              styles.explanationBody,
-              answeredCorrectly ? styles.explanationBodyGreen : styles.explanationBodyRed,
-            ]}
-          >
-            {question.explanation}
-          </Text>
+          <LinkedExplanation
+            text={question.explanation}
+            bodyStyle={answeredCorrectly ? styles.explanationBodyGreen : styles.explanationBodyRed}
+          />
         </View>
       )}
 
@@ -651,7 +638,7 @@ export default function PracticeScreen() {
             </View>
           ) : aiLoading ? (
             <View style={styles.aiLoadingRow}>
-              <ActivityIndicator size="small" color="#A78BFA" />
+              <ActivityIndicator size="small" color="#0D9488" />
               <Text style={styles.aiLoadingText}>Getting explanation...</Text>
             </View>
           ) : (
@@ -695,6 +682,46 @@ export default function PracticeScreen() {
   );
 }
 
+// ── LinkedExplanation ─────────────────────────────────────────────────────────
+
+const RULE_PATTERN = /(?:Highway Code )?Rule (\d+)/g;
+
+function LinkedExplanation({ text, bodyStyle }: { text: string; bodyStyle: object }) {
+  const segments: { text: string; ruleNumber?: number }[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  RULE_PATTERN.lastIndex = 0;
+  while ((match = RULE_PATTERN.exec(text)) !== null) {
+    if (match.index > last) segments.push({ text: text.slice(last, match.index) });
+    segments.push({ text: match[0], ruleNumber: parseInt(match[1], 10) });
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) segments.push({ text: text.slice(last) });
+
+  return (
+    <Text style={[styles.explanationBody, bodyStyle]}>
+      {segments.map((seg, i) =>
+        seg.ruleNumber ? (
+          <Text
+            key={i}
+            style={styles.ruleLink}
+            onPress={() =>
+              router.push({
+                pathname: '/(tabs)/highwaycode',
+                params: { ruleNumber: String(seg.ruleNumber) },
+              })
+            }
+          >
+            {seg.text}
+          </Text>
+        ) : (
+          <Text key={i}>{seg.text}</Text>
+        ),
+      )}
+    </Text>
+  );
+}
+
 // ── Sub-screens ───────────────────────────────────────────────────────────────
 
 function StartView({
@@ -707,7 +734,7 @@ function StartView({
   const theme = useTheme();
   return (
     <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.startContent}>
-      <Text style={styles.startTitle}>Practice Mode</Text>
+      <Text style={[styles.startTitle, { color: theme.textColor }]}>Practice Mode</Text>
       <Text style={styles.startSub}>
         Adaptive questions based on your progress
       </Text>
@@ -736,12 +763,12 @@ function resultConfig(pct: number): {
   emoji: string;
 } {
   if (pct === 100)
-    return { borderColor: '#34D399', accentColor: '#34D399', label: 'PERFECT!', emoji: '🏆' };
+    return { borderColor: '#0D9488', accentColor: '#0D9488', label: 'PERFECT!', emoji: '🏆' };
   if (pct >= 80)
-    return { borderColor: '#A78BFA', accentColor: '#A78BFA', label: 'GREAT JOB!', emoji: '⭐' };
+    return { borderColor: '#6366F1', accentColor: '#6366F1', label: 'GREAT JOB!', emoji: '⭐' };
   if (pct >= 60)
-    return { borderColor: '#FBBF24', accentColor: '#FBBF24', label: 'NOT BAD!', emoji: '👍' };
-  return { borderColor: '#F87171', accentColor: '#F87171', label: 'KEEP GOING!', emoji: '💪' };
+    return { borderColor: '#F59E0B', accentColor: '#F59E0B', label: 'NOT BAD!', emoji: '👍' };
+  return { borderColor: '#EF4444', accentColor: '#EF4444', label: 'KEEP GOING!', emoji: '💪' };
 }
 
 function motivationalMessage(correct: number, total: number): string {
@@ -856,7 +883,7 @@ function BattleView({
 }) {
   const multiplier = Math.min(Math.max(combo, 1), 5);
   const comboColor =
-    combo >= 5 ? '#F87171' : combo >= 3 ? '#FBBF24' : combo >= 2 ? '#34D399' : '#6B7280';
+    combo >= 5 ? '#EF4444' : combo >= 3 ? '#F59E0B' : combo >= 2 ? '#0D9488' : '#9CA3AF';
   const theme = useTheme();
 
   return (
@@ -970,7 +997,7 @@ function BattleResultsScreen({
 }) {
   const excellent = score >= 12;
   const good = score >= 8;
-  const bannerColor = excellent ? '#34D399' : good ? '#FBBF24' : '#F87171';
+  const bannerColor = excellent ? '#0D9488' : good ? '#F59E0B' : '#EF4444';
   const label = excellent ? 'EXCELLENT!' : good ? 'GOOD FIGHT!' : 'KEEP TRAINING!';
   const theme = useTheme();
 
@@ -1007,7 +1034,7 @@ function BattleResultsScreen({
           <Text style={styles.battleStatLabel}>Score</Text>
         </View>
         <View style={styles.battleStat}>
-          <Text style={[styles.battleStatValue, { color: xpEarned > 0 ? '#A78BFA' : '#374151' }]}>
+          <Text style={[styles.battleStatValue, { color: xpEarned > 0 ? '#6366F1' : '#9CA3AF' }]}>
             {xpEarned > 0 ? '+' + xpEarned : '0'}
           </Text>
           <Text style={styles.battleStatLabel}>XP</Text>
@@ -1063,39 +1090,38 @@ function DailyLimitView({ onUpgrade, onBack }: { onUpgrade: () => void; onBack: 
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: '#0A0A0F' },
+  scroll: { flex: 1 },
   content: { padding: 16, paddingBottom: 48 },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
-    backgroundColor: '#0A0A0F',
   },
   loadingText: { color: '#6B7280', fontSize: 15 },
 
   // Start screen
-  startContent: { padding: 24, paddingBottom: 48, flexGrow: 1, justifyContent: 'center' },
-  startTitle: { fontSize: 28, fontWeight: '800', color: '#F1F0FF', marginBottom: 8 },
+  startContent: { padding: 24, paddingTop: 24, paddingBottom: 48 },
+  startTitle: { fontSize: 28, fontWeight: '800', marginBottom: 8 },
   startSub: { fontSize: 15, color: '#6B7280', marginBottom: 32, lineHeight: 22 },
   startOr: {
     textAlign: 'center',
-    color: '#374151',
+    color: '#9CA3AF',
     fontSize: 13,
     fontWeight: '600',
     marginVertical: 16,
   },
   battleButton: {
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#F87171',
+    borderColor: '#EF4444',
   },
   battleButtonTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#F87171',
+    color: '#EF4444',
     marginBottom: 4,
   },
   battleButtonSubtitle: {
@@ -1109,26 +1135,26 @@ const styles = StyleSheet.create({
   // Progress bar
   progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   progressLabel: { fontSize: 13, color: '#6B7280', fontWeight: '500' },
-  progressPct: { fontSize: 13, color: '#A78BFA', fontWeight: '700' },
+  progressPct: { fontSize: 13, color: '#6366F1', fontWeight: '700' },
   progressTrack: {
     height: 6,
-    backgroundColor: '#1C1C27',
+    backgroundColor: '#F3F4F6',
     borderRadius: 3,
     marginBottom: 16,
     overflow: 'hidden',
   },
-  progressFill: { height: 6, backgroundColor: '#A78BFA', borderRadius: 3 },
+  progressFill: { height: 6, backgroundColor: '#0D9488', borderRadius: 3 },
 
   // Question card
   questionCard: {
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 20,
     marginBottom: 14,
     borderWidth: 0.5,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
     borderLeftWidth: 3,
-    borderLeftColor: '#A78BFA',
+    borderLeftColor: '#6366F1',
   },
   topicBadge: {
     alignSelf: 'flex-end',
@@ -1136,12 +1162,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     marginBottom: 10,
-    backgroundColor: '#1C1C27',
+    backgroundColor: '#F3F4F6',
     borderWidth: 0.5,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
   },
   topicBadgeEmoji: { fontSize: 16 },
-  questionText: { fontSize: 17, fontWeight: '600', color: '#F1F0FF', lineHeight: 26 },
+  questionText: { fontSize: 17, fontWeight: '600', lineHeight: 26 },
 
   // Options
   optionList: { gap: 10, marginBottom: 14 },
@@ -1153,44 +1179,44 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 12,
   },
-  optionDefault: { backgroundColor: '#13131A', borderColor: '#1F1F2E' },
-  optionCorrect: { backgroundColor: '#064E3B', borderColor: '#34D399' },
-  optionWrong: { backgroundColor: '#450A0A', borderColor: '#F87171' },
-  optionDimmed: { backgroundColor: '#13131A', borderColor: '#1F1F2E' },
+  optionDefault: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' },
+  optionCorrect: { backgroundColor: '#F0FDFA', borderColor: '#0D9488', borderWidth: 2 },
+  optionWrong:   { backgroundColor: '#FEF2F2', borderColor: '#EF4444', borderWidth: 2 },
+  optionDimmed:  { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' },
   badge: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  badgeDefault: { backgroundColor: '#1C1C27' },
-  badgeCorrect: { backgroundColor: '#34D399' },
-  badgeWrong: { backgroundColor: '#F87171' },
+  badgeDefault: { backgroundColor: '#F3F4F6' },
+  badgeCorrect: { backgroundColor: '#0D9488' },
+  badgeWrong:   { backgroundColor: '#EF4444' },
   badgeText: { fontSize: 13, fontWeight: '800' },
   badgeTextDefault: { color: '#6B7280' },
   badgeTextColored: { color: '#FFFFFF' },
   optionText: { flex: 1, fontSize: 15, lineHeight: 22 },
-  optionTextDefault: { color: '#F1F0FF' },
-  optionTextCorrect: { color: '#34D399', fontWeight: '600' },
-  optionTextWrong: { color: '#F87171', fontWeight: '600' },
-  optionTextDimmed: { color: '#374151' },
+  optionTextDefault: { color: '#111827' },
+  optionTextCorrect: { color: '#0D9488', fontWeight: '600' },
+  optionTextWrong:   { color: '#EF4444', fontWeight: '600' },
+  optionTextDimmed:  { color: '#9CA3AF' },
 
   // Explanation
   explanation: { borderRadius: 12, padding: 16, marginBottom: 14, borderLeftWidth: 3 },
-  explanationGreen: { backgroundColor: '#064E3B', borderLeftColor: '#34D399' },
-  explanationRed: { backgroundColor: '#450A0A', borderLeftColor: '#F87171' },
+  explanationGreen: { backgroundColor: '#F0FDFA', borderLeftColor: '#0D9488' },
+  explanationRed:   { backgroundColor: '#FEF2F2', borderLeftColor: '#EF4444' },
   explanationTitle: { fontSize: 15, fontWeight: '700', marginBottom: 4 },
-  explanationTitleGreen: { color: '#34D399' },
-  explanationTitleRed: { color: '#F87171' },
+  explanationTitleGreen: { color: '#0D9488' },
+  explanationTitleRed:   { color: '#EF4444' },
   explanationBody: { fontSize: 14, lineHeight: 21 },
-  explanationBodyGreen: { color: '#D1FAE5' },
-  explanationBodyRed: { color: '#FEE2E2' },
+  explanationBodyGreen: { color: '#065F46' },
+  explanationBodyRed:   { color: '#991B1B' },
 
   // Buttons
   primaryButton: {
-    backgroundColor: '#7B5EA7',
+    backgroundColor: '#0D9488',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
@@ -1199,18 +1225,19 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   outlineButton: {
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
+    marginBottom: 10,
   },
-  outlineButtonText: { color: '#6B7280', fontSize: 16, fontWeight: '600' },
+  outlineButtonText: { color: '#0D9488', fontSize: 16, fontWeight: '600' },
 
   // Results screen
   scoreBanner: {
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     borderWidth: 1,
     paddingVertical: 32,
@@ -1219,12 +1246,12 @@ const styles = StyleSheet.create({
   },
   resultEmoji: { fontSize: 56, marginBottom: 8 },
   resultLabel: { fontSize: 22, fontWeight: '900', letterSpacing: 2, marginBottom: 8 },
-  scoreValue: { fontSize: 72, fontWeight: '900', color: '#F1F0FF', lineHeight: 80 },
+  scoreValue: { fontSize: 72, fontWeight: '900', color: '#111827', lineHeight: 80 },
   scorePct: { fontSize: 20, color: '#6B7280', fontWeight: '600', marginTop: 4 },
   xpNotif: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#A78BFA',
+    color: '#0D9488',
     marginTop: 10,
   },
   motivationalMsg: {
@@ -1252,8 +1279,8 @@ const styles = StyleSheet.create({
     gap: 10,
     borderLeftWidth: 3,
   },
-  breakdownRowCorrect: { backgroundColor: '#064E3B', borderLeftColor: '#34D399' },
-  breakdownRowWrong: { backgroundColor: '#450A0A', borderLeftColor: '#F87171' },
+  breakdownRowCorrect: { backgroundColor: '#F0FDFA', borderLeftColor: '#0D9488' },
+  breakdownRowWrong:   { backgroundColor: '#FEF2F2', borderLeftColor: '#EF4444' },
   breakdownDot: {
     width: 26,
     height: 26,
@@ -1263,33 +1290,33 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     marginTop: 1,
   },
-  dotGreen: { backgroundColor: '#34D399' },
-  dotRed: { backgroundColor: '#F87171' },
+  dotGreen: { backgroundColor: '#0D9488' },
+  dotRed:   { backgroundColor: '#EF4444' },
   dotText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
-  breakdownText: { flex: 1, fontSize: 13, color: '#F1F0FF', lineHeight: 20 },
+  breakdownText: { flex: 1, fontSize: 13, color: '#111827', lineHeight: 20 },
 
   tutorButton: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#7B5EA7',
-    backgroundColor: '#13131A',
+    borderColor: '#0D9488',
+    backgroundColor: '#FFFFFF',
     paddingVertical: 14,
     alignItems: 'center',
     marginBottom: 8,
   },
-  tutorButtonText: { color: '#A78BFA', fontSize: 15, fontWeight: '700' },
+  tutorButtonText: { color: '#0D9488', fontSize: 15, fontWeight: '700' },
 
   // AI tutor
   explainButton: {
-    backgroundColor: '#1C1C27',
+    backgroundColor: '#F0FDFA',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#A78BFA',
+    borderColor: '#0D9488',
     paddingVertical: 12,
     alignItems: 'center',
     marginBottom: 8,
   },
-  explainButtonText: { color: '#A78BFA', fontSize: 14, fontWeight: '700' },
+  explainButtonText: { color: '#0D9488', fontSize: 14, fontWeight: '700' },
   aiLoadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1300,44 +1327,44 @@ const styles = StyleSheet.create({
   },
   aiLoadingText: { color: '#6B7280', fontSize: 14 },
   aiCard: {
-    backgroundColor: '#1C1C27',
+    backgroundColor: '#F3F4F6',
     borderRadius: 12,
     padding: 14,
     marginBottom: 8,
     borderLeftWidth: 3,
-    borderLeftColor: '#A78BFA',
+    borderLeftColor: '#6366F1',
   },
   aiCardTitle: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#A78BFA',
+    color: '#6366F1',
     letterSpacing: 1,
     marginBottom: 6,
   },
-  aiCardBody: { fontSize: 14, color: '#9CA3AF', lineHeight: 22 },
+  aiCardBody: { fontSize: 14, color: '#374151', lineHeight: 22 },
 
   // Achievement banner
   achievementBanner: {
-    backgroundColor: '#1C1C27',
+    backgroundColor: '#EEF2FF',
     borderRadius: 14,
     padding: 14,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#A78BFA',
+    borderColor: '#6366F1',
     borderLeftWidth: 4,
-    borderLeftColor: '#A78BFA',
+    borderLeftColor: '#6366F1',
   },
   achievementBannerTitle: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#A78BFA',
+    color: '#6366F1',
     letterSpacing: 1,
     marginBottom: 6,
   },
   achievementBannerItem: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#F1F0FF',
+    color: '#111827',
     marginBottom: 2,
   },
 
@@ -1353,12 +1380,12 @@ const styles = StyleSheet.create({
   battleLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#F87171',
+    color: '#EF4444',
     letterSpacing: 1,
   },
   battleProgress: { fontSize: 13, fontWeight: '600', color: '#6B7280' },
   comboBadge: {
-    backgroundColor: '#13131A',
+    backgroundColor: '#F3F4F6',
     borderRadius: 10,
     borderWidth: 1,
     paddingHorizontal: 10,
@@ -1367,19 +1394,19 @@ const styles = StyleSheet.create({
     minWidth: 54,
   },
   comboValue: { fontSize: 18, fontWeight: '900', lineHeight: 22 },
-  comboLabel: { fontSize: 9, fontWeight: '700', color: '#374151', letterSpacing: 0.5 },
+  comboLabel: { fontSize: 9, fontWeight: '700', color: '#9CA3AF', letterSpacing: 0.5 },
   battleScoreBadge: {
-    backgroundColor: '#13131A',
+    backgroundColor: '#F3F4F6',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
     paddingHorizontal: 10,
     paddingVertical: 6,
     alignItems: 'center',
     minWidth: 54,
   },
-  battleScoreValue: { fontSize: 18, fontWeight: '900', color: '#F1F0FF', lineHeight: 22 },
-  battleScoreLabel: { fontSize: 9, fontWeight: '700', color: '#374151', letterSpacing: 0.5 },
+  battleScoreValue: { fontSize: 18, fontWeight: '900', color: '#111827', lineHeight: 22 },
+  battleScoreLabel: { fontSize: 9, fontWeight: '700', color: '#9CA3AF', letterSpacing: 0.5 },
   battleTopicsRow: {
     flexDirection: 'row',
     gap: 8,
@@ -1387,7 +1414,7 @@ const styles = StyleSheet.create({
   },
   battleTopicChip: {
     fontSize: 20,
-    backgroundColor: '#13131A',
+    backgroundColor: '#F3F4F6',
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -1397,10 +1424,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
   },
-  battleAutoAdvanceText: { fontSize: 13, color: '#374151', fontStyle: 'italic' },
+  battleAutoAdvanceText: { fontSize: 13, color: '#9CA3AF', fontStyle: 'italic' },
 
   // Battle results
-  battleResultScore: { fontSize: 72, fontWeight: '900', color: '#F1F0FF', lineHeight: 80 },
+  battleResultScore: { fontSize: 72, fontWeight: '900', color: '#111827', lineHeight: 80 },
   battleStatRow: {
     flexDirection: 'row',
     gap: 12,
@@ -1408,22 +1435,22 @@ const styles = StyleSheet.create({
   },
   battleStat: {
     flex: 1,
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     padding: 16,
     alignItems: 'center',
     borderWidth: 0.5,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
   },
   battleStatValue: {
     fontSize: 26,
     fontWeight: '800',
-    color: '#F1F0FF',
+    color: '#111827',
     marginBottom: 4,
   },
   battleStatLabel: { fontSize: 11, color: '#6B7280', fontWeight: '500' },
   battleHint: {
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFBEB',
     borderRadius: 12,
     padding: 14,
     marginBottom: 16,
@@ -1432,10 +1459,10 @@ const styles = StyleSheet.create({
   },
   battleHintText: { fontSize: 13, color: '#FBBF24', fontWeight: '600' },
   battleExitButton: {
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: '#E5E7EB',
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
@@ -1445,20 +1472,20 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    backgroundColor: '#1C1C27',
+    backgroundColor: '#F3F4F6',
     borderRadius: 6,
     marginBottom: 8,
   },
-  speakerBtnText: { fontSize: 11, fontWeight: '700' as const, color: '#A78BFA' },
+  speakerBtnText: { fontSize: 11, fontWeight: '700' as const, color: '#6366F1' },
 
   // Daily limit gate
   limitCard: {
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 28,
     marginHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
     borderTopWidth: 3,
     borderTopColor: '#FBBF24',
     alignItems: 'center',
@@ -1469,7 +1496,7 @@ const styles = StyleSheet.create({
   limitTitle: { fontSize: 22, fontWeight: '800', color: '#FBBF24', textAlign: 'center' },
   limitBody: { fontSize: 15, color: '#6B7280', textAlign: 'center', lineHeight: 22 },
   limitUpgradeBtn: {
-    backgroundColor: '#7B5EA7',
+    backgroundColor: '#0D9488',
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 24,
@@ -1478,7 +1505,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   limitUpgradeBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
-  limitNote: { fontSize: 13, color: '#374151', textAlign: 'center' },
+  limitNote: { fontSize: 13, color: '#6B7280', textAlign: 'center' },
   limitBackBtn: { paddingVertical: 8 },
   limitBackText: { color: '#6B7280', fontSize: 14, fontWeight: '600' },
+
+  ruleLink: { color: '#0D9488', fontWeight: '700', textDecorationLine: 'underline' },
 });

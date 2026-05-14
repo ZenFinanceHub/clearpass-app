@@ -65,20 +65,19 @@ function goalDate(): string {
 }
 
 function barColor(pct: number): string {
-  if (pct >= 80) return '#A78BFA';
-  if (pct >= 50) return '#FBBF24';
-  return '#F87171';
+  if (pct >= 80) return '#6366F1';
+  if (pct >= 50) return '#F59E0B';
+  return '#EF4444';
 }
 
 function getRank(score: number): { label: string; color: string } {
-  if (score >= 80) return { label: 'Test Ready!', color: '#FBBF24' };
-  if (score >= 60) return { label: 'Advanced', color: '#A78BFA' };
-  if (score >= 40) return { label: 'Intermediate', color: '#34D399' };
-  if (score >= 20) return { label: 'Improving', color: '#378ADD' };
-  return { label: 'Learner', color: '#6B7280' };
+  if (score >= 80) return { label: 'Test Ready!', color: '#F59E0B' };
+  if (score >= 60) return { label: 'Advanced', color: '#6366F1' };
+  if (score >= 40) return { label: 'Intermediate', color: '#0D9488' };
+  if (score >= 20) return { label: 'Improving', color: '#3B82F6' };
+  return { label: 'Learner', color: '#9CA3AF' };
 }
 
-// Filter out internal eligibility flags from the display list
 const DISPLAY_ACHIEVEMENTS = ACHIEVEMENTS.filter((a) => !a.id.endsWith('_eligible'));
 
 export default function ProgressScreen() {
@@ -144,7 +143,6 @@ export default function ProgressScreen() {
   const unlockedIds = new Set(progress.achievements ?? []);
   const unlockedCount = DISPLAY_ACHIEVEMENTS.filter((a) => unlockedIds.has(a.id)).length;
 
-  // Pair achievements into rows of 2
   const achievementPairs: [Achievement, Achievement | null][] = [];
   for (let i = 0; i < DISPLAY_ACHIEVEMENTS.length; i += 2) {
     achievementPairs.push([
@@ -185,7 +183,7 @@ export default function ProgressScreen() {
         <Text
           style={[
             styles.goalStatus,
-            { color: progress.readinessScore >= 80 ? '#34D399' : '#6B7280' },
+            { color: progress.readinessScore >= 80 ? '#0D9488' : '#6B7280' },
           ]}
         >
           {progress.readinessScore >= 80
@@ -219,7 +217,6 @@ export default function ProgressScreen() {
         </View>
       </View>
 
-      {/* Achievements */}
       <View style={styles.achievementsHeader}>
         <Text style={styles.sectionLabel}>ACHIEVEMENTS</Text>
         <Text style={styles.achievementsCount}>
@@ -352,34 +349,32 @@ function AchievementCard({
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: '#0A0A0F' },
+  scroll: { flex: 1 },
   content: {
     flexGrow: 1,
     padding: 20,
     paddingBottom: 40,
-    backgroundColor: '#0A0A0F',
   },
 
   emptyContainer: {
     flex: 1,
-    backgroundColor: '#0A0A0F',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
     gap: 12,
   },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: '#F1F0FF' },
+  emptyTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
   emptyBody: { fontSize: 15, color: '#6B7280', textAlign: 'center', lineHeight: 22 },
   emptyButton: {
     marginTop: 8,
-    backgroundColor: '#7B5EA7',
+    backgroundColor: '#0D9488',
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 32,
   },
   emptyButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
 
-  screenTitle: { fontSize: 26, fontWeight: '800', color: '#F1F0FF', marginBottom: 12 },
+  screenTitle: { fontSize: 26, fontWeight: '800', color: '#111827', marginBottom: 12 },
 
   rankBadge: {
     alignSelf: 'flex-start',
@@ -388,19 +383,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 6,
     marginBottom: 16,
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
   },
   rankText: { fontSize: 13, fontWeight: '800', letterSpacing: 0.5 },
 
   goalCard: {
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 18,
     marginBottom: 20,
     borderWidth: 0.5,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
     borderLeftWidth: 3,
-    borderLeftColor: '#A78BFA',
+    borderLeftColor: '#6366F1',
   },
   goalCardLabel: {
     fontSize: 11,
@@ -409,15 +404,15 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 6,
   },
-  goalTarget: { fontSize: 16, fontWeight: '700', color: '#F1F0FF', marginBottom: 12 },
+  goalTarget: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 12 },
   goalBarTrack: {
     height: 8,
-    backgroundColor: '#1C1C27',
+    backgroundColor: '#F3F4F6',
     borderRadius: 4,
     overflow: 'hidden',
     marginBottom: 8,
   },
-  goalBarFill: { height: 8, backgroundColor: '#A78BFA', borderRadius: 4 },
+  goalBarFill: { height: 8, backgroundColor: '#0D9488', borderRadius: 4 },
   goalStatus: { fontSize: 13, fontWeight: '600' },
 
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 28 },
@@ -427,21 +422,20 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     alignItems: 'center',
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderWidth: 0.5,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
     borderTopWidth: 3,
   },
-  statQuestions: { borderTopColor: '#F87171' },
-  statMocks: { borderTopColor: '#A78BFA' },
-  statStreak: { borderTopColor: '#FBBF24' },
-  statBest: { borderTopColor: '#34D399' },
+  statQuestions: { borderTopColor: '#EF4444' },
+  statMocks: { borderTopColor: '#6366F1' },
+  statStreak: { borderTopColor: '#F59E0B' },
+  statBest: { borderTopColor: '#10B981' },
   statEmoji: { fontSize: 24, marginBottom: 4 },
-  statValue: { fontSize: 28, fontWeight: '800', color: '#F1F0FF', marginBottom: 4 },
+  statValue: { fontSize: 28, fontWeight: '800', color: '#111827', marginBottom: 4 },
   statValueSmall: { fontSize: 20 },
   statLabel: { fontSize: 11, color: '#6B7280', fontWeight: '500', textAlign: 'center' },
 
-  // Achievements
   achievementsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -459,13 +453,12 @@ const styles = StyleSheet.create({
   },
   achievementCardPlaceholder: { flex: 1 },
   achievementUnlocked: {
-    backgroundColor: '#13131A',
-    borderColor: '#A78BFA',
-    borderWidth: 1,
+    backgroundColor: '#FFFFFF',
+    borderColor: '#6366F1',
   },
   achievementLocked: {
-    backgroundColor: '#0D0D12',
-    borderColor: '#1F1F2E',
+    backgroundColor: '#F9FAFB',
+    borderColor: '#E5E7EB',
   },
   achievementCardTop: {
     flexDirection: 'row',
@@ -473,24 +466,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
-  achievementLockedText: { fontSize: 10, fontWeight: '700', color: '#374151', letterSpacing: 1 },
+  achievementLockedText: { fontSize: 10, fontWeight: '700', color: '#9CA3AF', letterSpacing: 1 },
   achievementXpBadge: {
     borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderWidth: 0.5,
   },
-  achievementXpBadgeUnlocked: { backgroundColor: '#1C1C27', borderColor: '#7B5EA7' },
-  achievementXpBadgeLocked: { backgroundColor: '#0D0D12', borderColor: '#1F1F2E' },
+  achievementXpBadgeUnlocked: { backgroundColor: '#EEF2FF', borderColor: '#6366F1' },
+  achievementXpBadgeLocked: { backgroundColor: '#F3F4F6', borderColor: '#E5E7EB' },
   achievementXpText: { fontSize: 10, fontWeight: '700' },
-  achievementXpTextUnlocked: { color: '#A78BFA' },
-  achievementXpTextLocked: { color: '#374151' },
+  achievementXpTextUnlocked: { color: '#6366F1' },
+  achievementXpTextLocked: { color: '#9CA3AF' },
   achievementTitle: { fontWeight: '700', marginBottom: 4 },
-  achievementTitleUnlocked: { color: '#F1F0FF', fontSize: 15 },
-  achievementTitleLocked: { color: '#374151', fontSize: 13 },
+  achievementTitleUnlocked: { color: '#111827', fontSize: 15 },
+  achievementTitleLocked: { color: '#9CA3AF', fontSize: 13 },
   achievementDesc: { fontSize: 11, lineHeight: 16 },
   achievementDescUnlocked: { color: '#6B7280' },
-  achievementDescLocked: { color: '#1F1F2E' },
+  achievementDescLocked: { color: '#E5E7EB' },
 
   sectionLabel: {
     fontSize: 12,
@@ -503,11 +496,11 @@ const styles = StyleSheet.create({
 
   topicList: { gap: 10, marginBottom: 28 },
   topicRow: {
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 12,
     borderWidth: 0.5,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
   },
   topicHeader: {
     flexDirection: 'row',
@@ -515,46 +508,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
-  topicName: { fontSize: 14, fontWeight: '600', color: '#F1F0FF', flex: 1 },
+  topicName: { fontSize: 14, fontWeight: '600', color: '#111827', flex: 1 },
   topicPct: { fontSize: 13, fontWeight: '700', marginLeft: 8 },
-  barTrack: { height: 6, backgroundColor: '#1C1C27', borderRadius: 3, overflow: 'hidden' },
+  barTrack: { height: 6, backgroundColor: '#F3F4F6', borderRadius: 3, overflow: 'hidden' },
   barFill: { height: 6, borderRadius: 3 },
 
   sessionList: { gap: 10 },
   sessionCard: {
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     padding: 16,
     borderWidth: 0.5,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
   },
   sessionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sessionInfo: { flex: 1 },
-  sessionDate: { fontSize: 15, fontWeight: '700', color: '#6B7280', marginBottom: 2 },
-  sessionDuration: { fontSize: 12, color: '#374151' },
+  sessionDate: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 2 },
+  sessionDuration: { fontSize: 12, color: '#6B7280' },
   sessionRight: { alignItems: 'flex-end', gap: 6 },
-  sessionScore: { fontSize: 18, fontWeight: '800', color: '#F1F0FF' },
+  sessionScore: { fontSize: 18, fontWeight: '800', color: '#111827' },
   badge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
-  badgePass: { backgroundColor: '#064E3B' },
-  badgeFail: { backgroundColor: '#450A0A' },
+  badgePass: { backgroundColor: '#ECFDF5' },
+  badgeFail: { backgroundColor: '#FEF2F2' },
   badgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
-  badgePassText: { color: '#34D399' },
-  badgeFailText: { color: '#F87171' },
+  badgePassText: { color: '#0D9488' },
+  badgeFailText: { color: '#EF4444' },
 
   proBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     padding: 16,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#FBBF24',
+    borderColor: '#F59E0B',
     borderLeftWidth: 4,
-    borderLeftColor: '#FBBF24',
+    borderLeftColor: '#F59E0B',
   },
   proBannerContent: { flex: 1 },
-  proBannerTitle: { fontSize: 15, fontWeight: '800', color: '#FBBF24', marginBottom: 2 },
+  proBannerTitle: { fontSize: 15, fontWeight: '800', color: '#D97706', marginBottom: 2 },
   proBannerSub: { fontSize: 12, color: '#6B7280' },
-  proBannerArrow: { fontSize: 18, color: '#FBBF24', fontWeight: '700', marginLeft: 8 },
+  proBannerArrow: { fontSize: 18, color: '#D97706', fontWeight: '700', marginLeft: 8 },
 });

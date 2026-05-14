@@ -102,7 +102,7 @@ export default function OnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0A0F' },
+  container: { flex: 1, backgroundColor: '#F7F8FA' },
 
   skipBtn: {
     position: 'absolute',
@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   emoji: { fontSize: 80 },
-  title: { fontSize: 30, fontWeight: '900', color: '#F1F0FF', textAlign: 'center', letterSpacing: 0.5 },
+  title: { fontSize: 30, fontWeight: '900', color: '#111827', textAlign: 'center', letterSpacing: 0.5 },
   subtitle: { fontSize: 16, color: '#6B7280', textAlign: 'center', lineHeight: 24 },
 
   dots: {
@@ -136,10 +136,10 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#1F2937',
+    backgroundColor: '#E5E7EB',
   },
   dotActive: {
-    backgroundColor: '#7B5EA7',
+    backgroundColor: '#0D9488',
     width: 24,
   },
 
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
   },
   nextBtn: {
-    backgroundColor: '#7B5EA7',
+    backgroundColor: '#0D9488',
     borderRadius: 14,
     paddingVertical: 18,
     alignItems: 'center',

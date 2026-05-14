@@ -88,7 +88,7 @@ const TOPICS: TopicEntry[] = [
     category: TopicCategory.RulesOfTheRoad,
     label: 'Rules of the Road',
     emoji: '📋',
-    accentColor: '#10B981',
+    accentColor: '#0D9488',
     facts: [
       'At roundabouts, give way to traffic already on the roundabout from the right, unless signs or markings state otherwise.',
       'Yellow box junctions: do not enter unless your exit road is clear - you may wait in the box only when turning right and held up by oncoming traffic.',
@@ -115,7 +115,7 @@ export default function LearnScreen() {
     return (
       <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
         <TouchableOpacity style={styles.backRow} onPress={() => setPhase('topics')} activeOpacity={0.7}>
-          <Ionicons name="chevron-back" size={20} color="#A78BFA" />
+          <Ionicons name="chevron-back" size={20} color="#0D9488" />
           <Text style={styles.backText}>All Topics</Text>
         </TouchableOpacity>
 
@@ -149,14 +149,14 @@ export default function LearnScreen() {
             onPress={() => openTopic(topic)}
             activeOpacity={0.8}
           >
-            <View style={styles.topicIcon}>
+            <View style={[styles.topicIcon, { backgroundColor: topic.accentColor + '18' }]}>
               <Text style={styles.topicEmoji}>{topic.emoji}</Text>
             </View>
             <View style={styles.topicBody}>
               <Text style={[styles.topicLabel, { fontSize: theme.fontSize(16), fontFamily: theme.fontFamily, color: theme.textColor }]}>{topic.label}</Text>
               <Text style={[styles.topicMeta, { fontSize: theme.fontSize(13), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>{topic.facts.length} key rules</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#374151" />
+            <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
           </TouchableOpacity>
         ))}
       </View>
@@ -165,22 +165,22 @@ export default function LearnScreen() {
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: '#0A0A0F' },
+  scroll: { flex: 1 },
   content: { padding: 16, paddingBottom: 48 },
 
-  screenTitle: { fontSize: 26, fontWeight: '800', color: '#F1F0FF', marginBottom: 4 },
+  screenTitle: { fontSize: 26, fontWeight: '800', color: '#111827', marginBottom: 4 },
   screenSub: { fontSize: 14, color: '#6B7280', marginBottom: 20 },
 
   topicList: { gap: 10 },
   topicCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     padding: 16,
     gap: 14,
     borderWidth: 0.5,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
   },
   topicIcon: {
     width: 46,
@@ -188,27 +188,26 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1C1C27',
   },
   topicEmoji: { fontSize: 22 },
   topicBody: { flex: 1 },
-  topicLabel: { fontSize: 16, fontWeight: '700', color: '#F1F0FF', marginBottom: 2 },
+  topicLabel: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 2 },
   topicMeta: { fontSize: 13, color: '#6B7280' },
 
   backRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 20 },
-  backText: { fontSize: 15, color: '#A78BFA', fontWeight: '600' },
+  backText: { fontSize: 15, color: '#0D9488', fontWeight: '600' },
 
-  detailTitle: { fontSize: 24, fontWeight: '800', color: '#F1F0FF', marginBottom: 4 },
+  detailTitle: { fontSize: 24, fontWeight: '800', color: '#111827', marginBottom: 4 },
   detailSub: { fontSize: 14, color: '#6B7280', marginBottom: 20 },
 
   factList: { gap: 12 },
   factCard: {
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
     borderLeftWidth: 3,
     borderWidth: 0.5,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
     flexDirection: 'row',
     gap: 12,
     alignItems: 'flex-start',
@@ -223,5 +222,5 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   factNumText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
-  factText: { flex: 1, fontSize: 14, color: '#9CA3AF', lineHeight: 21 },
+  factText: { flex: 1, fontSize: 14, color: '#6B7280', lineHeight: 21 },
 });

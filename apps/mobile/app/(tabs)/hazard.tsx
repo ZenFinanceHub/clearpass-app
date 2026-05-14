@@ -262,6 +262,7 @@ export default function HazardScreen() {
   }
 
   // ── PLAYER ───────────────────────────────────────────────────────────────
+  // Player phase intentionally stays black (#000000)
 
   if (phase === 'player') {
     let videoContent: React.ReactElement;
@@ -387,7 +388,7 @@ export default function HazardScreen() {
           ))}
         </View>
 
-        <Text style={styles.bodyText}>
+        <Text style={[styles.bodyText, { color: theme.subTextColor }]}>
           {result.clicks.length}
           {' tap(s) recorded'}
         </Text>
@@ -416,7 +417,7 @@ export default function HazardScreen() {
         {'/'}
         {total.maxScore}
       </Text>
-      <Text style={styles.bodyText}>
+      <Text style={[styles.bodyText, { color: theme.subTextColor }]}>
         {total.passed
           ? 'Great hazard awareness! You would pass.'
           : 'Keep practising — aim for 60% or above.'}
@@ -472,51 +473,53 @@ function formatTime(t: number): string {
 }
 
 const styles = StyleSheet.create({
-  bg: { flex: 1, backgroundColor: '#0A0A0F' },
+  bg: { flex: 1 },
   scrollContent: { alignItems: 'center', padding: 24, gap: 16, paddingBottom: 40 },
   centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 },
 
-  heading: { fontSize: 26, fontWeight: '800', color: '#FFFFFF', textAlign: 'center' },
-  sub: { fontSize: 14, color: '#6B7280', textAlign: 'center' },
-  bodyText: { fontSize: 14, color: '#9CA3AF', textAlign: 'center', lineHeight: 20 },
-  clipCounter: { fontSize: 13, fontWeight: '700', color: '#7B5EA7', letterSpacing: 0.5 },
+  heading: { fontSize: 26, fontWeight: '800', textAlign: 'center' },
+  sub: { fontSize: 14, textAlign: 'center' },
+  bodyText: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  clipCounter: { fontSize: 13, fontWeight: '700', color: '#6366F1', letterSpacing: 0.5 },
 
   card: {
     width: '100%' as any,
     maxWidth: 480,
-    backgroundColor: '#111827',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 20,
     gap: 12,
+    borderWidth: 0.5,
+    borderColor: '#E5E7EB',
   },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: '#FFFFFF', marginBottom: 4 },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 4 },
 
   stepRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   stepBadge: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#EEF2FF',
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 4,
     minWidth: 72,
     alignItems: 'center',
   },
-  stepBadgeText: { fontSize: 12, fontWeight: '700', color: '#60A5FA' },
-  stepText: { fontSize: 13, color: '#D1D5DB', flex: 1 },
+  stepBadgeText: { fontSize: 12, fontWeight: '700', color: '#6366F1' },
+  stepText: { fontSize: 13, color: '#374151', flex: 1 },
 
   statsRow: { flexDirection: 'row', gap: 12 },
   statPill: {
-    backgroundColor: '#1F2937',
+    backgroundColor: '#F3F4F6',
     borderRadius: 12,
     paddingHorizontal: 20,
     paddingVertical: 12,
     alignItems: 'center',
     minWidth: 72,
   },
-  statNum: { fontSize: 20, fontWeight: '800', color: '#FFFFFF' },
+  statNum: { fontSize: 20, fontWeight: '800', color: '#111827' },
   statLabel: { fontSize: 11, color: '#6B7280', marginTop: 2 },
 
   primaryBtn: {
-    backgroundColor: '#7B5EA7',
+    backgroundColor: '#0D9488',
     borderRadius: 14,
     paddingVertical: 16,
     paddingHorizontal: 40,
@@ -527,7 +530,7 @@ const styles = StyleSheet.create({
   primaryBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
 
   reminderBox: {
-    backgroundColor: '#1F2937',
+    backgroundColor: '#FFFBEB',
     borderRadius: 12,
     padding: 16,
     borderLeftWidth: 3,
@@ -535,9 +538,9 @@ const styles = StyleSheet.create({
     width: '100%' as any,
     maxWidth: 360,
   },
-  reminderText: { fontSize: 14, color: '#FCD34D', textAlign: 'center', lineHeight: 20 },
+  reminderText: { fontSize: 14, color: '#D97706', textAlign: 'center', lineHeight: 20 },
 
-  // Player
+  // Player — stays black
   playerScreen: { flex: 1, backgroundColor: '#000000' },
   videoWrap: { flex: 1, backgroundColor: '#000000', overflow: 'hidden' },
   flashOverlay: { backgroundColor: '#FCD34D' },
@@ -566,20 +569,22 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   hudText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
-  tapHintBar: { backgroundColor: '#111827', paddingVertical: 12, alignItems: 'center' },
-  tapHintText: { fontSize: 13, color: '#9CA3AF' },
+  tapHintBar: { backgroundColor: '#FFFFFF', paddingVertical: 12, alignItems: 'center', borderTopWidth: 0.5, borderTopColor: '#E5E7EB' },
+  tapHintText: { fontSize: 13, color: '#374151' },
 
-  // Clip result
+  // Clip result card
   resultCard: {
     width: '100%' as any,
     maxWidth: 480,
-    backgroundColor: '#111827',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
     gap: 12,
+    borderWidth: 0.5,
+    borderColor: '#E5E7EB',
   },
-  resultScore: { fontSize: 52, fontWeight: '900', color: '#FFFFFF' },
+  resultScore: { fontSize: 52, fontWeight: '900', color: '#111827' },
   resultScoreLabel: { fontSize: 14, color: '#6B7280' },
   hazardRow: {
     width: '100%' as any,
@@ -588,11 +593,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
   },
-  hazardLabel: { fontSize: 13, color: '#D1D5DB', flex: 1 },
+  hazardLabel: { fontSize: 13, color: '#374151', flex: 1 },
   dots: { flexDirection: 'row', gap: 4 },
   dot: { width: 12, height: 12, borderRadius: 6 },
-  dotFilled: { backgroundColor: '#34D399' },
-  dotEmpty: { backgroundColor: '#374151' },
+  dotFilled: { backgroundColor: '#0D9488' },
+  dotEmpty: { backgroundColor: '#E5E7EB' },
 
   // Results
   resultBadge: {
@@ -603,35 +608,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 3,
   },
-  passBadge: { backgroundColor: '#064E3B', borderColor: '#34D399' },
-  failBadge: { backgroundColor: '#450A0A', borderColor: '#F87171' },
-  resultBadgeText: { fontSize: 18, fontWeight: '900', color: '#FFFFFF' },
+  passBadge: { backgroundColor: '#ECFDF5', borderColor: '#0D9488' },
+  failBadge: { backgroundColor: '#FEF2F2', borderColor: '#EF4444' },
+  resultBadgeText: { fontSize: 18, fontWeight: '900', color: '#111827' },
   totalScore: { fontSize: 48, fontWeight: '900' },
-  passText: { color: '#34D399' },
-  failText: { color: '#F87171' },
+  passText: { color: '#0D9488' },
+  failText: { color: '#EF4444' },
   xpBadge: {
-    backgroundColor: '#1E3A5F',
+    backgroundColor: '#EEF2FF',
     borderRadius: 20,
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: '#3B82F6',
+    borderColor: '#6366F1',
   },
-  xpText: { fontSize: 15, fontWeight: '700', color: '#60A5FA' },
+  xpText: { fontSize: 15, fontWeight: '700', color: '#6366F1' },
   breakdownRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 4,
   },
-  breakdownLabel: { fontSize: 13, color: '#9CA3AF', flex: 1 },
+  breakdownLabel: { fontSize: 13, color: '#6B7280', flex: 1 },
   breakdownScore: { fontSize: 14, fontWeight: '700' },
   btnRow: { flexDirection: 'row', gap: 12, width: '100%' as any, maxWidth: 480 },
   secondaryBtn: {
-    backgroundColor: '#1F2937',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#0D9488',
   },
-  secondaryBtnText: { color: '#9CA3AF', fontSize: 16, fontWeight: '700' },
+  secondaryBtnText: { color: '#0D9488', fontSize: 16, fontWeight: '700' },
 });
