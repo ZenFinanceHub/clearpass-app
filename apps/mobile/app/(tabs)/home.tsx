@@ -25,6 +25,8 @@ import {
   saveUserProgress,
   syncPendingUsername,
 } from '@/src/storage';
+import { loadStudyPlan, StudyPlan } from '@/src/studyPlan';
+import { buildTodaySummary } from '../studyplan';
 import { supabase } from '@/src/supabase';
 import { useTheme } from '@/src/theme';
 
@@ -478,6 +480,7 @@ export default function HomeScreen() {
   const [showDateModal, setShowDateModal] = useState(false);
   const [dateInput, setDateInput]     = useState('');
   const [dateError, setDateError]     = useState('');
+  const [studyPlan, setStudyPlan]     = useState<StudyPlan | null>(null);
   const theme = useTheme();
 
   useEffect(() => {
@@ -503,6 +506,9 @@ export default function HomeScreen() {
 
         const fresh = await loadUserProgress();
         if (fresh) setProgress(fresh);
+
+        const plan = await loadStudyPlan();
+        setStudyPlan(plan);
 
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         console.log('[HomeScreen] getUser ->', user?.id ?? 'no user', userError ?? 'no error');
@@ -699,6 +705,32 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Study Plan Card */}
+      <TouchableOpacity
+        style={styles.studyPlanCard}
+        onPress={() => router.push('/studyplan' as any)}
+        activeOpacity={0.8}
+      >
+        <View style={styles.studyPlanLeft}>
+          <Text style={styles.studyPlanEmoji}>{'📅'}</Text>
+          <View style={styles.studyPlanTextBlock}>
+            <Text style={styles.studyPlanLabel}>STUDY PLAN</Text>
+            {studyPlan ? (
+              <Text style={[styles.studyPlanSummary, { fontSize: theme.fontSize(13), fontFamily: theme.fontFamily }]}>
+                {buildTodaySummary(studyPlan) || 'View your plan'}
+              </Text>
+            ) : (
+              <Text style={[styles.studyPlanSummary, { fontSize: theme.fontSize(13), fontFamily: theme.fontFamily }]}>
+                {'Create a personalised study plan'}
+              </Text>
+            )}
+          </View>
+        </View>
+        <View style={styles.studyPlanChevron}>
+          <Text style={styles.studyPlanChevronText}>{'›'}</Text>
+        </View>
+      </TouchableOpacity>
 
       {/* Daily Challenge Card */}
       {dc && (
@@ -959,6 +991,28 @@ const styles = StyleSheet.create({
   actionEmoji: { fontSize: 22, marginBottom: 4 },
   actionTitle: { fontSize: 14, fontWeight: '700', marginBottom: 0 },
   actionSub:   { fontSize: 11, fontWeight: '500' },
+
+  // ── Study Plan Card ───────────────────────────────────────────────────────────
+  studyPlanCard: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 0.5,
+    borderColor: '#E5E7EB',
+    borderLeftWidth: 3,
+    borderLeftColor: '#0D9488',
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  studyPlanLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  studyPlanEmoji: { fontSize: 26 },
+  studyPlanTextBlock: { flex: 1 },
+  studyPlanLabel: { fontSize: 11, fontWeight: '700', color: '#0D9488', letterSpacing: 1, marginBottom: 3 },
+  studyPlanSummary: { fontSize: 13, fontWeight: '600', color: '#374151' },
+  studyPlanChevron: { marginLeft: 8 },
+  studyPlanChevronText: { fontSize: 22, color: '#9CA3AF', fontWeight: '400', lineHeight: 26 },
 
   // ── Daily Challenge Card ──────────────────────────────────────────────────────
   dcCard: {
