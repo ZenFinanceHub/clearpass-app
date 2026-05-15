@@ -27,6 +27,9 @@ import {
 } from '@/src/storage';
 import { loadStudyPlan, StudyPlan } from '@/src/studyPlan';
 import { buildTodaySummary } from '../studyplan';
+import { loadSRState } from '@/src/spacedRepetition';
+import { computeAndSavePassProbability, PassProbabilityResult } from '@/src/passProbability';
+import { allQuestions } from '@clearpass/content';
 import { supabase } from '@/src/supabase';
 import { useTheme } from '@/src/theme';
 
@@ -481,6 +484,7 @@ export default function HomeScreen() {
   const [dateInput, setDateInput]     = useState('');
   const [dateError, setDateError]     = useState('');
   const [studyPlan, setStudyPlan]     = useState<StudyPlan | null>(null);
+  const [passProb, setPassProb]       = useState<PassProbabilityResult | null>(null);
   const theme = useTheme();
 
   useEffect(() => {
@@ -510,6 +514,16 @@ export default function HomeScreen() {
         const plan = await loadStudyPlan();
         setStudyPlan(plan);
 
+        try {
+          const [srState, freshProg] = await Promise.all([loadSRState(), loadUserProgress()]);
+          if (freshProg) {
+            const prob = await computeAndSavePassProbability(freshProg, srState, allQuestions);
+            setPassProb(prob);
+          }
+        } catch (e) {
+          console.warn('[HomeScreen] passProb error:', e);
+        }
+
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         console.log('[HomeScreen] getUser ->', user?.id ?? 'no user', userError ?? 'no error');
 
@@ -519,17 +533,22 @@ export default function HomeScreen() {
           return;
         }
 
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('full_name, username')
+          .select('username')
           .eq('id', user.id)
           .single();
 
-        const displayName = (profile?.full_name as string | null) || (profile?.username as string | null);
+        console.log('[HomeScreen] profile ->', JSON.stringify(profile), 'error ->', profileError?.message ?? 'none');
+
+        const displayName = profile?.username as string | null;
+        console.log('[HomeScreen] displayName ->', displayName);
+
         if (displayName) {
           setUsername(displayName);
         } else {
           const pending = await AsyncStorage.getItem('@clearpass/pending_username');
+          console.log('[HomeScreen] pending_username ->', pending);
           if (pending) setUsername(pending);
         }
       })();
@@ -625,12 +644,24 @@ export default function HomeScreen() {
             ? `Your test is in ${daysLeft} day${daysLeft === 1 ? '' : 's'}. Keep it up!`
             : 'Set your test date to see countdown'}
         </Text>
-        <View style={styles.heroBarTrack}>
-          <View style={[styles.heroBarFill, { width: `${readinessPct}%` as any }]} />
+        <View style={styles.heroProbRow}>
+          <Text style={[styles.heroProbNum, { fontSize: theme.fontSize(48), fontFamily: theme.fontFamily }]}>
+            {passProb ? passProb.probability : readinessPct}{'%'}
+          </Text>
+          {passProb && (
+            <Text style={[styles.heroProbArrow, {
+              color: passProb.trend === 'up' ? '#6EE7B7' : passProb.trend === 'down' ? '#FCA5A5' : 'rgba(255,255,255,0.45)',
+            }]}>
+              {passProb.trend === 'up' ? '↑' : passProb.trend === 'down' ? '↓' : '→'}
+            </Text>
+          )}
         </View>
-        <Text style={[styles.heroBarLabel, { fontSize: theme.fontSize(11), fontFamily: theme.fontFamily }]}>
-          {'Readiness: '}{readinessPct}{'%'}
+        <Text style={[styles.heroProbLabel, { fontSize: theme.fontSize(11), fontFamily: theme.fontFamily }]}>
+          {'Pass Probability'}
         </Text>
+        <View style={styles.heroBarTrack}>
+          <View style={[styles.heroBarFill, { width: `${passProb ? passProb.probability : readinessPct}%` as any }]} />
+        </View>
       </LinearGradient>
 
       {/* Road Map Hero */}
@@ -680,28 +711,28 @@ export default function HomeScreen() {
         <View style={styles.actionRow}>
           <TouchableOpacity style={styles.actionCard} onPress={() => router.push('/(tabs)/practice')} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'🎯'}</Text>
-            <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.textColor }]}>Practice</Text>
-            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>Random questions</Text>
+            <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Practice</Text>
+            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>Random questions</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionCard} onPress={() => router.push('/(tabs)/mock')} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'📋'}</Text>
-            <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.textColor }]}>Mock Test</Text>
-            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>57 minutes</Text>
+            <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Mock Test</Text>
+            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>57 minutes</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.actionRow}>
           <TouchableOpacity style={styles.actionCard} onPress={() => router.push('/(tabs)/learn')} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'📚'}</Text>
-            <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.textColor }]}>Learn</Text>
-            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>Highway Code</Text>
+            <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Learn</Text>
+            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>Highway Code</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionCard} onPress={() => router.push('/(tabs)/hazard')} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'⚠'}</Text>
-            <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.textColor }]}>Hazard</Text>
-            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>14 clips</Text>
+            <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Hazard</Text>
+            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>14 clips</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -853,6 +884,31 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: 'rgba(255,255,255,0.75)',
     fontWeight: '600',
+  },
+  heroProbRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    marginBottom: 2,
+  },
+  heroProbNum: {
+    fontSize: 48,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    lineHeight: 52,
+  },
+  heroProbArrow: {
+    fontSize: 28,
+    fontWeight: '700',
+    lineHeight: 52,
+    paddingBottom: 2,
+  },
+  heroProbLabel: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.75)',
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    marginBottom: 10,
   },
 
   // ── Road Map Hero ────────────────────────────────────────────────────────────

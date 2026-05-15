@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/src/supabase';
 import {
   Achievement,
@@ -20,10 +20,10 @@ import {
   awardXp,
   calculateReadiness,
   checkAchievements,
-  getQuestionsForSession,
   initQuestionState,
   updateQuestionState,
 } from '@clearpass/core';
+import { recordAnswer, selectPracticeQuestions, getDueQuestions } from '@/src/spacedRepetition';
 import { allQuestions, getQuestionById } from '@clearpass/content';
 import {
   createFreshUserProgress,
@@ -85,6 +85,8 @@ type BattleDisplay = {
 };
 
 export default function PracticeScreen() {
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
+
   const [phase, setPhase] = useState<Phase>('start');
 
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -93,6 +95,8 @@ export default function PracticeScreen() {
   const [sessionResults, setSessionResults] = useState<SessionResult[]>([]);
   const [aiExplanation, setAiExplanation] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [showSRButtons, setShowSRButtons] = useState(false);
+  const srRecordedRef = useRef(false);
 
   const [xpGained, setXpGained] = useState(0);
   const [newAchievements, setNewAchievements] = useState<Achievement[]>([]);
@@ -123,15 +127,26 @@ export default function PracticeScreen() {
   const battleAnsweredRef = useRef(false);
   const battleCancelledRef = useRef(false);
 
+  // Auto-speak question + options when a new question loads (no answer yet)
   useEffect(() => {
-    if (phase !== 'quiz' || !settings.textToSpeech || questions.length === 0) return;
+    if (phase !== 'quiz' || !settings.textToSpeech || questions.length === 0 || selectedIndex !== null) return;
     const q = questions[currentIndex];
     if (!q) return;
     const opts = q.options.map((opt, i) => `Option ${LABELS[i]}: ${opt}`).join('. ');
     Speech.stop();
     Speech.speak(`${q.questionText}. ${opts}`, { language: 'en-GB' });
     return () => { Speech.stop(); };
-  }, [phase, currentIndex, questions, settings.textToSpeech]);
+  }, [phase, currentIndex, questions, settings.textToSpeech]); // selectedIndex intentionally omitted — stopping is handled in handleAnswer
+
+  // Speak result when answer is revealed
+  useEffect(() => {
+    if (phase !== 'quiz' || !settings.textToSpeech || selectedIndex === null || questions.length === 0) return;
+    const q = questions[currentIndex];
+    if (!q) return;
+    const verdict = selectedIndex === q.correctIndex ? 'Correct!' : 'Incorrect.';
+    Speech.stop();
+    Speech.speak(`${verdict} ${q.explanation}`, { language: 'en-GB' });
+  }, [phase, currentIndex, questions, settings.textToSpeech, selectedIndex]);
 
   async function handleProUpgrade() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -170,15 +185,18 @@ export default function PracticeScreen() {
       return;
     }
 
-    const sessionIds = getQuestionsForSession(
-      Object.values(statesMap),
-      allQuestions.map((q) => q.id),
-      SESSION_SIZE,
-    );
-
-    const sessionQuestions = sessionIds
-      .map((id) => getQuestionById(id))
-      .filter((q): q is Question => q !== undefined);
+    let sessionQuestions: Question[];
+    if (mode === 'review') {
+      const dueIds = await getDueQuestions(allQuestions.map(q => q.id), SESSION_SIZE);
+      sessionQuestions = dueIds
+        .map(id => getQuestionById(id))
+        .filter((q): q is Question => q !== undefined);
+      if (sessionQuestions.length === 0) {
+        sessionQuestions = await selectPracticeQuestions(allQuestions, SESSION_SIZE);
+      }
+    } else {
+      sessionQuestions = await selectPracticeQuestions(allQuestions, SESSION_SIZE);
+    }
 
     resultsRef.current = [];
     setSessionResults([]);
@@ -314,6 +332,7 @@ export default function PracticeScreen() {
   const handleAnswer = useCallback(
     async (optionIndex: number) => {
       if (selectedIndex !== null) return;
+      Speech.stop();
 
       const question = questions[currentIndex];
       const correct = optionIndex === question.correctIndex;
@@ -332,12 +351,40 @@ export default function PracticeScreen() {
       setSelectedIndex(optionIndex);
       setSessionResults(resultsRef.current);
 
+      // SR: auto-record wrong answers; correct answers wait for Easy/Hard tap
+      srRecordedRef.current = false;
+      if (!correct) {
+        void recordAnswer(question.id, false, false);
+        srRecordedRef.current = true;
+      } else {
+        setShowSRButtons(true);
+      }
+
       await saveQuestionStates(questionStatesRef.current);
     },
     [selectedIndex, questions, currentIndex],
   );
 
+  function handleSRRecord(wasHard: boolean) {
+    if (srRecordedRef.current) return;
+    const question = questions[currentIndex];
+    srRecordedRef.current = true;
+    setShowSRButtons(false);
+    void recordAnswer(question.id, true, wasHard);
+  }
+
   const handleNext = useCallback(async () => {
+    Speech.stop();
+    // Auto-record easy if user skipped the SR rating on a correct answer
+    if (!srRecordedRef.current && selectedIndex !== null) {
+      const q = questions[currentIndex];
+      if (q && selectedIndex === q.correctIndex) {
+        void recordAnswer(q.id, true, false);
+      }
+    }
+    srRecordedRef.current = false;
+    setShowSRButtons(false);
+
     const count = await incrementFreeQuestionsAnswered();
     if (count >= FREE_QUESTION_LIMIT) {
       const premium = await isPremium();
@@ -356,7 +403,7 @@ export default function PracticeScreen() {
       setAiExplanation(null);
       setAiLoading(false);
     }
-  }, [currentIndex, questions.length]);
+  }, [currentIndex, questions, questions.length, selectedIndex]);
 
   const handleExplain = useCallback(async () => {
     if (aiLoading || aiExplanation !== null) return;
@@ -560,7 +607,13 @@ export default function PracticeScreen() {
             <Text style={styles.speakerBtnText}>{'[ >> ]'}</Text>
           </TouchableOpacity>
         )}
-        <Text style={[styles.questionText, { fontSize: theme.fontSize(17), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(26), color: theme.textColor }]}>{question.questionText}</Text>
+        <Text
+          style={[styles.questionText, { fontSize: theme.fontSize(17), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(26), color: theme.textColor }]}
+          onPress={settings.textToSpeech ? () => { Speech.stop(); Speech.speak(question.questionText, { language: 'en-GB' }); } : undefined}
+          suppressHighlighting={!settings.textToSpeech}
+        >
+          {question.questionText}
+        </Text>
       </View>
 
       <View style={styles.optionList}>
@@ -594,9 +647,15 @@ export default function PracticeScreen() {
             <TouchableOpacity
               key={idx}
               style={[styles.option, cardStyle, settings.highContrast ? { borderWidth: 2, borderColor: isAnswered ? undefined : theme.borderColor } : undefined]}
-              onPress={() => handleAnswer(idx)}
-              activeOpacity={isAnswered ? 1 : 0.75}
-              disabled={isAnswered}
+              onPress={() => {
+                if (isAnswered) {
+                  if (settings.textToSpeech) { Speech.stop(); Speech.speak(option, { language: 'en-GB' }); }
+                  return;
+                }
+                void handleAnswer(idx);
+              }}
+              activeOpacity={!isAnswered || settings.textToSpeech ? 0.75 : 1}
+              disabled={isAnswered && !settings.textToSpeech}
             >
               <View style={[styles.badge, badgeStyle]}>
                 <Text style={[styles.badgeText, badgeTextStyle]}>{LABELS[idx]}</Text>
@@ -626,6 +685,20 @@ export default function PracticeScreen() {
             text={question.explanation}
             bodyStyle={answeredCorrectly ? styles.explanationBodyGreen : styles.explanationBodyRed}
           />
+        </View>
+      )}
+
+      {isAnswered && answeredCorrectly && showSRButtons && (
+        <View style={styles.srRow}>
+          <Text style={styles.srRowLabel}>How well did you know this?</Text>
+          <View style={styles.srBtns}>
+            <TouchableOpacity style={styles.easyBtn} onPress={() => handleSRRecord(false)} activeOpacity={0.8}>
+              <Text style={styles.easyBtnText}>{'Easy ✓'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.hardBtn} onPress={() => handleSRRecord(true)} activeOpacity={0.8}>
+              <Text style={styles.hardBtnText}>{'Hard ✓'}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -1510,4 +1583,32 @@ const styles = StyleSheet.create({
   limitBackText: { color: '#6B7280', fontSize: 14, fontWeight: '600' },
 
   ruleLink: { color: '#0D9488', fontWeight: '700', textDecorationLine: 'underline' },
+
+  // Spaced repetition rating
+  srRow: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 0.5,
+    borderColor: '#E5E7EB',
+    padding: 12,
+    marginBottom: 10,
+  },
+  srRowLabel: { fontSize: 12, color: '#6B7280', fontWeight: '500', marginBottom: 8 },
+  srBtns:     { flexDirection: 'row', gap: 8 },
+  easyBtn: {
+    flex: 1,
+    backgroundColor: '#D1FAE5',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  easyBtnText: { fontSize: 14, fontWeight: '700', color: '#065F46' },
+  hardBtn: {
+    flex: 1,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  hardBtnText: { fontSize: 14, fontWeight: '700', color: '#92400E' },
 });

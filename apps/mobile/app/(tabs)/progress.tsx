@@ -1,4 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { loadSRState, SpacedRepetitionState } from '@/src/spacedRepetition';
+import { computeAndSavePassProbability, PassProbabilityResult } from '@/src/passProbability';
+import { allQuestions } from '@clearpass/content';
 import {
   Linking,
   ScrollView,
@@ -82,14 +85,22 @@ const DISPLAY_ACHIEVEMENTS = ACHIEVEMENTS.filter((a) => !a.id.endsWith('_eligibl
 
 export default function ProgressScreen() {
   const [progress, setProgress] = useState<UserProgress | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const [srState,  setSrState]  = useState<SpacedRepetitionState | null>(null);
+  const [passProb, setPassProb] = useState<PassProbabilityResult | null>(null);
+  const [loaded,   setLoaded]   = useState(false);
   const theme = useTheme();
 
   useEffect(() => {
-    loadUserProgress().then((p) => {
+    void (async () => {
+      const [p, sr] = await Promise.all([loadUserProgress(), loadSRState()]);
       setProgress(p);
+      setSrState(sr);
+      if (p) {
+        const prob = await computeAndSavePassProbability(p, sr, allQuestions);
+        setPassProb(prob);
+      }
       setLoaded(true);
-    });
+    })();
   }, []);
 
   async function handleUpgrade() {
@@ -217,6 +228,10 @@ export default function ProgressScreen() {
         </View>
       </View>
 
+      {passProb && <PassProbabilityCard result={passProb} />}
+
+      <DueForReviewSection srState={srState} />
+
       <View style={styles.achievementsHeader}>
         <Text style={styles.sectionLabel}>ACHIEVEMENTS</Text>
         <Text style={styles.achievementsCount}>
@@ -299,6 +314,194 @@ export default function ProgressScreen() {
         </>
       )}
     </ScrollView>
+  );
+}
+
+const BAR_MAX_H = 48;
+
+// ── Pass Probability Card ─────────────────────────────────────────────────────
+
+function CircularProgress({ pct }: { pct: number }) {
+  // Half-circle arc (left → top → right = 0% → 100%).
+  // Uses per-side border colours on a circle clipped to its top half.
+  // Grey ring is rendered inside each half-clip so it cannot be covered by
+  // clip Views that may acquire opaque backgrounds on some platforms.
+  //
+  // Arc segments (approx. 60° each, covering 0-50% and 50-100%):
+  //   borderLeftColor  → 9 o'clock sector  (0-33% of gauge)
+  //   borderTopColor   → 12 o'clock sector (33-67%)
+  //   borderRightColor → 3 o'clock sector  (67-100%)
+  const clamp = Math.min(100, Math.max(0, pct));
+  const color = clamp >= 70 ? '#10B981' : clamp >= 45 ? '#F59E0B' : '#EF4444';
+  const GREY  = '#E5E7EB';
+  const NONE  = 'transparent';
+
+  const leftColor  = clamp > 0  ? color : NONE;
+  const topColor   = clamp > 33 ? color : NONE;
+  const rightColor = clamp > 67 ? color : NONE;
+
+  return (
+    <View style={styles.circleWrapper}>
+      {/* Clip to top half only */}
+      <View style={styles.circleArcClip}>
+        {/* Grey track ring */}
+        <View style={[styles.circleRing, {
+          borderLeftColor: GREY, borderTopColor: GREY,
+          borderRightColor: GREY, borderBottomColor: GREY,
+        }]} />
+        {/* Coloured arc overlaid on top */}
+        <View style={[styles.circleRing, {
+          borderLeftColor:   leftColor,
+          borderTopColor:    topColor,
+          borderRightColor:  rightColor,
+          borderBottomColor: NONE,
+        }]} />
+      </View>
+      {/* Text sits below the clipped arc */}
+      <View style={styles.circleTextBox}>
+        <Text style={[styles.circleNum, { color }]}>{clamp}{'%'}</Text>
+        <Text style={styles.circleNumLabel}>probability</Text>
+      </View>
+    </View>
+  );
+}
+
+function BreakdownBar({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <View style={styles.bbRow}>
+      <View style={styles.bbLabelRow}>
+        <Text style={styles.bbLabel}>{label}</Text>
+        <Text style={[styles.bbValue, { color }]}>{value}{'%'}</Text>
+      </View>
+      <View style={styles.bbTrack}>
+        <View style={[styles.bbFill, { width: `${value}%` as any, backgroundColor: color }]} />
+      </View>
+    </View>
+  );
+}
+
+function PassProbabilityCard({ result }: { result: PassProbabilityResult }) {
+  const theme = useTheme();
+  const { probability, trend, breakdown, weakestArea, recommendation } = result;
+  const trendColor  = trend === 'up' ? '#10B981' : trend === 'down' ? '#EF4444' : '#9CA3AF';
+  const trendArrow  = trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→';
+  const trendLabel  = trend === 'up' ? 'improving' : trend === 'down' ? 'declining' : 'stable';
+
+  return (
+    <View style={styles.ppCard}>
+      <View style={styles.ppHeader}>
+        <Text style={[styles.sectionLabel, { marginBottom: 0 }]}>PASS PROBABILITY</Text>
+        <View style={[styles.ppTrendBadge, { backgroundColor: trend === 'up' ? '#ECFDF5' : trend === 'down' ? '#FEF2F2' : '#F3F4F6' }]}>
+          <Text style={[styles.ppTrendText, { color: trendColor }]}>{trendArrow}{' '}{trendLabel}</Text>
+        </View>
+      </View>
+
+      <CircularProgress pct={probability} />
+
+      <View style={styles.ppBreakdown}>
+        <BreakdownBar
+          label="Mock Tests"
+          value={breakdown.mockScore}
+          color={breakdown.mockScore >= 70 ? '#10B981' : breakdown.mockScore >= 45 ? '#F59E0B' : '#EF4444'}
+        />
+        <BreakdownBar
+          label="Practice Accuracy"
+          value={breakdown.accuracyScore}
+          color={breakdown.accuracyScore >= 70 ? '#10B981' : breakdown.accuracyScore >= 45 ? '#F59E0B' : '#EF4444'}
+        />
+        <BreakdownBar
+          label="Topic Coverage"
+          value={breakdown.coverageScore}
+          color={breakdown.coverageScore >= 70 ? '#10B981' : breakdown.coverageScore >= 45 ? '#F59E0B' : '#EF4444'}
+        />
+        <BreakdownBar
+          label="Study Streak"
+          value={breakdown.consistencyScore}
+          color={breakdown.consistencyScore >= 70 ? '#10B981' : breakdown.consistencyScore >= 45 ? '#F59E0B' : '#EF4444'}
+        />
+      </View>
+
+      <View style={styles.ppFocusBox}>
+        <Text style={styles.ppFocusTitle}>What's holding you back</Text>
+        <Text style={[styles.ppFocusArea, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily }]}>{weakestArea}</Text>
+        <Text style={[styles.ppFocusRec, { fontSize: theme.fontSize(13), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(20) }]}>{recommendation}</Text>
+      </View>
+    </View>
+  );
+}
+
+function DueForReviewSection({ srState }: { srState: SpacedRepetitionState | null }) {
+  const theme = useTheme();
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+
+  const last7 = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - (6 - i));
+    return d.toISOString().split('T')[0];
+  });
+
+  const reviewCounts = last7.map(date => srState?.dailyReviewCounts?.[date] ?? 0);
+  const maxReviews   = Math.max(...reviewCounts, 1);
+  const dueCount     = Object.values(srState?.reviews ?? {})
+    .filter(r => r.nextReviewDate <= todayStr)
+    .length;
+
+  const totalReviewed = Object.keys(srState?.reviews ?? {}).length;
+  if (totalReviewed === 0) return null;
+
+  return (
+    <View style={styles.srSection}>
+      <Text style={[styles.sectionLabel, { color: theme.subTextColor }]}>DUE FOR REVIEW</Text>
+
+      <View style={styles.srCard}>
+        <View style={styles.srCardTop}>
+          <View>
+            <Text style={styles.srDueCount}>{dueCount}</Text>
+            <Text style={[styles.srDueLabel, { color: theme.subTextColor }]}>
+              {dueCount === 1 ? 'question due today' : 'questions due today'}
+            </Text>
+          </View>
+          <View style={styles.srCardRight}>
+            <Text style={styles.srTotalLabel}>
+              {totalReviewed}{' in system'}
+            </Text>
+          </View>
+        </View>
+
+        {dueCount > 0 && (
+          <TouchableOpacity
+            style={styles.srReviewBtn}
+            onPress={() => router.push({ pathname: '/(tabs)/practice', params: { mode: 'review' } })}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.srReviewBtnText}>Start Review Session</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <Text style={[styles.srChartTitle, { color: theme.subTextColor }]}>Reviews this week</Text>
+      <View style={styles.srChartRow}>
+        {last7.map((date, i) => {
+          const barH = reviewCounts[i] > 0
+            ? Math.max(4, Math.round((reviewCounts[i] / maxReviews) * BAR_MAX_H))
+            : 0;
+          return (
+            <View key={date} style={styles.srBarCol}>
+              <View style={[styles.srBarTrack, { height: BAR_MAX_H }]}>
+                {barH > 0 && <View style={[styles.srBarFill, { height: barH }]} />}
+              </View>
+              {reviewCounts[i] > 0 && (
+                <Text style={styles.srBarCount}>{reviewCounts[i]}</Text>
+              )}
+              <Text style={[styles.srBarDay, date === todayStr && styles.srBarDayToday]}>
+                {DAY_NAMES[new Date(date + 'T00:00:00').getDay()]}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
@@ -533,6 +736,132 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
   badgePassText: { color: '#0D9488' },
   badgeFailText: { color: '#EF4444' },
+
+  // ── Pass Probability Card ─────────────────────────────────────────────────
+  ppCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 0.5,
+    borderColor: '#E5E7EB',
+    borderTopWidth: 3,
+    borderTopColor: '#6366F1',
+    padding: 18,
+    marginBottom: 24,
+  },
+  ppHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  ppTrendBadge: {
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  ppTrendText: { fontSize: 12, fontWeight: '700' },
+
+  // Half-circle progress
+  circleWrapper: {
+    alignSelf: 'center',
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  circleArcClip: {
+    width: 120,
+    height: 62,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  circleRing: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 12,
+    backgroundColor: 'transparent',
+    top: 0,
+  },
+  circleTextBox: {
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  circleNum: { fontSize: 26, fontWeight: '900', lineHeight: 30 },
+  circleNumLabel: { fontSize: 10, color: '#9CA3AF', fontWeight: '600', letterSpacing: 0.5 },
+
+  ppBreakdown: { gap: 10, marginBottom: 16 },
+  bbRow: { gap: 4 },
+  bbLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  bbLabel: { fontSize: 13, fontWeight: '600', color: '#374151' },
+  bbValue: { fontSize: 13, fontWeight: '700' },
+  bbTrack: {
+    height: 6,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  bbFill: { height: 6, borderRadius: 3 },
+
+  ppFocusBox: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    padding: 14,
+    gap: 4,
+  },
+  ppFocusTitle: { fontSize: 11, fontWeight: '700', color: '#9CA3AF', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 2 },
+  ppFocusArea: { fontSize: 15, fontWeight: '800', color: '#111827' },
+  ppFocusRec: { fontSize: 13, color: '#6B7280', lineHeight: 20 },
+
+  // ── Due for Review ────────────────────────────────────────────────────────
+  srSection:      { marginBottom: 28 },
+  srCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 0.5,
+    borderColor: '#E5E7EB',
+    borderTopWidth: 3,
+    borderTopColor: '#0D9488',
+    padding: 16,
+    marginBottom: 12,
+  },
+  srCardTop:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+  srDueCount:     { fontSize: 40, fontWeight: '900', color: '#0D9488', lineHeight: 46 },
+  srDueLabel:     { fontSize: 13, fontWeight: '500', marginTop: 2 },
+  srCardRight:    { alignItems: 'flex-end', paddingTop: 4 },
+  srTotalLabel:   { fontSize: 12, color: '#9CA3AF', fontWeight: '500' },
+  srReviewBtn: {
+    backgroundColor: '#0D9488',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  srReviewBtnText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
+  srChartTitle: { fontSize: 12, fontWeight: '600', marginBottom: 8 },
+  srChartRow: {
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'flex-end',
+  },
+  srBarCol: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  srBarTrack: {
+    width: '100%',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 4,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+  },
+  srBarFill:      { width: '100%', backgroundColor: '#0D9488', borderRadius: 4 },
+  srBarCount:     { fontSize: 10, color: '#0D9488', fontWeight: '700' },
+  srBarDay:       { fontSize: 10, color: '#9CA3AF', fontWeight: '500' },
+  srBarDayToday:  { color: '#0D9488', fontWeight: '700' },
 
   proBanner: {
     flexDirection: 'row',
