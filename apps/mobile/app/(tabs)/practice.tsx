@@ -41,6 +41,8 @@ import {
 } from '@/src/subscription';
 import { explainAnswer } from '@clearpass/ai';
 import { TOPIC_LABELS } from '@/src/tutorNudges';
+import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
+import { CelebrationModal } from '@/src/components/CelebrationModal';
 import * as Speech from 'expo-speech';
 import { useAccessibility } from '@/src/AccessibilityContext';
 import { useTheme } from '@/src/theme';
@@ -113,6 +115,8 @@ export default function PracticeScreen() {
   const [battleNewAchievements, setBattleNewAchievements] = useState<Achievement[]>([]);
 
   const [sessionTutorNudge, setSessionTutorNudge] = useState<{ topic: string; topicKey: string } | null>(null);
+  const [celebQueue, setCelebQueue] = useState<CelebrationEvent[]>([]);
+  const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
 
   const { settings } = useAccessibility();
   const theme = useTheme();
@@ -523,6 +527,24 @@ export default function PracticeScreen() {
     } else {
       setSessionTutorNudge(null);
     }
+
+    try {
+      const celebEvents = await checkAndTriggerCelebrations(final);
+      if (celebEvents.length > 0) {
+        setActiveCelebration(celebEvents[0]);
+        setCelebQueue(celebEvents.slice(1));
+      }
+    } catch {}
+  }
+
+  function handleCelebDismiss() {
+    const [next, ...rest] = celebQueue;
+    if (next) {
+      setActiveCelebration(next);
+      setCelebQueue(rest);
+    } else {
+      setActiveCelebration(null);
+    }
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -551,13 +573,18 @@ export default function PracticeScreen() {
 
   if (phase === 'results') {
     return (
-      <ResultsScreen
-        results={sessionResults}
-        onPlayAgain={handlePlayAgain}
-        xpGained={xpGained}
-        newAchievements={newAchievements}
-        tutorNudge={sessionTutorNudge}
-      />
+      <>
+        <ResultsScreen
+          results={sessionResults}
+          onPlayAgain={handlePlayAgain}
+          xpGained={xpGained}
+          newAchievements={newAchievements}
+          tutorNudge={sessionTutorNudge}
+        />
+        {activeCelebration && (
+          <CelebrationModal event={activeCelebration} onDismiss={handleCelebDismiss} />
+        )}
+      </>
     );
   }
 

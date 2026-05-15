@@ -26,6 +26,8 @@ import {
 } from '@/src/storage';
 import { isPremium } from '@/src/subscription';
 import { useTheme } from '@/src/theme';
+import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
+import { CelebrationModal } from '@/src/components/CelebrationModal';
 
 const TOTAL_QUESTIONS = 50;
 const TIME_LIMIT_SECONDS = 57 * 60;
@@ -111,6 +113,8 @@ export default function MockScreen() {
   const [resultData, setResultData] = useState<ResultData | null>(null);
   const [showGrid, setShowGrid] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const [celebQueue, setCelebQueue] = useState<CelebrationEvent[]>([]);
+  const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
 
   const questionsRef = useRef<Question[]>([]);
   const answersRef = useRef<(number | null)[]>([]);
@@ -234,19 +238,42 @@ export default function MockScreen() {
     const { newAchievements, updatedProgress } = checkAchievements(progress);
     await saveUserProgress(updatedProgress);
 
+    try {
+      const celebEvents = await checkAndTriggerCelebrations(updatedProgress);
+      if (celebEvents.length > 0) {
+        setActiveCelebration(celebEvents[0]);
+        setCelebQueue(celebEvents.slice(1));
+      }
+    } catch {}
+
     setResultData({ correct, timeTaken, byTopic, xpEarned, newAchievements, passed });
     setPhase('results');
+  }
+
+  function handleCelebDismiss() {
+    const [next, ...rest] = celebQueue;
+    if (next) {
+      setActiveCelebration(next);
+      setCelebQueue(rest);
+    } else {
+      setActiveCelebration(null);
+    }
   }
 
   if (phase === 'start') return <StartView onStart={handleStart} />;
 
   if (phase === 'results' && resultData) {
     return (
-      <ResultsView
-        data={resultData}
-        onReview={() => { setExpandedRows(new Set()); setPhase('review'); }}
-        onDone={() => router.replace('/(tabs)/home')}
-      />
+      <>
+        <ResultsView
+          data={resultData}
+          onReview={() => { setExpandedRows(new Set()); setPhase('review'); }}
+          onDone={() => router.replace('/(tabs)/home')}
+        />
+        {activeCelebration && (
+          <CelebrationModal event={activeCelebration} onDismiss={handleCelebDismiss} />
+        )}
+      </>
     );
   }
 

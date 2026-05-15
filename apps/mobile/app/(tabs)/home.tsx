@@ -30,6 +30,8 @@ import { buildTodaySummary } from '../studyplan';
 import { loadSRState } from '@/src/spacedRepetition';
 import { computeAndSavePassProbability, PassProbabilityResult } from '@/src/passProbability';
 import { generateNudges, saveNudges, loadNudges, dismissNudge, TutorNudge, NudgeType } from '@/src/tutorNudges';
+import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
+import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { allQuestions } from '@clearpass/content';
 import { supabase } from '@/src/supabase';
 import { useTheme } from '@/src/theme';
@@ -569,6 +571,8 @@ export default function HomeScreen() {
   const [studyPlan, setStudyPlan]     = useState<StudyPlan | null>(null);
   const [passProb, setPassProb]       = useState<PassProbabilityResult | null>(null);
   const [nudges, setNudges]           = useState<TutorNudge[]>([]);
+  const [celebQueue, setCelebQueue]   = useState<CelebrationEvent[]>([]);
+  const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
   const theme = useTheme();
 
   useEffect(() => {
@@ -593,7 +597,16 @@ export default function HomeScreen() {
         await syncPendingUsername();
 
         const fresh = await loadUserProgress();
-        if (fresh) setProgress(fresh);
+        if (fresh) {
+          setProgress(fresh);
+          try {
+            const celebEvents = await checkAndTriggerCelebrations(fresh);
+            if (celebEvents.length > 0) {
+              setActiveCelebration(celebEvents[0]);
+              setCelebQueue(celebEvents.slice(1));
+            }
+          } catch {}
+        }
 
         const plan = await loadStudyPlan();
         setStudyPlan(plan);
@@ -681,6 +694,16 @@ export default function HomeScreen() {
     setNudges(prev => prev.filter(n => n.id !== id));
   }
 
+  function handleCelebDismiss() {
+    const [next, ...rest] = celebQueue;
+    if (next) {
+      setActiveCelebration(next);
+      setCelebQueue(rest);
+    } else {
+      setActiveCelebration(null);
+    }
+  }
+
   const xp      = progress?.xp ?? 0;
   const xpData  = getXpLevel(xp);
   const streak  = progress?.studyStreakDays ?? 0;
@@ -720,6 +743,7 @@ export default function HomeScreen() {
     : 0;
 
   return (
+  <>
     <ScrollView
       style={[styles.scroll, { backgroundColor: theme.backgroundColor }]}
       contentContainerStyle={styles.content}
@@ -925,6 +949,10 @@ export default function HomeScreen() {
         </View>
       </Modal>
     </ScrollView>
+    {activeCelebration && (
+      <CelebrationModal event={activeCelebration} onDismiss={handleCelebDismiss} />
+    )}
+  </>
   );
 }
 

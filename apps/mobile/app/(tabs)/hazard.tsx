@@ -14,6 +14,8 @@ import { hazardClips } from '@clearpass/content';
 import { loadUserProgress, saveUserProgress } from '@/src/storage';
 import { isPremium } from '@/src/subscription';
 import { useTheme } from '@/src/theme';
+import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
+import { CelebrationModal } from '@/src/components/CelebrationModal';
 
 type Phase = 'info' | 'pre-clip' | 'player' | 'clip-result' | 'results';
 
@@ -99,7 +101,11 @@ export default function HazardScreen() {
   const [muted, setMuted] = useState(true);
   const flashAnim = useRef(new Animated.Value(0)).current;
   const webViewRef = useRef<any>(null);
+  const pendingHomeRef = useRef(false);
   const theme = useTheme();
+
+  const [celebQueue, setCelebQueue] = useState<CelebrationEvent[]>([]);
+  const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -144,7 +150,7 @@ export default function HazardScreen() {
     if (progress) {
       const total = calculateHazardTotal(results);
       const xp = 20 + (total.passed ? 50 : 0);
-      await saveUserProgress({
+      const updated = {
         ...progress,
         xp: (progress.xp ?? 0) + xp,
         hazardPerceptionHistory: [
@@ -156,9 +162,34 @@ export default function HazardScreen() {
             passed: total.passed,
           },
         ],
-      });
+      };
+      await saveUserProgress(updated);
+
+      try {
+        const celebEvents = await checkAndTriggerCelebrations(updated);
+        if (celebEvents.length > 0) {
+          pendingHomeRef.current = true;
+          setActiveCelebration(celebEvents[0]);
+          setCelebQueue(celebEvents.slice(1));
+          return;
+        }
+      } catch {}
     }
     router.replace('/(tabs)/home');
+  }
+
+  function handleCelebDismiss() {
+    const [next, ...rest] = celebQueue;
+    if (next) {
+      setActiveCelebration(next);
+      setCelebQueue(rest);
+    } else {
+      setActiveCelebration(null);
+      if (pendingHomeRef.current) {
+        pendingHomeRef.current = false;
+        router.replace('/(tabs)/home');
+      }
+    }
   }
 
   function handleRestart() {
@@ -406,6 +437,7 @@ export default function HazardScreen() {
   const xpEarned = 20 + (total.passed ? 50 : 0);
 
   return (
+    <>
     <ScrollView style={[styles.bg, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.scrollContent}>
       <View style={[styles.resultBadge, total.passed ? styles.passBadge : styles.failBadge]}>
         <Text style={styles.resultBadgeText}>{total.passed ? 'PASS' : 'FAIL'}</Text>
@@ -463,6 +495,10 @@ export default function HazardScreen() {
         </TouchableOpacity>
       </View>
     </ScrollView>
+    {activeCelebration && (
+      <CelebrationModal event={activeCelebration} onDismiss={handleCelebDismiss} />
+    )}
+    </>
   );
 }
 
