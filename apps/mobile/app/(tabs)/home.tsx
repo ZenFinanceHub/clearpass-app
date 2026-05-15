@@ -832,6 +832,31 @@ export default function HomeScreen() {
         </TouchableOpacity>
       )}
 
+      {/* Test Day Banner */}
+      {daysLeft !== null && daysLeft >= 0 && daysLeft <= 1 && (
+        <TouchableOpacity
+          style={styles.testDayBanner}
+          onPress={() => router.push('/testday' as any)}
+          activeOpacity={0.85}
+        >
+          <LinearGradient
+            colors={['#0D9488', '#0891B2']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.testDayGradient}
+          >
+            <Text style={styles.testDayEmoji}>{daysLeft === 0 ? '🎯' : '📅'}</Text>
+            <View style={styles.testDayTextBlock}>
+              <Text style={styles.testDayTitle}>
+                {daysLeft === 0 ? 'Test Day Mode' : 'Test Tomorrow!'}
+              </Text>
+              <Text style={styles.testDaySub}>{'Tap to prepare'}</Text>
+            </View>
+            <Text style={styles.testDayChevron}>{'›'}</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      )}
+
       {/* Action Grid */}
       <View style={styles.actionGrid}>
         <View style={styles.actionRow}>
@@ -1358,4 +1383,23 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   modalCancelText: { color: '#6B7280', fontSize: 15, fontWeight: '600' },
+
+  // Test Day Banner
+  testDayBanner: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  testDayGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  testDayEmoji:     { fontSize: 28 },
+  testDayTextBlock: { flex: 1 },
+  testDayTitle:     { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+  testDaySub:       { fontSize: 12, color: 'rgba(255,255,255,0.82)', marginTop: 2 },
+  testDayChevron:   { fontSize: 26, color: '#FFFFFF', fontWeight: '700', lineHeight: 30 },
 });

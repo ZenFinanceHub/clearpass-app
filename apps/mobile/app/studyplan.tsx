@@ -324,6 +324,19 @@ export default function StudyPlanScreen() {
             </TouchableOpacity>
           </View>
 
+          <TouchableOpacity
+            style={styles.testDayCard}
+            onPress={() => router.push('/testday' as any)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.testDayCardEmoji}>{'🎯'}</Text>
+            <View style={styles.testDayCardText}>
+              <Text style={styles.testDayCardTitle}>{'Test Day Prep'}</Text>
+              <Text style={styles.testDayCardSub}>{'Breathe, revise and checklist'}</Text>
+            </View>
+            <Text style={styles.testDayCardChevron}>{'›'}</Text>
+          </TouchableOpacity>
+
           {error && <View style={styles.errorCard}><Text style={styles.errorText}>{error}</Text></View>}
 
           {plan.days.map((day) => (
@@ -707,4 +720,21 @@ const styles = StyleSheet.create({
   modalCancelText: { color: '#6B7280', fontSize: 15, fontWeight: '600' },
 
   bottomPad: { height: 20 },
+
+  testDayCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDFA',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#0D9488',
+    padding: 16,
+    marginBottom: 16,
+    gap: 12,
+  },
+  testDayCardEmoji:   { fontSize: 26 },
+  testDayCardText:    { flex: 1 },
+  testDayCardTitle:   { fontSize: 15, fontWeight: '800', color: '#0D9488' },
+  testDayCardSub:     { fontSize: 12, color: '#14B8A6', marginTop: 2 },
+  testDayCardChevron: { fontSize: 24, color: '#0D9488', fontWeight: '700', lineHeight: 28 },
 });
