@@ -40,6 +40,7 @@ import {
   isPremium,
 } from '@/src/subscription';
 import { explainAnswer } from '@clearpass/ai';
+import { TOPIC_LABELS } from '@/src/tutorNudges';
 import * as Speech from 'expo-speech';
 import { useAccessibility } from '@/src/AccessibilityContext';
 import { useTheme } from '@/src/theme';
@@ -110,6 +111,8 @@ export default function PracticeScreen() {
   });
   const [battleXpEarned, setBattleXpEarned] = useState(0);
   const [battleNewAchievements, setBattleNewAchievements] = useState<Achievement[]>([]);
+
+  const [sessionTutorNudge, setSessionTutorNudge] = useState<{ topic: string; topicKey: string } | null>(null);
 
   const { settings } = useAccessibility();
   const theme = useTheme();
@@ -206,6 +209,7 @@ export default function PracticeScreen() {
     setAiLoading(false);
     setXpGained(0);
     setNewAchievements([]);
+    setSessionTutorNudge(null);
     setQuestions(sessionQuestions);
     setPhase(sessionQuestions.length > 0 ? 'quiz' : 'results');
   }
@@ -506,6 +510,19 @@ export default function PracticeScreen() {
 
     setXpGained(xpThisSession);
     setNewAchievements(unlocked);
+
+    const strugglingEntry = Object.entries(topicData).find(
+      ([, data]) => data.total >= 2 && data.correct / data.total < 0.5,
+    );
+    if (strugglingEntry) {
+      const [topicKey] = strugglingEntry;
+      setSessionTutorNudge({
+        topic: TOPIC_LABELS[topicKey as TopicCategory] ?? topicKey,
+        topicKey,
+      });
+    } else {
+      setSessionTutorNudge(null);
+    }
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -539,6 +556,7 @@ export default function PracticeScreen() {
         onPlayAgain={handlePlayAgain}
         xpGained={xpGained}
         newAchievements={newAchievements}
+        tutorNudge={sessionTutorNudge}
       />
     );
   }
@@ -857,12 +875,15 @@ function ResultsScreen({
   onPlayAgain,
   xpGained,
   newAchievements,
+  tutorNudge,
 }: {
   results: SessionResult[];
   onPlayAgain: () => void;
   xpGained: number;
   newAchievements: Achievement[];
+  tutorNudge?: { topic: string; topicKey: string } | null;
 }) {
+  const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const correct = results.filter((r) => r.correct).length;
   const total = results.length;
   const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
@@ -897,6 +918,42 @@ function ResultsScreen({
       <Text style={[styles.motivationalMsg, { color: cfg.accentColor }]}>
         {motivationalMessage(correct, total)}
       </Text>
+
+      {tutorNudge && !nudgeDismissed && (
+        <View style={styles.sessionNudgeCard}>
+          <View style={styles.sessionNudgeHeader}>
+            <Text style={styles.sessionNudgeTitle}>{'🤖 Struggling with '}{tutorNudge.topic}</Text>
+            <TouchableOpacity
+              onPress={() => setNudgeDismissed(true)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.sessionNudgeDismiss}>{'x'}</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.sessionNudgeBody}>
+            {'Our AI tutor can help you understand these questions better.'}
+          </Text>
+          <View style={styles.sessionNudgeBtns}>
+            <TouchableOpacity
+              style={styles.sessionNudgeAskBtn}
+              onPress={() => router.push({
+                pathname: '/(tabs)/tutor',
+                params: { topic: tutorNudge.topicKey },
+              })}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.sessionNudgeAskText}>{'Ask Tutor'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.sessionNudgeLaterBtn}
+              onPress={() => setNudgeDismissed(true)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.sessionNudgeLaterText}>{'Maybe Later'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       <Text style={styles.sectionLabel}>Question Breakdown</Text>
       <View style={styles.breakdownList}>
@@ -1583,6 +1640,52 @@ const styles = StyleSheet.create({
   limitBackText: { color: '#6B7280', fontSize: 14, fontWeight: '600' },
 
   ruleLink: { color: '#0D9488', fontWeight: '700', textDecorationLine: 'underline' },
+
+  // Session tutor nudge card
+  sessionNudgeCard: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderLeftWidth: 3,
+    borderLeftColor: '#F59E0B',
+    padding: 14,
+    marginBottom: 16,
+  },
+  sessionNudgeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  sessionNudgeTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#92400E',
+    flex: 1,
+    marginRight: 8,
+  },
+  sessionNudgeDismiss: { fontSize: 15, color: '#9CA3AF', fontWeight: '600' },
+  sessionNudgeBody: { fontSize: 13, color: '#78350F', lineHeight: 18, marginBottom: 10 },
+  sessionNudgeBtns: { flexDirection: 'row', gap: 8 },
+  sessionNudgeAskBtn: {
+    flex: 1,
+    backgroundColor: '#F59E0B',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  sessionNudgeAskText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  sessionNudgeLaterBtn: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  sessionNudgeLaterText: { color: '#6B7280', fontSize: 13, fontWeight: '600' },
 
   // Spaced repetition rating
   srRow: {

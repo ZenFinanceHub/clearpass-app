@@ -29,6 +29,7 @@ import { loadStudyPlan, StudyPlan } from '@/src/studyPlan';
 import { buildTodaySummary } from '../studyplan';
 import { loadSRState } from '@/src/spacedRepetition';
 import { computeAndSavePassProbability, PassProbabilityResult } from '@/src/passProbability';
+import { generateNudges, saveNudges, loadNudges, dismissNudge, TutorNudge, NudgeType } from '@/src/tutorNudges';
 import { allQuestions } from '@clearpass/content';
 import { supabase } from '@/src/supabase';
 import { useTheme } from '@/src/theme';
@@ -448,6 +449,88 @@ function RoadMapHero({ progress }: { progress: UserProgress | null }) {
   );
 }
 
+// ─── NudgesSection ────────────────────────────────────────────────────────────
+
+const NUDGE_BORDER: Record<NudgeType, string> = {
+  struggling_topic:   '#F59E0B',
+  mock_score_dropped: '#F59E0B',
+  streak_at_risk:     '#EF4444',
+  milestone_close:    '#0D9488',
+  ready_for_mock:     '#0D9488',
+  weak_area_detected: '#F59E0B',
+  inactivity:         '#F59E0B',
+};
+
+const NUDGE_ACTION_BG: Record<NudgeType, string> = {
+  struggling_topic:   '#FFFBEB',
+  mock_score_dropped: '#FFFBEB',
+  streak_at_risk:     '#FEF2F2',
+  milestone_close:    '#F0FDFA',
+  ready_for_mock:     '#F0FDFA',
+  weak_area_detected: '#FFFBEB',
+  inactivity:         '#FFFBEB',
+};
+
+const NUDGE_EMOJI: Record<NudgeType, string> = {
+  struggling_topic:   '🤖',
+  mock_score_dropped: '⚠',
+  streak_at_risk:     '🔥',
+  milestone_close:    '🎯',
+  ready_for_mock:     '🎯',
+  weak_area_detected: '⚠',
+  inactivity:         '📅',
+};
+
+function NudgesSection({
+  nudges,
+  onDismiss,
+}: {
+  nudges: TutorNudge[];
+  onDismiss: (id: string) => void;
+}) {
+  if (nudges.length === 0) return null;
+  const visible = nudges.slice(0, 2);
+  return (
+    <View style={styles.nudgesSection}>
+      <Text style={styles.nudgesLabel}>{'AI TUTOR TIPS'}</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.nudgesScroll}>
+        {visible.map(nudge => {
+          const borderColor = NUDGE_BORDER[nudge.type];
+          const actionBg    = NUDGE_ACTION_BG[nudge.type];
+          const emoji       = NUDGE_EMOJI[nudge.type];
+          return (
+            <View key={nudge.id} style={[styles.nudgeCard, { borderLeftColor: borderColor }]}>
+              <View style={styles.nudgeHeader}>
+                <Text style={styles.nudgeEmoji}>{emoji}</Text>
+                <View style={styles.nudgeTitleRow}>
+                  <Text style={styles.nudgeTitle} numberOfLines={1}>{nudge.title}</Text>
+                  <TouchableOpacity
+                    onPress={() => onDismiss(nudge.id)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={styles.nudgeDismiss}>{'x'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <Text style={styles.nudgeBody} numberOfLines={3}>{nudge.body}</Text>
+              <TouchableOpacity
+                style={[styles.nudgeAction, { backgroundColor: actionBg }]}
+                onPress={() => router.push({
+                  pathname: nudge.actionRoute as any,
+                  params: nudge.actionParams,
+                })}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.nudgeActionText, { color: borderColor }]}>{nudge.actionLabel}</Text>
+              </TouchableOpacity>
+            </View>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
 // ─── Daily tips & helpers ─────────────────────────────────────────────────────
 
 const DAILY_TIPS = [
@@ -485,6 +568,7 @@ export default function HomeScreen() {
   const [dateError, setDateError]     = useState('');
   const [studyPlan, setStudyPlan]     = useState<StudyPlan | null>(null);
   const [passProb, setPassProb]       = useState<PassProbabilityResult | null>(null);
+  const [nudges, setNudges]           = useState<TutorNudge[]>([]);
   const theme = useTheme();
 
   useEffect(() => {
@@ -519,6 +603,16 @@ export default function HomeScreen() {
           if (freshProg) {
             const prob = await computeAndSavePassProbability(freshProg, srState, allQuestions);
             setPassProb(prob);
+            const generated = generateNudges(freshProg, srState, allQuestions);
+            const existing = await loadNudges();
+            const dismissedIds = new Set(
+              (existing?.nudges ?? []).filter(n => n.dismissed).map(n => n.id),
+            );
+            const withDismissals = generated.map(n =>
+              dismissedIds.has(n.id) ? { ...n, dismissed: true } : n,
+            );
+            await saveNudges(withDismissals);
+            setNudges(withDismissals.filter(n => !n.dismissed));
           }
         } catch (e) {
           console.warn('[HomeScreen] passProb error:', e);
@@ -580,6 +674,11 @@ export default function HomeScreen() {
     setProgress(updated);
     await saveUserProgress(updated);
     setShowDateModal(false);
+  }
+
+  async function handleDismissNudge(id: string) {
+    await dismissNudge(id);
+    setNudges(prev => prev.filter(n => n.id !== id));
   }
 
   const xp      = progress?.xp ?? 0;
@@ -666,6 +765,9 @@ export default function HomeScreen() {
 
       {/* Road Map Hero */}
       <RoadMapHero progress={progress} />
+
+      {/* Tutor Nudges */}
+      <NudgesSection nudges={nudges} onDismiss={(id) => void handleDismissNudge(id)} />
 
       {/* XP Card */}
       <View style={styles.xpCard}>
@@ -910,6 +1012,61 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: 10,
   },
+
+  // ── Nudges ───────────────────────────────────────────────────────────────────
+  nudgesSection: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    paddingTop: 4,
+  },
+  nudgesLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#9CA3AF',
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  nudgesScroll: {
+    gap: 12,
+    paddingRight: 16,
+  },
+  nudgeCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 0.5,
+    borderColor: '#E5E7EB',
+    borderLeftWidth: 3,
+    padding: 14,
+    width: 272,
+  },
+  nudgeHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 6,
+    gap: 8,
+  },
+  nudgeEmoji: { fontSize: 18, lineHeight: 22 },
+  nudgeTitleRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  nudgeTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#111827',
+    flex: 1,
+    marginRight: 6,
+  },
+  nudgeDismiss: { fontSize: 15, color: '#9CA3AF', lineHeight: 22, fontWeight: '600' },
+  nudgeBody: { fontSize: 12, color: '#6B7280', lineHeight: 18, marginBottom: 10 },
+  nudgeAction: {
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  nudgeActionText: { fontSize: 12, fontWeight: '700' },
 
   // ── Road Map Hero ────────────────────────────────────────────────────────────
   roadContainer: {
