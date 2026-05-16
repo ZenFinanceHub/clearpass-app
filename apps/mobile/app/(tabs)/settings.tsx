@@ -274,6 +274,15 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* ── Test Day Prep ────────────────────────────────────────────────────── */}
+      <TouchableOpacity
+        style={styles.testDayBtn}
+        onPress={() => router.push('/testday' as any)}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.testDayBtnText}>{'🎯  Test Day Mode (Preview)'}</Text>
+      </TouchableOpacity>
+
       {/* ── Bottom Actions ───────────────────────────────────────────────────── */}
       <TouchableOpacity style={styles.manageBtn} onPress={() => router.push('/paywall')} activeOpacity={0.85}>
         <Text style={styles.manageBtnText}>{'Manage Subscription'}</Text>
@@ -427,6 +436,18 @@ const styles = StyleSheet.create({
     marginTop: -8,
   },
   noteText: { fontSize: 13, color: '#6B7280', lineHeight: 18 },
+
+  // ── Test Day Button ───────────────────────────────────────────────────────────
+  testDayBtn: {
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    width: '100%',
+    borderWidth: 1.5,
+    borderColor: '#0D9488',
+    marginBottom: 12,
+  },
+  testDayBtnText: { color: '#0D9488', fontSize: 16, fontWeight: '700' },
 
   // ── Bottom Buttons ────────────────────────────────────────────────────────────
   manageBtn: {

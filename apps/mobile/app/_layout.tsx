@@ -56,6 +56,8 @@ export default function RootLayout() {
           <Stack.Screen name="auth/forgot-password" options={{ headerShown: false }} />
           <Stack.Screen name="auth/reset-password" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="studyplan" options={{ headerShown: false }} />
+          <Stack.Screen name="testday" options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="light" />
       </>
