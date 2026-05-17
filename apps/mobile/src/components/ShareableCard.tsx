@@ -220,17 +220,15 @@ export function ShareCardModal({
           <View style={ms.handle} />
           <Text style={ms.sheetTitle}>{'Your Result Card'}</Text>
 
+          <View ref={cardRef} collapsable={false} style={ms.cardWrap}>
+            <CardContent data={data} />
+          </View>
+
           {Platform.OS === 'web' ? (
             <View style={ms.webMsg}>
-              <Text style={ms.webMsgText}>{'Take a screenshot to share your result!'}</Text>
+              <Text style={ms.webMsgText}>{'Take a screenshot to share this!'}</Text>
             </View>
           ) : (
-            <View ref={cardRef} collapsable={false} style={ms.cardWrap}>
-              <CardContent data={data} />
-            </View>
-          )}
-
-          {Platform.OS !== 'web' && (
             <View style={ms.btnRow}>
               <TouchableOpacity style={[ms.btn, ms.shareBtn]} onPress={handleShare} disabled={busy} activeOpacity={0.85}>
                 <Text style={ms.shareBtnText}>{busy ? 'Working...' : 'Share'}</Text>
@@ -373,6 +371,7 @@ const ms = StyleSheet.create({
     paddingBottom: 40,
     alignItems: 'center',
     gap: 16,
+    minHeight: 500,
   },
   handle: {
     width: 40,
