@@ -6,6 +6,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { AccessibilityProvider } from '@/src/AccessibilityContext';
 import { supabase } from '@/src/supabase';
+import { configureNotificationHandler } from '@/src/notifications';
+
+configureNotificationHandler();
 
 const ONBOARDING_KEY = '@clearpass/hasSeenOnboarding';
 

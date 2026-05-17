@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -16,6 +17,25 @@ import { supabase } from '@/src/supabase';
 import { useAccessibility } from '@/src/AccessibilityContext';
 import type { AccessibilitySettings } from '@/src/AccessibilityContext';
 import { useTheme } from '@/src/theme';
+import { calculateReadiness } from '@clearpass/core';
+import { loadUserProgress } from '@/src/storage';
+import {
+  NotificationSettings,
+  DEFAULT_NOTIF_SETTINGS,
+  loadNotificationSettings,
+  saveNotificationSettings,
+  requestNotificationPermissions,
+  scheduleStudyReminder,
+  cancelStudyReminder,
+  scheduleStreakProtection,
+  cancelStreakProtection,
+  scheduleTestCountdown,
+  cancelTestCountdown,
+  showWebAlert,
+  showPermissionDeniedAlert,
+} from '@/src/notifications';
+
+// ─── Accessibility config ─────────────────────────────────────────────────────
 
 type SettingKey = keyof AccessibilitySettings;
 
@@ -65,16 +85,28 @@ const SETTINGS: SettingConfig[] = [
   },
 ];
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
   return name.slice(0, 2).toUpperCase();
 }
 
+function formatTime(hour: number, minute: number): string {
+  const h    = hour % 12 || 12;
+  const m    = String(minute).padStart(2, '0');
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  return `Daily at ${h}:${m} ${ampm}`;
+}
+
+// ─── SettingsScreen ───────────────────────────────────────────────────────────
+
 export default function SettingsScreen() {
   const { settings, setSetting } = useAccessibility();
   const theme = useTheme();
 
+  // Profile state
   const [username, setUsername]           = useState<string | null>(null);
   const [email, setEmail]                 = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -82,8 +114,18 @@ export default function SettingsScreen() {
   const [saving, setSaving]               = useState(false);
   const [successMsg, setSuccessMsg]       = useState('');
 
+  // Notification state
+  const [notifSettings, setNotifSettings]   = useState<NotificationSettings>(DEFAULT_NOTIF_SETTINGS);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [pickerHour, setPickerHour]         = useState(19);
+  const [pickerMinute, setPickerMinute]     = useState(0);
+  const [userTestDate, setUserTestDate]     = useState<string | null>(null);
+  const [userReadiness, setUserReadiness]   = useState(0);
+  const [userStreak, setUserStreak]         = useState(0);
+
   useEffect(() => {
     void (async () => {
+      // Load profile
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setEmail(user.email ?? null);
@@ -94,13 +136,30 @@ export default function SettingsScreen() {
           .single();
         if (profile?.username) {
           setUsername(profile.username as string);
-          return;
         }
       }
-      const pending = await AsyncStorage.getItem('@clearpass/pending_username');
-      if (pending) setUsername(pending);
+      if (!username) {
+        const pending = await AsyncStorage.getItem('@clearpass/pending_username');
+        if (pending) setUsername(pending);
+      }
+
+      // Load notification settings
+      const ns = await loadNotificationSettings();
+      setNotifSettings(ns);
+      setPickerHour(ns.reminderHour);
+      setPickerMinute(ns.reminderMinute);
+
+      // Load progress for scheduling context
+      const progress = await loadUserProgress();
+      if (progress) {
+        setUserTestDate(progress.testDate ?? null);
+        setUserReadiness(calculateReadiness(progress).score);
+        setUserStreak(progress.studyStreakDays ?? 0);
+      }
     })();
   }, []);
+
+  // ─── Profile handlers ────────────────────────────────────────────────────
 
   async function handleSaveProfile() {
     const trimmed = editName.trim();
@@ -167,7 +226,91 @@ export default function SettingsScreen() {
     router.replace('/onboarding');
   }
 
+  // ─── Notification handlers ───────────────────────────────────────────────
+
+  async function ensurePermission(): Promise<boolean> {
+    if (Platform.OS === 'web') { showWebAlert(); return false; }
+    const granted = await requestNotificationPermissions();
+    if (!granted) { showPermissionDeniedAlert(); return false; }
+    return true;
+  }
+
+  async function handleToggleStudyReminder(val: boolean) {
+    if (val) {
+      const ok = await ensurePermission();
+      if (!ok) return;
+      setPickerHour(notifSettings.reminderHour);
+      setPickerMinute(notifSettings.reminderMinute);
+      setShowTimePicker(true);
+    } else {
+      await cancelStudyReminder();
+      const updated = { ...notifSettings, studyReminder: false };
+      setNotifSettings(updated);
+      await saveNotificationSettings(updated);
+    }
+  }
+
+  async function handleConfirmTimePicker() {
+    setShowTimePicker(false);
+    await scheduleStudyReminder(pickerHour, pickerMinute);
+    const updated: NotificationSettings = {
+      ...notifSettings,
+      studyReminder:  true,
+      reminderHour:   pickerHour,
+      reminderMinute: pickerMinute,
+    };
+    setNotifSettings(updated);
+    await saveNotificationSettings(updated);
+  }
+
+  function handleCancelTimePicker() {
+    setShowTimePicker(false);
+  }
+
+  async function handleToggleStreakProtection(val: boolean) {
+    if (val) {
+      const ok = await ensurePermission();
+      if (!ok) return;
+      await scheduleStreakProtection(userStreak);
+      const updated = { ...notifSettings, streakProtection: true };
+      setNotifSettings(updated);
+      await saveNotificationSettings(updated);
+    } else {
+      await cancelStreakProtection();
+      const updated = { ...notifSettings, streakProtection: false };
+      setNotifSettings(updated);
+      await saveNotificationSettings(updated);
+    }
+  }
+
+  async function handleToggleTestCountdown(val: boolean) {
+    if (val) {
+      if (!userTestDate) {
+        Alert.alert('No test date set', 'Please set your test date on the home screen first.');
+        return;
+      }
+      const ok = await ensurePermission();
+      if (!ok) return;
+      await scheduleTestCountdown(userTestDate, userReadiness);
+      const updated = { ...notifSettings, testCountdown: true };
+      setNotifSettings(updated);
+      await saveNotificationSettings(updated);
+    } else {
+      await cancelTestCountdown();
+      const updated = { ...notifSettings, testCountdown: false };
+      setNotifSettings(updated);
+      await saveNotificationSettings(updated);
+    }
+  }
+
+  // ─── Derived display ─────────────────────────────────────────────────────
+
   const displayInitials = username ? getInitials(username) : '?';
+
+  const displayHour = pickerHour % 12 || 12;
+  const displayAmPm = pickerHour >= 12 ? 'PM' : 'AM';
+
+  // ─── Render ──────────────────────────────────────────────────────────────
 
   return (
     <ScrollView
@@ -216,7 +359,7 @@ export default function SettingsScreen() {
         {'Customise the app to suit your reading and learning needs.'}
       </Text>
 
-      <View style={styles.group}>
+      <View style={[styles.group, { backgroundColor: theme.cardColor }]}>
         {SETTINGS.map((item, index) => (
           <View
             key={item.key}
@@ -246,12 +389,85 @@ export default function SettingsScreen() {
         </Text>
       </View>
 
+      {/* ── Notifications Section ────────────────────────────────────────────── */}
+      <Text style={[styles.sectionHeader, { fontSize: theme.fontSize(22), fontFamily: theme.fontFamily, color: theme.textColor }]}>
+        {'Notifications'}
+      </Text>
+      <Text style={[styles.sectionSub, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(20), color: theme.subTextColor }]}>
+        {'Stay on track with timely reminders and alerts.'}
+      </Text>
+
+      <View style={[styles.group, { backgroundColor: theme.cardColor }]}>
+        {/* Daily Study Reminder */}
+        <View style={[styles.row, styles.rowBorder]}>
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>
+              {'Daily Study Reminder'}
+            </Text>
+            <Text style={[styles.description, { fontSize: theme.fontSize(12), color: theme.subTextColor }]}>
+              {notifSettings.studyReminder
+                ? formatTime(notifSettings.reminderHour, notifSettings.reminderMinute)
+                : 'Get a daily nudge to practise'}
+            </Text>
+          </View>
+          <Switch
+            value={notifSettings.studyReminder}
+            onValueChange={(val) => void handleToggleStudyReminder(val)}
+            trackColor={{ false: '#E5E7EB', true: '#0D9488' }}
+            thumbColor={notifSettings.studyReminder ? '#FFFFFF' : '#9CA3AF'}
+            ios_backgroundColor={'#E5E7EB'}
+          />
+        </View>
+
+        {/* Streak Protection */}
+        <View style={[styles.row, styles.rowBorder]}>
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>
+              {'Streak Protection'}
+            </Text>
+            <Text style={[styles.description, { fontSize: theme.fontSize(12), color: theme.subTextColor }]}>
+              {notifSettings.streakProtection
+                ? 'Alert at 8:00 PM if streak at risk'
+                : "Reminds you at 8pm when your streak's at risk"}
+            </Text>
+          </View>
+          <Switch
+            value={notifSettings.streakProtection}
+            onValueChange={(val) => void handleToggleStreakProtection(val)}
+            trackColor={{ false: '#E5E7EB', true: '#0D9488' }}
+            thumbColor={notifSettings.streakProtection ? '#FFFFFF' : '#9CA3AF'}
+            ios_backgroundColor={'#E5E7EB'}
+          />
+        </View>
+
+        {/* Test Countdown */}
+        <View style={styles.row}>
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>
+              {'Test Countdown Alerts'}
+            </Text>
+            <Text style={[styles.description, { fontSize: theme.fontSize(12), color: theme.subTextColor }]}>
+              {notifSettings.testCountdown
+                ? '3 reminders scheduled (7, 3 and 1 day before)'
+                : 'Reminders 7, 3 and 1 day before your test'}
+            </Text>
+          </View>
+          <Switch
+            value={notifSettings.testCountdown}
+            onValueChange={(val) => void handleToggleTestCountdown(val)}
+            trackColor={{ false: '#E5E7EB', true: '#0D9488' }}
+            thumbColor={notifSettings.testCountdown ? '#FFFFFF' : '#9CA3AF'}
+            ios_backgroundColor={'#E5E7EB'}
+          />
+        </View>
+      </View>
+
       {/* ── Account Section ──────────────────────────────────────────────────── */}
       <Text style={[styles.sectionHeader, { fontSize: theme.fontSize(22), fontFamily: theme.fontFamily, color: theme.textColor }]}>
         {'Account'}
       </Text>
 
-      <View style={styles.group}>
+      <View style={[styles.group, { backgroundColor: theme.cardColor }]}>
         <TouchableOpacity
           style={[styles.row, styles.rowBorder]}
           onPress={() => void handleChangePassword()}
@@ -344,9 +560,101 @@ export default function SettingsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ── Time Picker Modal ────────────────────────────────────────────────── */}
+      <Modal
+        visible={showTimePicker}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCancelTimePicker}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: theme.cardColor }]}>
+            <Text style={[styles.modalTitle, { fontSize: theme.fontSize(20), color: theme.textColor }]}>
+              {'Daily Reminder Time'}
+            </Text>
+            <Text style={[styles.modalFieldLabel, { color: theme.subTextColor }]}>
+              {'Choose what time to receive your daily study reminder.'}
+            </Text>
+
+            <View style={styles.timePickerRow}>
+              {/* Hour */}
+              <View style={styles.timePickerUnit}>
+                <TouchableOpacity
+                  style={styles.timePickerArrow}
+                  onPress={() => setPickerHour(h => (h + 1) % 24)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.timePickerArrowText}>{'▲'}</Text>
+                </TouchableOpacity>
+                <Text style={[styles.timePickerValue, { color: theme.textColor }]}>
+                  {String(displayHour).padStart(2, '0')}
+                </Text>
+                <TouchableOpacity
+                  style={styles.timePickerArrow}
+                  onPress={() => setPickerHour(h => (h + 23) % 24)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.timePickerArrowText}>{'▼'}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={[styles.timeSeparator, { color: theme.textColor }]}>{':'}</Text>
+
+              {/* Minute */}
+              <View style={styles.timePickerUnit}>
+                <TouchableOpacity
+                  style={styles.timePickerArrow}
+                  onPress={() => setPickerMinute(m => (m + 5) % 60)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.timePickerArrowText}>{'▲'}</Text>
+                </TouchableOpacity>
+                <Text style={[styles.timePickerValue, { color: theme.textColor }]}>
+                  {String(pickerMinute).padStart(2, '0')}
+                </Text>
+                <TouchableOpacity
+                  style={styles.timePickerArrow}
+                  onPress={() => setPickerMinute(m => (m + 55) % 60)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.timePickerArrowText}>{'▼'}</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* AM/PM */}
+              <TouchableOpacity
+                style={styles.ampmBtn}
+                onPress={() => setPickerHour(h => (h + 12) % 24)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.ampmText}>{displayAmPm}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalSaveBtn}
+              onPress={() => void handleConfirmTimePicker()}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.modalSaveBtnText}>{'Set Time'}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalCancelBtn}
+              onPress={handleCancelTimePicker}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.modalCancelBtnText}>{'Cancel'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   scroll:   { flex: 1 },
@@ -357,7 +665,6 @@ const styles = StyleSheet.create({
 
   // ── Profile Card ─────────────────────────────────────────────────────────────
   profileCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     borderWidth: 0.5,
     borderColor: '#E5E7EB',
@@ -377,10 +684,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
-  avatarText: { fontSize: 20, fontWeight: '700', color: '#FFFFFF' },
-  profileInfo: { flex: 1, gap: 3 },
-  profileName:  { fontSize: 16, fontWeight: '700', color: '#111827' },
-  profileEmail: { fontSize: 13, color: '#6B7280' },
+  avatarText:     { fontSize: 20, fontWeight: '700', color: '#FFFFFF' },
+  profileInfo:    { flex: 1, gap: 3 },
+  profileName:    { fontSize: 16, fontWeight: '700', color: '#111827' },
+  profileEmail:   { fontSize: 13, color: '#6B7280' },
   editProfileBtn: {
     borderRadius: 8,
     borderWidth: 1.5,
@@ -391,9 +698,8 @@ const styles = StyleSheet.create({
   },
   editProfileBtnText: { fontSize: 13, fontWeight: '700', color: '#0D9488' },
 
-  // ── Settings Group ────────────────────────────────────────────────────────────
+  // ── Settings / Notifications group ────────────────────────────────────────────
   group: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 0.5,
@@ -445,7 +751,7 @@ const styles = StyleSheet.create({
     width: '100%',
     borderWidth: 1.5,
     borderColor: '#0D9488',
-    marginBottom: 12,
+    marginBottom: 4,
   },
   testDayBtnText: { color: '#0D9488', fontSize: 16, fontWeight: '700' },
 
@@ -460,7 +766,6 @@ const styles = StyleSheet.create({
   manageBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
 
   signOutBtn: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
@@ -470,7 +775,7 @@ const styles = StyleSheet.create({
   },
   signOutBtnText: { color: '#EF4444', fontSize: 16, fontWeight: '700' },
 
-  // ── Edit Profile Modal ────────────────────────────────────────────────────────
+  // ── Modals ────────────────────────────────────────────────────────────────────
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -479,7 +784,6 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   modalCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 24,
     width: '100%',
@@ -488,7 +792,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   modalTitle:      { fontSize: 20, fontWeight: '800', color: '#111827' },
-  modalFieldLabel: { fontSize: 12, fontWeight: '700', color: '#6B7280', letterSpacing: 0.5, marginBottom: -4 },
+  modalFieldLabel: { fontSize: 12, fontWeight: '600', color: '#6B7280', lineHeight: 18 },
   modalInput: {
     backgroundColor: '#F3F4F6',
     borderRadius: 10,
@@ -507,17 +811,11 @@ const styles = StyleSheet.create({
     borderColor: '#0D9488',
     marginBottom: -4,
   },
-  successText: { fontSize: 14, fontWeight: '700', color: '#0D9488', textAlign: 'center' },
-  modalSaveBtn: {
-    backgroundColor: '#0D9488',
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
+  successText:          { fontSize: 14, fontWeight: '700', color: '#0D9488', textAlign: 'center' },
+  modalSaveBtn:         { backgroundColor: '#0D9488', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   modalSaveBtnDisabled: { opacity: 0.6 },
-  modalSaveBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  modalSaveBtnText:     { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   modalCancelBtn: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
@@ -525,4 +823,38 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   modalCancelBtnText: { color: '#6B7280', fontSize: 15, fontWeight: '600' },
+
+  // ── Time Picker ───────────────────────────────────────────────────────────────
+  timePickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
+  timePickerUnit: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  timePickerArrow: {
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    width: 52,
+  },
+  timePickerArrowText: { fontSize: 14, color: '#374151', fontWeight: '700' },
+  timePickerValue:     { fontSize: 36, fontWeight: '800', lineHeight: 44, minWidth: 52, textAlign: 'center' },
+  timeSeparator:       { fontSize: 36, fontWeight: '800', lineHeight: 44, marginBottom: 2 },
+  ampmBtn: {
+    backgroundColor: '#F0FDFA',
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#0D9488',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginLeft: 4,
+    alignSelf: 'center',
+  },
+  ampmText: { fontSize: 16, fontWeight: '800', color: '#0D9488' },
 });
