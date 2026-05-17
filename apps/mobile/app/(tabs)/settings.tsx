@@ -114,6 +114,9 @@ export default function SettingsScreen() {
   const [saving, setSaving]               = useState(false);
   const [successMsg, setSuccessMsg]       = useState('');
 
+  // Instructor state
+  const [linkedInstructorCount, setLinkedInstructorCount] = useState(0);
+
   // Notification state
   const [notifSettings, setNotifSettings]   = useState<NotificationSettings>(DEFAULT_NOTIF_SETTINGS);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -141,6 +144,18 @@ export default function SettingsScreen() {
       if (!username) {
         const pending = await AsyncStorage.getItem('@clearpass/pending_username');
         if (pending) setUsername(pending);
+      }
+
+      // Load linked instructor count
+      if (user) {
+        try {
+          const { count } = await supabase
+            .from('instructor_relationships')
+            .select('id', { count: 'exact', head: true })
+            .eq('learner_id', user.id)
+            .eq('status', 'accepted');
+          setLinkedInstructorCount(count ?? 0);
+        } catch {}
       }
 
       // Load notification settings
@@ -470,6 +485,22 @@ export default function SettingsScreen() {
       <View style={[styles.group, { backgroundColor: theme.cardColor }]}>
         <TouchableOpacity
           style={[styles.row, styles.rowBorder]}
+          onPress={() => router.push('/instructor?mode=learner' as any)}
+          activeOpacity={0.75}
+        >
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Linked Instructors'}</Text>
+            <Text style={[styles.description, { fontSize: theme.fontSize(12), color: theme.subTextColor }]}>
+              {linkedInstructorCount > 0
+                ? `${linkedInstructorCount} instructor${linkedInstructorCount === 1 ? '' : 's'} monitoring your progress`
+                : 'No instructors linked yet'}
+            </Text>
+          </View>
+          <Text style={styles.chevron}>{'›'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.row, styles.rowBorder]}
           onPress={() => void handleChangePassword()}
           activeOpacity={0.75}
         >
@@ -489,6 +520,15 @@ export default function SettingsScreen() {
           </View>
         </TouchableOpacity>
       </View>
+
+      {/* ── Instructor/Parent Dashboard ──────────────────────────────────────── */}
+      <TouchableOpacity
+        style={styles.instructorBtn}
+        onPress={() => router.push('/instructor?mode=instructor' as any)}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.instructorBtnText}>{'Instructor / Parent Dashboard'}</Text>
+      </TouchableOpacity>
 
       {/* ── Test Day Prep ────────────────────────────────────────────────────── */}
       <TouchableOpacity
@@ -742,6 +782,18 @@ const styles = StyleSheet.create({
     marginTop: -8,
   },
   noteText: { fontSize: 13, color: '#6B7280', lineHeight: 18 },
+
+  // ── Instructor Button ─────────────────────────────────────────────────────────
+  instructorBtn: {
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    width: '100%',
+    borderWidth: 1.5,
+    borderColor: '#0891B2',
+    marginBottom: 4,
+  },
+  instructorBtnText: { color: '#0891B2', fontSize: 16, fontWeight: '700' },
 
   // ── Test Day Button ───────────────────────────────────────────────────────────
   testDayBtn: {
