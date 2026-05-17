@@ -573,6 +573,7 @@ export default function HomeScreen() {
   const [nudges, setNudges]           = useState<TutorNudge[]>([]);
   const [celebQueue, setCelebQueue]   = useState<CelebrationEvent[]>([]);
   const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
+  const [pendingChallenges, setPendingChallenges] = useState(0);
   const theme = useTheme();
 
   useEffect(() => {
@@ -632,6 +633,18 @@ export default function HomeScreen() {
         }
 
         const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+        if (user) {
+          try {
+            const { count } = await supabase
+              .from('challenges')
+              .select('id', { count: 'exact', head: true })
+              .eq('challenged_id', user.id)
+              .eq('status', 'pending');
+            setPendingChallenges(count ?? 0);
+          } catch {}
+        }
+
         console.log('[HomeScreen] getUser ->', user?.id ?? 'no user', userError ?? 'no error');
 
         if (!user) {
@@ -884,6 +897,33 @@ export default function HomeScreen() {
             <Text style={styles.actionEmoji}>{'⚠'}</Text>
             <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Hazard</Text>
             <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>14 clips</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={[styles.actionCard, styles.challengeCard]}
+            onPress={() => router.push('/challenge' as any)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.challengeCardInner}>
+              <View style={styles.challengeCardLeft}>
+                <Text style={styles.actionEmoji}>{'⚔'}</Text>
+                <View>
+                  <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>
+                    {'Challenge'}
+                  </Text>
+                  <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>
+                    {'Beat a friend'}
+                  </Text>
+                </View>
+              </View>
+              {pendingChallenges > 0 && (
+                <View style={styles.challengeBadge}>
+                  <Text style={styles.challengeBadgeText}>{pendingChallenges}</Text>
+                </View>
+              )}
+            </View>
           </TouchableOpacity>
         </View>
       </View>
@@ -1257,6 +1297,33 @@ const styles = StyleSheet.create({
   actionEmoji: { fontSize: 22, marginBottom: 4 },
   actionTitle: { fontSize: 14, fontWeight: '700', marginBottom: 0 },
   actionSub:   { fontSize: 11, fontWeight: '500' },
+
+  challengeCard: {
+    borderLeftWidth: 3,
+    borderLeftColor: '#0D9488',
+    flex: 1,
+  },
+  challengeCardInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flex: 1,
+  },
+  challengeCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  challengeBadge: {
+    backgroundColor: '#EF4444',
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  challengeBadgeText: { fontSize: 12, fontWeight: '800', color: '#FFFFFF' },
 
   // ── Study Plan Card ───────────────────────────────────────────────────────────
   studyPlanCard: {
