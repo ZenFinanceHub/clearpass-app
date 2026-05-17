@@ -16,6 +16,7 @@ import { isPremium } from '@/src/subscription';
 import { useTheme } from '@/src/theme';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
+import { ShareCardModal } from '@/src/components/ShareableCard';
 
 type Phase = 'info' | 'pre-clip' | 'player' | 'clip-result' | 'results';
 
@@ -106,6 +107,7 @@ export default function HazardScreen() {
 
   const [celebQueue, setCelebQueue] = useState<CelebrationEvent[]>([]);
   const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
+  const [showShareCard, setShowShareCard] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -478,6 +480,14 @@ export default function HazardScreen() {
         ))}
       </View>
 
+      <TouchableOpacity
+        style={[styles.secondaryBtn, { width: '100%' as any, maxWidth: 480 }]}
+        onPress={() => setShowShareCard(true)}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.secondaryBtnText}>{'Share Result'}</Text>
+      </TouchableOpacity>
+
       <View style={styles.btnRow}>
         <TouchableOpacity
           style={[styles.secondaryBtn, { flex: 1 }]}
@@ -497,6 +507,13 @@ export default function HazardScreen() {
     </ScrollView>
     {activeCelebration && (
       <CelebrationModal event={activeCelebration} onDismiss={handleCelebDismiss} />
+    )}
+    {showShareCard && (
+      <ShareCardModal
+        visible={showShareCard}
+        onClose={() => setShowShareCard(false)}
+        data={{ type: 'hazard', score: total.score, maxScore: total.maxScore, passed: total.passed }}
+      />
     )}
     </>
   );

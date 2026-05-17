@@ -28,6 +28,7 @@ import { isPremium } from '@/src/subscription';
 import { useTheme } from '@/src/theme';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
+import { ShareCardModal } from '@/src/components/ShareableCard';
 
 const TOTAL_QUESTIONS = 50;
 const TIME_LIMIT_SECONDS = 57 * 60;
@@ -100,7 +101,7 @@ function scoreTest(questions: Question[], answers: (number | null)[]): { correct
 
 type Phase = 'start' | 'test' | 'review' | 'results';
 type ReviewFilter = 'all' | 'wrong' | 'flagged';
-type ResultData = { correct: number; timeTaken: number; byTopic: ByTopic; xpEarned: number; newAchievements: Achievement[]; passed: boolean };
+type ResultData = { correct: number; timeTaken: number; byTopic: ByTopic; xpEarned: number; newAchievements: Achievement[]; passed: boolean; streakDays: number };
 
 export default function MockScreen() {
   const theme = useTheme();
@@ -246,7 +247,7 @@ export default function MockScreen() {
       }
     } catch {}
 
-    setResultData({ correct, timeTaken, byTopic, xpEarned, newAchievements, passed });
+    setResultData({ correct, timeTaken, byTopic, xpEarned, newAchievements, passed, streakDays: updatedProgress.studyStreakDays ?? 0 });
     setPhase('results');
   }
 
@@ -484,13 +485,15 @@ function ResultsView({
   onDone: () => void;
 }) {
   const theme = useTheme();
-  const { correct, timeTaken, byTopic, xpEarned, newAchievements, passed } = data;
+  const [showShareCard, setShowShareCard] = useState(false);
+  const { correct, timeTaken, byTopic, xpEarned, newAchievements, passed, streakDays } = data;
 
   const topicRows = (Object.entries(byTopic) as [TopicCategory, TopicTally][])
     .filter(([, t]) => t.total > 0)
     .sort(([a], [b]) => TOPIC_LABELS[a].localeCompare(TOPIC_LABELS[b]));
 
   return (
+  <>
     <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
       {newAchievements.length > 0 && (
         <View style={styles.achievementBanner}>
@@ -537,10 +540,25 @@ function ResultsView({
         <Text style={styles.secondaryBtnText}>{'Review Answers'}</Text>
       </TouchableOpacity>
 
+      {passed && (
+        <TouchableOpacity style={styles.secondaryBtn} onPress={() => setShowShareCard(true)} activeOpacity={0.85}>
+          <Text style={styles.secondaryBtnText}>{'Share Result'}</Text>
+        </TouchableOpacity>
+      )}
+
       <TouchableOpacity style={styles.primaryBtn} onPress={onDone} activeOpacity={0.85}>
         <Text style={styles.primaryBtnText}>{'Done'}</Text>
       </TouchableOpacity>
     </ScrollView>
+
+    {showShareCard && (
+      <ShareCardModal
+        visible={showShareCard}
+        onClose={() => setShowShareCard(false)}
+        data={{ type: 'mock', score: correct, total: TOTAL_QUESTIONS, passed, timeTakenSeconds: timeTaken, streakDays }}
+      />
+    )}
+  </>
   );
 }
 

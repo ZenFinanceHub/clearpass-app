@@ -43,6 +43,7 @@ import { explainAnswer } from '@clearpass/ai';
 import { TOPIC_LABELS } from '@/src/tutorNudges';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
+import { ShareCardModal } from '@/src/components/ShareableCard';
 import * as Speech from 'expo-speech';
 import { useAccessibility } from '@/src/AccessibilityContext';
 import { useTheme } from '@/src/theme';
@@ -114,6 +115,7 @@ export default function PracticeScreen() {
   const [battleXpEarned, setBattleXpEarned] = useState(0);
   const [battleNewAchievements, setBattleNewAchievements] = useState<Achievement[]>([]);
 
+  const [sessionStreakDays, setSessionStreakDays] = useState(0);
   const [sessionTutorNudge, setSessionTutorNudge] = useState<{ topic: string; topicKey: string } | null>(null);
   const [celebQueue, setCelebQueue] = useState<CelebrationEvent[]>([]);
   const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
@@ -514,6 +516,7 @@ export default function PracticeScreen() {
 
     setXpGained(xpThisSession);
     setNewAchievements(unlocked);
+    setSessionStreakDays(final.studyStreakDays ?? 0);
 
     const strugglingEntry = Object.entries(topicData).find(
       ([, data]) => data.total >= 2 && data.correct / data.total < 0.5,
@@ -580,6 +583,7 @@ export default function PracticeScreen() {
           xpGained={xpGained}
           newAchievements={newAchievements}
           tutorNudge={sessionTutorNudge}
+          streakDays={sessionStreakDays}
         />
         {activeCelebration && (
           <CelebrationModal event={activeCelebration} onDismiss={handleCelebDismiss} />
@@ -903,21 +907,27 @@ function ResultsScreen({
   xpGained,
   newAchievements,
   tutorNudge,
+  streakDays,
 }: {
   results: SessionResult[];
   onPlayAgain: () => void;
   xpGained: number;
   newAchievements: Achievement[];
   tutorNudge?: { topic: string; topicKey: string } | null;
+  streakDays?: number;
 }) {
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
+  const [showShareCard, setShowShareCard] = useState(false);
   const correct = results.filter((r) => r.correct).length;
   const total = results.length;
   const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
   const cfg = resultConfig(pct);
   const theme = useTheme();
+  const topicSet = new Set(results.map((r) => r.question.topicCategory));
+  const dominantTopic = topicSet.size === 1 ? TOPIC_LABELS[Array.from(topicSet)[0] as TopicCategory] : undefined;
 
   return (
+  <>
     <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
       {newAchievements.length > 0 && (
         <View style={styles.achievementBanner}>
@@ -1002,6 +1012,10 @@ function ResultsScreen({
         ))}
       </View>
 
+      <TouchableOpacity style={styles.shareLink} onPress={() => setShowShareCard(true)} activeOpacity={0.75}>
+        <Text style={styles.shareLinkText}>{'Share Result'}</Text>
+      </TouchableOpacity>
+
       <TouchableOpacity style={styles.primaryButton} onPress={onPlayAgain} activeOpacity={0.85}>
         <Text style={styles.primaryButtonText}>Play Again</Text>
       </TouchableOpacity>
@@ -1014,6 +1028,15 @@ function ResultsScreen({
         <Text style={styles.outlineButtonText}>Back to Home</Text>
       </TouchableOpacity>
     </ScrollView>
+
+    {showShareCard && (
+      <ShareCardModal
+        visible={showShareCard}
+        onClose={() => setShowShareCard(false)}
+        data={{ type: 'practice', correct, total, topic: dominantTopic, streakDays }}
+      />
+    )}
+  </>
   );
 }
 
@@ -1667,6 +1690,9 @@ const styles = StyleSheet.create({
   limitBackText: { color: '#6B7280', fontSize: 14, fontWeight: '600' },
 
   ruleLink: { color: '#0D9488', fontWeight: '700', textDecorationLine: 'underline' },
+
+  shareLink: { alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 16 },
+  shareLinkText: { fontSize: 14, color: '#0D9488', fontWeight: '600', textDecorationLine: 'underline' },
 
   // Session tutor nudge card
   sessionNudgeCard: {
