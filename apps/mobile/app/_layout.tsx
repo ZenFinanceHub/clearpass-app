@@ -1,12 +1,21 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import NetInfo from '@react-native-community/netinfo';
 import { AccessibilityProvider } from '@/src/AccessibilityContext';
 import { supabase } from '@/src/supabase';
 import { configureNotificationHandler } from '@/src/notifications';
+import {
+  getCacheStatus,
+  cacheQuestions,
+  cacheHighwayCode,
+  cacheRoadSigns,
+  syncWhenOnline,
+} from '@/src/offlineCache';
 
 configureNotificationHandler();
 
@@ -19,6 +28,7 @@ export default function RootLayout() {
   });
 
   const navigated = useRef(false);
+  const [showCachingToast, setShowCachingToast] = useState(false);
 
   useEffect(() => {
     if (navigated.current) return;
@@ -43,6 +53,28 @@ export default function RootLayout() {
     void bootstrap();
   }, []);
 
+  // Background: cache static content on first launch or after a week
+  useEffect(() => {
+    void (async () => {
+      const status = await getCacheStatus();
+      const weekMs = 7 * 24 * 60 * 60 * 1000;
+      const stale = !status.lastCached || Date.now() - new Date(status.lastCached).getTime() > weekMs;
+      const incomplete = !status.questions || !status.highwayCode || !status.roadSigns;
+      if (incomplete || stale) {
+        const firstTime = !status.questions;
+        if (firstTime) setShowCachingToast(true);
+        await Promise.all([cacheQuestions(), cacheHighwayCode(), cacheRoadSigns()]);
+        if (firstTime) setTimeout(() => setShowCachingToast(false), 3000);
+      }
+    })();
+
+    // Sync pending progress whenever connection is restored
+    const unsub = NetInfo.addEventListener((state) => {
+      if (state.isConnected) void syncWhenOnline();
+    });
+    return () => unsub();
+  }, []);
+
   return (
     <AccessibilityProvider>
       <>
@@ -65,7 +97,32 @@ export default function RootLayout() {
           <Stack.Screen name="challenge" options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="light" />
+        {showCachingToast && (
+          <View style={toastStyles.toast} pointerEvents="none">
+            <Text style={toastStyles.text}>{'Downloading content for offline use...'}</Text>
+          </View>
+        )}
       </>
     </AccessibilityProvider>
   );
 }
+
+const toastStyles = StyleSheet.create({
+  toast: {
+    position: 'absolute',
+    bottom: 96,
+    left: 20,
+    right: 20,
+    backgroundColor: '#111827',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  text: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
+});

@@ -17,6 +17,7 @@ import { useTheme } from '@/src/theme';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { ShareCardModal } from '@/src/components/ShareableCard';
+import { OfflineBanner } from '@/src/components/OfflineBanner';
 
 type Phase = 'info' | 'pre-clip' | 'player' | 'clip-result' | 'results';
 
@@ -208,7 +209,9 @@ export default function HazardScreen() {
   if (phase === 'info') {
     const maxPts = hazardClips.reduce((s, c) => s + c.hazards.length * 5, 0);
     return (
-      <ScrollView style={[styles.bg, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.scrollContent}>
+      <View style={styles.bg}>
+        <OfflineBanner />
+      <ScrollView style={{ flex: 1, backgroundColor: theme.backgroundColor }} contentContainerStyle={styles.scrollContent}>
         <Text style={[styles.heading, { fontSize: theme.fontSize(26), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Hazard Perception'}</Text>
         <Text style={[styles.sub, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>{'UK Theory Test Practice'}</Text>
 
@@ -258,6 +261,7 @@ export default function HazardScreen() {
           <Text style={styles.primaryBtnText}>{'Start Practice'}</Text>
         </TouchableOpacity>
       </ScrollView>
+      </View>
     );
   }
 
@@ -440,6 +444,7 @@ export default function HazardScreen() {
 
   return (
     <>
+    <OfflineBanner />
     <ScrollView style={[styles.bg, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.scrollContent}>
       <View style={[styles.resultBadge, total.passed ? styles.passBadge : styles.failBadge]}>
         <Text style={styles.resultBadgeText}>{total.passed ? 'PASS' : 'FAIL'}</Text>

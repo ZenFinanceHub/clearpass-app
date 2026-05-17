@@ -32,6 +32,7 @@ import { computeAndSavePassProbability, PassProbabilityResult } from '@/src/pass
 import { generateNudges, saveNudges, loadNudges, dismissNudge, TutorNudge, NudgeType } from '@/src/tutorNudges';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
+import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { allQuestions } from '@clearpass/content';
 import { supabase } from '@/src/supabase';
 import { useTheme } from '@/src/theme';
@@ -757,6 +758,7 @@ export default function HomeScreen() {
 
   return (
   <>
+    <OfflineBanner />
     <ScrollView
       style={[styles.scroll, { backgroundColor: theme.backgroundColor }]}
       contentContainerStyle={styles.content}

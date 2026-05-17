@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useTheme } from '@/src/theme';
+import { OfflineBanner } from '@/src/components/OfflineBanner';
 import {
   RoadSign,
   SignCategory,
@@ -620,8 +621,10 @@ export default function RoadSignsScreen() {
 
   // ── Grid view ───────────────────────────────────────────────────────────────
   return (
+    <View style={styles.screen}>
+      <OfflineBanner />
     <ScrollView
-      style={[styles.screen, { backgroundColor: theme.backgroundColor }]}
+      style={{ flex: 1, backgroundColor: theme.backgroundColor }}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
@@ -722,6 +725,7 @@ export default function RoadSignsScreen() {
         ))}
       </View>
     </ScrollView>
+    </View>
   );
 }
 

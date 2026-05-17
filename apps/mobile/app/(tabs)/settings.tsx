@@ -18,7 +18,15 @@ import { useAccessibility } from '@/src/AccessibilityContext';
 import type { AccessibilitySettings } from '@/src/AccessibilityContext';
 import { useTheme } from '@/src/theme';
 import { calculateReadiness } from '@clearpass/core';
+import { allQuestions, highwayCodeChapters, roadSigns } from '@clearpass/content';
 import { loadUserProgress } from '@/src/storage';
+import {
+  getCacheStatus,
+  cacheQuestions,
+  cacheHighwayCode,
+  cacheRoadSigns,
+  type CacheStatus,
+} from '@/src/offlineCache';
 import {
   NotificationSettings,
   DEFAULT_NOTIF_SETTINGS,
@@ -117,6 +125,10 @@ export default function SettingsScreen() {
   // Instructor state
   const [linkedInstructorCount, setLinkedInstructorCount] = useState(0);
 
+  // Cache state
+  const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
+  const [refreshingCache, setRefreshingCache] = useState(false);
+
   // Notification state
   const [notifSettings, setNotifSettings]   = useState<NotificationSettings>(DEFAULT_NOTIF_SETTINGS);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -171,6 +183,10 @@ export default function SettingsScreen() {
         setUserReadiness(calculateReadiness(progress).score);
         setUserStreak(progress.studyStreakDays ?? 0);
       }
+
+      // Load cache status
+      const cs = await getCacheStatus();
+      setCacheStatus(cs);
     })();
   }, []);
 
@@ -239,6 +255,18 @@ export default function SettingsScreen() {
   async function handleSignOut() {
     await supabase.auth.signOut();
     router.replace('/onboarding');
+  }
+
+  async function handleRefreshCache() {
+    if (refreshingCache) return;
+    setRefreshingCache(true);
+    try {
+      await Promise.all([cacheQuestions(), cacheHighwayCode(), cacheRoadSigns()]);
+      const cs = await getCacheStatus();
+      setCacheStatus(cs);
+    } finally {
+      setRefreshingCache(false);
+    }
   }
 
   // ─── Notification handlers ───────────────────────────────────────────────
@@ -316,6 +344,17 @@ export default function SettingsScreen() {
       setNotifSettings(updated);
       await saveNotificationSettings(updated);
     }
+  }
+
+  // ─── Cache display helpers ────────────────────────────────────────────────
+
+  function formatLastCached(iso: string | undefined): string {
+    if (!iso) return 'Not yet cached';
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    return `${diffDays} days ago`;
   }
 
   // ─── Derived display ─────────────────────────────────────────────────────
@@ -476,6 +515,55 @@ export default function SettingsScreen() {
           />
         </View>
       </View>
+
+      {/* ── Offline Mode Section ────────────────────────────────────────────── */}
+      <Text style={[styles.sectionHeader, { fontSize: theme.fontSize(22), fontFamily: theme.fontFamily, color: theme.textColor }]}>
+        {'Offline Mode'}
+      </Text>
+      <Text style={[styles.sectionSub, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(20), color: theme.subTextColor }]}>
+        {'All content is available without an internet connection.'}
+      </Text>
+
+      <View style={[styles.group, { backgroundColor: theme.cardColor }]}>
+        <View style={[styles.cacheRow, styles.rowBorder]}>
+          <Text style={styles.cacheIcon}>{cacheStatus?.questions ? '[+]' : '[ ]'}</Text>
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Questions'}</Text>
+            <Text style={[styles.description, { fontSize: theme.fontSize(12), color: theme.subTextColor }]}>{allQuestions.length}{' questions cached'}</Text>
+          </View>
+        </View>
+        <View style={[styles.cacheRow, styles.rowBorder]}>
+          <Text style={styles.cacheIcon}>{cacheStatus?.highwayCode ? '[+]' : '[ ]'}</Text>
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Highway Code'}</Text>
+            <Text style={[styles.description, { fontSize: theme.fontSize(12), color: theme.subTextColor }]}>{highwayCodeChapters.length}{' chapters cached'}</Text>
+          </View>
+        </View>
+        <View style={[styles.cacheRow, styles.rowBorder]}>
+          <Text style={styles.cacheIcon}>{cacheStatus?.roadSigns ? '[+]' : '[ ]'}</Text>
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Road Signs'}</Text>
+            <Text style={[styles.description, { fontSize: theme.fontSize(12), color: theme.subTextColor }]}>{roadSigns.length}{' signs cached'}</Text>
+          </View>
+        </View>
+        <View style={styles.cacheRow}>
+          <Text style={[styles.cacheLastLabel, { color: theme.subTextColor }]}>{'Last cached:'}</Text>
+          <Text style={[styles.cacheLastValue, { color: theme.textColor }]}>
+            {formatLastCached(cacheStatus?.lastCached)}
+          </Text>
+        </View>
+      </View>
+
+      <TouchableOpacity
+        style={[styles.refreshCacheBtn, refreshingCache && styles.refreshCacheBtnDisabled]}
+        onPress={() => void handleRefreshCache()}
+        activeOpacity={0.85}
+        disabled={refreshingCache}
+      >
+        <Text style={styles.refreshCacheBtnText}>
+          {refreshingCache ? 'Refreshing...' : 'Refresh Cache'}
+        </Text>
+      </TouchableOpacity>
 
       {/* ── Account Section ──────────────────────────────────────────────────── */}
       <Text style={[styles.sectionHeader, { fontSize: theme.fontSize(22), fontFamily: theme.fontFamily, color: theme.textColor }]}>
@@ -771,6 +859,29 @@ const styles = StyleSheet.create({
   textWrap:    { flex: 1, gap: 2 },
   label:       { fontSize: 15, fontWeight: '600', color: '#111827' },
   description: { fontSize: 12, color: '#6B7280', lineHeight: 17 },
+
+  // ── Cache rows ────────────────────────────────────────────────────────────────
+  cacheRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  cacheIcon: { fontSize: 13, fontWeight: '800', color: '#0D9488', width: 28, textAlign: 'center' },
+  cacheLastLabel: { fontSize: 13, fontWeight: '600', flex: 1 },
+  cacheLastValue: { fontSize: 13, fontWeight: '700' },
+  refreshCacheBtn: {
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#0D9488',
+    backgroundColor: '#FFFFFF',
+    marginTop: -8,
+  },
+  refreshCacheBtnDisabled: { opacity: 0.5 },
+  refreshCacheBtnText: { color: '#0D9488', fontSize: 15, fontWeight: '700' },
 
   // ── Note Box ──────────────────────────────────────────────────────────────────
   noteBox: {

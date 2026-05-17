@@ -44,6 +44,7 @@ import { TOPIC_LABELS } from '@/src/tutorNudges';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { ShareCardModal } from '@/src/components/ShareableCard';
+import { OfflineBanner } from '@/src/components/OfflineBanner';
 import * as Speech from 'expo-speech';
 import { useAccessibility } from '@/src/AccessibilityContext';
 import { useTheme } from '@/src/theme';
@@ -553,7 +554,12 @@ export default function PracticeScreen() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (phase === 'start') {
-    return <StartView onStart={() => { setPhase('loading'); void startSession(); }} onBattle={() => void startBattle()} />;
+    return (
+      <>
+        <OfflineBanner />
+        <StartView onStart={() => { setPhase('loading'); void startSession(); }} onBattle={() => void startBattle()} />
+      </>
+    );
   }
 
   if (phase === 'loading') {
@@ -577,6 +583,7 @@ export default function PracticeScreen() {
   if (phase === 'results') {
     return (
       <>
+        <OfflineBanner />
         <ResultsScreen
           results={sessionResults}
           onPlayAgain={handlePlayAgain}

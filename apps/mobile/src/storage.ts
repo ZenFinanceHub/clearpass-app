@@ -1,11 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
 import { QuestionState, TopicCategory, UserProgress } from '@clearpass/core';
 import { supabase } from './supabase';
 
 const KEYS = {
-  USER_PROGRESS: '@clearpass/user_progress',
-  QUESTION_STATES: '@clearpass/question_states',
+  USER_PROGRESS:    '@clearpass/user_progress',
+  QUESTION_STATES:  '@clearpass/question_states',
   PENDING_USERNAME: '@clearpass/pending_username',
+  SYNC_PENDING:     '@clearpass/sync_pending',
 } as const;
 
 export async function syncPendingUsername(): Promise<void> {
@@ -46,6 +48,7 @@ export async function syncProgressToCloud(progress: UserProgress): Promise<void>
         },
         { onConflict: 'id' },
       );
+    if (!error) await AsyncStorage.removeItem(KEYS.SYNC_PENDING);
     console.log('[syncProgressToCloud] result:', error ?? 'ok');
   } catch (e) {
     console.log('[syncProgressToCloud] caught error:', e);
@@ -73,7 +76,16 @@ export async function loadProgressFromCloud(): Promise<UserProgress | null> {
 
 export async function saveUserProgress(progress: UserProgress): Promise<void> {
   await AsyncStorage.setItem(KEYS.USER_PROGRESS, JSON.stringify(progress));
-  void syncProgressToCloud(progress);
+  try {
+    const state = await NetInfo.fetch();
+    if (state.isConnected) {
+      void syncProgressToCloud(progress);
+    } else {
+      await AsyncStorage.setItem(KEYS.SYNC_PENDING, 'true');
+    }
+  } catch {
+    void syncProgressToCloud(progress);
+  }
 }
 
 export async function loadUserProgress(): Promise<UserProgress | null> {

@@ -16,6 +16,7 @@ import {
   getRuleByNumber,
   searchHighwayCode,
 } from '@clearpass/content';
+import { OfflineBanner } from '@/src/components/OfflineBanner';
 
 type ViewMode = 'list' | 'chapter' | 'rule';
 
@@ -97,8 +98,10 @@ export default function HighwayCodeScreen() {
   // ── Rule deep-link view ───────────────────────────────────────────────────
   if (viewMode === 'rule' && selectedRule && selectedChapter) {
     return (
+      <View style={styles.screen}>
+        <OfflineBanner />
       <ScrollView
-        style={[styles.screen, { backgroundColor: theme.backgroundColor }]}
+        style={{ flex: 1, backgroundColor: theme.backgroundColor }}
         contentContainerStyle={styles.content}
       >
         <TouchableOpacity style={styles.backBtn} onPress={goBack} activeOpacity={0.7}>
@@ -143,14 +146,17 @@ export default function HighwayCodeScreen() {
           <Text style={styles.chapterBtnText}>View all rules in this chapter</Text>
         </TouchableOpacity>
       </ScrollView>
+      </View>
     );
   }
 
   // ── Chapter view ──────────────────────────────────────────────────────────
   if (viewMode === 'chapter' && selectedChapter) {
     return (
+      <View style={styles.screen}>
+        <OfflineBanner />
       <ScrollView
-        style={[styles.screen, { backgroundColor: theme.backgroundColor }]}
+        style={{ flex: 1, backgroundColor: theme.backgroundColor }}
         contentContainerStyle={styles.content}
       >
         <TouchableOpacity style={styles.backBtn} onPress={goBack} activeOpacity={0.7}>
@@ -230,13 +236,16 @@ export default function HighwayCodeScreen() {
           <Text style={styles.practiceBtnText}>{'<- Back to all chapters'}</Text>
         </TouchableOpacity>
       </ScrollView>
+      </View>
     );
   }
 
   // ── List view ─────────────────────────────────────────────────────────────
   return (
+    <View style={styles.screen}>
+      <OfflineBanner />
     <ScrollView
-      style={[styles.screen, { backgroundColor: theme.backgroundColor }]}
+      style={{ flex: 1, backgroundColor: theme.backgroundColor }}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
@@ -336,6 +345,7 @@ export default function HighwayCodeScreen() {
         </View>
       )}
     </ScrollView>
+    </View>
   );
 }
 

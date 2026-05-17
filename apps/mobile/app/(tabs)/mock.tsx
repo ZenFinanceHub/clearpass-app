@@ -29,6 +29,7 @@ import { useTheme } from '@/src/theme';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { ShareCardModal } from '@/src/components/ShareableCard';
+import { OfflineBanner } from '@/src/components/OfflineBanner';
 
 const TOTAL_QUESTIONS = 50;
 const TIME_LIMIT_SECONDS = 57 * 60;
@@ -262,18 +263,22 @@ export default function MockScreen() {
   }
 
   if (phase === 'start') return (
-    <StartView
-      onStart={handleStart}
-      onTestShareCard={() => {
-        setResultData({ correct: 47, timeTaken: 2580, byTopic: {}, xpEarned: 100, newAchievements: [], passed: true, streakDays: 5 });
-        setPhase('results');
-      }}
-    />
+    <>
+      <OfflineBanner />
+      <StartView
+        onStart={handleStart}
+        onTestShareCard={() => {
+          setResultData({ correct: 47, timeTaken: 2580, byTopic: {}, xpEarned: 100, newAchievements: [], passed: true, streakDays: 5 });
+          setPhase('results');
+        }}
+      />
+    </>
   );
 
   if (phase === 'results' && resultData) {
     return (
       <>
+        <OfflineBanner />
         <ResultsView
           data={resultData}
           onReview={() => { setExpandedRows(new Set()); setPhase('review'); }}
