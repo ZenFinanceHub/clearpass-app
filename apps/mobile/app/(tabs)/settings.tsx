@@ -27,6 +27,7 @@ import {
   cacheRoadSigns,
   type CacheStatus,
 } from '@/src/offlineCache';
+import { getTestResult, type TestResult } from '../ipassed';
 import {
   NotificationSettings,
   DEFAULT_NOTIF_SETTINGS,
@@ -129,6 +130,9 @@ export default function SettingsScreen() {
   const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
   const [refreshingCache, setRefreshingCache] = useState(false);
 
+  // Test result state
+  const [testResult, setTestResult] = useState<TestResult | null>(null);
+
   // Notification state
   const [notifSettings, setNotifSettings]   = useState<NotificationSettings>(DEFAULT_NOTIF_SETTINGS);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -187,6 +191,10 @@ export default function SettingsScreen() {
       // Load cache status
       const cs = await getCacheStatus();
       setCacheStatus(cs);
+
+      // Load test result
+      const tr = await getTestResult();
+      setTestResult(tr);
     })();
   }, []);
 
@@ -571,6 +579,29 @@ export default function SettingsScreen() {
       </Text>
 
       <View style={[styles.group, { backgroundColor: theme.cardColor }]}>
+        <TouchableOpacity
+          style={[styles.row, styles.rowBorder]}
+          onPress={() => router.push('/ipassed' as any)}
+          activeOpacity={0.75}
+        >
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>
+              {'My Test Result'}
+            </Text>
+            <Text style={[styles.description, {
+              fontSize: theme.fontSize(12),
+              color: testResult?.passed ? '#0D9488' : testResult ? '#F59E0B' : theme.subTextColor,
+            }]}>
+              {testResult?.passed
+                ? 'Passed [V]' + (testResult.score ? ' - Score: ' + String(testResult.score) + '/50' : '')
+                : testResult
+                  ? 'Resit booked'
+                  : 'Record your test result ->'}
+            </Text>
+          </View>
+          <Text style={styles.chevron}>{'>'}</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={[styles.row, styles.rowBorder]}
           onPress={() => router.push('/instructor?mode=learner' as any)}

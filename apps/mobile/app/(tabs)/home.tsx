@@ -575,6 +575,7 @@ export default function HomeScreen() {
   const [celebQueue, setCelebQueue]   = useState<CelebrationEvent[]>([]);
   const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
   const [pendingChallenges, setPendingChallenges] = useState(0);
+  const [showResultBanner, setShowResultBanner]   = useState(false);
   const theme = useTheme();
 
   useEffect(() => {
@@ -608,6 +609,18 @@ export default function HomeScreen() {
               setCelebQueue(celebEvents.slice(1));
             }
           } catch {}
+        }
+
+        // Check if test date has passed and result not yet submitted
+        if (fresh) {
+          const td = fresh.testDate;
+          const passed = td !== null && getDaysRemaining(td) < 0;
+          if (passed) {
+            const submitted = await AsyncStorage.getItem('@clearpass/has_submitted_result');
+            setShowResultBanner(submitted !== 'true');
+          } else {
+            setShowResultBanner(false);
+          }
         }
 
         const plan = await loadStudyPlan();
@@ -870,6 +883,36 @@ export default function HomeScreen() {
             <Text style={styles.testDayChevron}>{'›'}</Text>
           </LinearGradient>
         </TouchableOpacity>
+      )}
+
+      {/* Test Result Banner */}
+      {showResultBanner && (
+        <View style={styles.resultBannerWrap}>
+          <LinearGradient
+            colors={['#0D9488', '#6366F1']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.resultBannerGradient}
+          >
+            <Text style={styles.resultBannerTitle}>{'[*] How did your test go?'}</Text>
+            <View style={styles.resultBannerBtns}>
+              <TouchableOpacity
+                style={styles.resultBannerPassBtn}
+                onPress={() => router.push('/ipassed?flow=passed' as any)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.resultBannerPassText}>{'I Passed!'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.resultBannerResitBtn}
+                onPress={() => router.push('/ipassed?flow=resit' as any)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.resultBannerResitText}>{'I need to resit'}</Text>
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+        </View>
       )}
 
       {/* Action Grid */}
@@ -1276,6 +1319,53 @@ const styles = StyleSheet.create({
 
   setDateRow:  { marginHorizontal: 16, marginBottom: 4, paddingVertical: 8 },
   setDateText: { fontSize: 13, color: '#6B7280', fontWeight: '500' },
+
+  // ── Test Result Banner ────────────────────────────────────────────────────────
+  resultBannerWrap: {
+    marginHorizontal: 16,
+    marginBottom: 4,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  resultBannerGradient: {
+    padding: 16,
+    gap: 12,
+  },
+  resultBannerTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  resultBannerBtns: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  resultBannerPassBtn: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  resultBannerPassText: {
+    color: '#0D9488',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  resultBannerResitBtn: {
+    flex: 1,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.7)',
+  },
+  resultBannerResitText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
 
   // ── Action Grid ───────────────────────────────────────────────────────────────
   actionGrid: {

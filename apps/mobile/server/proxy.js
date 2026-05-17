@@ -138,6 +138,34 @@ app.post('/api/create-checkout-session', async (req, res) => {
   }
 });
 
+let statsCache = null;
+let statsCacheTime = 0;
+
+app.get('/api/stats', async (req, res) => {
+  if (statsCache && Date.now() - statsCacheTime < 3600000) {
+    return res.json(statsCache);
+  }
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    const supabaseAdmin = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_KEY,
+    );
+    const { count, error } = await supabaseAdmin
+      .from('pass_stories')
+      .select('id', { count: 'exact', head: true })
+      .eq('shared', true);
+    if (error) throw error;
+    statsCache = { totalPasses: count ?? 0, lastUpdated: new Date().toISOString() };
+    statsCacheTime = Date.now();
+    res.json(statsCache);
+  } catch (err) {
+    console.error('[stats] error:', err);
+    if (statsCache) return res.json(statsCache);
+    res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`ClearPass proxy running on http://localhost:${PORT}`);
 });

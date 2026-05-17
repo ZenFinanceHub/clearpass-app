@@ -49,6 +49,7 @@ export default function TutorScreen() {
     userAnswerText?: string;
     correctAnswerText?: string;
     explanation?: string;
+    freeMessage?: string;
   }>();
 
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -57,10 +58,11 @@ export default function TutorScreen() {
   const [showPaywall, setShowPaywall] = useState(false);
   const [dotCount, setDotCount] = useState(1);
 
-  const messagesRef = useRef<Msg[]>([]);
-  const scrollRef = useRef<ScrollView>(null);
-  const lastQuestion = useRef('');
-  const isSending = useRef(false);
+  const messagesRef    = useRef<Msg[]>([]);
+  const scrollRef      = useRef<ScrollView>(null);
+  const lastQuestion   = useRef('');
+  const lastFreeMsg    = useRef('');
+  const isSending      = useRef(false);
 
   function updateMsgs(msgs: Msg[]) {
     messagesRef.current = msgs;
@@ -80,7 +82,8 @@ export default function TutorScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      const q = params.questionText;
+      const q  = params.questionText;
+      const fm = params.freeMessage;
       if (q && q !== lastQuestion.current) {
         lastQuestion.current = q;
         isSending.current = false;
@@ -91,11 +94,17 @@ export default function TutorScreen() {
           ` - The correct answer is ${params.correctAnswerText ?? ''}.` +
           ` I answered ${params.userAnswerText ?? ''}.`;
         void sendText(opening);
-      } else if (!q && messagesRef.current.length === 0) {
+      } else if (fm && fm !== lastFreeMsg.current) {
+        lastFreeMsg.current = fm;
+        isSending.current = false;
+        setIsLoading(false);
+        updateMsgs([]);
+        void sendText(fm);
+      } else if (!q && !fm && messagesRef.current.length === 0) {
         updateMsgs([{ id: '0', role: 'assistant', content: WELCOME, time: nowTime() }]);
       }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [params.questionText, params.correctAnswerText, params.userAnswerText]),
+    }, [params.questionText, params.correctAnswerText, params.userAnswerText, params.freeMessage]),
   );
 
   async function sendText(text: string) {
