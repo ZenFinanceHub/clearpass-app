@@ -136,9 +136,6 @@ export default function TutorScreen() {
       messages: apiMessages,
     };
 
-    console.log('[TutorScreen] POST', url);
-    console.log('[TutorScreen] body', JSON.stringify(body));
-
     try {
       const res = await fetch(url, {
         method: 'POST',
@@ -147,15 +144,12 @@ export default function TutorScreen() {
       });
 
       const rawText = await res.text();
-      console.log('[TutorScreen] status', res.status, 'body', rawText);
-
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const data = JSON.parse(rawText) as { content: Array<{ type: string; text: string }> };
       const reply = data.content[0]?.text?.trim() ?? "Sorry, I couldn't connect. Please try again.";
       updateMsgs([...messagesRef.current, { id: String(Date.now() + 1), role: 'assistant', content: reply, time: nowTime() }]);
-    } catch (err) {
-      console.log('[TutorScreen] error', err);
+    } catch {
       updateMsgs([...messagesRef.current, { id: String(Date.now() + 1), role: 'assistant', content: "Sorry, I couldn't connect. Please try again.", time: nowTime() }]);
     } finally {
       setIsLoading(false);

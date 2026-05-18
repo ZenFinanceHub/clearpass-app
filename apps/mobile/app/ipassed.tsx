@@ -103,8 +103,7 @@ function PassedFlow() {
       const progress = (await loadUserProgress()) ?? createFreshUserProgress();
       await saveUserProgress(awardXp(progress, 500));
       await saveTestResult({ passed: true, score: selectedScore ?? undefined });
-    } catch (e) {
-      console.warn('[ipassed] submit error:', e);
+    } catch {
       await saveTestResult({ passed: true, score: selectedScore ?? undefined });
     } finally {
       setSubmitting(false);

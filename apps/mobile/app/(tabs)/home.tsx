@@ -642,9 +642,7 @@ export default function HomeScreen() {
             await saveNudges(withDismissals);
             setNudges(withDismissals.filter(n => !n.dismissed));
           }
-        } catch (e) {
-          console.warn('[HomeScreen] passProb error:', e);
-        }
+        } catch {}
 
         const { data: { user }, error: userError } = await supabase.auth.getUser();
 
@@ -659,30 +657,24 @@ export default function HomeScreen() {
           } catch {}
         }
 
-        console.log('[HomeScreen] getUser ->', user?.id ?? 'no user', userError ?? 'no error');
-
         if (!user) {
           const pending = await AsyncStorage.getItem('@clearpass/pending_username');
           if (pending) setUsername(pending);
           return;
         }
 
-        const { data: profile, error: profileError } = await supabase
+        const { data: profile } = await supabase
           .from('profiles')
           .select('username')
           .eq('id', user.id)
           .single();
 
-        console.log('[HomeScreen] profile ->', JSON.stringify(profile), 'error ->', profileError?.message ?? 'none');
-
         const displayName = profile?.username as string | null;
-        console.log('[HomeScreen] displayName ->', displayName);
 
         if (displayName) {
           setUsername(displayName);
         } else {
           const pending = await AsyncStorage.getItem('@clearpass/pending_username');
-          console.log('[HomeScreen] pending_username ->', pending);
           if (pending) setUsername(pending);
         }
       })();

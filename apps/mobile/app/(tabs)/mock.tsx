@@ -267,10 +267,6 @@ export default function MockScreen() {
       <OfflineBanner />
       <StartView
         onStart={handleStart}
-        onTestShareCard={() => {
-          setResultData({ correct: 47, timeTaken: 2580, byTopic: {}, xpEarned: 100, newAchievements: [], passed: true, streakDays: 5 });
-          setPhase('results');
-        }}
       />
     </>
   );
@@ -454,7 +450,7 @@ const INFO_CARDS = [
   { emoji: '🔁', text: 'Change & flag answers' },
 ];
 
-function StartView({ onStart, onTestShareCard }: { onStart: () => void; onTestShareCard: () => void }) {
+function StartView({ onStart }: { onStart: () => void }) {
   const theme = useTheme();
   return (
     <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
@@ -478,10 +474,6 @@ function StartView({ onStart, onTestShareCard }: { onStart: () => void; onTestSh
 
       <TouchableOpacity style={styles.primaryBtn} onPress={onStart} activeOpacity={0.85}>
         <Text style={styles.primaryBtnText}>{'Start Test'}</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.devBtn} onPress={onTestShareCard} activeOpacity={0.75}>
-        <Text style={styles.devBtnText}>{'Dev: Test Share Card'}</Text>
       </TouchableOpacity>
 
       <View style={styles.warningBox}>
@@ -898,6 +890,4 @@ const styles = StyleSheet.create({
   },
   tutorBtnText: { color: '#0D9488', fontSize: 14, fontWeight: '700' },
 
-  devBtn: { alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 16 },
-  devBtnText: { fontSize: 12, color: '#9CA3AF', fontWeight: '600' },
 });
