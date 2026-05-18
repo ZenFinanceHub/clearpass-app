@@ -132,9 +132,12 @@ function PassedFlow() {
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView style={styles.flex} contentContainerStyle={styles.passedContent} keyboardShouldPersistTaps="handled">
 
-          <Animated.Text style={[styles.trophyEmoji, { transform: [{ translateY: bounceAnim }] }]}>
-            {'[PASS]'}
-          </Animated.Text>
+          <Animated.View style={[styles.trophyWrap, { transform: [{ translateY: bounceAnim }] }]}>
+            <View style={styles.trophyCircle}>
+              <Text style={styles.trophyEmoji}>{'🏆'}</Text>
+            </View>
+            <Text style={styles.trophyLabel}>{'PASSED'}</Text>
+          </Animated.View>
 
           <Text style={styles.passedHeading}>{'Congratulations!'}</Text>
           <Text style={styles.passedSub}>{'You passed your theory test!'}</Text>
@@ -347,13 +350,28 @@ const styles = StyleSheet.create({
     gap: 20,
   },
 
+  trophyWrap: {
+    alignItems: 'center',
+    gap: 14,
+  },
+  trophyCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   trophyEmoji: {
-    fontSize: 64,
-    fontWeight: '900',
+    fontSize: 60,
+    lineHeight: 72,
+    includeFontPadding: false,
+  },
+  trophyLabel: {
+    fontSize: 14,
+    fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: 2,
-    textAlign: 'center',
-    marginBottom: 4,
+    letterSpacing: 3,
   },
 
   passedHeading: {
