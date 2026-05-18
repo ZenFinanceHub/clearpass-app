@@ -87,10 +87,10 @@ export default function PaywallScreen() {
       {/* Pricing */}
       <View style={styles.pricingBox}>
         <View style={styles.priceRow}>
-          <Text style={styles.priceAmount}>{'£4.99'}</Text>
+          <Text style={styles.priceAmount}>{'£7.99'}</Text>
           <Text style={styles.pricePeriod}>{' / 3 months'}</Text>
         </View>
-        <Text style={styles.priceSub}>{"That's less than £1.67/month"}</Text>
+        <Text style={styles.priceSub}>{"That's less than £2.67/month"}</Text>
       </View>
 
       {error.length > 0 && <Text style={styles.errorText}>{error}</Text>}
