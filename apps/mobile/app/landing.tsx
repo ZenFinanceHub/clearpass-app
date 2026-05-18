@@ -10,6 +10,18 @@ import {
 import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
 
+const FEATURES = [
+  { icon: '🤖', title: 'AI Tutor', desc: 'Ask anything. Get clear explanations from real conversational AI.' },
+  { icon: '📊', title: 'Pass Probability', desc: 'Live prediction of your pass chance, updated after every session.' },
+  { icon: '📝', title: 'Full Mock Tests', desc: '50 questions, 57 minutes, full DVSA format.' },
+  { icon: '📅', title: 'Smart Study Plan', desc: 'AI builds a personalised day-by-day plan around your test date.' },
+  { icon: '⚠️', title: 'Hazard Perception', desc: 'Video clips with real scoring — just like the actual test.' },
+  { icon: '♿', title: 'Accessibility Mode', desc: 'OpenDyslexic font, text-to-speech, cream background and more.' },
+];
+
+const FREE_FEATURES = ['10 questions per day', 'Highway Code & road signs', '5 AI tutor questions/day'];
+const PRO_FEATURES = ['Unlimited questions', 'Full mock tests', 'Hazard perception', 'Unlimited AI tutor', 'AI study plan', 'Offline mode'];
+
 async function handleGetPro() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) { router.push('/auth'); return; }
@@ -25,53 +37,22 @@ async function handleGetPro() {
     const data = await res.json() as { url?: string };
     if (data.url) await Linking.openURL(data.url);
   } catch {
-    router.push('/auth');
+    router.push('/paywall');
   }
 }
-
-const NAVBAR_H = 64;
-
-type Feature = { emoji: string; title: string; desc: string; accent: string };
-const FEATURES: Feature[] = [
-  { emoji: '[ AI ]', title: 'Smart Practice', desc: 'AI selects questions based on your weak areas so every session counts.', accent: '#F87171' },
-  { emoji: '[ ? ]', title: 'AI Tutor', desc: 'Get instant explanations for every wrong answer from Claude AI.', accent: '#A78BFA' },
-  { emoji: '[ 57 ]', title: 'Mock Tests', desc: 'Full 57-minute timed tests matching the real DVSA format.', accent: '#34D399' },
-  { emoji: '⚡', title: 'Battle Mode', desc: 'Race through your weakest topics with a combo score multiplier.', accent: '#FBBF24' },
-  { emoji: '[ % ]', title: 'Progress Tracking', desc: 'Track your readiness score and see exactly where to improve.', accent: '#F87171' },
-  { emoji: '🏆', title: 'Leaderboard', desc: 'Compete with friends and see who is most prepared to pass.', accent: '#A78BFA' },
-];
-
-type Stat = { value: string; label: string; color: string };
-const STATS: Stat[] = [
-  { value: '55%', label: 'of learners fail first time', color: '#F87171' },
-  { value: '210+', label: 'practice questions', color: '#A78BFA' },
-  { value: '14', label: 'topic categories covered', color: '#FBBF24' },
-  { value: '43/50', label: 'pass mark needed', color: '#34D399' },
-];
-
-type Step = { num: string; title: string; desc: string };
-const STEPS: Step[] = [
-  { num: '1', title: 'Create your account', desc: 'Sign up free in 30 seconds' },
-  { num: '2', title: 'Practice daily', desc: '10 smart questions every day builds your knowledge fast' },
-  { num: '3', title: 'Pass first time', desc: 'When your readiness hits 80% you are ready to book' },
-];
-
-const FREE_FEATURES = ['10 questions per day', 'Basic progress tracking', 'Mock test preview'];
-const PRO_FEATURES = ['Unlimited questions', 'AI tutor explanations', 'Battle mode', 'Full mock tests', 'Leaderboard'];
-const PROOF = ['210+ questions', 'AI explanations', 'Mock tests'];
 
 export default function LandingPage() {
   return (
     <View style={styles.root}>
       {/* Navbar */}
       <View style={styles.navbar}>
-        <Text style={styles.navBrand}>ClearPass</Text>
+        <Text style={styles.navBrand}>{'ClearPass'}</Text>
         <View style={styles.navRight}>
           <TouchableOpacity onPress={() => router.push('/auth')} activeOpacity={0.75}>
-            <Text style={styles.navSignIn}>Sign In</Text>
+            <Text style={styles.navSignIn}>{'Sign In'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.navCta} onPress={() => router.push('/auth')} activeOpacity={0.85}>
-            <Text style={styles.navCtaText}>Get Started</Text>
+            <Text style={styles.navCtaText}>{'Start Free'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -80,56 +61,49 @@ export default function LandingPage() {
 
         {/* Hero */}
         <View style={styles.hero}>
-          <View style={styles.heroBgWrap}>
-            <Text style={styles.heroBgEmoji}>{'🚗'}</Text>
+          <View style={styles.heroBadge}>
+            <View style={styles.heroBadgePill}><Text style={styles.heroBadgePillText}>{'NEW'}</Text></View>
+            <Text style={styles.heroBadgeText}>{'AI Study Plans now live'}</Text>
           </View>
-          <View style={styles.heroInner}>
-            <Text style={styles.heroLine1}>Pass your theory test.</Text>
-            <Text style={styles.heroLine2}>First time.</Text>
-            <Text style={styles.heroSub}>
-              {'Join thousands of UK learners using AI-powered practice to pass first time. Smart questions, instant explanations, real results.'}
-            </Text>
-            <View style={styles.heroButtons}>
-              <TouchableOpacity style={styles.btnPrimary} onPress={() => router.push('/auth')} activeOpacity={0.85}>
-                <Text style={styles.btnPrimaryText}>Start for free</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.btnOutline} onPress={() => router.push('/auth')} activeOpacity={0.85}>
-                <Text style={styles.btnOutlineText}>See how it works</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.proofRow}>
-              {PROOF.map((item) => (
-                <View key={item} style={styles.proofItem}>
-                  <Text style={styles.proofTick}>{'✓'}</Text>
-                  <Text style={styles.proofText}>{item}</Text>
-                </View>
-              ))}
-            </View>
+          <Text style={styles.heroH1}>{'Pass Your Theory Test'}</Text>
+          <Text style={styles.heroH1Accent}>{'First Time'}</Text>
+          <Text style={styles.heroSub}>{'The UK\'s smartest revision app. AI tutor, personalised study plan, and the only app built for dyslexic learners.'}</Text>
+          <View style={styles.heroBtns}>
+            <TouchableOpacity style={styles.btnPrimary} onPress={() => router.push('/auth')} activeOpacity={0.85}>
+              <Text style={styles.btnPrimaryText}>{'Start Free →'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.btnOutline} onPress={() => router.push('/auth')} activeOpacity={0.85}>
+              <Text style={styles.btnOutlineText}>{'See How It Works'}</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.heroMicro}>{'No credit card · Free to start · Cancel anytime'}</Text>
+          <View style={styles.heroSocial}>
+            <Text style={styles.heroStars}>{'⭐⭐⭐⭐⭐'}</Text>
+            <Text style={styles.heroSocialText}>{'Trusted by learner drivers across the UK'}</Text>
           </View>
         </View>
 
-        {/* Stats */}
-        <View style={styles.statsWrap}>
-          <View style={styles.statsCard}>
-            {STATS.map((s, i) => (
-              <React.Fragment key={s.value}>
-                <View style={styles.statItem}>
-                  <Text style={[styles.statValue, { color: s.color }]}>{s.value}</Text>
-                  <Text style={styles.statLabel}>{s.label}</Text>
-                </View>
-                {i < STATS.length - 1 && <View style={styles.statDivider} />}
-              </React.Fragment>
-            ))}
+        {/* Stats strip */}
+        <View style={styles.statsStrip}>
+          <View style={styles.statItem}>
+            <Text style={styles.statVal}>{'54%'}</Text>
+            <Text style={styles.statLbl}>{'of learners fail first time'}</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statVal}>{'2.8M'}</Text>
+            <Text style={styles.statLbl}>{'theory tests per year in the UK'}</Text>
           </View>
         </View>
 
         {/* Features */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Everything you need to pass</Text>
+          <Text style={styles.sectionLabel}>{'FEATURES'}</Text>
+          <Text style={styles.sectionTitle}>{'Everything you need to pass first time'}</Text>
           <View style={styles.featureGrid}>
             {FEATURES.map((f) => (
-              <View key={f.title} style={[styles.featureCard, { borderTopColor: f.accent }]}>
-                <Text style={styles.featureEmoji}>{f.emoji}</Text>
+              <View key={f.title} style={styles.featureCard}>
+                <Text style={styles.featureIcon}>{f.icon}</Text>
                 <Text style={styles.featureTitle}>{f.title}</Text>
                 <Text style={styles.featureDesc}>{f.desc}</Text>
               </View>
@@ -138,78 +112,84 @@ export default function LandingPage() {
         </View>
 
         {/* How it works */}
-        <View style={[styles.section, styles.sectionDark]}>
-          <Text style={styles.sectionTitle}>Start passing in 3 steps</Text>
-          <View style={styles.stepsRow}>
-            {STEPS.map((step, idx) => (
-              <React.Fragment key={step.num}>
-                <View style={styles.stepCard}>
-                  <View style={styles.stepCircle}>
-                    <Text style={styles.stepNum}>{step.num}</Text>
-                  </View>
-                  <Text style={styles.stepTitle}>{step.title}</Text>
-                  <Text style={styles.stepDesc}>{step.desc}</Text>
-                </View>
-                {idx < STEPS.length - 1 && <View style={styles.stepLine} />}
-              </React.Fragment>
-            ))}
-          </View>
+        <View style={[styles.section, styles.sectionAlt]}>
+          <Text style={styles.sectionLabel}>{'GET STARTED'}</Text>
+          <Text style={styles.sectionTitle}>{'Get test ready in 3 steps'}</Text>
+          {[
+            { n: '1', t: 'Create your free account', d: 'Set your test date and we\'ll build your personalised plan instantly.' },
+            { n: '2', t: 'Follow your AI study plan', d: 'Your plan adapts as you learn, focusing time where it matters most.' },
+            { n: '3', t: 'Pass first time', d: 'When your pass probability hits 85%+ you\'re ready to book.' },
+          ].map((step) => (
+            <View key={step.n} style={styles.stepRow}>
+              <View style={styles.stepCircle}>
+                <Text style={styles.stepNum}>{step.n}</Text>
+              </View>
+              <View style={styles.stepText}>
+                <Text style={styles.stepTitle}>{step.t}</Text>
+                <Text style={styles.stepDesc}>{step.d}</Text>
+              </View>
+            </View>
+          ))}
         </View>
 
         {/* Pricing */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Simple pricing</Text>
+          <Text style={styles.sectionLabel}>{'PRICING'}</Text>
+          <Text style={styles.sectionTitle}>{'Simple, honest pricing'}</Text>
           <View style={styles.pricingRow}>
-            <View style={styles.pricingCard}>
-              <Text style={styles.planName}>Free</Text>
-              <Text style={styles.planPrice}>{'£0'}</Text>
-              <View style={styles.planPriceSpacer} />
+            {/* Free card */}
+            <View style={styles.priceCard}>
+              <Text style={styles.planName}>{'Free'}</Text>
+              <Text style={styles.planFreeTag}>{'Free forever'}</Text>
+              <Text style={styles.planAmount}>{'£0'}</Text>
+              <View style={styles.planDivider} />
               {FREE_FEATURES.map((f) => (
                 <View key={f} style={styles.planFeatureRow}>
-                  <Text style={styles.planTick}>{'✓'}</Text>
+                  <Text style={styles.planCheck}>{'✓'}</Text>
                   <Text style={styles.planFeatureText}>{f}</Text>
                 </View>
               ))}
-              <TouchableOpacity style={styles.planCtaOutline} onPress={() => router.push('/auth')} activeOpacity={0.85}>
-                <Text style={styles.planCtaOutlineText}>Get started free</Text>
+              <TouchableOpacity style={styles.planCtaFree} onPress={() => router.push('/auth')} activeOpacity={0.85}>
+                <Text style={styles.planCtaFreeText}>{'Get started free'}</Text>
               </TouchableOpacity>
             </View>
 
-            <View style={[styles.pricingCard, styles.pricingCardPro]}>
-              <View style={styles.popularBadge}>
-                <Text style={styles.popularText}>Most popular</Text>
+            {/* Pro card */}
+            <View style={[styles.priceCard, styles.priceCardPro]}>
+              <View style={styles.planBadge}><Text style={styles.planBadgeText}>{'Most Popular'}</Text></View>
+              <Text style={[styles.planName, styles.planNamePro]}>{'Premium'}</Text>
+              <View style={styles.planPriceRow}>
+                <Text style={styles.planAmountPro}>{'£7.99'}</Text>
+                <Text style={styles.planPeriod}>{' / 3 months'}</Text>
               </View>
-              <Text style={[styles.planName, styles.planNamePro]}>Pro</Text>
-              <Text style={[styles.planPrice, styles.planPricePro]}>{'£4.99'}</Text>
-              <Text style={styles.planPriceNote}>one-time purchase</Text>
+              <Text style={styles.planNote}>{'Less than £2.67/month'}</Text>
+              <View style={styles.planDivider} />
               {PRO_FEATURES.map((f) => (
                 <View key={f} style={styles.planFeatureRow}>
-                  <Text style={styles.planTickPro}>{'✓'}</Text>
+                  <Text style={styles.planCheckPro}>{'✓'}</Text>
                   <Text style={styles.planFeatureTextPro}>{f}</Text>
                 </View>
               ))}
               <TouchableOpacity style={styles.planCtaPro} onPress={() => void handleGetPro()} activeOpacity={0.85}>
-                <Text style={styles.planCtaProText}>Get Pro</Text>
+                <Text style={styles.planCtaProText}>{'Start Learning Now'}</Text>
               </TouchableOpacity>
+              <Text style={styles.planSmall}>{'The theory test costs £23. ClearPass pays for itself.'}</Text>
             </View>
           </View>
         </View>
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerBrand}>ClearPass</Text>
-          <Text style={styles.footerSub}>Pass your UK theory test first time</Text>
-          <Text style={styles.footerDisclaimer}>Built for UK learners. Not affiliated with DVSA.</Text>
+          <Text style={styles.footerBrand}>{'ClearPass'}</Text>
+          <Text style={styles.footerSub}>{'Pass your UK theory test first time'}</Text>
           <View style={styles.footerLinks}>
-            <TouchableOpacity activeOpacity={0.75}>
-              <Text style={styles.footerLink}>Privacy Policy</Text>
-            </TouchableOpacity>
+            <TouchableOpacity activeOpacity={0.75}><Text style={styles.footerLink}>{'Privacy Policy'}</Text></TouchableOpacity>
             <Text style={styles.footerDot}>{'·'}</Text>
-            <TouchableOpacity activeOpacity={0.75}>
-              <Text style={styles.footerLink}>Terms of Service</Text>
-            </TouchableOpacity>
+            <TouchableOpacity activeOpacity={0.75}><Text style={styles.footerLink}>{'Terms'}</Text></TouchableOpacity>
+            <Text style={styles.footerDot}>{'·'}</Text>
+            <TouchableOpacity activeOpacity={0.75}><Text style={styles.footerLink}>{'Contact'}</Text></TouchableOpacity>
           </View>
-          <Text style={styles.footerCopy}>{'© 2026 ClearPass'}</Text>
+          <Text style={styles.footerCopy}>{'© 2026 ClearPass · Built in the UK 🇬🇧'}</Text>
         </View>
 
       </ScrollView>
@@ -217,293 +197,124 @@ export default function LandingPage() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0A0A0F' },
+const TEAL = '#0D9488';
+const INDIGO = '#6366F1';
+const BG = '#F7F8FA';
 
-  // ── Navbar ──────────────────────────────────────────────────────────────────
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: BG },
+
   navbar: {
-    height: NAVBAR_H,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingLeft: 24,
-    paddingRight: 24,
-    backgroundColor: '#0D0D14',
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#1F1F2E',
+    height: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, backgroundColor: '#FFFFFF',
+    borderBottomWidth: 0.5, borderBottomColor: '#E5E7EB',
   },
-  navBrand: { fontSize: 20, fontWeight: '900', color: '#FFFFFF', letterSpacing: 1 },
-  navRight: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  navSignIn: { fontSize: 14, fontWeight: '600', color: '#A78BFA' },
-  navCta: {
-    backgroundColor: '#7B5EA7',
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
+  navBrand: { fontSize: 20, fontWeight: '900', color: TEAL, letterSpacing: -0.5 },
+  navRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  navSignIn: { fontSize: 14, fontWeight: '600', color: '#374151' },
+  navCta: { backgroundColor: TEAL, borderRadius: 9, paddingHorizontal: 16, paddingVertical: 8 },
   navCtaText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
 
-  // ── Scroll ──────────────────────────────────────────────────────────────────
   scroll: { flex: 1 },
   scrollContent: { flexGrow: 1 },
 
-  // ── Hero ────────────────────────────────────────────────────────────────────
   hero: {
-    minHeight: '100vh' as any,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 40,
-    paddingBottom: 80,
-    overflow: 'hidden',
+    backgroundColor: '#F0FDF9',
+    paddingHorizontal: 24, paddingTop: 48, paddingBottom: 56, alignItems: 'center',
   },
-  heroBgWrap: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
+  heroBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#FFFFFF', borderRadius: 100, borderWidth: 1, borderColor: '#E5E7EB',
+    paddingHorizontal: 14, paddingVertical: 6, marginBottom: 24,
   },
-  heroBgEmoji: { fontSize: 120, opacity: 0.05 },
-  heroInner: { alignItems: 'center', width: '100%', maxWidth: 640 },
-  heroLine1: {
-    fontSize: 48,
-    fontWeight: '900',
-    color: '#F1F0FF',
-    textAlign: 'center',
-    lineHeight: 58,
+  heroBadgePill: { backgroundColor: TEAL, borderRadius: 100, paddingHorizontal: 8, paddingVertical: 2 },
+  heroBadgePillText: { fontSize: 10, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 },
+  heroBadgeText: { fontSize: 13, fontWeight: '600', color: '#374151' },
+  heroH1: { fontSize: 40, fontWeight: '900', color: '#111827', textAlign: 'center', letterSpacing: -1, lineHeight: 48 },
+  heroH1Accent: { fontSize: 40, fontWeight: '900', color: TEAL, textAlign: 'center', letterSpacing: -1, lineHeight: 52, marginBottom: 20 },
+  heroSub: { fontSize: 16, color: '#6B7280', textAlign: 'center', lineHeight: 26, maxWidth: 360, marginBottom: 32 },
+  heroBtns: { flexDirection: 'row', gap: 10, marginBottom: 16, flexWrap: 'wrap', justifyContent: 'center' },
+  btnPrimary: { backgroundColor: TEAL, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 24 },
+  btnPrimaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  btnOutline: { borderRadius: 12, paddingVertical: 14, paddingHorizontal: 24, borderWidth: 1.5, borderColor: '#E5E7EB', backgroundColor: '#FFFFFF' },
+  btnOutlineText: { color: '#374151', fontSize: 15, fontWeight: '600' },
+  heroMicro: { fontSize: 12, color: '#9CA3AF', marginBottom: 28, textAlign: 'center' },
+  heroSocial: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB',
+    paddingHorizontal: 16, paddingVertical: 12,
   },
-  heroLine2: {
-    fontSize: 48,
-    fontWeight: '900',
-    color: '#A78BFA',
-    textAlign: 'center',
-    lineHeight: 58,
-    marginBottom: 28,
-  },
-  heroSub: {
-    fontSize: 18,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 28,
-    maxWidth: 560,
-    marginBottom: 40,
-  },
-  heroButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 32,
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-  },
-  btnPrimary: {
-    backgroundColor: '#7B5EA7',
-    borderRadius: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-  },
-  btnPrimaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
-  btnOutline: {
-    borderRadius: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderWidth: 1,
-    borderColor: '#1F1F2E',
-    backgroundColor: '#13131A',
-  },
-  btnOutlineText: { color: '#6B7280', fontSize: 16, fontWeight: '600' },
-  proofRow: {
-    flexDirection: 'row',
-    gap: 24,
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-  },
-  proofItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  proofTick: { fontSize: 13, color: '#34D399', fontWeight: '800' },
-  proofText: { fontSize: 13, color: '#6B7280' },
+  heroStars: { fontSize: 14 },
+  heroSocialText: { fontSize: 13, color: '#374151', fontWeight: '500' },
 
-  // ── Stats ───────────────────────────────────────────────────────────────────
-  statsWrap: { paddingHorizontal: 16, marginBottom: 8 },
-  statsCard: {
-    flexDirection: 'row',
-    backgroundColor: '#13131A',
-    borderRadius: 20,
-    padding: 32,
-    borderWidth: 0.5,
-    borderColor: '#1F1F2E',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 16,
-  },
-  statItem: { flex: 1, minWidth: 80, alignItems: 'center' },
-  statValue: { fontSize: 36, fontWeight: '900', lineHeight: 44 },
-  statLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginTop: 4,
-    lineHeight: 16,
-  },
-  statDivider: { width: 1, height: 40, backgroundColor: '#1F1F2E' },
+  statsStrip: { backgroundColor: TEAL, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 24, paddingHorizontal: 16 },
+  statItem: { flex: 1, alignItems: 'center', paddingHorizontal: 12 },
+  statVal: { fontSize: 22, fontWeight: '900', color: '#FFFFFF', marginBottom: 4 },
+  statLbl: { fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: '500', textAlign: 'center', lineHeight: 17 },
+  statDivider: { width: 1, height: 36, backgroundColor: 'rgba(255,255,255,0.25)' },
 
-  // ── Sections ────────────────────────────────────────────────────────────────
-  section: { paddingHorizontal: 16, paddingVertical: 64 },
-  sectionDark: { backgroundColor: '#0D0D14' },
-  sectionTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#F1F0FF',
-    textAlign: 'center',
-    marginBottom: 48,
-  },
+  section: { paddingHorizontal: 20, paddingVertical: 56 },
+  sectionAlt: { backgroundColor: '#FFFFFF' },
+  sectionLabel: { fontSize: 11, fontWeight: '700', color: TEAL, letterSpacing: 1, marginBottom: 8 },
+  sectionTitle: { fontSize: 26, fontWeight: '900', color: '#111827', letterSpacing: -0.5, marginBottom: 28, lineHeight: 34 },
 
-  // ── Features ────────────────────────────────────────────────────────────────
-  featureGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-    justifyContent: 'center',
-  },
+  featureGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   featureCard: {
-    backgroundColor: '#13131A',
-    borderRadius: 16,
-    padding: 24,
-    borderWidth: 0.5,
-    borderColor: '#1F1F2E',
-    borderTopWidth: 3,
-    flex: 1,
-    minWidth: 200,
-    maxWidth: 320,
+    flex: 1, minWidth: 140, backgroundColor: '#FFFFFF', borderRadius: 16,
+    padding: 20, borderWidth: 1, borderColor: '#E5E7EB',
   },
-  featureEmoji: { fontSize: 32, marginBottom: 12 },
-  featureTitle: { fontSize: 16, fontWeight: '700', color: '#F1F0FF', marginBottom: 8 },
-  featureDesc: { fontSize: 13, color: '#6B7280', lineHeight: 20 },
+  featureIcon: { fontSize: 28, marginBottom: 12 },
+  featureTitle: { fontSize: 15, fontWeight: '800', color: '#111827', marginBottom: 6 },
+  featureDesc: { fontSize: 13, color: '#6B7280', lineHeight: 19 },
 
-  // ── Steps ───────────────────────────────────────────────────────────────────
-  stepsRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-  },
-  stepCard: {
-    alignItems: 'center',
-    flex: 1,
-    minWidth: 180,
-    maxWidth: 260,
-    paddingHorizontal: 12,
-  },
+  stepRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 16, marginBottom: 24 },
   stepCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#1C1C27',
-    borderWidth: 2,
-    borderColor: '#A78BFA',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
+    width: 48, height: 48, borderRadius: 24, backgroundColor: TEAL,
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  stepNum: { fontSize: 22, fontWeight: '900', color: '#A78BFA' },
-  // marginTop aligns the line with circle centre: (56 - 2) / 2 = 27
-  stepLine: {
-    height: 2,
-    width: 60,
-    backgroundColor: '#1F1F2E',
-    flexShrink: 0,
-    marginTop: 27,
-  },
-  stepTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#F1F0FF',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  stepDesc: { fontSize: 13, color: '#6B7280', textAlign: 'center', lineHeight: 20 },
+  stepNum: { fontSize: 20, fontWeight: '900', color: '#FFFFFF' },
+  stepText: { flex: 1, paddingTop: 4 },
+  stepTitle: { fontSize: 16, fontWeight: '800', color: '#111827', marginBottom: 4 },
+  stepDesc: { fontSize: 14, color: '#6B7280', lineHeight: 20 },
 
-  // ── Pricing ─────────────────────────────────────────────────────────────────
-  pricingRow: {
-    flexDirection: 'row',
-    gap: 16,
-    justifyContent: 'center',
-    flexWrap: 'wrap',
+  pricingRow: { flexDirection: 'row', gap: 14, flexWrap: 'wrap' },
+  priceCard: {
+    flex: 1, minWidth: 220, backgroundColor: '#FFFFFF', borderRadius: 20,
+    padding: 24, borderWidth: 1.5, borderColor: '#E5E7EB',
   },
-  pricingCard: {
-    backgroundColor: '#13131A',
-    borderRadius: 20,
-    padding: 32,
-    borderWidth: 0.5,
-    borderColor: '#1F1F2E',
-    flex: 1,
-    minWidth: 260,
-    maxWidth: 360,
+  priceCardPro: {
+    borderColor: TEAL,
+    shadowColor: TEAL, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 24, elevation: 4,
   },
-  pricingCardPro: {
-    backgroundColor: '#7B5EA7',
-    borderWidth: 2,
-    borderColor: '#A78BFA',
-    shadowColor: '#A78BFA',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-  },
-  popularBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FBBF24',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginBottom: 16,
-  },
-  popularText: { fontSize: 11, fontWeight: '800', color: '#0A0A0F' },
-  planName: { fontSize: 20, fontWeight: '800', color: '#F1F0FF', marginBottom: 8 },
-  planNamePro: { color: '#FFFFFF' },
-  planPrice: { fontSize: 48, fontWeight: '900', color: '#F1F0FF', lineHeight: 56 },
-  planPricePro: { color: '#FFFFFF' },
-  planPriceSpacer: { height: 22 },
-  planPriceNote: { fontSize: 13, color: 'rgba(255,255,255,0.65)', marginBottom: 24 },
+  planBadge: { backgroundColor: TEAL, borderRadius: 100, paddingHorizontal: 12, paddingVertical: 4, alignSelf: 'flex-start', marginBottom: 14 },
+  planBadgeText: { fontSize: 11, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 },
+  planName: { fontSize: 18, fontWeight: '800', color: '#111827', marginBottom: 4 },
+  planNamePro: { color: '#111827' },
+  planFreeTag: { fontSize: 13, color: '#6B7280', marginBottom: 12 },
+  planAmount: { fontSize: 44, fontWeight: '900', color: '#111827', letterSpacing: -1, lineHeight: 52, marginBottom: 4 },
+  planPriceRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 4 },
+  planAmountPro: { fontSize: 44, fontWeight: '900', color: '#111827', letterSpacing: -1, lineHeight: 52 },
+  planPeriod: { fontSize: 15, color: '#6B7280', fontWeight: '600' },
+  planNote: { fontSize: 13, color: TEAL, fontWeight: '700', marginBottom: 16 },
+  planDivider: { height: 1, backgroundColor: '#E5E7EB', marginVertical: 16 },
   planFeatureRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  planTick: { fontSize: 14, color: '#34D399', fontWeight: '700' },
-  planTickPro: { fontSize: 14, color: '#FFFFFF', fontWeight: '700' },
-  planFeatureText: { fontSize: 14, color: '#9CA3AF', flex: 1 },
-  planFeatureTextPro: { fontSize: 14, color: '#FFFFFF', flex: 1 },
-  planCtaOutline: {
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 24,
-    borderWidth: 1,
-    borderColor: '#1F1F2E',
-    backgroundColor: '#1C1C27',
-  },
-  planCtaOutlineText: { fontSize: 15, fontWeight: '700', color: '#F1F0FF' },
-  planCtaPro: {
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 24,
-    backgroundColor: '#FFFFFF',
-  },
-  planCtaProText: { fontSize: 15, fontWeight: '700', color: '#7B5EA7' },
+  planCheck: { fontSize: 14, color: TEAL, fontWeight: '800' },
+  planCheckPro: { fontSize: 14, color: TEAL, fontWeight: '800' },
+  planFeatureText: { fontSize: 14, color: '#374151', flex: 1 },
+  planFeatureTextPro: { fontSize: 14, color: '#374151', flex: 1 },
+  planCtaFree: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 8, borderWidth: 1.5, borderColor: '#E5E7EB' },
+  planCtaFreeText: { fontSize: 15, fontWeight: '700', color: '#374151' },
+  planCtaPro: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 8, backgroundColor: TEAL },
+  planCtaProText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
+  planSmall: { fontSize: 12, color: '#9CA3AF', textAlign: 'center', marginTop: 12, lineHeight: 18 },
 
-  // ── Footer ──────────────────────────────────────────────────────────────────
   footer: {
-    backgroundColor: '#0D0D14',
-    borderTopWidth: 0.5,
-    borderTopColor: '#1F1F2E',
-    paddingVertical: 48,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    gap: 8,
+    backgroundColor: '#111827', paddingVertical: 48, paddingHorizontal: 24, alignItems: 'center', gap: 10,
   },
-  footerBrand: { fontSize: 20, fontWeight: '900', color: '#F1F0FF', letterSpacing: 1 },
-  footerSub: { fontSize: 14, color: '#6B7280', marginTop: 4 },
-  footerDisclaimer: { fontSize: 12, color: '#374151', marginBottom: 8 },
-  footerLinks: { flexDirection: 'row', gap: 12, alignItems: 'center' },
+  footerBrand: { fontSize: 20, fontWeight: '900', color: '#FFFFFF' },
+  footerSub: { fontSize: 13, color: '#6B7280' },
+  footerLinks: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   footerLink: { fontSize: 13, color: '#6B7280' },
   footerDot: { fontSize: 13, color: '#374151' },
-  footerCopy: { fontSize: 12, color: '#374151', marginTop: 8 },
+  footerCopy: { fontSize: 12, color: '#374151', marginTop: 4 },
 });
