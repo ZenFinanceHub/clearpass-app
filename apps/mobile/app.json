@@ -11,18 +11,20 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#012169"
+      "backgroundColor": "#0D9488"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "uk.clearpass.app"
+      "bundleIdentifier": "co.uk.getclearpass.app",
+      "buildNumber": "1"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#012169"
+        "backgroundColor": "#0D9488"
       },
-      "package": "uk.clearpass.app",
+      "package": "co.uk.getclearpass.app",
+      "versionCode": 1,
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },

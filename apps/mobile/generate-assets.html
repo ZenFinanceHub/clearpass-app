@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ClearPass — Generate App Assets</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #F7F8FA; padding: 40px; color: #111827; }
+    h1 { font-size: 24px; font-weight: 900; color: #0D9488; margin-bottom: 8px; }
+    p { color: #6B7280; margin-bottom: 40px; }
+    .grid { display: flex; flex-wrap: wrap; gap: 32px; }
+    .asset { background: #fff; border: 1px solid #E5E7EB; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+    .asset h3 { font-size: 14px; font-weight: 700; color: #374151; margin: 0; }
+    .asset p { font-size: 12px; color: #9CA3AF; margin: 0; }
+    canvas { border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+    button {
+      background: #0D9488; color: #fff; border: none; border-radius: 8px;
+      padding: 10px 20px; font-size: 14px; font-weight: 700; cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: #0A7A70; }
+    .instructions { background: #F0FDF9; border: 1px solid #A7F3D0; border-radius: 12px; padding: 20px; margin-bottom: 40px; max-width: 640px; }
+    .instructions h2 { font-size: 16px; font-weight: 700; color: #065F46; margin: 0 0 10px; }
+    .instructions ol { margin: 0; padding-left: 20px; color: #374151; line-height: 2; font-size: 14px; }
+    code { background: #E5E7EB; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>ClearPass — App Asset Generator</h1>
+  <p>Click each Download button, then move the files into <code>apps/mobile/assets/</code> (overwrite the existing files).</p>
+
+  <div class="instructions">
+    <h2>After downloading all 4 files:</h2>
+    <ol>
+      <li>Move all 4 files to <code>apps/mobile/assets/</code></li>
+      <li>Rename the splash file to <code>splash-icon.png</code></li>
+      <li>Delete this HTML file (it's not needed in the repo)</li>
+    </ol>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <script>
+    const TEAL   = '#0D9488';
+    const INDIGO = '#6366F1';
+
+    function download(canvas, filename) {
+      const a = document.createElement('a');
+      a.download = filename;
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+    }
+
+    function makeCard(title, subtitle, canvasFn, filename, previewSize) {
+      const container = document.createElement('div');
+      container.className = 'asset';
+
+      const h3 = document.createElement('h3');
+      h3.textContent = title;
+
+      const sub = document.createElement('p');
+      sub.textContent = subtitle;
+
+      // Full-res canvas (hidden)
+      const fullCanvas = document.createElement('canvas');
+      canvasFn(fullCanvas);
+
+      // Preview canvas (scaled down for display)
+      const preview = document.createElement('canvas');
+      preview.width = previewSize;
+      preview.height = Math.round(previewSize * fullCanvas.height / fullCanvas.width);
+      const pctx = preview.getContext('2d');
+      pctx.drawImage(fullCanvas, 0, 0, preview.width, preview.height);
+
+      const btn = document.createElement('button');
+      btn.textContent = `Download ${filename}`;
+      btn.onclick = () => download(fullCanvas, filename);
+
+      container.append(h3, sub, preview, btn);
+      return container;
+    }
+
+    // ── Icon (1024x1024) ──────────────────────────────────────────
+    function drawIcon(canvas) {
+      canvas.width = 1024;
+      canvas.height = 1024;
+      const ctx = canvas.getContext('2d');
+
+      // Background
+      ctx.fillStyle = TEAL;
+      ctx.fillRect(0, 0, 1024, 1024);
+
+      // Subtle inner glow
+      const glow = ctx.createRadialGradient(512, 480, 0, 512, 480, 560);
+      glow.addColorStop(0, 'rgba(255,255,255,0.12)');
+      glow.addColorStop(1, 'rgba(0,0,0,0.1)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, 1024, 1024);
+
+      // "CP" text
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '900 520px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('CP', 512, 532);
+    }
+
+    // ── Adaptive icon (1024x1024, foreground only — no bg needed) ─
+    function drawAdaptiveIcon(canvas) {
+      canvas.width = 1024;
+      canvas.height = 1024;
+      const ctx = canvas.getContext('2d');
+
+      // Transparent background (adaptive icon foreground layer)
+      ctx.clearRect(0, 0, 1024, 1024);
+
+      // Teal circle for safe zone
+      ctx.fillStyle = TEAL;
+      ctx.beginPath();
+      ctx.arc(512, 512, 460, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Inner glow
+      const glow = ctx.createRadialGradient(512, 480, 0, 512, 480, 420);
+      glow.addColorStop(0, 'rgba(255,255,255,0.12)');
+      glow.addColorStop(1, 'rgba(0,0,0,0.05)');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(512, 512, 460, 0, Math.PI * 2);
+      ctx.fill();
+
+      // "CP" text
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '900 440px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('CP', 512, 532);
+    }
+
+    // ── Splash screen (1284x2778 — iPhone 15 Pro Max, covers all) ─
+    function drawSplash(canvas) {
+      canvas.width = 1284;
+      canvas.height = 2778;
+      const ctx = canvas.getContext('2d');
+
+      // Teal to indigo gradient background
+      const grad = ctx.createLinearGradient(0, 0, 642, 2778);
+      grad.addColorStop(0,   TEAL);
+      grad.addColorStop(0.6, '#0F766E');
+      grad.addColorStop(1,   INDIGO);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 1284, 2778);
+
+      // Soft radial overlay
+      const radial = ctx.createRadialGradient(642, 1200, 0, 642, 1200, 900);
+      radial.addColorStop(0, 'rgba(255,255,255,0.08)');
+      radial.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = radial;
+      ctx.fillRect(0, 0, 1284, 2778);
+
+      // ClearPass wordmark
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '900 200px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('ClearPass', 642, 1300);
+
+      // Tagline
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.font = '500 72px system-ui, -apple-system, sans-serif';
+      ctx.fillText('Pass first time', 642, 1460);
+    }
+
+    // ── Favicon (64x64) ──────────────────────────────────────────
+    function drawFavicon(canvas) {
+      canvas.width = 64;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = TEAL;
+      ctx.beginPath();
+      ctx.roundRect(0, 0, 64, 64, 14);
+      ctx.fill();
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '900 32px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('CP', 32, 34);
+    }
+
+    const grid = document.getElementById('grid');
+    grid.appendChild(makeCard('App Icon', '1024 × 1024 px', drawIcon, 'icon.png', 200));
+    grid.appendChild(makeCard('Adaptive Icon', '1024 × 1024 px (foreground)', drawAdaptiveIcon, 'adaptive-icon.png', 200));
+    grid.appendChild(makeCard('Splash Screen', '1284 × 2778 px', drawSplash, 'splash-icon.png', 120));
+    grid.appendChild(makeCard('Favicon', '64 × 64 px', drawFavicon, 'favicon.png', 64));
+  </script>
+</body>
+</html>
