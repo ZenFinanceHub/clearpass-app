@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -14,10 +14,27 @@ import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
 
 export default function ResetPasswordScreen() {
-  const [password, setPassword]   = useState('');
-  const [confirm, setConfirm]     = useState('');
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState('');
+  const [password, setPassword]     = useState('');
+  const [confirm, setConfirm]       = useState('');
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState('');
+  const [sessionReady, setSessionReady] = useState(false);
+
+  useEffect(() => {
+    // Check for an existing session first (web: token already parsed from URL fragment)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) setSessionReady(true);
+    });
+
+    // Listen for the PASSWORD_RECOVERY event fired when the reset link is opened
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if ((event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') && session) {
+        setSessionReady(true);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   async function handleUpdate() {
     setError('');
@@ -40,6 +57,15 @@ export default function ResetPasswordScreen() {
     }
   }
 
+  if (!sessionReady) {
+    return (
+      <View style={styles.waitContainer}>
+        <ActivityIndicator size="large" color="#0D9488" />
+        <Text style={styles.waitText}>{'Verifying your reset link...'}</Text>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -52,7 +78,7 @@ export default function ResetPasswordScreen() {
             value={password}
             onChangeText={(t) => { setPassword(t); setError(''); }}
             placeholder="New password"
-            placeholderTextColor="#374151"
+            placeholderTextColor="#9CA3AF"
             secureTextEntry
             autoComplete="new-password"
           />
@@ -61,7 +87,7 @@ export default function ResetPasswordScreen() {
             value={confirm}
             onChangeText={(t) => { setConfirm(t); setError(''); }}
             placeholder="Confirm new password"
-            placeholderTextColor="#374151"
+            placeholderTextColor="#9CA3AF"
             secureTextEntry
             autoComplete="new-password"
           />
@@ -83,25 +109,28 @@ export default function ResetPasswordScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0A0F' },
+  container: { flex: 1, backgroundColor: '#F7F8FA' },
   inner: { flexGrow: 1, paddingHorizontal: 28, paddingTop: 80, paddingBottom: 48 },
 
-  title: { fontSize: 30, fontWeight: '900', color: '#F1F0FF', marginBottom: 8 },
+  waitContainer: { flex: 1, backgroundColor: '#F7F8FA', alignItems: 'center', justifyContent: 'center', gap: 16 },
+  waitText: { fontSize: 15, color: '#6B7280', fontWeight: '500' },
+
+  title: { fontSize: 30, fontWeight: '900', color: '#111827', marginBottom: 8 },
   subtitle: { fontSize: 14, color: '#6B7280', lineHeight: 20, marginBottom: 32 },
 
   form: { gap: 12 },
   input: {
-    backgroundColor: '#13131A',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#1F1F2E',
+    borderColor: '#E5E7EB',
     borderRadius: 12,
     padding: 14,
-    color: '#F1F0FF',
+    color: '#111827',
     fontSize: 15,
   },
-  errorText: { fontSize: 13, color: '#F87171', marginTop: 2 },
+  errorText: { fontSize: 13, color: '#EF4444', marginTop: 2 },
   updateBtn: {
-    backgroundColor: '#7B5EA7',
+    backgroundColor: '#0D9488',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',

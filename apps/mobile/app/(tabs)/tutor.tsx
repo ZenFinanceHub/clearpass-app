@@ -19,10 +19,9 @@ import { useTheme } from '@/src/theme';
 const FREE_LIMIT = 5;
 
 function getProxyUrl(): string {
-  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-    return 'https://clearpass-app-production.up.railway.app';
-  }
-  return 'http://localhost:3001';
+  return __DEV__
+    ? 'http://localhost:3001'
+    : 'https://clearpass-app-production.up.railway.app';
 }
 
 const SYSTEM_PROMPT =
