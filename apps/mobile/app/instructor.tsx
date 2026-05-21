@@ -3,12 +3,14 @@ import {
   Alert,
   Modal,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/src/supabase';
 import { createFreshUserProgress } from '@/src/storage';
@@ -39,6 +41,14 @@ type LearnerEntry = {
   rel: Relationship;
   progress: UserProgress | null;
   username: string | null;
+};
+
+type EarningEntry = {
+  id: string;
+  learner_id: string;
+  amount: number;
+  status: string;
+  created_at: string;
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -115,6 +125,16 @@ function generateCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
+
+function generateReferralCode(username: string): string {
+  const prefix = username.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 3).padEnd(3, 'X');
+  const digits = Math.floor(100 + Math.random() * 900).toString();
+  return prefix + digits;
+}
+
+const PROXY_URL = __DEV__
+  ? 'http://localhost:3001'
+  : 'https://clearpass-app-production.up.railway.app';
 
 // ─── LearnerCard ──────────────────────────────────────────────────────────────
 
@@ -516,16 +536,146 @@ function EmailSummaryModal({
   );
 }
 
+// ─── ReferralSection ─────────────────────────────────────────────────────────
+
+function ReferralSection({
+  referralCode,
+  onCopy,
+  onShare,
+}: {
+  referralCode: string;
+  onCopy: () => void;
+  onShare: () => void;
+}) {
+  const theme = useTheme();
+  const link = `getclearpass.co.uk?ref=${referralCode}`;
+  return (
+    <View style={[styles.refSection, { backgroundColor: theme.cardColor }]}>
+      <Text style={[styles.refSectionTitle, { color: theme.textColor }]}>{'Share Your Referral Link'}</Text>
+      <Text style={[styles.refSectionSub, { color: theme.subTextColor }]}>
+        {'Earn £2.50 for every pupil who subscribes to Premium'}
+      </Text>
+      <View style={styles.refLinkBox}>
+        <Text style={styles.refLinkText}>{link}</Text>
+      </View>
+      <View style={styles.refBtnRow}>
+        <TouchableOpacity style={styles.refCopyBtn} onPress={onCopy} activeOpacity={0.85}>
+          <Text style={styles.refCopyBtnText}>{'Copy Link'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.refShareBtn} onPress={onShare} activeOpacity={0.85}>
+          <Text style={styles.refShareBtnText}>{'Share'}</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+// ─── EarningsSection ──────────────────────────────────────────────────────────
+
+function EarningsSection({
+  earnings,
+  instructorName,
+  instructorEmail,
+}: {
+  earnings: EarningEntry[];
+  instructorName: string;
+  instructorEmail: string;
+}) {
+  const theme = useTheme();
+  const [requesting, setRequesting] = useState(false);
+
+  const total   = earnings.reduce((s, e) => s + Number(e.amount), 0);
+  const pending = earnings.filter(e => e.status === 'pending').reduce((s, e) => s + Number(e.amount), 0);
+
+  async function handlePayout() {
+    if (pending < 10) {
+      Alert.alert('Not enough yet', 'Minimum payout is £10 — keep referring to unlock your payout!');
+      return;
+    }
+    setRequesting(true);
+    try {
+      const res = await fetch(`${PROXY_URL}/api/payout-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instructorName, instructorEmail, amount: pending, conversions: earnings.length }),
+      });
+      if (res.ok) {
+        Alert.alert('Request sent!', `Your payout request for £${pending.toFixed(2)} has been submitted.`);
+      } else {
+        Alert.alert('Error', 'Could not send payout request. Please try again.');
+      }
+    } catch {
+      Alert.alert('Error', 'Could not send payout request. Please try again.');
+    } finally {
+      setRequesting(false);
+    }
+  }
+
+  return (
+    <View style={[styles.earningsSection, { backgroundColor: theme.cardColor }]}>
+      <Text style={[styles.earningsSectionTitle, { color: theme.textColor }]}>{'Your Earnings'}</Text>
+      <View style={styles.earningsStatsRow}>
+        <View style={styles.earningStat}>
+          <Text style={[styles.earningStatVal, { color: theme.textColor }]}>{`£${total.toFixed(2)}`}</Text>
+          <Text style={[styles.earningStatLabel, { color: theme.subTextColor }]}>{'Total earned'}</Text>
+        </View>
+        <View style={styles.earningStat}>
+          <Text style={[styles.earningStatVal, { color: theme.textColor }]}>{`£${pending.toFixed(2)}`}</Text>
+          <Text style={[styles.earningStatLabel, { color: theme.subTextColor }]}>{'Pending payout'}</Text>
+        </View>
+        <View style={styles.earningStat}>
+          <Text style={[styles.earningStatVal, { color: theme.textColor }]}>{String(earnings.length)}</Text>
+          <Text style={[styles.earningStatLabel, { color: theme.subTextColor }]}>{'Converted'}</Text>
+        </View>
+      </View>
+      {earnings.length === 0 ? (
+        <Text style={[styles.earningsEmptyText, { color: theme.subTextColor }]}>
+          {'No conversions yet — share your referral link to start earning'}
+        </Text>
+      ) : (
+        earnings.map((e, idx) => (
+          <View key={e.id} style={styles.earningRow}>
+            <View>
+              <Text style={[styles.earningDate, { color: theme.textColor }]}>{formatDate(e.created_at)}</Text>
+              <Text style={[styles.earningDesc, { color: theme.subTextColor }]}>{`Learner ${idx + 1} converted to Premium`}</Text>
+            </View>
+            <Text style={styles.earningAmount}>{'£2.50'}</Text>
+          </View>
+        ))
+      )}
+      <TouchableOpacity
+        style={[styles.payoutBtn, requesting && styles.btnDisabled]}
+        onPress={() => void handlePayout()}
+        activeOpacity={0.85}
+        disabled={requesting}
+      >
+        <Text style={styles.payoutBtnText}>{requesting ? 'Sending...' : 'Request Payout'}</Text>
+      </TouchableOpacity>
+      {pending < 10 && (
+        <Text style={[styles.payoutMinText, { color: theme.subTextColor }]}>{'Minimum payout is £10'}</Text>
+      )}
+    </View>
+  );
+}
+
 // ─── InstructorDashboard ──────────────────────────────────────────────────────
 
 function InstructorDashboard({
   learners,
   instructorCode,
+  referralCode,
+  earnings,
+  instructorEmail,
+  instructorUsername,
   loading,
   onRefresh,
 }: {
   learners: LearnerEntry[];
   instructorCode: string | null;
+  referralCode: string | null;
+  earnings: EarningEntry[];
+  instructorEmail: string;
+  instructorUsername: string;
   loading: boolean;
   onRefresh: () => void;
 }) {
@@ -534,6 +684,19 @@ function InstructorDashboard({
   const [showAdd, setShowAdd]                 = useState(false);
   const [showSummary, setShowSummary]         = useState(false);
   const [summaryTarget, setSummaryTarget]     = useState<LearnerEntry | null>(null);
+
+  async function handleCopyLink() {
+    if (!referralCode) return;
+    await Clipboard.setStringAsync(`https://getclearpass.co.uk?ref=${referralCode}`);
+    Alert.alert('Copied!', 'Referral link copied to clipboard.');
+  }
+
+  async function handleShareLink() {
+    if (!referralCode) return;
+    await Share.share({
+      message: `I recommend ClearPass for your theory test revision. Use my link for the UK's smartest theory test app: getclearpass.co.uk?ref=${referralCode}`,
+    });
+  }
 
   if (loading) {
     return (
@@ -584,6 +747,18 @@ function InstructorDashboard({
         >
           <Text style={styles.addLearnerBtnText}>{'Add Learner by Email'}</Text>
         </TouchableOpacity>
+        {referralCode && (
+          <ReferralSection
+            referralCode={referralCode}
+            onCopy={() => void handleCopyLink()}
+            onShare={() => void handleShareLink()}
+          />
+        )}
+        <EarningsSection
+          earnings={earnings}
+          instructorName={instructorUsername}
+          instructorEmail={instructorEmail}
+        />
         <AddLearnerModal
           visible={showAdd}
           instructorCode={instructorCode}
@@ -614,6 +789,19 @@ function InstructorDashboard({
       {learners.map(entry => (
         <LearnerCard key={entry.rel.id} data={entry} onPress={() => setSelectedLearner(entry)} />
       ))}
+
+      {referralCode && (
+        <ReferralSection
+          referralCode={referralCode}
+          onCopy={() => void handleCopyLink()}
+          onShare={() => void handleShareLink()}
+        />
+      )}
+      <EarningsSection
+        earnings={earnings}
+        instructorName={instructorUsername}
+        instructorEmail={instructorEmail}
+      />
 
       <AddLearnerModal
         visible={showAdd}
@@ -834,10 +1022,14 @@ export default function InstructorScreen() {
   const mode    = params.mode === 'learner' ? 'learner' : 'instructor';
   const theme   = useTheme();
 
-  const [learners,       setLearners]       = useState<LearnerEntry[]>([]);
-  const [instructors,    setInstructors]    = useState<Relationship[]>([]);
-  const [instructorCode, setInstructorCode] = useState<string | null>(null);
-  const [loading,        setLoading]        = useState(true);
+  const [learners,           setLearners]           = useState<LearnerEntry[]>([]);
+  const [instructors,        setInstructors]        = useState<Relationship[]>([]);
+  const [instructorCode,     setInstructorCode]     = useState<string | null>(null);
+  const [referralCode,       setReferralCode]       = useState<string | null>(null);
+  const [earnings,           setEarnings]           = useState<EarningEntry[]>([]);
+  const [instructorEmail,    setInstructorEmail]    = useState('');
+  const [instructorUsername, setInstructorUsername] = useState('');
+  const [loading,            setLoading]            = useState(true);
 
   useEffect(() => { void loadData(); }, [mode]);
 
@@ -847,10 +1039,12 @@ export default function InstructorScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
 
-      // Ensure instructor code exists
+      setInstructorEmail(user.email ?? '');
+
+      // Ensure instructor code and referral code exist
       const { data: profile } = await supabase
         .from('profiles')
-        .select('id, instructor_code')
+        .select('id, instructor_code, referral_code, username')
         .eq('id', user.id)
         .single();
 
@@ -860,6 +1054,24 @@ export default function InstructorScreen() {
         await supabase.from('profiles').upsert({ id: user.id, instructor_code: code });
       }
       setInstructorCode(code);
+
+      const uname = (profile as { username?: string } | null)?.username ?? '';
+      setInstructorUsername(uname);
+
+      let refCode = (profile as { referral_code?: string } | null)?.referral_code ?? null;
+      if (!refCode && uname) {
+        refCode = generateReferralCode(uname);
+        await supabase.from('profiles').update({ referral_code: refCode }).eq('id', user.id);
+      }
+      setReferralCode(refCode);
+
+      // Load earnings
+      const { data: earningsData } = await supabase
+        .from('instructor_earnings')
+        .select('*')
+        .eq('instructor_id', user.id)
+        .order('created_at', { ascending: false });
+      setEarnings((earningsData as EarningEntry[] | null) ?? []);
 
       if (mode === 'instructor') {
         const { data: rels } = await supabase
@@ -921,6 +1133,10 @@ export default function InstructorScreen() {
         <InstructorDashboard
           learners={learners}
           instructorCode={instructorCode}
+          referralCode={referralCode}
+          earnings={earnings}
+          instructorEmail={instructorEmail}
+          instructorUsername={instructorUsername}
           loading={loading}
           onRefresh={() => void loadData()}
         />
@@ -1265,6 +1481,77 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   modalCancelText: { fontSize: 15, fontWeight: '600', color: '#6B7280' },
+
+  // Referral section
+  refSection: {
+    borderRadius: 16,
+    padding: 18,
+    gap: 12,
+    borderWidth: 0.5,
+    borderColor: '#E5E7EB',
+  },
+  refSectionTitle: { fontSize: 16, fontWeight: '800' },
+  refSectionSub:   { fontSize: 13 },
+  refLinkBox: {
+    backgroundColor: '#F0FDFA',
+    borderRadius: 10,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#0D9488',
+  },
+  refLinkText: { fontSize: 14, fontWeight: '700', color: '#0D9488' },
+  refBtnRow: { flexDirection: 'row', gap: 10 },
+  refCopyBtn: {
+    flex: 1,
+    backgroundColor: '#0D9488',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  refCopyBtnText:  { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  refShareBtn: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#0D9488',
+  },
+  refShareBtnText: { color: '#0D9488', fontSize: 14, fontWeight: '700' },
+
+  // Earnings section
+  earningsSection: {
+    borderRadius: 16,
+    padding: 18,
+    gap: 14,
+    borderWidth: 0.5,
+    borderColor: '#E5E7EB',
+  },
+  earningsSectionTitle: { fontSize: 16, fontWeight: '800' },
+  earningsStatsRow:     { flexDirection: 'row', justifyContent: 'space-between' },
+  earningStat:          { alignItems: 'center', flex: 1 },
+  earningStatVal:       { fontSize: 20, fontWeight: '900' },
+  earningStatLabel:     { fontSize: 11, fontWeight: '600', textAlign: 'center', marginTop: 2 },
+  earningsEmptyText:    { fontSize: 13, textAlign: 'center', lineHeight: 20 },
+  earningRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#F3F4F6',
+  },
+  earningDate:   { fontSize: 13, fontWeight: '600' },
+  earningDesc:   { fontSize: 12, marginTop: 2 },
+  earningAmount: { fontSize: 15, fontWeight: '800', color: '#0D9488' },
+  payoutBtn: {
+    backgroundColor: '#0D9488',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  payoutBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  payoutMinText: { fontSize: 12, textAlign: 'center' },
 
   // Email summary modal
   summaryMeta: { fontSize: 13 },

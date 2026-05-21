@@ -78,6 +78,35 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
         .eq('id', userId);
 
       console.log('Supabase update result:', error ? error.message : 'success');
+
+      // Track referral commission
+      try {
+        const { data: userProfile } = await supabaseAdmin
+          .from('profiles')
+          .select('referred_by')
+          .eq('id', userId)
+          .single();
+
+        if (userProfile?.referred_by) {
+          const { data: instructor } = await supabaseAdmin
+            .from('profiles')
+            .select('id')
+            .eq('referral_code', userProfile.referred_by)
+            .single();
+
+          if (instructor) {
+            await supabaseAdmin.from('instructor_earnings').insert({
+              instructor_id: instructor.id,
+              learner_id: userId,
+              amount: 2.50,
+              status: 'pending',
+            });
+            console.log('[webhook] Referral commission recorded for instructor:', instructor.id);
+          }
+        }
+      } catch (e) {
+        console.error('[webhook] Referral commission error:', e);
+      }
     } catch (e) {
       console.error('[webhook] Supabase error:', e);
     }
@@ -135,6 +164,41 @@ app.post('/api/create-checkout-session', async (req, res) => {
   } catch (err) {
     console.error('Stripe checkout error:', err);
     res.status(500).json({ error: 'Failed to create checkout session', detail: String(err) });
+  }
+});
+
+app.post('/api/payout-request', async (req, res) => {
+  const { instructorName, instructorEmail, amount, conversions } = req.body;
+  if (!instructorName || !instructorEmail || amount === undefined) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+  try {
+    const nodemailer = require('nodemailer');
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: false,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    });
+    await transporter.sendMail({
+      from: process.env.SMTP_USER,
+      to: 'craig@zen-finance.co.uk',
+      subject: `Payout Request - ${instructorName}`,
+      text: [
+        'ClearPass Instructor Payout Request',
+        '',
+        `Instructor: ${instructorName}`,
+        `Email: ${instructorEmail}`,
+        `Amount owed: £${Number(amount).toFixed(2)}`,
+        `Conversions: ${conversions}`,
+        '',
+        'Please process this payout at your earliest convenience.',
+      ].join('\n'),
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[payout-request] error:', err);
+    res.status(500).json({ error: 'Failed to send payout request email' });
   }
 });
 

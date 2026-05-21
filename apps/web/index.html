@@ -378,6 +378,19 @@
     }
     .inst-stat-text { font-size: 14px; color: var(--mid); font-weight: 600; }
 
+    /* ── INSTRUCTOR EARNINGS ──────────────────────────────────── */
+    .inst-earn-box { background: #F0FDF9; border: 1px solid #99F6E4; border-radius: 14px; padding: 18px 20px; margin: 4px 0 8px; display: flex; flex-direction: column; gap: 6px; }
+    .inst-earn-headline { font-size: 15px; color: var(--dark); line-height: 1.5; }
+    .inst-earn-sub { font-size: 14px; color: var(--soft); line-height: 1.5; }
+    .inst-calc { background: var(--bg); border-radius: 12px; padding: 16px 18px; margin-top: 8px; border: 1px solid var(--border); }
+    .inst-calc-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+    .inst-calc-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .inst-calc-input { width: 72px; padding: 8px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 16px; font-weight: 700; font-family: inherit; color: var(--dark); background: #fff; text-align: center; }
+    .inst-calc-input:focus { outline: none; border-color: var(--teal); }
+    .inst-calc-unit { font-size: 14px; color: var(--soft); font-weight: 500; }
+    .inst-calc-result { font-size: 15px; color: var(--mid); }
+    .inst-calc-result strong { color: var(--teal); font-size: 20px; }
+
     /* ── FINAL CTA ─────────────────────────────────────────────── */
     .final-cta {
       background: linear-gradient(135deg, var(--teal) 0%, #0F766E 30%, var(--indigo) 100%);
@@ -771,9 +784,14 @@
           <li><span class="inst-icon">&#128221;</span> Mock test history and scores</li>
           <li><span class="inst-icon">&#128293;</span> Daily streak tracking</li>
         </ul>
+        <div class="inst-earn-box">
+          <p class="inst-earn-headline"><strong style="color:var(--teal);">Earn &#163;2.50 for every pupil who subscribes</strong></p>
+          <p class="inst-earn-sub">Share your unique referral link with pupils</p>
+          <p class="inst-earn-sub">Instructors with 20 active pupils earn <strong>&#163;50+ per month</strong></p>
+        </div>
         <div class="instructors-actions">
           <a href="#" class="instructors-link">Learn more about the Instructor Dashboard &#8594;</a>
-          <a href="#" class="btn btn-primary" style="align-self:flex-start;">Get free instructor access &#8594;</a>
+          <a href="https://clearpass-app.vercel.app" class="btn btn-primary" style="align-self:flex-start;">Get free instructor access &#8594;</a>
         </div>
       </div>
       <div class="instructors-card fade-up delay-2">
@@ -794,6 +812,14 @@
         <div class="inst-stat">
           <div class="inst-stat-icon">&#127942;</div>
           <div class="inst-stat-text">2 pupils ready to book their test</div>
+        </div>
+        <div class="inst-calc">
+          <p class="inst-calc-label">Earnings calculator</p>
+          <div class="inst-calc-row">
+            <input id="calc-pupils" class="inst-calc-input" type="number" min="1" max="100" value="10" oninput="updateCalc()">
+            <span class="inst-calc-unit">pupils</span>
+          </div>
+          <p class="inst-calc-result">= <strong id="calc-result">&#163;25.00</strong> / month</p>
         </div>
       </div>
     </div>
@@ -912,6 +938,13 @@
         document.getElementById('stories-count-lbl').textContent = 'of learners are revising with ClearPass right now';
       }
     })();
+
+    // Earnings calculator
+    function updateCalc() {
+      const pupils = Math.max(0, parseInt(document.getElementById('calc-pupils').value) || 0);
+      const monthly = (pupils * 2.50).toFixed(2);
+      document.getElementById('calc-result').textContent = '£' + monthly;
+    }
 
     // Close mobile menu on outside click
     document.addEventListener('click', (e) => {

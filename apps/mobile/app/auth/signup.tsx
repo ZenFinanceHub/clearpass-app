@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -11,17 +11,26 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/src/supabase';
 
 const PENDING_USERNAME_KEY = '@clearpass/pending_username';
+const REFERRAL_CODE_KEY    = 'referral_code';
 
 export default function SignUpScreen() {
+  const params = useLocalSearchParams<{ ref?: string }>();
+
   const [username, setUsername] = useState('');
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
+
+  useEffect(() => {
+    if (params.ref) {
+      void AsyncStorage.setItem(REFERRAL_CODE_KEY, params.ref);
+    }
+  }, [params.ref]);
 
   async function handleSignUp() {
     setError('');
@@ -42,7 +51,10 @@ export default function SignUpScreen() {
 
       if (userId) {
         const name = username.trim();
-        const { error: profileError } = await supabase.from('profiles').insert({ id: userId, username: name });
+        const referralCode = await AsyncStorage.getItem(REFERRAL_CODE_KEY);
+        const profileData: Record<string, string> = { id: userId, username: name };
+        if (referralCode) profileData.referred_by = referralCode;
+        const { error: profileError } = await supabase.from('profiles').insert(profileData);
         if (profileError && profileError.code !== '23505') {
           await AsyncStorage.setItem(PENDING_USERNAME_KEY, name);
         }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
 
@@ -27,8 +28,15 @@ function getProxyUrl(): string {
 }
 
 export default function PaywallScreen() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState('');
+  const [loading,    setLoading]    = useState(false);
+  const [error,      setError]      = useState('');
+  const [referredBy, setReferredBy] = useState<string | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem('referral_code').then(code => {
+      if (code) setReferredBy(code);
+    }).catch(() => {});
+  }, []);
 
   async function handleSubscribe() {
     setError('');
@@ -67,6 +75,13 @@ export default function PaywallScreen() {
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      {/* Referral badge */}
+      {referredBy && (
+        <View style={styles.referralBadge}>
+          <Text style={styles.referralBadgeText}>{'Recommended by your driving instructor'}</Text>
+        </View>
+      )}
+
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerEmoji}>{'🏆'}</Text>
@@ -173,4 +188,16 @@ const styles = StyleSheet.create({
 
   skipBtn: { paddingVertical: 8 },
   skipText: { fontSize: 14, color: '#9CA3AF' },
+
+  referralBadge: {
+    backgroundColor: '#F0FDFA',
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#0D9488',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+  },
+  referralBadgeText: { fontSize: 13, fontWeight: '700', color: '#0D9488' },
 });

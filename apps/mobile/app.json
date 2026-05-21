@@ -39,6 +39,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "dac8f561-57cc-4b8b-b13d-7302561d71ee"
+      }
+    },
+    "owner": "craigyp1982"
   }
 }
