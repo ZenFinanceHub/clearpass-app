@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -29,6 +29,7 @@ export default function RootLayout() {
 
   const navigated = useRef(false);
   const [showCachingToast, setShowCachingToast] = useState(false);
+  const segments = useSegments();
 
   useEffect(() => {
     if (navigated.current) return;
@@ -38,7 +39,13 @@ export default function RootLayout() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         navigated.current = true;
-        router.replace('/(tabs)/home');
+        // Only redirect to home from unauthenticated entry points.
+        // If the user is already on an authenticated route (e.g. direct web
+        // navigation to /roadsigns), let it through without overriding.
+        const entryPoints = new Set(['', 'index', 'onboarding', 'landing']);
+        if (entryPoints.has(segments[0] ?? '')) {
+          router.replace('/(tabs)/home');
+        }
         return;
       }
       const seen = await AsyncStorage.getItem(ONBOARDING_KEY);
@@ -51,6 +58,7 @@ export default function RootLayout() {
     }
 
     void bootstrap();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Background: cache static content on first launch or after a week
@@ -91,6 +99,12 @@ export default function RootLayout() {
           <Stack.Screen name="auth/forgot-password" options={{ headerShown: false }} />
           <Stack.Screen name="auth/reset-password" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="roadsigns" options={{ headerShown: false }} />
+          <Stack.Screen name="highwaycode" options={{ headerShown: false }} />
+          <Stack.Screen name="hazard" options={{ headerShown: false }} />
+          <Stack.Screen name="progress" options={{ headerShown: false }} />
+          <Stack.Screen name="leaderboard" options={{ headerShown: false }} />
+          <Stack.Screen name="aitutor" options={{ headerShown: false }} />
           <Stack.Screen name="studyplan" options={{ headerShown: false }} />
           <Stack.Screen name="testday" options={{ headerShown: false }} />
           <Stack.Screen name="instructor" options={{ headerShown: false }} />

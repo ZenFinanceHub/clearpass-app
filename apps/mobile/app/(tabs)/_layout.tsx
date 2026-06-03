@@ -17,12 +17,12 @@ const TABS: TabConfig[] = [
   { name: 'home',        title: 'Home',     headerTitle: 'ClearPass', icon: 'home-outline',              iconFocused: 'home' },
   { name: 'practice',   title: 'Practice',                            icon: 'book-outline',              iconFocused: 'book' },
   { name: 'mock',        title: 'Mock Test',                           icon: 'clipboard-outline',         iconFocused: 'clipboard' },
-  { name: 'tutor',       title: 'AI Tutor',                            icon: 'chatbubble-ellipses-outline', iconFocused: 'chatbubble-ellipses' },
+  { name: 'learn',       title: 'Study',                               icon: 'library-outline',           iconFocused: 'library' },
   { name: 'settings',   title: 'Settings',                            icon: 'settings-outline',          iconFocused: 'settings' },
   // Hidden from tab bar — still navigable via router.push()
+  { name: 'tutor',        title: 'AI Tutor',    icon: 'chatbubble-ellipses-outline', iconFocused: 'chatbubble-ellipses', hidden: true },
   { name: 'highwaycode',  title: 'HC Rules',    icon: 'document-text-outline', iconFocused: 'document-text',  hidden: true },
   { name: 'roadsigns',    title: 'Signs',       icon: 'stop-circle-outline',   iconFocused: 'stop-circle',    hidden: true },
-  { name: 'learn',        title: 'Learn',       icon: 'library-outline',       iconFocused: 'library',        hidden: true },
   { name: 'hazard',       title: 'Hazard',      icon: 'warning-outline',       iconFocused: 'warning',        hidden: true },
   { name: 'progress',     title: 'Progress',    icon: 'stats-chart-outline',   iconFocused: 'stats-chart',    hidden: true },
   { name: 'leaderboard',  title: 'Leaderboard', icon: 'trophy-outline',        iconFocused: 'trophy',         hidden: true },
@@ -68,7 +68,7 @@ export default function TabLayout() {
           options={{
             title,
             ...(headerTitle ? { headerTitle } : {}),
-            ...(hidden ? { href: null } : {}),
+            ...(hidden ? { tabBarButton: () => null } : {}),
             tabBarIcon: ({ color, size, focused }) => (
               <Ionicons name={focused ? iconFocused : icon} size={size} color={color} />
             ),

@@ -930,7 +930,7 @@ export default function HomeScreen() {
             <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>Highway Code</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionCard} onPress={() => router.push('/(tabs)/hazard')} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.actionCard} onPress={() => router.push('/hazard')} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'⚠'}</Text>
             <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Hazard</Text>
             <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>14 clips</Text>
