@@ -11,15 +11,27 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "ios": {
+        "distribution": "internal"
       }
     },
     "production": {
       "android": {
         "buildType": "app-bundle"
+      },
+      "ios": {
+        "distribution": "store"
       }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleId": "FILL_IN_APPLE_ID_EMAIL",
+        "ascAppId": "FILL_IN_ASC_APP_ID",
+        "appleTeamId": "FILL_IN_TEAM_ID"
+      }
+    }
   }
 }
