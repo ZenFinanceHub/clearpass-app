@@ -37,6 +37,7 @@ import {
 import {
   FREE_QUESTION_LIMIT,
   incrementFreeQuestionsAnswered,
+  resetFreeQuestionsAnswered,
   isPremium,
 } from '@/src/subscription';
 import { explainAnswer } from '@clearpass/ai';
@@ -188,6 +189,7 @@ export default function PracticeScreen() {
     const base = loaded ?? createFreshUserProgress();
     const isNewDay = base.lastStudied.split('T')[0] !== today;
     const progress = isNewDay ? { ...base, dailyQuestionsAnswered: 0 } : base;
+    if (isNewDay) await resetFreeQuestionsAnswered();
     userProgressRef.current = progress;
 
     if (!(progress.isPro ?? false) && (progress.dailyQuestionsAnswered ?? 0) >= 10) {
