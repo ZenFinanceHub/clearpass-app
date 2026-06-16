@@ -1,13 +1,27 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
-import { loadUserProgress, saveUserProgress } from '@/src/storage';
+import { loadProgressFromCloud, loadUserProgress, saveUserProgress } from '@/src/storage';
 
 export default function PaymentSuccessScreen() {
   useEffect(() => {
-    loadUserProgress().then((p) => {
-      if (p) void saveUserProgress(p);
-    });
+    void (async () => {
+      // Optimistically flag isPro locally so the UI unlocks immediately.
+      const local = await loadUserProgress();
+      if (local && !local.isPro) {
+        await saveUserProgress({ ...local, isPro: true });
+      }
+
+      // After 4 seconds, pull from Supabase — the webhook should have updated by then.
+      setTimeout(() => {
+        void (async () => {
+          try {
+            const cloud = await loadProgressFromCloud();
+            if (cloud) await saveUserProgress(cloud);
+          } catch {}
+        })();
+      }, 4000);
+    })();
   }, []);
 
   return (

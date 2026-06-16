@@ -94,6 +94,17 @@ async function patchStatus(partial: Partial<CacheStatus>): Promise<void> {
   );
 }
 
+export async function getLastCacheTime(): Promise<string | null> {
+  const status = await getCacheStatus();
+  return status.lastCached || null;
+}
+
+export async function shouldRefreshCache(): Promise<boolean> {
+  const last = await getLastCacheTime();
+  if (!last) return true;
+  return Date.now() - new Date(last).getTime() > 24 * 60 * 60 * 1000;
+}
+
 // ─── Offline sync ─────────────────────────────────────────────────────────────
 
 export async function syncWhenOnline(): Promise<void> {

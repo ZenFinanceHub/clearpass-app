@@ -27,13 +27,23 @@ import { recordAnswer, selectPracticeQuestions, getDueQuestions } from '@/src/sp
 import { allQuestions, getQuestionById } from '@clearpass/content';
 import {
   createFreshUserProgress,
+  getBookmarkedQuestions,
+  getWeakSpotQuestions,
+  isBookmarked as checkIsBookmarked,
   loadQuestionStates,
   loadUserProgress,
+  recordWeakSpotResult,
+  clearWeakSpot,
   saveQuestionStates,
+  saveSessionHistory,
   saveUserProgress,
   syncProgressToCloud,
+  toggleBookmark,
   updateStudyStreak,
 } from '@/src/storage';
+import { submitSessionStats, getComparativeStats, type ComparativeStats } from '@/src/analytics';
+import { playCorrect, playWrong } from '@/src/sounds';
+import { cancelStreakProtectionNotification } from '@/src/notifications';
 import {
   FREE_QUESTION_LIMIT,
   incrementFreeQuestionsAnswered,
@@ -49,6 +59,7 @@ import { OfflineBanner } from '@/src/components/OfflineBanner';
 import * as Speech from 'expo-speech';
 import { useAccessibility } from '@/src/AccessibilityContext';
 import { useTheme } from '@/src/theme';
+import { getProxyUrl } from '@/src/proxyUrl';
 
 const SESSION_SIZE = 10;
 const BATTLE_PER_TOPIC = 5;
@@ -74,7 +85,7 @@ const TOPIC_EMOJI: Record<TopicCategory, string> = {
   [TopicCategory.VehicleLoading]: '📦',
 };
 
-type Phase = 'start' | 'loading' | 'quiz' | 'results' | 'battle' | 'battleResults' | 'dailyLimit';
+type Phase = 'start' | 'loading' | 'quiz' | 'results' | 'battle' | 'battleResults' | 'dailyLimit' | 'speedRound' | 'speedRoundResults' | 'weakSpot' | 'weakSpotResults';
 
 type SessionResult = {
   question: Question;
@@ -117,6 +128,25 @@ export default function PracticeScreen() {
   const [battleXpEarned, setBattleXpEarned] = useState(0);
   const [battleNewAchievements, setBattleNewAchievements] = useState<Achievement[]>([]);
 
+  const [speedDisplay, setSpeedDisplay] = useState<{ timeLeft: number; idx: number; selected: number | null }>({ timeLeft: 90, idx: 0, selected: null });
+  const [speedFinalResults, setSpeedFinalResults] = useState<SessionResult[]>([]);
+  const [speedXpGained, setSpeedXpGained] = useState(0);
+  const [speedTimeUsed, setSpeedTimeUsed] = useState(0);
+
+  const [weakSpotCount, setWeakSpotCount] = useState(0);
+  const [weakDisplay, setWeakDisplay] = useState<{
+    selected: number | null;
+    consecutive: number;
+    clearedCount: number;
+    totalCount: number;
+    showCleared: boolean;
+  }>({ selected: null, consecutive: 0, clearedCount: 0, totalCount: 0, showCleared: false });
+  const [weakFinalCleared, setWeakFinalCleared] = useState<Question[]>([]);
+  const [weakXpGained, setWeakXpGained] = useState(0);
+
+  const [sessionTopic, setSessionTopic] = useState<string | null>(null);
+  const [sessionPct, setSessionPct] = useState(0);
+
   const [sessionStreakDays, setSessionStreakDays] = useState(0);
   const [sessionTutorNudge, setSessionTutorNudge] = useState<{ topic: string; topicKey: string } | null>(null);
   const [celebQueue, setCelebQueue] = useState<CelebrationEvent[]>([]);
@@ -124,6 +154,9 @@ export default function PracticeScreen() {
 
   const { settings } = useAccessibility();
   const theme = useTheme();
+
+  const [currentBookmarked, setCurrentBookmarked] = useState(false);
+  const sessionStartTimeRef = useRef<number>(0);
 
   const questionStatesRef = useRef<Record<string, QuestionState>>({});
   const userProgressRef = useRef<UserProgress | null>(null);
@@ -137,6 +170,26 @@ export default function PracticeScreen() {
   const battleScoreRef = useRef(0);
   const battleAnsweredRef = useRef(false);
   const battleCancelledRef = useRef(false);
+
+  const speedQsRef = useRef<Question[]>([]);
+  const speedIdxRef = useRef(0);
+  const speedResultsRef2 = useRef<SessionResult[]>([]);
+  const speedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const speedTimeRef = useRef(90);
+  const speedAnsweredRef2 = useRef(false);
+  const speedEndedRef = useRef(false);
+  const speedStartMsRef = useRef(0);
+
+  type WeakItem = { question: Question; consecutive: number };
+  const weakQueueRef   = useRef<WeakItem[]>([]);
+  const weakOrigRef    = useRef<Question[]>([]);
+  const weakClearedRef = useRef<Set<string>>(new Set());
+  const weakAnsweredRef3 = useRef(false);
+  const weakAttemptsRef  = useRef(0);
+
+  useEffect(() => {
+    void getWeakSpotQuestions().then(ids => setWeakSpotCount(ids.length));
+  }, [phase === 'start' ? phase : null]);
 
   // Auto-speak question + options when a new question loads (no answer yet)
   useEffect(() => {
@@ -159,14 +212,26 @@ export default function PracticeScreen() {
     Speech.speak(`${verdict} ${q.explanation}`, { language: 'en-GB' });
   }, [phase, currentIndex, questions, settings.textToSpeech, selectedIndex]);
 
+  // Sync bookmark state when question changes
+  useEffect(() => {
+    if (phase !== 'quiz' || questions.length === 0) return;
+    const q = questions[currentIndex];
+    if (!q) return;
+    void checkIsBookmarked(q.id).then(setCurrentBookmarked);
+  }, [phase, currentIndex, questions]);
+
+  async function handleToggleBookmark() {
+    const q = questions[currentIndex];
+    if (!q) return;
+    const nowBookmarked = await toggleBookmark(q.id);
+    setCurrentBookmarked(nowBookmarked);
+  }
+
   async function handleProUpgrade() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push('/auth'); return; }
     try {
-      const proxyUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-        ? 'https://clearpass-app-production.up.railway.app'
-        : 'http://localhost:3001';
-      const res = await fetch(`${proxyUrl}/api/create-checkout-session`, {
+      const res = await fetch(`${getProxyUrl()}/api/create-checkout-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id }),
@@ -179,6 +244,7 @@ export default function PracticeScreen() {
   }
 
   async function startSession() {
+    void cancelStreakProtectionNotification();
     const [statesMap, loaded] = await Promise.all([
       loadQuestionStates(),
       loadUserProgress(),
@@ -198,7 +264,16 @@ export default function PracticeScreen() {
     }
 
     let sessionQuestions: Question[];
-    if (mode === 'review') {
+    if (mode === 'bookmarked') {
+      const bookmarkedIds = await getBookmarkedQuestions();
+      const all = bookmarkedIds
+        .map((id) => getQuestionById(id))
+        .filter((q): q is Question => q !== undefined);
+      sessionQuestions = all.sort(() => Math.random() - 0.5).slice(0, SESSION_SIZE);
+      if (sessionQuestions.length === 0) {
+        sessionQuestions = await selectPracticeQuestions(allQuestions, SESSION_SIZE);
+      }
+    } else if (mode === 'review') {
       const dueIds = await getDueQuestions(allQuestions.map(q => q.id), SESSION_SIZE);
       sessionQuestions = dueIds
         .map(id => getQuestionById(id))
@@ -209,6 +284,7 @@ export default function PracticeScreen() {
     } else {
       sessionQuestions = await selectPracticeQuestions(allQuestions, SESSION_SIZE);
     }
+    sessionStartTimeRef.current = Date.now();
 
     resultsRef.current = [];
     setSessionResults([]);
@@ -333,6 +409,190 @@ export default function PracticeScreen() {
     setPhase('battleResults');
   }
 
+  function startSpeedRound() {
+    void cancelStreakProtectionNotification();
+    const qs = allQuestions.sort(() => Math.random() - 0.5).slice(0, 10);
+    speedQsRef.current = qs;
+    speedIdxRef.current = 0;
+    speedResultsRef2.current = [];
+    speedAnsweredRef2.current = false;
+    speedEndedRef.current = false;
+    speedTimeRef.current = 90;
+    speedStartMsRef.current = Date.now();
+
+    setSpeedDisplay({ timeLeft: 90, idx: 0, selected: null });
+    setSpeedFinalResults([]);
+    setSpeedXpGained(0);
+    setSpeedTimeUsed(0);
+    setPhase('speedRound');
+
+    speedTimerRef.current = setInterval(() => {
+      speedTimeRef.current -= 1;
+      if (speedTimeRef.current <= 0) {
+        if (speedTimerRef.current) { clearInterval(speedTimerRef.current); speedTimerRef.current = null; }
+        void finaliseSpeedRound(true);
+      } else {
+        setSpeedDisplay(prev => ({ ...prev, timeLeft: speedTimeRef.current }));
+      }
+    }, 1000);
+  }
+
+  function handleSpeedAnswer(optionIndex: number) {
+    if (speedAnsweredRef2.current || speedEndedRef.current) return;
+    speedAnsweredRef2.current = true;
+
+    const q = speedQsRef.current[speedIdxRef.current];
+    if (!q) return;
+    const correct = optionIndex === q.correctIndex;
+
+    if (settings.soundEffects) {
+      if (correct) playCorrect(); else playWrong();
+    }
+
+    speedResultsRef2.current = [...speedResultsRef2.current, { question: q, selectedIndex: optionIndex, correct }];
+    setSpeedDisplay(prev => ({ ...prev, selected: optionIndex }));
+
+    setTimeout(() => {
+      if (speedEndedRef.current) return;
+      const nextIdx = speedIdxRef.current + 1;
+      if (nextIdx >= speedQsRef.current.length) {
+        if (speedTimerRef.current) { clearInterval(speedTimerRef.current); speedTimerRef.current = null; }
+        void finaliseSpeedRound(false);
+      } else {
+        speedIdxRef.current = nextIdx;
+        speedAnsweredRef2.current = false;
+        setSpeedDisplay(prev => ({ ...prev, idx: nextIdx, selected: null }));
+      }
+    }, 400);
+  }
+
+  async function finaliseSpeedRound(timerExpired: boolean) {
+    if (speedEndedRef.current) return;
+    speedEndedRef.current = true;
+
+    const results = speedResultsRef2.current;
+    const timeUsed = Math.round((Date.now() - speedStartMsRef.current) / 1000);
+    const correctCount = results.filter(r => r.correct).length;
+    const allCompleted = results.length === 10;
+
+    let xp = correctCount * 5;
+    if (allCompleted && timeUsed < 60) xp += 10;
+
+    const progress = (await loadUserProgress()) ?? createFreshUserProgress();
+    const updated = awardXp(progress, xp);
+    await saveUserProgress(updated);
+    await syncProgressToCloud(updated);
+
+    void saveSessionHistory({
+      date: new Date().toISOString(),
+      score: correctCount,
+      total: results.length,
+      topic: 'Speed Round',
+      durationSeconds: timeUsed,
+    });
+
+    setSpeedFinalResults(results);
+    setSpeedXpGained(xp);
+    setSpeedTimeUsed(timeUsed);
+    setPhase('speedRoundResults');
+  }
+
+  async function startWeakSpotDrill() {
+    void cancelStreakProtectionNotification();
+    const ids = await getWeakSpotQuestions();
+    const qs = ids.map(id => getQuestionById(id)).filter((q): q is Question => q !== undefined);
+    if (qs.length < 5) { setPhase('start'); return; }
+
+    const queue: WeakItem[] = qs.sort(() => Math.random() - 0.5).map(q => ({ question: q, consecutive: 0 }));
+    weakQueueRef.current = queue;
+    weakOrigRef.current = qs;
+    weakClearedRef.current = new Set();
+    weakAnsweredRef3.current = false;
+    weakAttemptsRef.current = 0;
+
+    setWeakDisplay({ selected: null, consecutive: 0, clearedCount: 0, totalCount: qs.length, showCleared: false });
+    setWeakFinalCleared([]);
+    setWeakXpGained(0);
+    setPhase('weakSpot');
+  }
+
+  function handleWeakAnswer(optionIndex: number) {
+    if (weakAnsweredRef3.current) return;
+    weakAnsweredRef3.current = true;
+    weakAttemptsRef.current += 1;
+
+    const item = weakQueueRef.current[0];
+    if (!item) return;
+    const correct = optionIndex === item.question.correctIndex;
+
+    if (settings.soundEffects) { if (correct) playCorrect(); else playWrong(); }
+    void recordWeakSpotResult(item.question.id, correct);
+
+    const newConsecutive = correct ? item.consecutive + 1 : 0;
+    setWeakDisplay(prev => ({ ...prev, selected: optionIndex, consecutive: newConsecutive }));
+
+    const maxAttempts = weakOrigRef.current.length * 6;
+    if (weakAttemptsRef.current >= maxAttempts) {
+      setTimeout(() => { void finaliseWeakSpot(); }, 400);
+      return;
+    }
+
+    setTimeout(() => {
+      weakQueueRef.current.shift();
+
+      if (correct && newConsecutive >= 3) {
+        weakClearedRef.current.add(item.question.id);
+        void clearWeakSpot(item.question.id);
+        setWeakDisplay(prev => ({
+          ...prev,
+          showCleared: true,
+          clearedCount: weakClearedRef.current.size,
+        }));
+        setTimeout(() => {
+          if (weakQueueRef.current.length === 0) {
+            void finaliseWeakSpot();
+          } else {
+            const next = weakQueueRef.current[0]!;
+            weakAnsweredRef3.current = false;
+            setWeakDisplay(prev => ({
+              ...prev,
+              selected: null,
+              showCleared: false,
+              consecutive: next.consecutive,
+              clearedCount: weakClearedRef.current.size,
+            }));
+          }
+        }, 700);
+      } else {
+        weakQueueRef.current.push({ ...item, consecutive: newConsecutive });
+        if (weakQueueRef.current.length === 0) {
+          void finaliseWeakSpot();
+        } else {
+          const next = weakQueueRef.current[0]!;
+          weakAnsweredRef3.current = false;
+          setWeakDisplay(prev => ({
+            ...prev,
+            selected: null,
+            showCleared: false,
+            consecutive: next.consecutive,
+          }));
+        }
+      }
+    }, 400);
+  }
+
+  async function finaliseWeakSpot() {
+    const clearedQuestions = weakOrigRef.current.filter(q => weakClearedRef.current.has(q.id));
+    const xp = clearedQuestions.length * 15;
+    const progress = (await loadUserProgress()) ?? createFreshUserProgress();
+    const updated = awardXp(progress, xp);
+    await saveUserProgress(updated);
+    await syncProgressToCloud(updated);
+    setWeakFinalCleared(clearedQuestions);
+    setWeakXpGained(xp);
+    setPhase('weakSpotResults');
+  }
+
   async function handlePlayAgain() {
     setPhase('start');
   }
@@ -360,6 +620,12 @@ export default function PracticeScreen() {
 
       const result: SessionResult = { question, selectedIndex: optionIndex, correct };
       resultsRef.current = [...resultsRef.current, result];
+
+      if (settings.soundEffects) {
+        if (correct) playCorrect(); else playWrong();
+      }
+
+      void recordWeakSpotResult(question.id, correct);
 
       setSelectedIndex(optionIndex);
       setSessionResults(resultsRef.current);
@@ -517,9 +783,19 @@ export default function PracticeScreen() {
     await saveUserProgress(final);
     await syncProgressToCloud(final);
 
+    const durationSeconds = Math.round((Date.now() - sessionStartTimeRef.current) / 1000);
+    const topicKeys = Object.keys(topicData) as TopicCategory[];
+    const sessionTopic = topicKeys.length === 1 ? (TOPIC_LABELS[topicKeys[0]] ?? 'Mixed') : 'Mixed';
+    void saveSessionHistory({ date: new Date().toISOString(), score: correctCount, total: results.length, topic: sessionTopic, durationSeconds });
+
     setXpGained(xpThisSession);
     setNewAchievements(unlocked);
     setSessionStreakDays(final.studyStreakDays ?? 0);
+
+    const singleTopic = topicKeys.length === 1 ? (TOPIC_LABELS[topicKeys[0]] ?? null) : null;
+    setSessionTopic(singleTopic);
+    setSessionPct(results.length > 0 ? Math.round((correctCount / results.length) * 100) : 0);
+    if (singleTopic) void submitSessionStats(singleTopic, correctCount, results.length);
 
     const strugglingEntry = Object.entries(topicData).find(
       ([, data]) => data.total >= 2 && data.correct / data.total < 0.5,
@@ -559,7 +835,13 @@ export default function PracticeScreen() {
     return (
       <>
         <OfflineBanner />
-        <StartView onStart={() => { setPhase('loading'); void startSession(); }} onBattle={() => void startBattle()} />
+        <StartView
+          onStart={() => { setPhase('loading'); void startSession(); }}
+          onBattle={() => void startBattle()}
+          onSpeedRound={() => startSpeedRound()}
+          onWeakSpot={() => void startWeakSpotDrill()}
+          weakSpotCount={weakSpotCount}
+        />
       </>
     );
   }
@@ -593,6 +875,8 @@ export default function PracticeScreen() {
           newAchievements={newAchievements}
           tutorNudge={sessionTutorNudge}
           streakDays={sessionStreakDays}
+          sessionTopic={sessionTopic}
+          userAccuracyPct={sessionPct}
         />
         {activeCelebration && (
           <CelebrationModal event={activeCelebration} onDismiss={handleCelebDismiss} />
@@ -615,6 +899,67 @@ export default function PracticeScreen() {
         weakTopics={battleWeakTopicsRef.current}
         onAnswer={handleBattleAnswer}
         onExit={exitBattle}
+      />
+    );
+  }
+
+  if (phase === 'speedRound') {
+    const sq = speedQsRef.current[speedDisplay.idx];
+    if (!sq) return null;
+    return (
+      <SpeedRoundView
+        question={sq}
+        questionIndex={speedDisplay.idx}
+        totalQuestions={speedQsRef.current.length}
+        selected={speedDisplay.selected}
+        timeLeft={speedDisplay.timeLeft}
+        onAnswer={handleSpeedAnswer}
+        onExit={() => {
+          speedEndedRef.current = true;
+          if (speedTimerRef.current) { clearInterval(speedTimerRef.current); speedTimerRef.current = null; }
+          setPhase('start');
+        }}
+      />
+    );
+  }
+
+  if (phase === 'speedRoundResults') {
+    return (
+      <SpeedRoundResultsView
+        results={speedFinalResults}
+        timeUsed={speedTimeUsed}
+        xpGained={speedXpGained}
+        onPlayAgain={() => startSpeedRound()}
+        onBack={handlePlayAgain}
+      />
+    );
+  }
+
+  if (phase === 'weakSpot') {
+    const wq = weakQueueRef.current[0];
+    if (!wq) return null;
+    return (
+      <WeakSpotView
+        question={wq.question}
+        selected={weakDisplay.selected}
+        consecutive={weakDisplay.consecutive}
+        clearedCount={weakDisplay.clearedCount}
+        totalCount={weakDisplay.totalCount}
+        showCleared={weakDisplay.showCleared}
+        onAnswer={handleWeakAnswer}
+        onExit={() => void finaliseWeakSpot()}
+      />
+    );
+  }
+
+  if (phase === 'weakSpotResults') {
+    return (
+      <WeakSpotResultsView
+        clearedQuestions={weakFinalCleared}
+        totalQuestions={weakOrigRef.current.length}
+        xpGained={weakXpGained}
+        onPlayAgain={() => void startWeakSpotDrill()}
+        onBack={handlePlayAgain}
       />
     );
   }
@@ -656,6 +1001,9 @@ export default function PracticeScreen() {
         <View style={styles.topicBadge}>
           <Text style={styles.topicBadgeEmoji}>{topicEmoji}</Text>
         </View>
+        <TouchableOpacity style={styles.bookmarkBtn} onPress={() => void handleToggleBookmark()} activeOpacity={0.7}>
+          <Text style={styles.bookmarkBtnText}>{currentBookmarked ? '🔖' : '🏷️'}</Text>
+        </TouchableOpacity>
         {settings.textToSpeech && (
           <TouchableOpacity
             style={styles.speakerBtn}
@@ -858,11 +1206,18 @@ function LinkedExplanation({ text, bodyStyle }: { text: string; bodyStyle: objec
 function StartView({
   onStart,
   onBattle,
+  onSpeedRound,
+  onWeakSpot,
+  weakSpotCount,
 }: {
   onStart: () => void;
   onBattle: () => void;
+  onSpeedRound: () => void;
+  onWeakSpot: () => void;
+  weakSpotCount: number;
 }) {
   const theme = useTheme();
+  const hasWeakSpots = weakSpotCount >= 5;
   return (
     <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.startContent}>
       <Text style={[styles.startTitle, { color: theme.textColor }]}>Practice Mode</Text>
@@ -876,8 +1231,39 @@ function StartView({
 
       <Text style={styles.startOr}>{'- or -'}</Text>
 
+      <TouchableOpacity
+        style={[styles.weakSpotButton, !hasWeakSpots && styles.weakSpotButtonDisabled]}
+        onPress={hasWeakSpots ? onWeakSpot : undefined}
+        activeOpacity={hasWeakSpots ? 0.85 : 1}
+      >
+        <Text style={[styles.weakSpotButtonTitle, !hasWeakSpots && { color: '#9CA3AF' }]}>
+          {'[!] Weak Spots'}
+          {hasWeakSpots ? ` (${weakSpotCount})` : ''}
+        </Text>
+        <Text style={styles.weakSpotButtonSubtitle}>
+          {hasWeakSpots
+            ? 'Questions you keep getting wrong - drill until cleared'
+            : 'Keep practising -- we will identify your weak spots after a few sessions'}
+        </Text>
+        {hasWeakSpots && (
+          <Text style={styles.weakSpotButtonSub}>{'15 XP per weak spot cleared'}</Text>
+        )}
+      </TouchableOpacity>
+
+      <Text style={styles.startOr}>{'- or -'}</Text>
+
+      <TouchableOpacity style={styles.speedButton} onPress={onSpeedRound} activeOpacity={0.85}>
+        <Text style={styles.speedButtonTitle}>{'[>] Speed Round'}</Text>
+        <Text style={styles.speedButtonSubtitle}>10 questions, 90-second countdown</Text>
+        <Text style={styles.speedButtonSub}>
+          {'5 XP per correct answer + 10 XP bonus if you finish all 10 under 60s'}
+        </Text>
+      </TouchableOpacity>
+
+      <Text style={styles.startOr}>{'- or -'}</Text>
+
       <TouchableOpacity style={styles.battleButton} onPress={onBattle} activeOpacity={0.85}>
-        <Text style={styles.battleButtonTitle}>{'⚔'}{' Battle Mode'}</Text>
+        <Text style={styles.battleButtonTitle}>{'[x] Battle Mode'}</Text>
         <Text style={styles.battleButtonSubtitle}>Race through your 3 weakest topics</Text>
         <Text style={styles.battleButtonSub}>
           Build combos for bonus points - how high can you score?
@@ -917,6 +1303,8 @@ function ResultsScreen({
   newAchievements,
   tutorNudge,
   streakDays,
+  sessionTopic,
+  userAccuracyPct,
 }: {
   results: SessionResult[];
   onPlayAgain: () => void;
@@ -924,9 +1312,12 @@ function ResultsScreen({
   newAchievements: Achievement[];
   tutorNudge?: { topic: string; topicKey: string } | null;
   streakDays?: number;
+  sessionTopic?: string | null;
+  userAccuracyPct?: number;
 }) {
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const [showShareCard, setShowShareCard] = useState(false);
+  const [comparative, setComparative] = useState<ComparativeStats | null>(null);
   const correct = results.filter((r) => r.correct).length;
   const total = results.length;
   const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
@@ -934,6 +1325,11 @@ function ResultsScreen({
   const theme = useTheme();
   const topicSet = new Set(results.map((r) => r.question.topicCategory));
   const dominantTopic = topicSet.size === 1 ? TOPIC_LABELS[Array.from(topicSet)[0] as TopicCategory] : undefined;
+
+  useEffect(() => {
+    if (!sessionTopic || userAccuracyPct === undefined) return;
+    void getComparativeStats(sessionTopic, userAccuracyPct).then(setComparative);
+  }, [sessionTopic, userAccuracyPct]);
 
   return (
   <>
@@ -960,6 +1356,19 @@ function ResultsScreen({
           <Text style={styles.xpNotif}>{'+'}{xpGained}{' XP earned!'}</Text>
         )}
       </View>
+
+      {comparative && comparative.totalAnswers >= 50 && sessionTopic && (
+        <View style={styles.comparativeCard}>
+          <Text style={styles.comparativeText}>
+            {'You scored better than '}
+            <Text style={styles.comparativePct}>{comparative.betterThan}{'%'}</Text>
+            {' of ClearPass users on '}{sessionTopic}
+          </Text>
+          <Text style={styles.comparativeAvg}>
+            {'Platform average: '}{comparative.platformAvgPct}{'%'}
+          </Text>
+        </View>
+      )}
 
       <Text style={[styles.motivationalMsg, { color: cfg.accentColor }]}>
         {motivationalMessage(correct, total)}
@@ -1252,6 +1661,347 @@ function BattleResultsScreen({
         activeOpacity={0.85}
       >
         <Text style={styles.outlineButtonText}>Back to Home</Text>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+}
+
+function WeakSpotView({
+  question,
+  selected,
+  consecutive,
+  clearedCount,
+  totalCount,
+  showCleared,
+  onAnswer,
+  onExit,
+}: {
+  question: Question;
+  selected: number | null;
+  consecutive: number;
+  clearedCount: number;
+  totalCount: number;
+  showCleared: boolean;
+  onAnswer: (idx: number) => void;
+  onExit: () => void;
+}) {
+  const theme = useTheme();
+  const clearPct = totalCount > 0 ? (clearedCount / totalCount) * 100 : 0;
+  const isAnswered = selected !== null;
+
+  return (
+    <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
+      <View style={styles.weakHeader}>
+        <TouchableOpacity style={styles.battleExitButton} onPress={onExit} activeOpacity={0.85}>
+          <Text style={styles.battleExitText}>Finish</Text>
+        </TouchableOpacity>
+        <View style={styles.weakHeaderCenter}>
+          <Text style={styles.weakModeLabel}>{'WEAK SPOTS'}</Text>
+          <Text style={[styles.weakProgress, { color: theme.subTextColor }]}>
+            {clearedCount}{' / '}{totalCount}{' cleared'}
+          </Text>
+        </View>
+        <View style={[styles.weakConsecBadge, consecutive > 0 ? { borderColor: '#0D9488' } : { borderColor: '#E5E7EB' }]}>
+          <Text style={[styles.weakConsecValue, { color: consecutive > 0 ? '#0D9488' : '#9CA3AF' }]}>
+            {consecutive}{'/3'}
+          </Text>
+          <Text style={[styles.weakConsecLabel, { color: theme.subTextColor }]}>streak</Text>
+        </View>
+      </View>
+
+      <View style={styles.weakBarTrack}>
+        <View style={[styles.weakBarFill, { width: `${clearPct}%` as any }]} />
+      </View>
+
+      <View style={[styles.questionCard, { backgroundColor: theme.cardColor }]}>
+        <Text style={[styles.questionText, { fontSize: theme.fontSize(17), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(26), color: theme.textColor }]}>
+          {question.questionText}
+        </Text>
+      </View>
+
+      {showCleared && (
+        <View style={styles.weakClearedBanner}>
+          <Text style={styles.weakClearedText}>{'[v] Cleared!'}</Text>
+        </View>
+      )}
+
+      {!showCleared && (
+        <View style={styles.optionList}>
+          {question.options.map((option, idx) => {
+            const isCorrect = idx === question.correctIndex;
+            const isSelected = idx === selected;
+            let cardStyle = styles.optionDefault;
+            let badgeStyle = styles.badgeDefault;
+            let textStyle = styles.optionTextDefault;
+            let badgeTextStyle = styles.badgeTextDefault;
+            if (isAnswered) {
+              if (isCorrect) { cardStyle = styles.optionCorrect; badgeStyle = styles.badgeCorrect; textStyle = styles.optionTextCorrect; badgeTextStyle = styles.badgeTextColored; }
+              else if (isSelected) { cardStyle = styles.optionWrong; badgeStyle = styles.badgeWrong; textStyle = styles.optionTextWrong; badgeTextStyle = styles.badgeTextColored; }
+              else { cardStyle = styles.optionDimmed; textStyle = styles.optionTextDimmed; }
+            }
+            return (
+              <TouchableOpacity
+                key={idx}
+                style={[styles.option, cardStyle]}
+                onPress={() => onAnswer(idx)}
+                activeOpacity={isAnswered ? 1 : 0.75}
+                disabled={isAnswered}
+              >
+                <View style={[styles.badge, badgeStyle]}>
+                  <Text style={[styles.badgeText, badgeTextStyle]}>{LABELS[idx]}</Text>
+                </View>
+                <Text style={[styles.optionText, textStyle, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing }]}>{option}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+
+      {isAnswered && !showCleared && (
+        <View style={[styles.explanation, selected === question.correctIndex ? styles.explanationGreen : styles.explanationRed]}>
+          <Text style={[styles.explanationTitle, selected === question.correctIndex ? styles.explanationTitleGreen : styles.explanationTitleRed]}>
+            {selected === question.correctIndex ? `Correct! (${consecutive}/3 in a row)` : 'Incorrect - keep going!'}
+          </Text>
+          <Text style={[styles.explanationBody, selected === question.correctIndex ? styles.explanationBodyGreen : styles.explanationBodyRed]}>
+            {question.explanation}
+          </Text>
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
+function WeakSpotResultsView({
+  clearedQuestions,
+  totalQuestions,
+  xpGained,
+  onPlayAgain,
+  onBack,
+}: {
+  clearedQuestions: Question[];
+  totalQuestions: number;
+  xpGained: number;
+  onPlayAgain: () => void;
+  onBack: () => void;
+}) {
+  const theme = useTheme();
+  const cleared = clearedQuestions.length;
+  const allCleared = cleared === totalQuestions;
+  const bannerColor = allCleared ? '#0D9488' : cleared > 0 ? '#6366F1' : '#F59E0B';
+  const topicSet = new Set(clearedQuestions.map(q => TOPIC_LABELS[q.topicCategory]));
+
+  return (
+    <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
+      <View style={[styles.scoreBanner, { borderColor: bannerColor }]}>
+        <Text style={[styles.weakResultBadgeLabel, { color: bannerColor }]}>{'WEAK SPOTS DRILL'}</Text>
+        <Text style={[styles.resultLabel, { color: bannerColor }]}>
+          {allCleared ? 'ALL CLEARED!' : cleared > 0 ? 'GOOD PROGRESS!' : 'KEEP DRILLING!'}
+        </Text>
+        <Text style={styles.scoreValue}>{cleared}{' / '}{totalQuestions}</Text>
+        <Text style={styles.scorePct}>{'weak spots cleared'}</Text>
+        {xpGained > 0 && (
+          <Text style={styles.xpNotif}>{'+'}{xpGained}{' XP earned!'}</Text>
+        )}
+      </View>
+
+      {topicSet.size > 0 && (
+        <>
+          <Text style={styles.sectionLabel}>Topics Cleared</Text>
+          <View style={styles.weakTopicList}>
+            {Array.from(topicSet).map(topic => (
+              <View key={topic} style={styles.weakTopicChip}>
+                <Text style={styles.weakTopicChipText}>{topic}</Text>
+              </View>
+            ))}
+          </View>
+        </>
+      )}
+
+      <TouchableOpacity style={styles.primaryButton} onPress={onPlayAgain} activeOpacity={0.85}>
+        <Text style={styles.primaryButtonText}>Drill Again</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.outlineButton} onPress={onBack} activeOpacity={0.85}>
+        <Text style={styles.outlineButtonText}>Back to Practice</Text>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+}
+
+function SpeedRoundView({
+  question,
+  questionIndex,
+  totalQuestions,
+  selected,
+  timeLeft,
+  onAnswer,
+  onExit,
+}: {
+  question: Question;
+  questionIndex: number;
+  totalQuestions: number;
+  selected: number | null;
+  timeLeft: number;
+  onAnswer: (idx: number) => void;
+  onExit: () => void;
+}) {
+  const theme = useTheme();
+  const isLow = timeLeft < 20;
+  const timerColor = isLow ? '#EF4444' : '#0D9488';
+
+  return (
+    <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
+      <View style={styles.speedHeader}>
+        <TouchableOpacity style={styles.battleExitButton} onPress={onExit} activeOpacity={0.85}>
+          <Text style={styles.battleExitText}>Exit</Text>
+        </TouchableOpacity>
+        <View style={[styles.speedTimerBox, { borderColor: timerColor }]}>
+          <Text style={[styles.speedTimerValue, { color: timerColor }]}>{timeLeft}</Text>
+          <Text style={[styles.speedTimerLabel, { color: timerColor }]}>{'sec'}</Text>
+        </View>
+        <View style={styles.speedProgressBox}>
+          <Text style={styles.speedProgressText}>
+            {'Q '}{questionIndex + 1}{' / '}{totalQuestions}
+          </Text>
+          <Text style={styles.speedModeLabel}>{'SPEED ROUND'}</Text>
+        </View>
+      </View>
+
+      <View style={[styles.speedTimerBar, { backgroundColor: '#F3F4F6' }]}>
+        <View style={[styles.speedTimerFill, { width: `${(timeLeft / 90) * 100}%` as any, backgroundColor: timerColor }]} />
+      </View>
+
+      <View style={styles.questionCard}>
+        <Text style={[styles.questionText, { fontSize: theme.fontSize(17), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(26), color: theme.textColor }]}>
+          {question.questionText}
+        </Text>
+      </View>
+
+      <View style={styles.optionList}>
+        {question.options.map((option, idx) => {
+          const isCorrect = idx === question.correctIndex;
+          const isSelected = idx === selected;
+          const isAnswered = selected !== null;
+
+          let cardStyle = styles.optionDefault;
+          let badgeStyle = styles.badgeDefault;
+          let textStyle = styles.optionTextDefault;
+          let badgeTextStyle = styles.badgeTextDefault;
+
+          if (isAnswered) {
+            if (isCorrect) {
+              cardStyle = styles.optionCorrect;
+              badgeStyle = styles.badgeCorrect;
+              textStyle = styles.optionTextCorrect;
+              badgeTextStyle = styles.badgeTextColored;
+            } else if (isSelected) {
+              cardStyle = styles.optionWrong;
+              badgeStyle = styles.badgeWrong;
+              textStyle = styles.optionTextWrong;
+              badgeTextStyle = styles.badgeTextColored;
+            } else {
+              cardStyle = styles.optionDimmed;
+              textStyle = styles.optionTextDimmed;
+            }
+          }
+
+          return (
+            <TouchableOpacity
+              key={idx}
+              style={[styles.option, cardStyle]}
+              onPress={() => onAnswer(idx)}
+              activeOpacity={isAnswered ? 1 : 0.75}
+              disabled={isAnswered}
+            >
+              <View style={[styles.badge, badgeStyle]}>
+                <Text style={[styles.badgeText, badgeTextStyle]}>{LABELS[idx]}</Text>
+              </View>
+              <Text style={[styles.optionText, textStyle, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing }]}>{option}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {selected !== null && (
+        <View style={styles.battleAutoAdvance}>
+          <Text style={styles.battleAutoAdvanceText}>Next question...</Text>
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
+function SpeedRoundResultsView({
+  results,
+  timeUsed,
+  xpGained,
+  onPlayAgain,
+  onBack,
+}: {
+  results: SessionResult[];
+  timeUsed: number;
+  xpGained: number;
+  onPlayAgain: () => void;
+  onBack: () => void;
+}) {
+  const theme = useTheme();
+  const correct = results.filter(r => r.correct).length;
+  const total = results.length;
+  const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
+  const cfg = resultConfig(pct);
+  const allCompleted = total === 10;
+  const speedBonus = allCompleted && timeUsed < 60;
+
+  return (
+    <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
+      <View style={[styles.scoreBanner, { borderColor: cfg.borderColor }]}>
+        <Text style={[styles.speedRoundBadgeLabel, { color: '#EF4444' }]}>{'SPEED ROUND'}</Text>
+        <Text style={[styles.resultLabel, { color: cfg.accentColor }]}>{cfg.label}</Text>
+        <Text style={styles.scoreValue}>{correct}{' / '}{total}</Text>
+        <Text style={styles.scorePct}>{pct}{'%'}</Text>
+        <View style={styles.speedStatsRow}>
+          <View style={styles.speedStat}>
+            <Text style={[styles.speedStatValue, { color: theme.textColor }]}>{timeUsed}{'s'}</Text>
+            <Text style={[styles.speedStatLabel, { color: theme.subTextColor }]}>Time used</Text>
+          </View>
+          <View style={styles.speedStat}>
+            <Text style={[styles.speedStatValue, { color: theme.textColor }]}>{total}{' / 10'}</Text>
+            <Text style={[styles.speedStatLabel, { color: theme.subTextColor }]}>Answered</Text>
+          </View>
+        </View>
+        {speedBonus && (
+          <View style={styles.speedBonusTag}>
+            <Text style={styles.speedBonusText}>{'[*] Speed Bonus! +10 XP'}</Text>
+          </View>
+        )}
+        {xpGained > 0 && (
+          <Text style={styles.xpNotif}>{'+'}{xpGained}{' XP earned!'}</Text>
+        )}
+      </View>
+
+      <Text style={styles.sectionLabel}>Question Breakdown</Text>
+      <View style={styles.breakdownList}>
+        {results.map(({ question, correct: isCorrect }, i) => (
+          <View
+            key={question.id}
+            style={[styles.breakdownRow, isCorrect ? styles.breakdownRowCorrect : styles.breakdownRowWrong]}
+          >
+            <View style={[styles.breakdownDot, isCorrect ? styles.dotGreen : styles.dotRed]}>
+              <Text style={styles.dotText}>{isCorrect ? '+' : 'x'}</Text>
+            </View>
+            <Text style={styles.breakdownText} numberOfLines={2}>
+              {i + 1}.{'  '}{question.questionText}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      <TouchableOpacity style={styles.primaryButton} onPress={onPlayAgain} activeOpacity={0.85}>
+        <Text style={styles.primaryButtonText}>Play Again</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.outlineButton} onPress={onBack} activeOpacity={0.85}>
+        <Text style={styles.outlineButtonText}>Back to Practice</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -1666,6 +2416,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   speakerBtnText: { fontSize: 11, fontWeight: '700' as const, color: '#6366F1' },
+  bookmarkBtn: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    padding: 4,
+  },
+  bookmarkBtnText: { fontSize: 20 },
 
   // Daily limit gate
   limitCard: {
@@ -1697,6 +2454,128 @@ const styles = StyleSheet.create({
   limitNote: { fontSize: 13, color: '#6B7280', textAlign: 'center' },
   limitBackBtn: { paddingVertical: 8 },
   limitBackText: { color: '#6B7280', fontSize: 14, fontWeight: '600' },
+
+  // Weak Spot Drill
+  weakSpotButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  weakSpotButtonDisabled: { borderColor: '#E5E7EB', opacity: 0.7 },
+  weakSpotButtonTitle:    { fontSize: 18, fontWeight: '800', color: '#F59E0B', marginBottom: 4 },
+  weakSpotButtonSubtitle: { fontSize: 13, fontWeight: '600', color: '#6B7280', marginBottom: 6 },
+  weakSpotButtonSub:      { fontSize: 12, color: '#6B7280', lineHeight: 18 },
+  weakHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  weakHeaderCenter: { alignItems: 'center', gap: 2 },
+  weakModeLabel: { fontSize: 11, fontWeight: '800', color: '#F59E0B', letterSpacing: 1 },
+  weakProgress:  { fontSize: 13, fontWeight: '600' },
+  weakConsecBadge: {
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    alignItems: 'center',
+    minWidth: 54,
+  },
+  weakConsecValue: { fontSize: 18, fontWeight: '900', lineHeight: 22 },
+  weakConsecLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 0.5 },
+  weakBarTrack: {
+    height: 6,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 3,
+    marginBottom: 14,
+    overflow: 'hidden',
+  },
+  weakBarFill: { height: 6, backgroundColor: '#0D9488', borderRadius: 3 },
+  weakClearedBanner: {
+    backgroundColor: '#F0FDFA',
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#0D9488',
+    marginBottom: 14,
+  },
+  weakClearedText: { fontSize: 22, fontWeight: '900', color: '#0D9488' },
+  weakResultBadgeLabel: { fontSize: 13, fontWeight: '800', letterSpacing: 1, marginBottom: 4 },
+  weakTopicList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
+  weakTopicChip: {
+    backgroundColor: '#F0FDFA',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 0.5,
+    borderColor: '#0D9488',
+  },
+  weakTopicChipText: { fontSize: 13, fontWeight: '600', color: '#0D9488' },
+
+  // Comparative stats
+  comparativeCard: {
+    backgroundColor: '#EEF2FF',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 0.5,
+    borderColor: '#6366F1',
+  },
+  comparativeText: { fontSize: 14, color: '#374151', lineHeight: 20 },
+  comparativePct:  { fontWeight: '800', color: '#6366F1' },
+  comparativeAvg:  { fontSize: 12, color: '#6B7280', marginTop: 4 },
+
+  // Speed Round
+  speedButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#EF4444',
+  },
+  speedButtonTitle: { fontSize: 18, fontWeight: '800', color: '#EF4444', marginBottom: 4 },
+  speedButtonSubtitle: { fontSize: 13, fontWeight: '600', color: '#6B7280', marginBottom: 6 },
+  speedButtonSub: { fontSize: 12, color: '#6B7280', lineHeight: 18 },
+  speedHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  speedTimerBox: {
+    borderRadius: 12,
+    borderWidth: 2,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    alignItems: 'center',
+    minWidth: 70,
+  },
+  speedTimerValue: { fontSize: 32, fontWeight: '900', lineHeight: 36 },
+  speedTimerLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 1 },
+  speedProgressBox: { alignItems: 'flex-end', gap: 2 },
+  speedProgressText: { fontSize: 13, fontWeight: '600', color: '#6B7280' },
+  speedModeLabel: { fontSize: 10, fontWeight: '800', color: '#EF4444', letterSpacing: 1 },
+  speedTimerBar: { height: 6, borderRadius: 3, marginBottom: 14, overflow: 'hidden' },
+  speedTimerFill: { height: 6, borderRadius: 3 },
+  speedRoundBadgeLabel: { fontSize: 13, fontWeight: '800', letterSpacing: 1, marginBottom: 4 },
+  speedStatsRow: { flexDirection: 'row', gap: 24, marginTop: 8, marginBottom: 4 },
+  speedStat: { alignItems: 'center', gap: 2 },
+  speedStatValue: { fontSize: 20, fontWeight: '800' },
+  speedStatLabel: { fontSize: 11, fontWeight: '500' },
+  speedBonusTag: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#FBBF24',
+  },
+  speedBonusText: { fontSize: 13, fontWeight: '700', color: '#D97706' },
 
   ruleLink: { color: '#0D9488', fontWeight: '700', textDecorationLine: 'underline' },
 

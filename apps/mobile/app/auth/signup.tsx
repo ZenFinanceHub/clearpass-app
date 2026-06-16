@@ -20,17 +20,20 @@ const REFERRAL_CODE_KEY    = 'referral_code';
 export default function SignUpScreen() {
   const params = useLocalSearchParams<{ ref?: string }>();
 
-  const [username, setUsername]         = useState('');
-  const [email, setEmail]               = useState('');
-  const [password, setPassword]         = useState('');
-  const [loading, setLoading]           = useState(false);
-  const [error, setError]               = useState('');
+  const [username,        setUsername]        = useState('');
+  const [email,           setEmail]           = useState('');
+  const [password,        setPassword]        = useState('');
+  const [referralCode,    setReferralCode]    = useState(params.ref ?? '');
+  const [loading,         setLoading]         = useState(false);
+  const [error,           setError]           = useState('');
+  const [referralWarn,    setReferralWarn]    = useState('');
   const [awaitingConfirm, setAwaitingConfirm] = useState(false);
-  const [resendLoading, setResendLoading]     = useState(false);
-  const [resendMessage, setResendMessage]     = useState('');
+  const [resendLoading,   setResendLoading]   = useState(false);
+  const [resendMessage,   setResendMessage]   = useState('');
 
   useEffect(() => {
     if (params.ref) {
+      setReferralCode(params.ref);
       void AsyncStorage.setItem(REFERRAL_CODE_KEY, params.ref);
     }
   }, [params.ref]);
@@ -54,12 +57,35 @@ export default function SignUpScreen() {
 
       if (userId) {
         const name = username.trim();
-        const referralCode = await AsyncStorage.getItem(REFERRAL_CODE_KEY);
+        const code = referralCode.trim().toUpperCase() || (await AsyncStorage.getItem(REFERRAL_CODE_KEY)) || null;
         const profileData: Record<string, string> = { id: userId, username: name };
-        if (referralCode) profileData.referred_by = referralCode;
+        if (code) profileData.referred_by = code;
         const { error: profileError } = await supabase.from('profiles').insert(profileData);
         if (profileError && profileError.code !== '23505') {
           await AsyncStorage.setItem(PENDING_USERNAME_KEY, name);
+        }
+
+        if (code) {
+          await AsyncStorage.setItem(REFERRAL_CODE_KEY, code);
+          try {
+            const { data: refProfile } = await supabase
+              .from('profiles')
+              .select('id, instructor_code')
+              .eq('referral_code', code)
+              .maybeSingle();
+
+            if (!refProfile) {
+              setReferralWarn('Code not recognised — continuing without it.');
+            } else if ((refProfile as { instructor_code?: string | null }).instructor_code) {
+              // Code owner is an instructor — create instructor relationship
+              await supabase.from('instructor_relationships').insert({
+                instructor_id: refProfile.id,
+                learner_id: userId,
+                status: 'accepted',
+                invite_code: code,
+              });
+            }
+          } catch {}
         }
       } else {
         await AsyncStorage.setItem(PENDING_USERNAME_KEY, username.trim());
@@ -165,6 +191,17 @@ export default function SignUpScreen() {
             secureTextEntry
             autoComplete="new-password"
           />
+          <TextInput
+            style={[styles.input, styles.inputOptional]}
+            value={referralCode}
+            onChangeText={(t) => { setReferralCode(t.toUpperCase()); setReferralWarn(''); }}
+            placeholder="Instructor or friend's code (optional)"
+            placeholderTextColor="#9CA3AF"
+            autoCapitalize="characters"
+            autoCorrect={false}
+            maxLength={10}
+          />
+          {referralWarn.length > 0 && <Text style={styles.warnText}>{referralWarn}</Text>}
 
           {error.length > 0 && <Text style={styles.errorText}>{error}</Text>}
 
@@ -210,6 +247,8 @@ const styles = StyleSheet.create({
     color: '#111827',
     fontSize: 15,
   },
+  inputOptional: { borderStyle: 'dashed' },
+  warnText:  { fontSize: 12, color: '#F59E0B', marginTop: -4 },
   errorText: { fontSize: 13, color: '#EF4444', marginTop: 2 },
   submitBtn: {
     backgroundColor: '#0D9488',

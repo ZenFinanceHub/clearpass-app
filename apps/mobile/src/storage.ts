@@ -8,35 +8,28 @@ const KEYS = {
   QUESTION_STATES:  '@clearpass/question_states',
   PENDING_USERNAME: '@clearpass/pending_username',
   SYNC_PENDING:     '@clearpass/sync_pending',
+  BOOKMARKS:        '@clearpass/bookmarks',
+  SESSION_HISTORY:  '@clearpass/session_history',
 } as const;
 
 export async function syncPendingUsername(): Promise<void> {
   try {
     const username = await AsyncStorage.getItem(KEYS.PENDING_USERNAME);
-    console.log('[syncPendingUsername] pending username:', username);
     if (!username) return;
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    console.log('[syncPendingUsername] user:', user?.id ?? 'none', userError ?? 'no error');
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const { error } = await supabase
       .from('profiles')
       .upsert({ id: user.id, username });
-    console.log('[syncPendingUsername] upsert result:', error ?? 'ok');
     if (!error || error.code === '23505') {
       await AsyncStorage.removeItem(KEYS.PENDING_USERNAME);
-      console.log('[syncPendingUsername] cleared pending username');
     }
-  } catch (e) {
-    console.log('[syncPendingUsername] caught error:', e);
-  }
+  } catch {}
 }
 
 export async function syncProgressToCloud(progress: UserProgress): Promise<void> {
   try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    console.log('[syncProgressToCloud] user:', user?.id ?? 'none');
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const { error } = await supabase
       .from('user_progress')
@@ -49,10 +42,7 @@ export async function syncProgressToCloud(progress: UserProgress): Promise<void>
         { onConflict: 'id' },
       );
     if (!error) await AsyncStorage.removeItem(KEYS.SYNC_PENDING);
-    console.log('[syncProgressToCloud] result:', error ?? 'ok');
-  } catch (e) {
-    console.log('[syncProgressToCloud] caught error:', e);
-  }
+  } catch {}
 }
 
 export async function loadProgressFromCloud(): Promise<UserProgress | null> {
@@ -141,6 +131,50 @@ export function createFreshUserProgress(): UserProgress {
   };
 }
 
+// ─── Bookmarks ────────────────────────────────────────────────────────────────
+
+export async function getBookmarkedQuestions(): Promise<string[]> {
+  const raw = await AsyncStorage.getItem(KEYS.BOOKMARKS);
+  return raw ? (JSON.parse(raw) as string[]) : [];
+}
+
+export async function toggleBookmark(questionId: string): Promise<boolean> {
+  const current = await getBookmarkedQuestions();
+  const exists = current.includes(questionId);
+  const next = exists ? current.filter((id) => id !== questionId) : [...current, questionId];
+  await AsyncStorage.setItem(KEYS.BOOKMARKS, JSON.stringify(next));
+  return !exists;
+}
+
+export async function isBookmarked(questionId: string): Promise<boolean> {
+  const current = await getBookmarkedQuestions();
+  return current.includes(questionId);
+}
+
+// ─── Session History ──────────────────────────────────────────────────────────
+
+export interface SessionHistoryEntry {
+  date: string;
+  score: number;
+  total: number;
+  topic: string;
+  durationSeconds: number;
+}
+
+export async function saveSessionHistory(entry: SessionHistoryEntry): Promise<void> {
+  const raw = await AsyncStorage.getItem(KEYS.SESSION_HISTORY);
+  const history: SessionHistoryEntry[] = raw ? (JSON.parse(raw) as SessionHistoryEntry[]) : [];
+  const next = [entry, ...history].slice(0, 50);
+  await AsyncStorage.setItem(KEYS.SESSION_HISTORY, JSON.stringify(next));
+}
+
+export async function getSessionHistory(): Promise<SessionHistoryEntry[]> {
+  const raw = await AsyncStorage.getItem(KEYS.SESSION_HISTORY);
+  return raw ? (JSON.parse(raw) as SessionHistoryEntry[]) : [];
+}
+
+// ─── Tutor usage ──────────────────────────────────────────────────────────────
+
 const TUTOR_QUESTIONS_KEY = '@clearpass/tutor_questions_used';
 
 export async function getTutorQuestionsUsed(): Promise<number> {
@@ -155,6 +189,89 @@ export async function incrementTutorQuestionsUsed(): Promise<number> {
   const next = current + 1;
   await AsyncStorage.setItem(TUTOR_QUESTIONS_KEY, String(next));
   return next;
+}
+
+// ─── Onboarding ───────────────────────────────────────────────────────────────
+
+const ONBOARDING_KEY = '@clearpass/hasSeenOnboarding';
+const PENDING_TEST_DATE_KEY = '@clearpass/pending_test_date';
+
+export async function hasCompletedOnboarding(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(ONBOARDING_KEY)) === 'true';
+  } catch { return false; }
+}
+
+export async function setOnboardingComplete(): Promise<void> {
+  await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
+}
+
+export async function savePendingTestDate(iso: string): Promise<void> {
+  await AsyncStorage.setItem(PENDING_TEST_DATE_KEY, iso);
+}
+
+export async function popPendingTestDate(): Promise<string | null> {
+  try {
+    const val = await AsyncStorage.getItem(PENDING_TEST_DATE_KEY);
+    if (val) await AsyncStorage.removeItem(PENDING_TEST_DATE_KEY);
+    return val;
+  } catch { return null; }
+}
+
+// ─── Weak Spot Tracking ───────────────────────────────────────────────────────
+
+const WEAK_SPOTS_KEY = '@clearpass/wrong_counts';
+
+export async function recordWeakSpotResult(questionId: string, correct: boolean): Promise<void> {
+  if (correct) return;
+  try {
+    const raw = await AsyncStorage.getItem(WEAK_SPOTS_KEY);
+    const counts: Record<string, number> = raw ? (JSON.parse(raw) as Record<string, number>) : {};
+    counts[questionId] = (counts[questionId] ?? 0) + 1;
+    await AsyncStorage.setItem(WEAK_SPOTS_KEY, JSON.stringify(counts));
+  } catch {}
+}
+
+export async function getWeakSpotQuestions(): Promise<string[]> {
+  try {
+    const raw = await AsyncStorage.getItem(WEAK_SPOTS_KEY);
+    if (!raw) return [];
+    const counts = JSON.parse(raw) as Record<string, number>;
+    return Object.entries(counts)
+      .filter(([, count]) => count >= 2)
+      .map(([id]) => id);
+  } catch { return []; }
+}
+
+export async function clearWeakSpot(questionId: string): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(WEAK_SPOTS_KEY);
+    if (!raw) return;
+    const counts = JSON.parse(raw) as Record<string, number>;
+    delete counts[questionId];
+    await AsyncStorage.setItem(WEAK_SPOTS_KEY, JSON.stringify(counts));
+  } catch {}
+}
+
+// ─── Topic Accuracy ───────────────────────────────────────────────────────────
+
+export async function getTopicAccuracy(): Promise<Record<string, { correct: number; total: number }>> {
+  const history = await getSessionHistory();
+  const acc: Record<string, { correct: number; total: number }> = {};
+  for (const entry of history) {
+    if (entry.topic === 'Mixed' || entry.topic === 'Speed Round') continue;
+    if (!acc[entry.topic]) acc[entry.topic] = { correct: 0, total: 0 };
+    acc[entry.topic].correct += entry.score;
+    acc[entry.topic].total += entry.total;
+  }
+  return acc;
+}
+
+export async function getMasteredTopics(): Promise<string[]> {
+  const acc = await getTopicAccuracy();
+  return Object.entries(acc)
+    .filter(([, { correct, total }]) => total >= 20 && correct / total >= 0.8)
+    .map(([topic]) => topic);
 }
 
 export function updateStudyStreak(progress: UserProgress): UserProgress {

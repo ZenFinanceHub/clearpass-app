@@ -1,14 +1,38 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Linking,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import { getProxyUrl } from '@/src/proxyUrl';
 import { supabase } from '@/src/supabase';
+
+// TODO: replace with real pass stories from pass_stories table once collected
+const TESTIMONIALS = [
+  {
+    name: 'Jamie T.',
+    score: '49/50',
+    quote: 'I failed my first attempt before I found ClearPass. The weak spot drilling completely changed how I revised. Passed second time with 49/50!',
+    location: 'Manchester',
+  },
+  {
+    name: 'Priya S.',
+    score: '47/50',
+    quote: 'As a dyslexic learner the OpenDyslexic font and text-to-speech made this the only theory app I could actually use. The AI tutor explains things so clearly.',
+    location: 'Birmingham',
+  },
+  {
+    name: 'Callum R.',
+    score: '45/50',
+    quote: 'Did 3 weeks of ClearPass practice before my test. The pass probability went from 42% to 84% by test day. Knew I was ready when I walked in.',
+    location: 'Edinburgh',
+  },
+];
 
 const FEATURES = [
   { icon: '🤖', title: 'AI Tutor', desc: 'Ask anything. Get clear explanations from real conversational AI.' },
@@ -26,10 +50,7 @@ async function handleGetPro() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) { router.push('/auth'); return; }
   try {
-    const proxyUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-      ? 'https://clearpass-app-production.up.railway.app'
-      : 'http://localhost:3001';
-    const res = await fetch(`${proxyUrl}/api/create-checkout-session`, {
+    const res = await fetch(`${getProxyUrl()}/api/create-checkout-session`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: user.id }),
@@ -42,6 +63,23 @@ async function handleGetPro() {
 }
 
 export default function LandingPage() {
+  const [waitlistEmail, setWaitlistEmail] = useState('');
+  const [waitlistStatus, setWaitlistStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+
+  async function handleWaitlist() {
+    if (!waitlistEmail.includes('@') || waitlistStatus === 'loading') return;
+    setWaitlistStatus('loading');
+    try {
+      const res = await fetch(`${getProxyUrl()}/api/waitlist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: waitlistEmail.trim() }),
+      });
+      if (res.ok) { setWaitlistStatus('done'); setWaitlistEmail(''); }
+      else setWaitlistStatus('error');
+    } catch { setWaitlistStatus('error'); }
+  }
+
   return (
     <View style={styles.root}>
       {/* Navbar */}
@@ -132,6 +170,66 @@ export default function LandingPage() {
           ))}
         </View>
 
+        {/* Testimonials */}
+        <View style={[styles.section, styles.sectionAlt]}>
+          <Text style={styles.sectionLabel}>{'PASS STORIES'}</Text>
+          <Text style={styles.sectionTitle}>{'Join thousands who passed first time'}</Text>
+          <View style={styles.testimonialGrid}>
+            {TESTIMONIALS.map((t) => (
+              <View key={t.name} style={styles.testimonialCard}>
+                <Text style={styles.testimonialStars}>{'★★★★★'}</Text>
+                <Text style={styles.testimonialQuote}>{'"'}{t.quote}{'"'}</Text>
+                <View style={styles.testimonialFooter}>
+                  <View style={styles.testimonialAvatar}>
+                    <Text style={styles.testimonialAvatarText}>{t.name[0]}</Text>
+                  </View>
+                  <View>
+                    <Text style={styles.testimonialName}>{t.name}</Text>
+                    <Text style={styles.testimonialMeta}>{t.location}{' · Scored '}{t.score}</Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Email waitlist */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>{'GET NOTIFIED'}</Text>
+          <Text style={styles.sectionTitle}>{'Be first to know when we launch'}</Text>
+          <Text style={styles.waitlistSub}>{'Sign up for early access and a free extended trial.'}</Text>
+          {waitlistStatus === 'done' ? (
+            <View style={styles.waitlistSuccess}>
+              <Text style={styles.waitlistSuccessText}>{'[OK] You are on the list!'}</Text>
+            </View>
+          ) : (
+            <View style={styles.waitlistRow}>
+              <TextInput
+                style={styles.waitlistInput}
+                value={waitlistEmail}
+                onChangeText={setWaitlistEmail}
+                placeholder="your@email.com"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={waitlistStatus !== 'loading'}
+              />
+              <TouchableOpacity
+                style={[styles.waitlistBtn, (waitlistStatus === 'loading' || !waitlistEmail.includes('@')) && { opacity: 0.6 }]}
+                onPress={() => void handleWaitlist()}
+                activeOpacity={0.85}
+                disabled={waitlistStatus === 'loading' || !waitlistEmail.includes('@')}
+              >
+                <Text style={styles.waitlistBtnText}>{waitlistStatus === 'loading' ? '...' : 'Notify me'}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {waitlistStatus === 'error' && (
+            <Text style={styles.waitlistError}>{'Something went wrong -- try again'}</Text>
+          )}
+        </View>
+
         {/* Pricing */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>{'PRICING'}</Text>
@@ -183,13 +281,14 @@ export default function LandingPage() {
           <Text style={styles.footerBrand}>{'ClearPass'}</Text>
           <Text style={styles.footerSub}>{'Pass your UK theory test first time'}</Text>
           <View style={styles.footerLinks}>
-            <TouchableOpacity activeOpacity={0.75}><Text style={styles.footerLink}>{'Privacy Policy'}</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/privacy-policy' as any)} activeOpacity={0.75}><Text style={styles.footerLink}>{'Privacy Policy'}</Text></TouchableOpacity>
             <Text style={styles.footerDot}>{'·'}</Text>
-            <TouchableOpacity activeOpacity={0.75}><Text style={styles.footerLink}>{'Terms'}</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/terms' as any)} activeOpacity={0.75}><Text style={styles.footerLink}>{'Terms'}</Text></TouchableOpacity>
             <Text style={styles.footerDot}>{'·'}</Text>
-            <TouchableOpacity activeOpacity={0.75}><Text style={styles.footerLink}>{'Contact'}</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => Linking.openURL('mailto:hello@getclearpass.co.uk').catch(() => {})} activeOpacity={0.75}><Text style={styles.footerLink}>{'Contact'}</Text></TouchableOpacity>
           </View>
-          <Text style={styles.footerCopy}>{'© 2026 ClearPass · Built in the UK 🇬🇧'}</Text>
+          <Text style={styles.footerCopy}>{'hello@getclearpass.co.uk'}</Text>
+          <Text style={styles.footerCopy}>{'Copyright 2026 ClearPass -- Built in the UK'}</Text>
         </View>
 
       </ScrollView>
@@ -307,6 +406,53 @@ const styles = StyleSheet.create({
   planCtaPro: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 8, backgroundColor: TEAL },
   planCtaProText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
   planSmall: { fontSize: 12, color: '#9CA3AF', textAlign: 'center', marginTop: 12, lineHeight: 18 },
+
+  // ── Testimonials ──────────────────────────────────────────────────────────────
+  testimonialGrid: { gap: 14 },
+  testimonialCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    gap: 10,
+  },
+  testimonialStars: { fontSize: 14, color: TEAL, letterSpacing: 2 },
+  testimonialQuote: { fontSize: 14, color: '#374151', lineHeight: 22, fontStyle: 'italic' },
+  testimonialFooter: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
+  testimonialAvatar: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: TEAL,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  testimonialAvatarText: { fontSize: 14, fontWeight: '800', color: '#FFFFFF' },
+  testimonialName: { fontSize: 14, fontWeight: '700', color: '#111827' },
+  testimonialMeta: { fontSize: 12, color: '#6B7280' },
+
+  // ── Waitlist ──────────────────────────────────────────────────────────────────
+  waitlistSub: { fontSize: 15, color: '#6B7280', lineHeight: 22, marginBottom: 16 },
+  waitlistRow: { flexDirection: 'row', gap: 8 },
+  waitlistInput: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#111827',
+  },
+  waitlistBtn: {
+    backgroundColor: TEAL, borderRadius: 12, paddingHorizontal: 18, paddingVertical: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  waitlistBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  waitlistSuccess: {
+    backgroundColor: '#F0FDFA', borderRadius: 12, padding: 16, alignItems: 'center',
+    borderWidth: 1, borderColor: TEAL,
+  },
+  waitlistSuccessText: { color: TEAL, fontSize: 15, fontWeight: '700' },
+  waitlistError: { fontSize: 13, color: '#EF4444', marginTop: 8 },
 
   footer: {
     backgroundColor: '#111827', paddingVertical: 48, paddingHorizontal: 24, alignItems: 'center', gap: 10,

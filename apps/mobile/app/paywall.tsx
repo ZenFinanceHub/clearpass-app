@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +12,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
+import { getProxyUrl } from '@/src/proxyUrl';
 
 const FEATURES = [
   'Unlimited practice questions',
@@ -20,22 +22,23 @@ const FEATURES = [
   'Progress tracking & streaks',
 ];
 
-function getProxyUrl(): string {
-  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-    return 'https://clearpass-app-production.up.railway.app';
-  }
-  return 'http://localhost:3001';
-}
+
 
 export default function PaywallScreen() {
-  const [loading,    setLoading]    = useState(false);
-  const [error,      setError]      = useState('');
-  const [referredBy, setReferredBy] = useState<string | null>(null);
+  const [loading,      setLoading]      = useState(false);
+  const [error,        setError]        = useState('');
+  const [referredBy,   setReferredBy]   = useState<string | null>(null);
+  const [isTestMode,   setIsTestMode]   = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem('referral_code').then(code => {
       if (code) setReferredBy(code);
     }).catch(() => {});
+
+    fetch(`${getProxyUrl()}/api/config`)
+      .then(r => r.json() as Promise<{ stripeTestMode?: boolean }>)
+      .then(d => { if (d.stripeTestMode) setIsTestMode(true); })
+      .catch(() => {});
   }, []);
 
   async function handleSubscribe() {
@@ -75,6 +78,13 @@ export default function PaywallScreen() {
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      {/* Test mode banner */}
+      {isTestMode && (
+        <View style={styles.testBanner}>
+          <Text style={styles.testBannerText}>{'[!] Test mode -- no real charges'}</Text>
+        </View>
+      )}
+
       {/* Referral badge */}
       {referredBy && (
         <View style={styles.referralBadge}>
@@ -108,20 +118,39 @@ export default function PaywallScreen() {
         <Text style={styles.priceSub}>{"That's less than £2.67/month"}</Text>
       </View>
 
-      {error.length > 0 && <Text style={styles.errorText}>{error}</Text>}
-
-      {/* CTA */}
-      <TouchableOpacity
-        style={[styles.ctaBtn, loading && styles.ctaBtnDisabled]}
-        onPress={() => void handleSubscribe()}
-        disabled={loading}
-        activeOpacity={0.85}
-      >
-        {loading
-          ? <ActivityIndicator color="#FFFFFF" />
-          : <Text style={styles.ctaBtnText}>{'Start Learning Now'}</Text>
-        }
-      </TouchableOpacity>
+      {/* TODO: replace with Google Play IAP once policy decision is made */}
+      {Platform.OS === 'android' ? (
+        <>
+          <View style={styles.androidBanner}>
+            <Text style={styles.androidBannerTitle}>{'[!] Android payments coming soon'}</Text>
+            <Text style={styles.androidBannerBody}>
+              {'Premium is not yet available for direct purchase on Android. You can subscribe via our website.'}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.ctaBtn}
+            onPress={() => void Linking.openURL('https://getclearpass.co.uk')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.ctaBtnText}>{'Visit getclearpass.co.uk'}</Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <>
+          {error.length > 0 && <Text style={styles.errorText}>{error}</Text>}
+          <TouchableOpacity
+            style={[styles.ctaBtn, loading && styles.ctaBtnDisabled]}
+            onPress={() => void handleSubscribe()}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            {loading
+              ? <ActivityIndicator color="#FFFFFF" />
+              : <Text style={styles.ctaBtnText}>{'Start Learning Now'}</Text>
+            }
+          </TouchableOpacity>
+        </>
+      )}
 
       <TouchableOpacity style={styles.skipBtn} onPress={handleMaybeLater} activeOpacity={0.7}>
         <Text style={styles.skipText}>{'Maybe later'}</Text>
@@ -200,4 +229,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   referralBadgeText: { fontSize: 13, fontWeight: '700', color: '#0D9488' },
+
+  testBanner: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#FBBF24',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+  },
+  testBannerText: { fontSize: 13, fontWeight: '700', color: '#D97706' },
+
+  androidBanner: {
+    backgroundColor: '#F0F9FF',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#0891B2',
+    padding: 16,
+    alignSelf: 'stretch',
+    gap: 6,
+  },
+  androidBannerTitle: { fontSize: 14, fontWeight: '800', color: '#0891B2' },
+  androidBannerBody:  { fontSize: 13, color: '#374151', lineHeight: 20 },
 });

@@ -8,6 +8,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,6 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
 import {
   UserProgress,
+  awardXp,
   calculateReadiness,
   generateDailyChallenge,
   getXpLevel,
@@ -22,10 +24,18 @@ import {
 import {
   createFreshUserProgress,
   loadUserProgress,
+  popPendingTestDate,
   saveUserProgress,
   syncPendingUsername,
 } from '@/src/storage';
-import { loadStudyPlan, StudyPlan } from '@/src/studyPlan';
+import { getStudyPlan, loadStudyPlan, type SimpleStudyPlan, type StudyPlan } from '@/src/studyPlan';
+import {
+  requestNotificationPermissions,
+  scheduleMockTestReminder,
+  cancelMockTestReminder,
+  scheduleStreakProtectionNotification,
+  scheduleTestCountdownNotifications,
+} from '@/src/notifications';
 import { buildTodaySummary } from '../studyplan';
 import { loadSRState } from '@/src/spacedRepetition';
 import { computeAndSavePassProbability, PassProbabilityResult } from '@/src/passProbability';
@@ -36,6 +46,7 @@ import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { allQuestions } from '@clearpass/content';
 import { supabase } from '@/src/supabase';
 import { useTheme } from '@/src/theme';
+import { useNetwork } from '@/src/NetworkContext';
 
 // ─── Road map constants ───────────────────────────────────────────────────────
 
@@ -536,6 +547,32 @@ function NudgesSection({
 
 // ─── Daily tips & helpers ─────────────────────────────────────────────────────
 
+// ─── Scheduled Mock Test helpers ─────────────────────────────────────────────
+
+type ScheduledMockTest = {
+  id: string;
+  dateTimeIso: string;
+  label: string;
+  notifId: string | null;
+};
+
+const SCHEDULED_TESTS_KEY = '@clearpass/scheduled_mock_tests';
+
+function formatTestDateTime(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const isToday = d.toDateString() === now.toDateString();
+  const isTomorrow = d.toDateString() === tomorrow.toDateString();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const time = `${hh}:${mm}`;
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  if (isToday) return `Today at ${time}`;
+  if (isTomorrow) return `Tomorrow at ${time}`;
+  return `${d.getDate()} ${months[d.getMonth()]} at ${time}`;
+}
+
 const DAILY_TIPS = [
   "Stopping distance at 70mph is 96 metres - that's 24 car lengths!",
   'Over 50% of learners fail their theory test first time. Practice daily to beat the odds.',
@@ -569,14 +606,32 @@ export default function HomeScreen() {
   const [showDateModal, setShowDateModal] = useState(false);
   const [dateInput, setDateInput]     = useState('');
   const [dateError, setDateError]     = useState('');
-  const [studyPlan, setStudyPlan]     = useState<StudyPlan | null>(null);
+  const [aiStudyPlan, setAiStudyPlan] = useState<StudyPlan | null>(null);
   const [passProb, setPassProb]       = useState<PassProbabilityResult | null>(null);
   const [nudges, setNudges]           = useState<TutorNudge[]>([]);
   const [celebQueue, setCelebQueue]   = useState<CelebrationEvent[]>([]);
   const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
   const [pendingChallenges, setPendingChallenges] = useState(0);
   const [showResultBanner, setShowResultBanner]   = useState(false);
+
+  // Question of the Day
+  const [qotdExpanded, setQotdExpanded]     = useState(false);
+  const [qotdSelected, setQotdSelected]     = useState<number | null>(null);
+  const [qotdDoneToday, setQotdDoneToday]   = useState(false);
+
+  // Scheduled mock tests
+  const [scheduledTests, setScheduledTests] = useState<ScheduledMockTest[]>([]);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleDate, setScheduleDate]     = useState('');
+  const [scheduleHour, setScheduleHour]     = useState(10);
+  const [scheduleMinute, setScheduleMinute] = useState(0);
+  const [scheduleLabel, setScheduleLabel]   = useState('Mock Test');
+  const [scheduleError, setScheduleError]   = useState('');
   const theme = useTheme();
+  const { isOffline } = useNetwork();
+  const { width: winW } = useWindowDimensions();
+  const [studyPlan, setStudyPlan] = useState<SimpleStudyPlan | null>(null);
+  const cardW: `${number}%` = winW >= 600 ? '30%' : '47%';
 
   useEffect(() => {
     void (async () => {
@@ -590,7 +645,25 @@ export default function HomeScreen() {
         updated = { ...p, dailyChallenge: fresh };
         if (raw !== null) await saveUserProgress(updated);
       }
+      // Pick up test date set during onboarding
+      const pendingDate = await popPendingTestDate();
+      if (pendingDate && !updated.testDate) {
+        const withDate = { ...updated, testDate: pendingDate };
+        await saveUserProgress(withDate);
+        updated = withDate;
+      }
       setProgress(updated);
+
+      // Load scheduled mock tests, pruning past ones
+      try {
+        const storedRaw = await AsyncStorage.getItem(SCHEDULED_TESTS_KEY);
+        const stored: ScheduledMockTest[] = storedRaw ? (JSON.parse(storedRaw) as ScheduledMockTest[]) : [];
+        const future = stored.filter(t => new Date(t.dateTimeIso) > new Date());
+        setScheduledTests(future);
+        if (future.length !== stored.length) {
+          await AsyncStorage.setItem(SCHEDULED_TESTS_KEY, JSON.stringify(future));
+        }
+      } catch {}
     })();
   }, []);
 
@@ -624,7 +697,7 @@ export default function HomeScreen() {
         }
 
         const plan = await loadStudyPlan();
-        setStudyPlan(plan);
+        setAiStudyPlan(plan);
 
         try {
           const [srState, freshProg] = await Promise.all([loadSRState(), loadUserProgress()]);
@@ -677,6 +750,37 @@ export default function HomeScreen() {
           const pending = await AsyncStorage.getItem('@clearpass/pending_username');
           if (pending) setUsername(pending);
         }
+
+        // Study plan: compute today's task if test date is set
+        if (fresh?.testDate) {
+          const weakTopics = Object.entries(fresh.topicScores as Record<string, number>)
+            .sort(([, a], [, b]) => a - b)
+            .slice(0, 5)
+            .map(([k]) => k);
+          setStudyPlan(getStudyPlan(fresh.testDate, weakTopics));
+        }
+
+        // Streak protection: schedule for 20:00 today if streak at risk
+        if (fresh && (fresh.studyStreakDays ?? 0) > 0) {
+          const todayCheck = new Date().toISOString().split('T')[0];
+          const lastDay = new Date(fresh.lastStudied).toISOString().split('T')[0];
+          if (lastDay !== todayCheck) {
+            void scheduleStreakProtectionNotification(fresh.studyStreakDays ?? 0);
+          }
+        }
+
+        // QotD: check if already answered today
+        const todayStr = new Date().toISOString().split('T')[0];
+        const qotdRaw = await AsyncStorage.getItem(`@clearpass/qotd_${todayStr}`);
+        if (qotdRaw !== null) {
+          setQotdDoneToday(true);
+          setQotdSelected(parseInt(qotdRaw, 10));
+          setQotdExpanded(true);
+        } else {
+          setQotdDoneToday(false);
+          setQotdSelected(null);
+          setQotdExpanded(false);
+        }
       })();
     }, []),
   );
@@ -695,6 +799,45 @@ export default function HomeScreen() {
     setShowDateModal(true);
   }
 
+  async function handleScheduleTest() {
+    const parsed = parseDdMmYyyy(scheduleDate.trim());
+    if (!parsed) { setScheduleError('Enter a valid date (DD/MM/YYYY)'); return; }
+    const dt = new Date(parsed);
+    dt.setHours(scheduleHour, scheduleMinute, 0, 0);
+    if (dt <= new Date()) { setScheduleError('Test must be in the future'); return; }
+
+    let notifId: string | null = null;
+    try {
+      const granted = await requestNotificationPermissions();
+      if (granted) notifId = await scheduleMockTestReminder(dt, scheduleLabel || 'Mock Test');
+    } catch {}
+
+    const newTest: ScheduledMockTest = {
+      id: String(Date.now()),
+      dateTimeIso: dt.toISOString(),
+      label: scheduleLabel.trim() || 'Mock Test',
+      notifId,
+    };
+    const updated = [...scheduledTests, newTest].sort(
+      (a, b) => new Date(a.dateTimeIso).getTime() - new Date(b.dateTimeIso).getTime(),
+    );
+    setScheduledTests(updated);
+    await AsyncStorage.setItem(SCHEDULED_TESTS_KEY, JSON.stringify(updated));
+    setShowScheduleModal(false);
+    setScheduleError('');
+    setScheduleDate('');
+    setScheduleLabel('Mock Test');
+    setScheduleHour(10);
+    setScheduleMinute(0);
+  }
+
+  async function handleCancelTest(test: ScheduledMockTest) {
+    if (test.notifId) await cancelMockTestReminder(test.notifId);
+    const updated = scheduledTests.filter(t => t.id !== test.id);
+    setScheduledTests(updated);
+    await AsyncStorage.setItem(SCHEDULED_TESTS_KEY, JSON.stringify(updated));
+  }
+
   async function handleSaveDate() {
     const parsed = parseDdMmYyyy(dateInput.trim());
     if (!parsed) {
@@ -706,6 +849,7 @@ export default function HomeScreen() {
     setProgress(updated);
     await saveUserProgress(updated);
     setShowDateModal(false);
+    void scheduleTestCountdownNotifications(new Date(parsed));
   }
 
   async function handleDismissNudge(id: string) {
@@ -753,6 +897,29 @@ export default function HomeScreen() {
     } else {
       countdownMsg = 'You have got plenty of time - stay consistent!';
       countdownColor = '#0D9488';
+    }
+  }
+
+  // Question of the Day — deterministic daily pick
+  const _qotdToday = new Date().toISOString().split('T')[0]!;
+  const _qotdParts = _qotdToday.split('-').map(Number);
+  const _qotdSeed  = _qotdParts[0]! * 10000 + _qotdParts[1]! * 100 + _qotdParts[2]!;
+  const qotdQuestion = allQuestions[_qotdSeed % allQuestions.length]!;
+
+  async function handleQotdAnswer(optionIndex: number) {
+    if (qotdSelected !== null) return;
+    setQotdSelected(optionIndex);
+    setQotdExpanded(true);
+    const todayStr = new Date().toISOString().split('T')[0]!;
+    await AsyncStorage.setItem(`@clearpass/qotd_${todayStr}`, String(optionIndex));
+    if (!qotdDoneToday) {
+      setQotdDoneToday(true);
+      const base = progress;
+      if (base) {
+        const updated = awardXp(base, 10);
+        setProgress(updated);
+        await saveUserProgress(updated);
+      }
     }
   }
 
@@ -852,6 +1019,46 @@ export default function HomeScreen() {
         </TouchableOpacity>
       )}
 
+      {/* Schedule Mock Test Card — requires internet */}
+      {!isOffline && <View style={[styles.scheduleMockCard, { backgroundColor: theme.cardColor, borderColor: theme.borderColor }]}>
+        <View style={styles.scheduleMockHeader}>
+          <View>
+            <Text style={styles.scheduleMockLabel}>{'SCHEDULE MOCK TEST'}</Text>
+            <Text style={[styles.scheduleMockSub, { color: theme.subTextColor }]}>
+              {'Get a reminder 30 min before it starts'}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.scheduleMockAddBtn}
+            onPress={() => setShowScheduleModal(true)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.scheduleMockAddText}>{'+ Schedule'}</Text>
+          </TouchableOpacity>
+        </View>
+        {scheduledTests.length > 0 && (
+          <View style={styles.scheduledList}>
+            {scheduledTests.slice(0, 3).map(test => (
+              <View key={test.id} style={[styles.scheduledItem, { borderTopColor: theme.borderColor }]}>
+                <View style={styles.scheduledItemLeft}>
+                  <Text style={[styles.scheduledItemLabel, { color: theme.textColor }]}>{test.label}</Text>
+                  <Text style={[styles.scheduledItemTime, { color: theme.subTextColor }]}>
+                    {formatTestDateTime(test.dateTimeIso)}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => void handleCancelTest(test)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.scheduledItemCancel}>{'x'}</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>}
+
       {/* Test Day Banner */}
       {daysLeft !== null && daysLeft >= 0 && daysLeft <= 1 && (
         <TouchableOpacity
@@ -909,31 +1116,41 @@ export default function HomeScreen() {
 
       {/* Action Grid */}
       <View style={styles.actionGrid}>
-        <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.actionCard} onPress={() => router.push('/(tabs)/practice')} activeOpacity={0.8}>
+        <View style={styles.actionCards}>
+          <TouchableOpacity style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/(tabs)/practice')} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'🎯'}</Text>
             <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Practice</Text>
             <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>Random questions</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionCard} onPress={() => router.push('/(tabs)/mock')} activeOpacity={0.8}>
+          <TouchableOpacity style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/(tabs)/mock')} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'📋'}</Text>
             <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Mock Test</Text>
             <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>57 minutes</Text>
           </TouchableOpacity>
-        </View>
 
-        <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.actionCard} onPress={() => router.push('/(tabs)/learn')} activeOpacity={0.8}>
-            <Text style={styles.actionEmoji}>{'📚'}</Text>
-            <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Learn</Text>
-            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>Highway Code</Text>
+          <TouchableOpacity style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/roadsigns' as any)} activeOpacity={0.8}>
+            <Text style={styles.actionEmoji}>{'🚦'}</Text>
+            <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Road Signs</Text>
+            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>89 UK signs</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionCard} onPress={() => router.push('/hazard')} activeOpacity={0.8}>
-            <Text style={styles.actionEmoji}>{'⚠'}</Text>
+          <TouchableOpacity style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/highwaycode' as any)} activeOpacity={0.8}>
+            <Text style={styles.actionEmoji}>{'🛣️'}</Text>
+            <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Highway Code</Text>
+            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>Official rules</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/hazard' as any)} activeOpacity={0.8}>
+            <Text style={styles.actionEmoji}>{'⚠️'}</Text>
             <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Hazard</Text>
             <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>14 clips</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/(tabs)/learn')} activeOpacity={0.8}>
+            <Text style={styles.actionEmoji}>{'📊'}</Text>
+            <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Progress & More</Text>
+            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>Leaderboard, AI Tutor</Text>
           </TouchableOpacity>
         </View>
 
@@ -965,6 +1182,39 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      {/* Today's Task from study plan */}
+      {studyPlan && studyPlan.todayTask.type !== 'rest' && (
+        <TouchableOpacity
+          style={[styles.todayTaskCard, { backgroundColor: theme.cardColor, borderColor: theme.borderColor }]}
+          onPress={() => router.push('/study-plan' as any)}
+          activeOpacity={0.85}
+        >
+          <View style={styles.todayTaskLeft}>
+            <Text style={styles.todayTaskLabel}>{'TODAY\'S TASK'}</Text>
+            <Text style={[styles.todayTaskTitle, { color: theme.textColor }]}>
+              {studyPlan.todayTask.type === 'questions' ? 'Practice Questions'
+                : studyPlan.todayTask.type === 'mock' ? 'Full Mock Test'
+                : studyPlan.todayTask.type === 'hazard' ? 'Hazard Perception'
+                : studyPlan.todayTask.type}
+            </Text>
+            <Text style={[styles.todayTaskSub, { color: theme.subTextColor }]}>
+              {studyPlan.todayTask.durationMins}{' min -- '}{studyPlan.daysLeft}{' days to go'}
+            </Text>
+          </View>
+          <Text style={styles.todayTaskChevron}>{'>'}</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* I Passed button */}
+      <TouchableOpacity
+        style={styles.iPassedBtn}
+        onPress={() => router.push('/ipassed' as any)}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.iPassedBtnText}>{'[*] I Passed my Theory Test!'}</Text>
+        <Text style={styles.iPassedBtnSub}>{'Celebrate and share your story'}</Text>
+      </TouchableOpacity>
+
       {/* Study Plan Card */}
       <TouchableOpacity
         style={styles.studyPlanCard}
@@ -975,9 +1225,9 @@ export default function HomeScreen() {
           <Text style={styles.studyPlanEmoji}>{'📅'}</Text>
           <View style={styles.studyPlanTextBlock}>
             <Text style={styles.studyPlanLabel}>STUDY PLAN</Text>
-            {studyPlan ? (
+            {aiStudyPlan ? (
               <Text style={[styles.studyPlanSummary, { fontSize: theme.fontSize(13), fontFamily: theme.fontFamily }]}>
-                {buildTodaySummary(studyPlan) || 'View your plan'}
+                {buildTodaySummary(aiStudyPlan) || 'View your plan'}
               </Text>
             ) : (
               <Text style={[styles.studyPlanSummary, { fontSize: theme.fontSize(13), fontFamily: theme.fontFamily }]}>
@@ -1015,6 +1265,59 @@ export default function HomeScreen() {
         </View>
       )}
 
+      {/* Question of the Day */}
+      <TouchableOpacity
+        style={styles.qotdCard}
+        onPress={() => { if (qotdSelected === null) setQotdExpanded((e) => !e); }}
+        activeOpacity={qotdSelected !== null ? 1 : 0.85}
+      >
+        <View style={styles.qotdHeader}>
+          <Text style={styles.qotdLabel}>QUESTION OF THE DAY</Text>
+          <View style={styles.qotdXpBadge}>
+            {qotdDoneToday
+              ? <Text style={styles.qotdXpText}>{'✓ +10 XP'}</Text>
+              : <Text style={styles.qotdXpText}>{'+10 XP'}</Text>
+            }
+          </View>
+        </View>
+        <Text style={[styles.qotdQuestion, { color: theme.textColor }]} numberOfLines={qotdExpanded ? undefined : 2}>
+          {qotdQuestion.questionText}
+        </Text>
+        {!qotdExpanded && (
+          <Text style={styles.qotdTap}>Tap to answer</Text>
+        )}
+        {qotdExpanded && (
+          <View style={styles.qotdOptions}>
+            {qotdQuestion.options.map((opt: string, idx: number) => {
+              const isCorrect  = idx === qotdQuestion.correctIndex;
+              const isSelected = idx === qotdSelected;
+              let bg = theme.cardColor;
+              let textCol = theme.textColor;
+              if (qotdSelected !== null) {
+                if (isCorrect)        { bg = '#D1FAE5'; textCol = '#065F46'; }
+                else if (isSelected)  { bg = '#FEE2E2'; textCol = '#991B1B'; }
+              }
+              return (
+                <TouchableOpacity
+                  key={idx}
+                  style={[styles.qotdOption, { backgroundColor: bg }]}
+                  onPress={() => void handleQotdAnswer(idx)}
+                  activeOpacity={qotdSelected !== null ? 1 : 0.75}
+                  disabled={qotdSelected !== null}
+                >
+                  <Text style={[styles.qotdOptionText, { color: textCol }]}>{opt}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            {qotdSelected !== null && (
+              <Text style={[styles.qotdExplanation, { color: theme.subTextColor }]}>
+                {qotdQuestion.explanation}
+              </Text>
+            )}
+          </View>
+        )}
+      </TouchableOpacity>
+
       {/* Tip Card */}
       <View style={styles.tipCard}>
         <Text style={styles.tipTitle}>DID YOU KNOW?</Text>
@@ -1022,6 +1325,63 @@ export default function HomeScreen() {
           {tip}
         </Text>
       </View>
+
+      {/* Schedule Mock Test Modal */}
+      <Modal visible={showScheduleModal} transparent animationType="fade" onRequestClose={() => setShowScheduleModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: theme.cardColor }]}>
+            <Text style={[styles.modalTitle, { color: theme.textColor }]}>Schedule Mock Test</Text>
+            <Text style={[styles.modalSub, { color: theme.subTextColor }]}>Date (DD/MM/YYYY)</Text>
+            <TextInput
+              style={[styles.dateInput, { color: theme.textColor }]}
+              value={scheduleDate}
+              onChangeText={setScheduleDate}
+              placeholder="DD/MM/YYYY"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="numbers-and-punctuation"
+              maxLength={10}
+            />
+            <Text style={[styles.modalSub, { color: theme.subTextColor }]}>Time</Text>
+            <View style={styles.scheduleTimeRow}>
+              <View style={styles.scheduleTimeUnit}>
+                <TouchableOpacity style={styles.scheduleArrow} onPress={() => setScheduleHour(h => (h + 1) % 24)} activeOpacity={0.7}>
+                  <Text style={styles.scheduleArrowText}>{'▲'}</Text>
+                </TouchableOpacity>
+                <Text style={[styles.scheduleTimeValue, { color: theme.textColor }]}>{String(scheduleHour).padStart(2, '0')}</Text>
+                <TouchableOpacity style={styles.scheduleArrow} onPress={() => setScheduleHour(h => (h + 23) % 24)} activeOpacity={0.7}>
+                  <Text style={styles.scheduleArrowText}>{'▼'}</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={[styles.scheduleTimeSep, { color: theme.textColor }]}>{':'}</Text>
+              <View style={styles.scheduleTimeUnit}>
+                <TouchableOpacity style={styles.scheduleArrow} onPress={() => setScheduleMinute(m => (m + 5) % 60)} activeOpacity={0.7}>
+                  <Text style={styles.scheduleArrowText}>{'▲'}</Text>
+                </TouchableOpacity>
+                <Text style={[styles.scheduleTimeValue, { color: theme.textColor }]}>{String(scheduleMinute).padStart(2, '0')}</Text>
+                <TouchableOpacity style={styles.scheduleArrow} onPress={() => setScheduleMinute(m => (m + 55) % 60)} activeOpacity={0.7}>
+                  <Text style={styles.scheduleArrowText}>{'▼'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            <Text style={[styles.modalSub, { color: theme.subTextColor }]}>Label (optional)</Text>
+            <TextInput
+              style={[styles.dateInput, { color: theme.textColor, letterSpacing: 0 }]}
+              value={scheduleLabel}
+              onChangeText={setScheduleLabel}
+              placeholder="Mock Test"
+              placeholderTextColor="#9CA3AF"
+              maxLength={40}
+            />
+            {scheduleError.length > 0 && <Text style={styles.dateError}>{scheduleError}</Text>}
+            <TouchableOpacity style={styles.modalSave} onPress={() => void handleScheduleTest()} activeOpacity={0.85}>
+              <Text style={styles.modalSaveText}>Schedule</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalCancel} onPress={() => { setShowScheduleModal(false); setScheduleError(''); }} activeOpacity={0.85}>
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Test Date Modal */}
       <Modal visible={showDateModal} transparent animationType="fade" onRequestClose={() => setShowDateModal(false)}>
@@ -1365,12 +1725,16 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 12,
   },
+  actionCards: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
   actionRow: {
     flexDirection: 'row',
     gap: 12,
   },
   actionCard: {
-    flex: 1,
     borderRadius: 14,
     padding: 14,
     backgroundColor: '#FFFFFF',
@@ -1485,6 +1849,34 @@ const styles = StyleSheet.create({
   tipTitle: { fontSize: 11, fontWeight: '700', color: '#6366F1', letterSpacing: 1, marginBottom: 6 },
   tipBody:  { fontSize: 13, lineHeight: 20 },
 
+  // ── Question of the Day ───────────────────────────────────────────────────────
+  qotdCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 0.5,
+    borderColor: '#E5E7EB',
+    borderLeftWidth: 3,
+    borderLeftColor: '#0D9488',
+    padding: 16,
+  },
+  qotdHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  qotdLabel:   { fontSize: 11, fontWeight: '700', color: '#0D9488', letterSpacing: 1 },
+  qotdXpBadge: { backgroundColor: '#CCFBF1', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
+  qotdXpText:  { fontSize: 11, fontWeight: '700', color: '#0D9488' },
+  qotdQuestion: { fontSize: 14, fontWeight: '600', lineHeight: 20, marginBottom: 8 },
+  qotdTap:     { fontSize: 12, color: '#9CA3AF', fontWeight: '500' },
+  qotdOptions: { gap: 8, marginTop: 4 },
+  qotdOption:  { borderRadius: 8, padding: 10, borderWidth: 0.5, borderColor: '#E5E7EB' },
+  qotdOptionText: { fontSize: 13, fontWeight: '500' },
+  qotdExplanation: { fontSize: 12, lineHeight: 18, marginTop: 8, fontStyle: 'italic' },
+
   // ── Modal ─────────────────────────────────────────────────────────────────────
   modalOverlay: {
     flex: 1,
@@ -1534,6 +1926,90 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   modalCancelText: { color: '#6B7280', fontSize: 15, fontWeight: '600' },
+
+  // ── Schedule Mock Test Card ────────────────────────────────────────────────────
+  scheduleMockCard: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 14,
+    borderWidth: 0.5,
+    borderTopWidth: 3,
+    borderTopColor: '#6366F1',
+    padding: 14,
+  },
+  scheduleMockHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  scheduleMockLabel: { fontSize: 11, fontWeight: '700', color: '#6366F1', letterSpacing: 1, marginBottom: 2 },
+  scheduleMockSub:   { fontSize: 12, fontWeight: '500' },
+  scheduleMockAddBtn: {
+    backgroundColor: '#6366F1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  scheduleMockAddText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
+  scheduledList: { marginTop: 10, gap: 0 },
+  scheduledItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderTopWidth: 0.5,
+  },
+  scheduledItemLeft: { flex: 1, gap: 1 },
+  scheduledItemLabel: { fontSize: 13, fontWeight: '600' },
+  scheduledItemTime:  { fontSize: 12, fontWeight: '500' },
+  scheduledItemCancel: { fontSize: 18, color: '#9CA3AF', fontWeight: '600', paddingHorizontal: 4 },
+
+  // ── Schedule Time Picker ───────────────────────────────────────────────────────
+  scheduleTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  scheduleTimeUnit: { alignItems: 'center', gap: 4 },
+  scheduleArrow: { padding: 8, borderRadius: 6, backgroundColor: '#F3F4F6', width: 44, alignItems: 'center' },
+  scheduleArrowText: { fontSize: 12, color: '#374151', fontWeight: '700' },
+  scheduleTimeValue: { fontSize: 30, fontWeight: '800', lineHeight: 36, minWidth: 44, textAlign: 'center' },
+  scheduleTimeSep:   { fontSize: 30, fontWeight: '800', lineHeight: 36 },
+
+  // ── Today's Task Card ──────────────────────────────────────────────────────────
+  todayTaskCard: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 14,
+    borderWidth: 0.5,
+    borderTopWidth: 3,
+    borderTopColor: '#6366F1',
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  todayTaskLeft: { flex: 1, gap: 2 },
+  todayTaskLabel: { fontSize: 10, fontWeight: '700', color: '#6366F1', letterSpacing: 1 },
+  todayTaskTitle: { fontSize: 15, fontWeight: '700' },
+  todayTaskSub:   { fontSize: 12, fontWeight: '500' },
+  todayTaskChevron: { fontSize: 20, color: '#9CA3AF', fontWeight: '400', marginLeft: 8 },
+
+  // ── I Passed Button ────────────────────────────────────────────────────────────
+  iPassedBtn: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: '#0D9488',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    gap: 3,
+  },
+  iPassedBtnText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+  iPassedBtnSub:  { fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: '500' },
 
   // Test Day Banner
   testDayBanner: {

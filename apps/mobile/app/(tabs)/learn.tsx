@@ -1,6 +1,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useNetwork } from '@/src/NetworkContext';
+import { OfflineBanner } from '@/src/components/OfflineBanner';
 
 type StudyCard = {
   route: string;
@@ -10,16 +12,21 @@ type StudyCard = {
 };
 
 const CARDS: StudyCard[] = [
-  { route: '/highwaycode', emoji: '📖', title: 'Highway Code',      subtitle: 'Rules and regulations' },
-  { route: '/roadsigns',   emoji: '🚦', title: 'Road Signs',        subtitle: 'Learn all UK signs' },
-  { route: '/hazard',      emoji: '⚠️',  title: 'Hazard Perception', subtitle: 'Spot developing hazards' },
-  { route: '/progress',    emoji: '📊', title: 'Progress',          subtitle: 'Track your learning' },
-  { route: '/leaderboard', emoji: '🏆', title: 'Leaderboard',       subtitle: 'See how you rank' },
-  { route: '/aitutor',     emoji: '🤖', title: 'AI Tutor',          subtitle: 'Get instant help' },
+  { route: '/study-plan',                      emoji: '📋', title: 'Study Plan',          subtitle: 'Your daily task' },
+  { route: '/highwaycode',                     emoji: '📖', title: 'Highway Code',        subtitle: 'Rules and regulations' },
+  { route: '/roadsigns',                       emoji: '🚦', title: 'Road Signs',          subtitle: 'Learn all UK signs' },
+  { route: '/hazard',                          emoji: '⚠️',  title: 'Hazard Perception',  subtitle: 'Spot developing hazards' },
+  { route: '/progress',                        emoji: '📊', title: 'Progress',            subtitle: 'Track your learning' },
+  { route: '/leaderboard',                     emoji: '🏆', title: 'Leaderboard',         subtitle: 'See how you rank' },
+  { route: '/aitutor',                         emoji: '🤖', title: 'AI Tutor',            subtitle: 'Get instant help' },
+  { route: '/(tabs)/practice?mode=bookmarked', emoji: '🔖', title: 'Bookmarked',          subtitle: 'Your saved questions' },
 ];
+
+const ONLINE_ONLY = new Set(['/aitutor']);
 
 export default function StudyScreen() {
   const router = useRouter();
+  const { isOffline } = useNetwork();
 
   const rows: StudyCard[][] = [];
   for (let i = 0; i < CARDS.length; i += 2) {
@@ -27,30 +34,38 @@ export default function StudyScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.heading}>Study</Text>
-        <Text style={styles.subheading}>Everything you need to pass</Text>
-      </View>
-      <View style={styles.grid}>
-        {rows.map((row, ri) => (
-          <View key={ri} style={styles.row}>
-            {row.map((card) => (
-              <TouchableOpacity
-                key={card.route}
-                style={styles.card}
-                onPress={() => router.push(card.route as any)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.emoji}>{card.emoji}</Text>
-                <Text style={styles.title}>{card.title}</Text>
-                <Text style={styles.subtitle}>{card.subtitle}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        ))}
-      </View>
-    </ScrollView>
+    <>
+      <OfflineBanner />
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.heading}>Study</Text>
+          <Text style={styles.subheading}>Everything you need to pass</Text>
+        </View>
+        <View style={styles.grid}>
+          {rows.map((row, ri) => (
+            <View key={ri} style={styles.row}>
+              {row.map((card) => {
+                const disabled = isOffline && ONLINE_ONLY.has(card.route);
+                return (
+                  <TouchableOpacity
+                    key={card.route}
+                    style={[styles.card, disabled && styles.cardDisabled]}
+                    onPress={() => { if (!disabled) router.push(card.route as any); }}
+                    activeOpacity={disabled ? 1 : 0.8}
+                  >
+                    <Text style={[styles.emoji, disabled && styles.textDisabled]}>{card.emoji}</Text>
+                    <Text style={[styles.title, disabled && styles.textDisabled]}>{card.title}</Text>
+                    <Text style={[styles.subtitle, disabled && styles.textDisabled]}>
+                      {disabled ? 'Requires internet' : card.subtitle}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </>
   );
 }
 
@@ -110,4 +125,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#6B7280',
   },
+  cardDisabled: { opacity: 0.45 },
+  textDisabled: { color: '#9CA3AF' },
 });

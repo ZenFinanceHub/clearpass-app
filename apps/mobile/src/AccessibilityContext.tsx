@@ -8,6 +8,8 @@ export interface AccessibilitySettings {
   textToSpeech: boolean;
   wordSpacing: boolean;
   creamBackground: boolean;
+  darkMode: boolean;
+  soundEffects: boolean;
 }
 
 const DEFAULTS: AccessibilitySettings = {
@@ -17,6 +19,8 @@ const DEFAULTS: AccessibilitySettings = {
   textToSpeech: false,
   wordSpacing: false,
   creamBackground: false,
+  darkMode: false,
+  soundEffects: true,
 };
 
 const STORAGE_KEY = 'accessibility_settings';

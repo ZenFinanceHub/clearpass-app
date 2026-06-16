@@ -228,6 +228,270 @@ app.post('/api/payout-request', async (req, res) => {
   }
 });
 
+// ─── Resend email helper ──────────────────────────────────────────────────────
+
+async function sendEmail({ to, subject, html }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error('RESEND_API_KEY not set');
+  const from = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+  const resp = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ from, to: [to], subject, html }),
+  });
+  if (!resp.ok) {
+    const body = await resp.text();
+    throw new Error(`Resend ${resp.status}: ${body}`);
+  }
+  return resp.json();
+}
+
+function confirmPageHtml(success, message) {
+  const icon = success ? '&#x2705;' : '&#x274C;';
+  const heading = success ? 'Confirmed!' : 'Confirmation failed';
+  const body = success
+    ? "You'll now receive weekly progress updates for your learner on ClearPass."
+    : (message || 'Something went wrong.');
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>ClearPass - Parent Confirmation</title></head>
+<body style="font-family:sans-serif;max-width:480px;margin:80px auto;padding:24px;text-align:center">
+  <div style="font-size:64px">${icon}</div>
+  <h2 style="color:#0D9488">${heading}</h2>
+  <p style="color:#374151">${body}</p>
+  <p style="color:#9CA3AF;font-size:13px;margin-top:40px">ClearPass &bull; UK Theory Test Preparation</p>
+</body>
+</html>`;
+}
+
+// ─── POST /api/send-parent-confirmation ──────────────────────────────────────
+
+app.post('/api/send-parent-confirmation', async (req, res) => {
+  const { parent_email, confirmation_token } = req.body;
+  if (!parent_email || !confirmation_token) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+  try {
+    const confirmUrl = `https://clearpass-app.vercel.app/confirm-parent?token=${confirmation_token}`;
+    await sendEmail({
+      to: parent_email,
+      subject: 'Confirm progress updates for your learner on ClearPass',
+      html: `
+        <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
+          <h2 style="color:#0D9488">ClearPass Progress Updates</h2>
+          <p style="color:#374151">A learner has asked ClearPass to send you weekly progress updates for their driving theory test preparation.</p>
+          <p style="color:#374151">Click below to confirm and start receiving updates.</p>
+          <p style="margin:24px 0">
+            <a href="${confirmUrl}" style="display:inline-block;background:#0D9488;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:700">
+              Confirm Updates
+            </a>
+          </p>
+          <p style="color:#9CA3AF;font-size:13px">If you did not expect this, you can safely ignore it.</p>
+          <p style="color:#9CA3AF;font-size:12px">ClearPass &bull; UK Theory Test Preparation</p>
+        </div>
+      `,
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[send-parent-confirmation]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/confirm-parent ──────────────────────────────────────────────────
+
+app.get('/api/confirm-parent', async (req, res) => {
+  const { token } = req.query;
+  if (!token) {
+    return res.status(400).send(confirmPageHtml(false, 'Missing confirmation token.'));
+  }
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+    const { data, error } = await supabaseAdmin
+      .from('parent_email_subscriptions')
+      .update({ confirmed: true })
+      .eq('confirmation_token', token)
+      .select()
+      .single();
+    if (error || !data) {
+      return res.status(404).send(confirmPageHtml(false, 'Token not found or already confirmed.'));
+    }
+    res.send(confirmPageHtml(true, null));
+  } catch (err) {
+    console.error('[confirm-parent]', err);
+    res.status(500).send(confirmPageHtml(false, 'Server error. Please try again.'));
+  }
+});
+
+// ─── POST /api/send-weekly-parent-emails ─────────────────────────────────────
+
+app.post('/api/send-weekly-parent-emails', async (req, res) => {
+  if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const supabaseAdmin = getSupabaseAdmin();
+  let sent = 0;
+  let failed = 0;
+
+  try {
+    const { data: subs } = await supabaseAdmin
+      .from('parent_email_subscriptions')
+      .select('parent_email, learner_id')
+      .eq('confirmed', true);
+
+    if (!subs || subs.length === 0) {
+      return res.json({ sent: 0, failed: 0 });
+    }
+
+    for (const sub of subs) {
+      try {
+        const [{ data: progressRow }, { data: profile }] = await Promise.all([
+          supabaseAdmin.from('user_progress').select('progress').eq('id', sub.learner_id).single(),
+          supabaseAdmin.from('profiles').select('username').eq('id', sub.learner_id).single(),
+        ]);
+
+        const p = progressRow?.progress || {};
+        const name = profile?.username || 'your learner';
+        const readiness = p.readinessScore || 0;
+        const totalQ = p.totalQuestionsAnswered || 0;
+        const streak = p.studyStreakDays || 0;
+        const mocks = (p.mockTestHistory || []).length;
+        const bestMock = mocks > 0 ? Math.max(...(p.mockTestHistory || []).map(m => m.score || 0)) : null;
+
+        await sendEmail({
+          to: sub.parent_email,
+          subject: `ClearPass weekly update for ${name}`,
+          html: `
+            <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
+              <h2 style="color:#0D9488">Weekly Progress Update</h2>
+              <p style="color:#374151">Here is <strong>${name}</strong>'s ClearPass progress this week:</p>
+              <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:15px">
+                <tr style="background:#F0FDFA"><td style="padding:12px;font-weight:600;color:#374151">Pass Probability</td><td style="padding:12px;font-weight:700;color:#0D9488">${readiness}%</td></tr>
+                <tr><td style="padding:12px;font-weight:600;color:#374151">Questions Answered</td><td style="padding:12px;color:#374151">${totalQ}</td></tr>
+                <tr style="background:#F9FAFB"><td style="padding:12px;font-weight:600;color:#374151">Study Streak</td><td style="padding:12px;color:#374151">${streak} days</td></tr>
+                <tr><td style="padding:12px;font-weight:600;color:#374151">Mock Tests Taken</td><td style="padding:12px;color:#374151">${mocks}</td></tr>
+                ${bestMock !== null ? `<tr style="background:#F9FAFB"><td style="padding:12px;font-weight:600;color:#374151">Best Mock Score</td><td style="padding:12px;color:#374151">${bestMock} / 50</td></tr>` : ''}
+              </table>
+              <p style="color:#9CA3AF;font-size:13px">To unsubscribe, ask ${name} to remove your email in their ClearPass settings.</p>
+              <p style="color:#9CA3AF;font-size:12px">ClearPass &bull; UK Theory Test Preparation</p>
+            </div>
+          `,
+        });
+        sent++;
+      } catch (e) {
+        console.error(`[weekly-email] failed for ${sub.parent_email}:`, e.message);
+        failed++;
+      }
+    }
+
+    res.json({ sent, failed });
+  } catch (err) {
+    console.error('[send-weekly-parent-emails]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/delete-account ────────────────────────────────────────────────
+
+app.post('/api/delete-account', async (req, res) => {
+  const { userToken } = req.body;
+  if (!userToken) return res.status(400).json({ error: 'Missing userToken' });
+
+  const supabaseAdmin = getSupabaseAdmin();
+
+  // Verify caller is who they say they are
+  const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(userToken);
+  if (authErr || !user) return res.status(401).json({ error: 'Invalid token' });
+
+  const id = user.id;
+  try {
+    await Promise.allSettled([
+      supabaseAdmin.from('parent_email_subscriptions').delete().eq('learner_id', id),
+      supabaseAdmin.from('instructor_lesson_notes').delete().eq('instructor_id', id),
+      supabaseAdmin.from('pass_stories').delete().eq('user_id', id),
+      supabaseAdmin.from('instructor_earnings').delete().or(`instructor_id.eq.${id},learner_id.eq.${id}`),
+      supabaseAdmin.from('instructor_relationships').delete().or(`instructor_id.eq.${id},learner_id.eq.${id}`),
+      supabaseAdmin.from('challenges').delete().or(`challenger_id.eq.${id},challenged_id.eq.${id}`),
+    ]);
+    await supabaseAdmin.from('user_progress').delete().eq('id', id);
+    await supabaseAdmin.from('profiles').delete().eq('id', id);
+    await supabaseAdmin.auth.admin.deleteUser(id);
+    console.log('[delete-account] deleted user', id);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[delete-account]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/waitlist ───────────────────────────────────────────────────────
+
+app.post('/api/waitlist', async (req, res) => {
+  const { email } = req.body;
+  if (!email || !String(email).includes('@')) {
+    return res.status(400).json({ error: 'Invalid email' });
+  }
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+    await supabaseAdmin.from('waitlist').insert({ email: String(email).trim().toLowerCase() });
+    res.json({ success: true });
+  } catch (err) {
+    if (err && typeof err === 'object' && 'code' in err && err.code === '23505') {
+      return res.json({ success: true, message: 'already_registered' });
+    }
+    console.error('[waitlist]', err);
+    res.status(500).json({ error: 'Failed to save email' });
+  }
+});
+
+// ─── POST /api/send-challenge-notification ────────────────────────────────────
+// NOTE: Push notifications between users require a server-side relay.
+// The client cannot directly push to another device. This endpoint:
+// 1. Looks up the challenged user's Expo push token from profiles
+// 2. Sends the notification via Expo Push API
+
+app.post('/api/send-challenge-notification', async (req, res) => {
+  const { challenged_user_id, challenger_username } = req.body;
+  if (!challenged_user_id || !challenger_username) {
+    return res.status(400).json({ error: 'Missing fields' });
+  }
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('expo_push_token')
+      .eq('id', challenged_user_id)
+      .single();
+
+    const token = (profile as { expo_push_token?: string } | null)?.expo_push_token;
+    if (!token) return res.json({ sent: false, reason: 'no_token' });
+
+    const resp = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        to: token,
+        title: `${challenger_username} challenged you!`,
+        body: 'They want to see who knows their theory best. Open ClearPass to accept!',
+        sound: 'default',
+        data: { type: 'challenge' },
+      }),
+    });
+    res.json({ sent: resp.ok });
+  } catch (err) {
+    console.error('[challenge-notification]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/config ──────────────────────────────────────────────────────────
+
+app.get('/api/config', (req, res) => {
+  const sk = process.env.STRIPE_SECRET_KEY || '';
+  res.json({ stripeTestMode: sk.startsWith('sk_test_') });
+});
+
 // ── Public stats ──────────────────────────────────────────────────────────────
 
 let statsCache = null;

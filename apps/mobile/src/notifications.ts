@@ -23,11 +23,13 @@ export const DEFAULT_NOTIF_SETTINGS: NotificationSettings = {
 
 // ─── Storage keys ─────────────────────────────────────────────────────────────
 
-const KEY_SETTINGS       = '@clearpass/notification_settings';
-const KEY_STUDY_REMINDER = '@clearpass/notif_study_reminder';
-const KEY_STREAK         = '@clearpass/notif_streak_protection';
-const KEY_TEST_COUNTDOWN = '@clearpass/notif_test_countdown';
-const KEY_WEEKLY         = '@clearpass/notif_weekly_progress';
+const KEY_SETTINGS          = '@clearpass/notification_settings';
+const KEY_STUDY_REMINDER    = '@clearpass/notif_study_reminder';
+const KEY_STREAK            = '@clearpass/notif_streak_protection';
+const KEY_STREAK_TODAY      = '@clearpass/notif_streak_today';
+const KEY_TEST_COUNTDOWN    = '@clearpass/notif_test_countdown';
+const KEY_TEST_COUNTDOWN_V2 = '@clearpass/notif_test_countdown_v2';
+const KEY_WEEKLY            = '@clearpass/notif_weekly_progress';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -231,6 +233,130 @@ export async function cancelWeeklyProgress(): Promise<void> {
     try { await Notifications.cancelScheduledNotificationAsync(id); } catch {}
     await AsyncStorage.removeItem(KEY_WEEKLY);
   }
+}
+
+// ─── Streak protection (one-shot, today) ─────────────────────────────────────
+
+export async function scheduleStreakProtectionNotification(streakCount: number): Promise<void> {
+  if (isWeb()) return;
+  await cancelStreakProtectionNotification();
+
+  const now = new Date();
+  const fireAt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 0, 0);
+  if (now >= fireAt) return; // already past 20:00 today
+
+  try {
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: streakCount > 0
+          ? `Don't lose your ${streakCount}-day streak!`
+          : "Don't break your streak!",
+        body: "You haven't studied today -- open ClearPass to keep your streak alive.",
+        sound: true,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: fireAt,
+      },
+    });
+    await AsyncStorage.setItem(KEY_STREAK_TODAY, id);
+  } catch {}
+}
+
+export async function cancelStreakProtectionNotification(): Promise<void> {
+  if (isWeb()) return;
+  const id = await AsyncStorage.getItem(KEY_STREAK_TODAY);
+  if (id) {
+    try { await Notifications.cancelScheduledNotificationAsync(id); } catch {}
+    await AsyncStorage.removeItem(KEY_STREAK_TODAY);
+  }
+}
+
+// ─── Test date countdown notifications ───────────────────────────────────────
+
+export async function scheduleTestCountdownNotifications(testDate: Date): Promise<void> {
+  if (isWeb()) return;
+  await cancelTestCountdownNotifications();
+
+  const now = new Date();
+  const reminders = [
+    {
+      daysOffset: -7,
+      title: 'One week until your theory test!',
+      body: "How's your preparation going? Keep up the practice -- you've got this.",
+    },
+    {
+      daysOffset: -1,
+      title: 'Your theory test is TOMORROW.',
+      body: "Get a good night's sleep -- you've prepared well. You've got this!",
+    },
+    {
+      daysOffset: 0,
+      title: "Today's the day!",
+      body: 'Good luck on your theory test.',
+    },
+  ];
+
+  const ids: string[] = [];
+  for (const r of reminders) {
+    const fireDate = new Date(
+      testDate.getFullYear(),
+      testDate.getMonth(),
+      testDate.getDate() + r.daysOffset,
+      9, 0, 0,
+    );
+    if (fireDate <= now) continue;
+    try {
+      const id = await Notifications.scheduleNotificationAsync({
+        content: { title: r.title, body: r.body, sound: true },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: fireDate },
+      });
+      ids.push(id);
+    } catch {}
+  }
+
+  if (ids.length > 0) {
+    await AsyncStorage.setItem(KEY_TEST_COUNTDOWN_V2, JSON.stringify(ids));
+  }
+}
+
+export async function cancelTestCountdownNotifications(): Promise<void> {
+  if (isWeb()) return;
+  const stored = await AsyncStorage.getItem(KEY_TEST_COUNTDOWN_V2);
+  if (stored) {
+    const ids: string[] = JSON.parse(stored) as string[];
+    await Promise.all(
+      ids.map(id => { try { return Notifications.cancelScheduledNotificationAsync(id); } catch { return Promise.resolve(); } }),
+    );
+    await AsyncStorage.removeItem(KEY_TEST_COUNTDOWN_V2);
+  }
+}
+
+// ─── Mock test reminder ───────────────────────────────────────────────────────
+
+export async function scheduleMockTestReminder(testDateTime: Date, label: string): Promise<string | null> {
+  if (isWeb()) return null;
+  const fireDate = new Date(testDateTime.getTime() - 30 * 60 * 1000);
+  if (fireDate <= new Date()) return null;
+  try {
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Mock test starting soon',
+        body: `Your scheduled mock test "${label}" starts in 30 minutes. Good luck!`,
+        sound: true,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: fireDate,
+      },
+    });
+    return id;
+  } catch { return null; }
+}
+
+export async function cancelMockTestReminder(identifier: string): Promise<void> {
+  if (isWeb()) return;
+  try { await Notifications.cancelScheduledNotificationAsync(identifier); } catch {}
 }
 
 // ─── Cancel all ───────────────────────────────────────────────────────────────

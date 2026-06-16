@@ -31,6 +31,8 @@ const TASK_ICONS: Record<StudyTaskType, string> = {
   highway_code: '📖',
   road_signs:   '🚦',
   rest:         '😴',
+  weakspots:    '[!]',
+  revision:     '📚',
 };
 
 const TASK_ROUTES: Partial<Record<StudyTaskType, string>> = {

@@ -4,6 +4,7 @@ import {
   Modal,
   Platform,
   ScrollView,
+  Share,
   StyleSheet,
   Switch,
   Text,
@@ -11,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/src/supabase';
@@ -19,7 +21,9 @@ import type { AccessibilitySettings } from '@/src/AccessibilityContext';
 import { useTheme } from '@/src/theme';
 import { calculateReadiness } from '@clearpass/core';
 import { allQuestions, highwayCodeChapters, roadSigns } from '@clearpass/content';
-import { loadUserProgress } from '@/src/storage';
+import { loadUserProgress, getMasteredTopics } from '@/src/storage';
+import { getProxyUrl } from '@/src/proxyUrl';
+import { TOPIC_BADGES } from '@/src/badges';
 import {
   getCacheStatus,
   cacheQuestions,
@@ -56,6 +60,18 @@ interface SettingConfig {
 }
 
 const SETTINGS: SettingConfig[] = [
+  {
+    key: 'darkMode',
+    label: 'Dark Mode',
+    description: 'Switch to a dark background theme for comfortable night-time studying.',
+    icon: '🌙',
+  },
+  {
+    key: 'soundEffects',
+    label: 'Sound Effects',
+    description: 'Play a chime on correct answers and a low tone on incorrect ones.',
+    icon: '🔊',
+  },
   {
     key: 'dyslexiaFont',
     label: 'Dyslexia-Friendly Font',
@@ -126,6 +142,18 @@ export default function SettingsScreen() {
   // Instructor state
   const [linkedInstructorCount, setLinkedInstructorCount] = useState(0);
 
+  // Badge state
+  const [earnedBadgeCount, setEarnedBadgeCount] = useState(0);
+
+  // Referral code state
+  const [myReferralCode, setMyReferralCode] = useState<string | null>(null);
+
+  // Parent email state
+  const [parentEmail, setParentEmail]         = useState<string | null>(null);
+  const [parentEmailInput, setParentEmailInput] = useState('');
+  const [savingParent, setSavingParent]       = useState(false);
+  const [parentMsg, setParentMsg]             = useState('');
+
   // Cache state
   const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
   const [refreshingCache, setRefreshingCache] = useState(false);
@@ -150,12 +178,20 @@ export default function SettingsScreen() {
         setEmail(user.email ?? null);
         const { data: profile } = await supabase
           .from('profiles')
-          .select('username')
+          .select('username, referral_code')
           .eq('id', user.id)
           .single();
-        if (profile?.username) {
-          setUsername(profile.username as string);
+        if (profile?.username) setUsername(profile.username as string);
+
+        let code = (profile as { referral_code?: string | null } | null)?.referral_code ?? null;
+        if (!code && profile?.username) {
+          // Generate: first 4 chars of username + 4 random digits
+          const prefix = (profile.username as string).replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 4).padEnd(4, 'X');
+          const digits = String(Math.floor(1000 + Math.random() * 9000));
+          code = prefix + digits;
+          await supabase.from('profiles').update({ referral_code: code }).eq('id', user.id);
         }
+        setMyReferralCode(code);
       }
       if (!username) {
         const pending = await AsyncStorage.getItem('@clearpass/pending_username');
@@ -186,6 +222,25 @@ export default function SettingsScreen() {
         setUserTestDate(progress.testDate ?? null);
         setUserReadiness(calculateReadiness(progress).score);
         setUserStreak(progress.studyStreakDays ?? 0);
+      }
+
+      // Load badge count
+      try {
+        const mastered = await getMasteredTopics();
+        setEarnedBadgeCount(mastered.length);
+      } catch {}
+
+      // Load parent email subscription
+      if (user) {
+        try {
+          const { data: sub } = await supabase
+            .from('parent_email_subscriptions')
+            .select('parent_email')
+            .eq('learner_id', user.id)
+            .limit(1)
+            .maybeSingle();
+          if (sub?.parent_email) setParentEmail(sub.parent_email as string);
+        } catch {}
       }
 
       // Load cache status
@@ -239,30 +294,108 @@ export default function SettingsScreen() {
   function handleDeleteAccount() {
     Alert.alert(
       'Delete Account',
-      'Are you sure? This cannot be undone.',
+      'This will permanently delete your account and all data. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            void (async () => {
-              await supabase.auth.signOut();
-              Alert.alert(
-                'Account deletion requested',
-                'Please contact support@clearpass.app to complete account deletion.',
-                [{ text: 'OK', onPress: () => router.replace('/onboarding') }],
-              );
-            })();
-          },
-        },
+        { text: 'Delete Everything', style: 'destructive', onPress: () => void doDeleteAccount() },
       ],
     );
+  }
+
+  async function doDeleteAccount() {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      // Wipe local storage
+      await AsyncStorage.multiRemove([
+        '@clearpass/user_progress',
+        '@clearpass/question_states',
+        '@clearpass/bookmarks',
+        '@clearpass/session_history',
+        '@clearpass/pending_username',
+        '@clearpass/sync_pending',
+        '@clearpass/wrong_counts',
+        '@clearpass/notification_settings',
+        '@clearpass/hasSeenOnboarding',
+        '@clearpass/has_submitted_result',
+        '@clearpass/test_result',
+        '@clearpass/scheduled_mock_tests',
+        '@clearpass/free_questions_answered',
+      ]);
+
+      if (token) {
+        await fetch(`${getProxyUrl()}/api/delete-account`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userToken: token }),
+        });
+      }
+
+      await supabase.auth.signOut();
+      router.replace('/landing');
+    } catch {
+      Alert.alert('Error', 'Could not delete account. Please contact privacy@clearpass.app.');
+    }
   }
 
   async function handleSignOut() {
     await supabase.auth.signOut();
     router.replace('/onboarding');
+  }
+
+  async function handleShareReferralCode() {
+    if (!myReferralCode) return;
+    await Share.share({
+      message: `Use my code ${myReferralCode} on ClearPass to get started with your UK driving theory test prep! Download: getclearpass.co.uk`,
+    });
+  }
+
+  async function handleCopyReferralCode() {
+    if (!myReferralCode) return;
+    await Clipboard.setStringAsync(myReferralCode);
+    Alert.alert('Copied!', `Code ${myReferralCode} copied to clipboard.`);
+  }
+
+  async function handleSaveParentEmail() {
+    const trimmed = parentEmailInput.trim().toLowerCase();
+    if (!trimmed.includes('@') || savingParent) return;
+    setSavingParent(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: sub, error } = await supabase
+        .from('parent_email_subscriptions')
+        .insert({ learner_id: user.id, parent_email: trimmed })
+        .select('confirmation_token')
+        .single();
+      if (error) throw error;
+      await fetch(`${getProxyUrl()}/api/send-parent-confirmation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ learner_id: user.id, parent_email: trimmed, confirmation_token: (sub as { confirmation_token: string }).confirmation_token }),
+      });
+      setParentEmail(trimmed);
+      setParentEmailInput('');
+      setParentMsg('Confirmation email sent!');
+      setTimeout(() => setParentMsg(''), 3500);
+    } catch {
+      Alert.alert('Error', 'Could not save. This email may already be linked to your account.');
+    } finally {
+      setSavingParent(false);
+    }
+  }
+
+  async function handleRemoveParentEmail() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      await supabase.from('parent_email_subscriptions').delete().eq('learner_id', user.id);
+      setParentEmail(null);
+      setParentEmailInput('');
+    } catch {
+      Alert.alert('Error', 'Could not remove parent email.');
+    }
   }
 
   async function handleRefreshCache() {
@@ -411,6 +544,27 @@ export default function SettingsScreen() {
             <Text style={styles.editProfileBtnText}>{'Edit Profile'}</Text>
           </TouchableOpacity>
         </View>
+        <View style={styles.profileBadgeRow}>
+          <Text style={[styles.profileBadgeText, { color: theme.subTextColor }]}>
+            {'[*] '}{earnedBadgeCount}{' / '}{TOPIC_BADGES.length}{' topics mastered'}
+          </Text>
+        </View>
+        {myReferralCode && (
+          <View style={styles.referralRow}>
+            <View style={styles.referralLeft}>
+              <Text style={[styles.referralLabel, { color: theme.subTextColor }]}>{'Your code'}</Text>
+              <Text style={[styles.referralCode, { color: theme.textColor }]}>{myReferralCode}</Text>
+            </View>
+            <View style={styles.referralBtns}>
+              <TouchableOpacity style={styles.referralCopyBtn} onPress={() => void handleCopyReferralCode()} activeOpacity={0.75}>
+                <Text style={styles.referralCopyText}>{'Copy'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.referralShareBtn} onPress={() => void handleShareReferralCode()} activeOpacity={0.75}>
+                <Text style={styles.referralShareText}>{'Share'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
 
       {/* ── Accessibility Section ────────────────────────────────────────────── */}
@@ -573,6 +727,58 @@ export default function SettingsScreen() {
         </Text>
       </TouchableOpacity>
 
+      {/* ── Parent Updates Section ──────────────────────────────────────────── */}
+      <Text style={[styles.sectionHeader, { fontSize: theme.fontSize(22), fontFamily: theme.fontFamily, color: theme.textColor }]}>
+        {'Parent Updates'}
+      </Text>
+      <Text style={[styles.sectionSub, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(20), color: theme.subTextColor }]}>
+        {'Send weekly progress summaries to a parent or guardian.'}
+      </Text>
+
+      <View style={[styles.group, { backgroundColor: theme.cardColor }]}>
+        {parentEmail ? (
+          <View style={styles.row}>
+            <View style={styles.textWrap}>
+              <Text style={[styles.label, { fontSize: theme.fontSize(15), color: theme.textColor }]}>{'Parent email'}</Text>
+              <Text style={[styles.description, { color: theme.subTextColor }]}>{parentEmail}</Text>
+              {parentMsg.length > 0 && <Text style={styles.parentSuccessText}>{parentMsg}</Text>}
+            </View>
+            <TouchableOpacity onPress={() => void handleRemoveParentEmail()} activeOpacity={0.75} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.removeParentText}>{'Remove'}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={[styles.row, styles.parentInputRow]}>
+            <TextInput
+              style={[styles.parentEmailInput, { color: theme.textColor, borderColor: parentEmailInput.includes('@') ? '#0D9488' : '#E5E7EB' }]}
+              value={parentEmailInput}
+              onChangeText={setParentEmailInput}
+              placeholder="parent@example.com"
+              placeholderTextColor="#9CA3AF"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoCorrect={false}
+              editable={!savingParent}
+            />
+            <TouchableOpacity
+              style={[styles.saveParentBtn, (!parentEmailInput.includes('@') || savingParent) && { opacity: 0.5 }]}
+              onPress={() => void handleSaveParentEmail()}
+              activeOpacity={0.85}
+              disabled={!parentEmailInput.includes('@') || savingParent}
+            >
+              <Text style={styles.saveParentBtnText}>{savingParent ? 'Saving...' : 'Send confirmation'}</Text>
+            </TouchableOpacity>
+            {parentMsg.length > 0 && <Text style={styles.parentSuccessText}>{parentMsg}</Text>}
+          </View>
+        )}
+      </View>
+
+      <View style={styles.noteBox}>
+        <Text style={styles.noteText}>
+          {'Your parent will receive a confirmation email before updates begin. Updates are sent once a week.'}
+        </Text>
+      </View>
+
       {/* ── Account Section ──────────────────────────────────────────────────── */}
       <Text style={[styles.sectionHeader, { fontSize: theme.fontSize(22), fontFamily: theme.fontFamily, color: theme.textColor }]}>
         {'Account'}
@@ -657,6 +863,32 @@ export default function SettingsScreen() {
       >
         <Text style={styles.testDayBtnText}>{'🎯  Test Day Mode (Preview)'}</Text>
       </TouchableOpacity>
+
+      {/* ── About Section ────────────────────────────────────────────────────── */}
+      <Text style={[styles.sectionHeader, { fontSize: theme.fontSize(22), fontFamily: theme.fontFamily, color: theme.textColor }]}>
+        {'About'}
+      </Text>
+
+      <View style={[styles.group, { backgroundColor: theme.cardColor }]}>
+        <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => router.push('/privacy-policy' as any)} activeOpacity={0.75}>
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Privacy Policy'}</Text>
+          </View>
+          <Text style={styles.chevron}>{'>'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => router.push('/terms' as any)} activeOpacity={0.75}>
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Terms of Service'}</Text>
+          </View>
+          <Text style={styles.chevron}>{'>'}</Text>
+        </TouchableOpacity>
+        <View style={styles.row}>
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'App Version'}</Text>
+          </View>
+          <Text style={[styles.description, { color: theme.subTextColor }]}>{'1.0.0'}</Text>
+        </View>
+      </View>
 
       {/* ── Bottom Actions ───────────────────────────────────────────────────── */}
       <TouchableOpacity style={styles.manageBtn} onPress={() => router.push('/paywall')} activeOpacity={0.85}>
@@ -856,6 +1088,41 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   editProfileBtnText: { fontSize: 13, fontWeight: '700', color: '#0D9488' },
+  profileBadgeRow: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 0.5,
+    borderTopColor: '#E5E7EB',
+  },
+  profileBadgeText: { fontSize: 13, fontWeight: '600' },
+  referralRow: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 0.5,
+    borderTopColor: '#E5E7EB',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  referralLeft:    { gap: 2 },
+  referralLabel:   { fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
+  referralCode:    { fontSize: 18, fontWeight: '800', letterSpacing: 2 },
+  referralBtns:    { flexDirection: 'row', gap: 8 },
+  referralCopyBtn: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#0D9488',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  referralCopyText:  { fontSize: 13, fontWeight: '700', color: '#0D9488' },
+  referralShareBtn: {
+    borderRadius: 8,
+    backgroundColor: '#0D9488',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  referralShareText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
 
   // ── Settings / Notifications group ────────────────────────────────────────────
   group: {
@@ -924,6 +1191,26 @@ const styles = StyleSheet.create({
     marginTop: -8,
   },
   noteText: { fontSize: 13, color: '#6B7280', lineHeight: 18 },
+
+  // ── Parent Email ──────────────────────────────────────────────────────────────
+  parentInputRow: { flexDirection: 'column', gap: 10, paddingVertical: 14 },
+  parentEmailInput: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 10,
+    borderWidth: 1.5,
+    fontSize: 15,
+    padding: 12,
+    color: '#111827',
+  },
+  saveParentBtn: {
+    backgroundColor: '#0D9488',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  saveParentBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  removeParentText: { fontSize: 13, fontWeight: '600', color: '#EF4444' },
+  parentSuccessText: { fontSize: 12, color: '#0D9488', fontWeight: '600', marginTop: 4 },
 
   // ── Instructor Button ─────────────────────────────────────────────────────────
   instructorBtn: {

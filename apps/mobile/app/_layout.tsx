@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Linking } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { Stack, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -7,6 +9,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import NetInfo from '@react-native-community/netinfo';
 import { AccessibilityProvider } from '@/src/AccessibilityContext';
+import { NetworkProvider } from '@/src/NetworkContext';
+import { handleIncomingUrl } from '@/src/deepLinks';
 import { supabase } from '@/src/supabase';
 import { configureNotificationHandler } from '@/src/notifications';
 import {
@@ -38,6 +42,24 @@ export default function RootLayout() {
       if (navigated.current) return;
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
+        // Save Expo push token for cross-user notifications (challenge feature)
+        if (Platform.OS !== 'web') {
+          void (async () => {
+            try {
+              const { status } = await Notifications.getPermissionsAsync();
+              if (status === 'granted') {
+                const { data: token } = await Notifications.getExpoPushTokenAsync({
+                  projectId: 'dac8f561-57cc-4b8b-b13d-7302561d71ee',
+                });
+                await supabase
+                  .from('profiles')
+                  .update({ expo_push_token: token })
+                  .eq('id', session.user.id);
+              }
+            } catch {}
+          })();
+        }
+
         navigated.current = true;
         // Only redirect to home from unauthenticated entry points.
         // If the user is already on an authenticated route (e.g. direct web
@@ -58,6 +80,23 @@ export default function RootLayout() {
     }
 
     void bootstrap();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Deep link handler
+  useEffect(() => {
+    function dispatch(url: string) {
+      const link = handleIncomingUrl(url);
+      if (link.type === 'confirmParent') {
+        router.push({ pathname: '/confirm-parent', params: { token: link.token } } as any);
+      } else if (link.type === 'referral') {
+        router.push({ pathname: '/auth/signup', params: { ref: link.code } } as any);
+      }
+    }
+
+    Linking.getInitialURL().then(url => { if (url) dispatch(url); }).catch(() => {});
+    const sub = Linking.addEventListener('url', ({ url }) => dispatch(url));
+    return () => sub.remove();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -85,6 +124,7 @@ export default function RootLayout() {
 
   return (
     <AccessibilityProvider>
+      <NetworkProvider>
       <>
         <Stack>
           <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -110,6 +150,12 @@ export default function RootLayout() {
           <Stack.Screen name="instructor" options={{ headerShown: false }} />
           <Stack.Screen name="challenge" options={{ headerShown: false }} />
           <Stack.Screen name="ipassed" options={{ headerShown: false }} />
+          <Stack.Screen name="i-passed" options={{ headerShown: false }} />
+          <Stack.Screen name="privacy-policy" options={{ headerShown: false }} />
+          <Stack.Screen name="terms" options={{ headerShown: false }} />
+          <Stack.Screen name="confirm-parent"  options={{ headerShown: false }} />
+          <Stack.Screen name="screenshot-mode" options={{ headerShown: false }} />
+          <Stack.Screen name="study-plan"     options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="light" />
         {showCachingToast && (
@@ -118,6 +164,7 @@ export default function RootLayout() {
           </View>
         )}
       </>
+      </NetworkProvider>
     </AccessibilityProvider>
   );
 }

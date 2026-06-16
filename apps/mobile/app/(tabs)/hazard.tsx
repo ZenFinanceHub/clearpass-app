@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Platform,
   ScrollView,
@@ -12,6 +13,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { HazardClipResult, HazardWindow, calculateHazardTotal, scoreClip } from '@clearpass/core';
 import { hazardClips } from '@clearpass/content';
 import { loadUserProgress, saveUserProgress } from '@/src/storage';
+import { getHazardVideoList, getVideoUrl, type HazardClipMeta } from '@/src/hazardVideos';
 import { isPremium } from '@/src/subscription';
 import { useTheme } from '@/src/theme';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
@@ -110,13 +112,22 @@ export default function HazardScreen() {
   const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
   const [showShareCard, setShowShareCard] = useState(false);
 
+  // Supabase clip loading
+  const [clipsLoading, setClipsLoading] = useState(true);
+  const [supabaseClips, setSupabaseClips] = useState<HazardClipMeta[]>([]);
+  const [activeClips, setActiveClips] = useState(hazardClips);
+
   useFocusEffect(
     useCallback(() => {
       void loadUserProgress();
+      void getHazardVideoList().then(clips => {
+        setSupabaseClips(clips);
+        setClipsLoading(false);
+      });
     }, []),
   );
 
-  const clip = hazardClips[clipIndex];
+  const clip = activeClips[clipIndex] ?? hazardClips[0];
 
   function handleVideoTap() {
     setClicks((prev) => [...prev, currentTime]);
@@ -204,10 +215,75 @@ export default function HazardScreen() {
     setMuted(true);
   }
 
+  async function handleStartPractice() {
+    const premium = await isPremium();
+    if (!premium) { router.push('/paywall'); return; }
+
+    if (supabaseClips.length > 0) {
+      // Load signed URLs and build clip objects compatible with the local format
+      const built = await Promise.all(
+        supabaseClips.map(async (sc, i) => {
+          const url = await getVideoUrl(sc.storage_path);
+          const base = hazardClips[i % Math.max(hazardClips.length, 1)];
+          return {
+            ...(base ?? hazardClips[0]),
+            id: sc.id,
+            title: sc.title,
+            durationSec: sc.duration_seconds,
+            videoUrl: url ?? '',
+            youtubeId: undefined,
+          };
+        }),
+      );
+      setActiveClips(built as typeof hazardClips);
+    }
+    setClipIndex(0);
+    setClicks([]);
+    setCurrentTime(0);
+    setClipResults([]);
+    setMuted(true);
+    setPhase('pre-clip');
+  }
+
   // ── INFO ─────────────────────────────────────────────────────────────────
 
   if (phase === 'info') {
-    const maxPts = hazardClips.reduce((s, c) => s + c.hazards.length * 5, 0);
+    // Loading state
+    if (clipsLoading) {
+      return (
+        <View style={[styles.bg, styles.centerFill, { backgroundColor: theme.backgroundColor }]}>
+          <ActivityIndicator size="large" color="#0D9488" />
+          <Text style={[styles.sub, { color: theme.subTextColor }]}>{'Loading...'}</Text>
+        </View>
+      );
+    }
+
+    // Coming soon — no clips in Supabase yet
+    if (supabaseClips.length === 0) {
+      return (
+        <View style={[styles.bg, styles.centerFill, { backgroundColor: theme.backgroundColor }]}>
+          <OfflineBanner />
+          <View style={styles.comingSoonCard}>
+            <Text style={styles.comingSoonEmoji}>{'[V]'}</Text>
+            <Text style={[styles.heading, { fontSize: theme.fontSize(22), color: theme.textColor, textAlign: 'center' }]}>
+              {'Hazard Perception'}
+            </Text>
+            <Text style={[styles.sub, { color: theme.subTextColor, textAlign: 'center' }]}>
+              {'Videos coming soon -- check back before your test!'}
+            </Text>
+            <Text style={[styles.bodyText, { color: theme.subTextColor, textAlign: 'center' }]}>
+              {'Real driving footage with hazard scoring, just like the actual DVSA test. We are uploading the clips now.'}
+            </Text>
+          </View>
+          <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.replace('/(tabs)/home')} activeOpacity={0.85}>
+            <Text style={styles.secondaryBtnText}>{'Back to Home'}</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    const clipsToUse = supabaseClips.length > 0 ? supabaseClips : hazardClips;
+    const maxPts = clipsToUse.length * 5;
     return (
       <View style={styles.bg}>
         <OfflineBanner />
@@ -222,7 +298,7 @@ export default function HazardScreen() {
               ['Watch', 'Each clip shows a driving scene'],
               ['Tap', 'Press when you see a developing hazard'],
               ['Score', 'Earlier tap = higher score (3, 4 or 5 pts)'],
-              ['Warning', 'Rapid clicking scores 0 — anti-cheat active'],
+              ['Warning', 'Rapid clicking scores 0 -- anti-cheat active'],
             ] as [string, string][]
           ).map(([label, text]) => (
             <View key={label} style={styles.stepRow}>
@@ -237,7 +313,7 @@ export default function HazardScreen() {
         <View style={styles.statsRow}>
           {(
             [
-              [String(hazardClips.length), 'clips'],
+              [String(clipsToUse.length), 'clips'],
               [String(maxPts), 'max pts'],
               ['~60%', 'to pass'],
             ] as [string, string][]
@@ -251,11 +327,7 @@ export default function HazardScreen() {
 
         <TouchableOpacity
           style={styles.primaryBtn}
-          onPress={() => void (async () => {
-            const premium = await isPremium();
-            if (!premium) { router.push('/paywall'); return; }
-            setPhase('pre-clip');
-          })()}
+          onPress={() => void handleStartPractice()}
           activeOpacity={0.85}
         >
           <Text style={styles.primaryBtnText}>{'Start Practice'}</Text>
@@ -699,4 +771,19 @@ const styles = StyleSheet.create({
     borderColor: '#0D9488',
   },
   secondaryBtnText: { color: '#0D9488', fontSize: 16, fontWeight: '700' },
+
+  comingSoonCard: {
+    backgroundColor: '#F0FDFA',
+    borderRadius: 20,
+    padding: 28,
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1.5,
+    borderColor: '#0D9488',
+    marginHorizontal: 16,
+    marginBottom: 24,
+    maxWidth: 360,
+    width: '90%' as any,
+  },
+  comingSoonEmoji: { fontSize: 48, fontWeight: '900', color: '#0D9488' },
 });

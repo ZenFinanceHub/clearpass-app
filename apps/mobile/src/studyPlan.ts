@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserProgress, TopicCategory } from '@clearpass/core';
+import { getProxyUrl } from './proxyUrl';
 
 export type StudyTaskType =
   | 'questions'
@@ -7,7 +8,9 @@ export type StudyTaskType =
   | 'hazard'
   | 'highway_code'
   | 'road_signs'
-  | 'rest';
+  | 'rest'
+  | 'weakspots'
+  | 'revision';
 
 export interface StudyTask {
   type: StudyTaskType;
@@ -33,12 +36,6 @@ export interface StudyPlan {
 
 const STORAGE_KEY = '@clearpass/study_plan';
 
-function getProxyUrl(): string {
-  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-    return 'https://clearpass-app-production.up.railway.app';
-  }
-  return 'http://localhost:3001';
-}
 
 export async function generateStudyPlan(
   testDate: string,
@@ -141,4 +138,90 @@ export async function loadStudyPlan(): Promise<StudyPlan | null> {
 
 export async function clearStudyPlan(): Promise<void> {
   await AsyncStorage.removeItem(STORAGE_KEY);
+}
+
+// ─── Algorithmic study plan (offline, no AI) ───────────────────────────────
+
+export type StudyPace = 'relaxed' | 'steady' | 'intensive' | 'final_push';
+
+export type SimpleTask = {
+  type: StudyTaskType;
+  topic?: string;
+  durationMins: number;
+};
+
+export type DayPlan = {
+  date: string;
+  dayName: string;
+  task: SimpleTask;
+};
+
+export type SimpleStudyPlan = {
+  pace: StudyPace;
+  daysLeft: number;
+  todayTask: SimpleTask;
+  weekPlan: DayPlan[];
+};
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+export function getStudyPlan(
+  testDate: string,
+  weakTopics: string[],
+): SimpleStudyPlan {
+  const nowDay = new Date();
+  nowDay.setHours(0, 0, 0, 0);
+  const testDay = new Date(testDate);
+  testDay.setHours(0, 0, 0, 0);
+  const daysLeft = Math.max(0, Math.round((testDay.getTime() - nowDay.getTime()) / 86400000));
+
+  let pace: StudyPace;
+  let durationMins: number;
+
+  if (daysLeft >= 21) {
+    pace = 'relaxed';       durationMins = 15;
+  } else if (daysLeft >= 14) {
+    pace = 'steady';        durationMins = 20;
+  } else if (daysLeft >= 7) {
+    pace = 'intensive';     durationMins = 30;
+  } else {
+    pace = 'final_push';    durationMins = 30;
+  }
+
+  function taskForOffset(offset: number): SimpleTask {
+    const d = daysLeft - offset;
+    if (d <= 0) return { type: 'rest', durationMins: 0 };
+    if (pace === 'final_push') {
+      return { type: offset % 2 === 0 ? 'mock' : 'questions', durationMins };
+    }
+    if (pace === 'intensive') {
+      return {
+        type: offset % 3 === 0 ? 'mock' : 'questions',
+        topic: offset % 3 !== 0 ? (weakTopics[offset % weakTopics.length] ?? undefined) : undefined,
+        durationMins,
+      };
+    }
+    // steady / relaxed
+    const pattern = [0, 1, 2, 3, 4, 5, 6].map(i => {
+      if (pace === 'steady')  return i < 3 ? 'questions' : i === 3 ? 'mock' : 'rest';
+      return i < 2 ? 'questions' : i === 5 ? 'mock' : 'rest'; // relaxed
+    });
+    const type = (pattern[offset % 7] ?? 'rest') as StudyTaskType;
+    return { type, topic: type === 'questions' ? (weakTopics[0] ?? undefined) : undefined, durationMins: type === 'rest' ? 0 : durationMins };
+  }
+
+  const todayTask = taskForOffset(0);
+
+  const weekPlan: DayPlan[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(nowDay);
+    d.setDate(d.getDate() + i);
+    weekPlan.push({
+      date: d.toISOString().split('T')[0],
+      dayName: DAY_NAMES[d.getDay()],
+      task: taskForOffset(i),
+    });
+  }
+
+  return { pace, daysLeft, todayTask, weekPlan };
 }

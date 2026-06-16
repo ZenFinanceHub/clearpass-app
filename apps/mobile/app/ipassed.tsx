@@ -6,6 +6,7 @@ import {
   Linking,
   Platform,
   ScrollView,
+  Share,
   StyleSheet,
   Switch,
   Text,
@@ -111,10 +112,17 @@ function PassedFlow() {
     setShowCelebration(true);
   }
 
+  async function handleShare() {
+    const scoreText = selectedScore ? ` I scored ${selectedScore}/50.` : '';
+    await Share.share({
+      message: `I just passed my UK driving theory test!${scoreText} Studied with ClearPass -- highly recommend it. #ClearPass #DrivingTest`,
+    });
+  }
+
   async function handleRateApp() {
     const url = Platform.OS === 'ios'
       ? 'https://apps.apple.com/app/clearpass-theory-test/id000000000'
-      : 'https://play.google.com/store/apps/details?id=com.clearpass.app';
+      : 'https://play.google.com/store/apps/details?id=co.uk.getclearpass.app';
     try { await Linking.openURL(url); } catch {}
     setShowReview(false);
     router.replace('/(tabs)/home');
@@ -205,7 +213,10 @@ function PassedFlow() {
       {showCelebration && (
         <CelebrationModal
           event="test_ready"
-          onDismiss={() => { setShowCelebration(false); setShowReview(true); }}
+          onDismiss={() => {
+            setShowCelebration(false);
+            void handleShare().finally(() => setShowReview(true));
+          }}
         />
       )}
 

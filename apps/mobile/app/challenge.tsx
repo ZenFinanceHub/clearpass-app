@@ -14,6 +14,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import { TopicCategory, awardXp } from '@clearpass/core';
+import { getProxyUrl } from '@/src/proxyUrl';
 import type { Question } from '@clearpass/core';
 import { allQuestions } from '@clearpass/content';
 import { supabase } from '@/src/supabase';
@@ -502,7 +503,17 @@ function ResultsView({
           )}
           <TouchableOpacity
             style={styles.remindBtn}
-            onPress={() => Alert.alert('Coming soon', 'Push notifications for challenges will be available soon!')}
+            onPress={() => {
+              const targetId = latest.challenger_id === myUserId ? latest.challenged_id : latest.challenger_id;
+              const senderName = latest.challenger_id === myUserId ? opponentName : latest.challenger_name;
+              if (targetId) {
+                void fetch(`${getProxyUrl()}/api/send-challenge-notification`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ challenged_user_id: targetId, challenger_username: senderName }),
+                }).then(() => Alert.alert('Reminder sent!', `${opponentName} has been notified.`));
+              }
+            }}
             activeOpacity={0.8}
           >
             <Text style={styles.remindBtnText}>{'Remind '}{opponentName}</Text>
@@ -693,6 +704,15 @@ function LobbyView({
         `Share this code with your friend:\n\n${shareCode}\n\nThey can enter it on the Challenge screen.`,
         [{ text: 'OK' }],
       );
+    }
+
+    // Notify the challenged user if they have a push token
+    if (challengedId) {
+      void fetch(`${getProxyUrl()}/api/send-challenge-notification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ challenged_user_id: challengedId, challenger_username: myUsername }),
+      });
     }
 
     setShowStartModal(false);

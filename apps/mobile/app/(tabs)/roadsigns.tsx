@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -7,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import SIGN_IMAGES from '@/src/signImages';
 import Svg, {
   Circle,
   Ellipse,
@@ -988,6 +990,14 @@ function RectVis({ size, bc, fc, tc, dt }: { size: number; bc: string; fc: strin
 }
 
 function SignVisual({ sign, size }: { sign: RoadSign; size: number }) {
+  const imgSrc = SIGN_IMAGES[sign.id];
+  if (imgSrc) {
+    const isRect = sign.shape === 'rectangle';
+    const isTriangle = sign.shape === 'triangle';
+    const w = isRect ? Math.round(size * 1.5) : size;
+    const h = isTriangle ? Math.round(size * 0.88) : isRect ? Math.round(size * 0.85) : size;
+    return <Image source={imgSrc} style={{ width: w, height: h }} resizeMode="contain" />;
+  }
   const { shape, borderColor: bc, fillColor: fc, textColor: tc, displayText: dt } = sign;
   if (shape === 'triangle')
     return <TriangleSignSVG id={sign.id} size={size} fillColor={fc} />;

@@ -41,6 +41,16 @@ type LearnerEntry = {
   rel: Relationship;
   progress: UserProgress | null;
   username: string | null;
+  lastNoteDate: string | null;
+};
+
+type LessonNote = {
+  id: string;
+  instructor_id: string;
+  learner_id: string;
+  note: string;
+  created_at: string;
+  lesson_date: string | null;
 };
 
 type EarningEntry = {
@@ -100,6 +110,13 @@ function bestMock(history: MockTestResult[]): number {
 function formatDate(iso: string): string {
   const d = new Date(iso);
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function formatLastNote(iso: string): string {
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (days === 0) return 'today';
+  if (days === 1) return 'yesterday';
+  return `${days} days ago`;
 }
 
 function formatLastActive(iso: string): string {
@@ -188,7 +205,14 @@ function LearnerCard({ data, onPress }: { data: LearnerEntry; onPress: () => voi
         </View>
       )}
 
-      <Text style={styles.learnerCardChevron}>{'View details  ›'}</Text>
+      <View style={styles.learnerCardFooter}>
+        <Text style={styles.learnerCardChevron}>{'View details  >'}</Text>
+        {data.lastNoteDate && (
+          <Text style={[styles.lastNoteText, { color: theme.subTextColor }]}>
+            {'Last note: '}{formatLastNote(data.lastNoteDate)}
+          </Text>
+        )}
+      </View>
     </TouchableOpacity>
   );
 }
@@ -337,13 +361,192 @@ function LearnerDetailView({
 
       {/* Actions */}
       <TouchableOpacity style={styles.encourageBtn} onPress={handleSendEncouragement} activeOpacity={0.85}>
-        <Text style={styles.encourageBtnText}>{'Send Encouragement 💪'}</Text>
+        <Text style={styles.encourageBtnText}>{'Send Encouragement'}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.emailSummaryBtn} onPress={onEmailSummary} activeOpacity={0.85}>
-        <Text style={styles.emailSummaryBtnText}>{'Email Summary 📊'}</Text>
+        <Text style={styles.emailSummaryBtnText}>{'Email Summary'}</Text>
       </TouchableOpacity>
+
+      {/* Lesson Notes */}
+      {rel.learner_id && (
+        <LessonNotesSection learnerId={rel.learner_id} />
+      )}
     </ScrollView>
+  );
+}
+
+// ─── AddNoteModal ─────────────────────────────────────────────────────────────
+
+function AddNoteModal({
+  visible,
+  instructorId,
+  learnerId,
+  onClose,
+  onSaved,
+}: {
+  visible: boolean;
+  instructorId: string;
+  learnerId: string;
+  onClose: () => void;
+  onSaved: (note: LessonNote) => void;
+}) {
+  const theme = useTheme();
+  const today = new Date().toISOString().split('T')[0];
+  const [lessonDate, setLessonDate] = useState(today);
+  const [noteText, setNoteText] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    if (!noteText.trim() || saving) return;
+    setSaving(true);
+    try {
+      const { data, error } = await supabase
+        .from('instructor_lesson_notes')
+        .insert({
+          instructor_id: instructorId,
+          learner_id: learnerId,
+          note: noteText.trim(),
+          lesson_date: lessonDate || null,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      onSaved(data as LessonNote);
+      setNoteText('');
+      setLessonDate(today);
+      onClose();
+    } catch {
+      Alert.alert('Error', 'Could not save note. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalCard, { backgroundColor: theme.cardColor }]}>
+          <Text style={[styles.modalTitle, { color: theme.textColor }]}>{'Add Lesson Note'}</Text>
+
+          <Text style={[styles.codeLabel, { color: theme.subTextColor }]}>{'Lesson Date (YYYY-MM-DD)'}</Text>
+          <TextInput
+            style={[styles.emailInput, { color: theme.textColor, borderColor: '#E5E7EB' }]}
+            value={lessonDate}
+            onChangeText={setLessonDate}
+            placeholder="2026-06-04"
+            placeholderTextColor="#9CA3AF"
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!saving}
+          />
+
+          <Text style={[styles.codeLabel, { color: theme.subTextColor }]}>{'Notes'}</Text>
+          <TextInput
+            style={[styles.noteTextArea, { color: theme.textColor, borderColor: noteText.trim().length > 0 ? '#0D9488' : '#E5E7EB' }]}
+            value={noteText}
+            onChangeText={setNoteText}
+            placeholder="Add your lesson notes here..."
+            placeholderTextColor="#9CA3AF"
+            multiline
+            numberOfLines={5}
+            textAlignVertical="top"
+            editable={!saving}
+            maxLength={2000}
+          />
+
+          <TouchableOpacity
+            style={[styles.addEmailBtn, (noteText.trim().length === 0 || saving) && styles.btnDisabled]}
+            onPress={() => void handleSave()}
+            activeOpacity={0.85}
+            disabled={noteText.trim().length === 0 || saving}
+          >
+            <Text style={styles.addEmailBtnText}>{saving ? 'Saving...' : 'Save Note'}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.modalCancelBtn} onPress={onClose} activeOpacity={0.85} disabled={saving}>
+            <Text style={styles.modalCancelText}>{'Cancel'}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── LessonNotesSection ───────────────────────────────────────────────────────
+
+function LessonNotesSection({ learnerId }: { learnerId: string }) {
+  const theme = useTheme();
+  const [notes, setNotes] = useState<LessonNote[]>([]);
+  const [loadingNotes, setLoadingNotes] = useState(true);
+  const [showAddNote, setShowAddNote] = useState(false);
+  const [instructorId, setInstructorId] = useState<string | null>(null);
+
+  useEffect(() => {
+    void loadNotes();
+  }, []);
+
+  async function loadNotes() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setLoadingNotes(false); return; }
+      setInstructorId(user.id);
+      const { data } = await supabase
+        .from('instructor_lesson_notes')
+        .select('*')
+        .eq('instructor_id', user.id)
+        .eq('learner_id', learnerId)
+        .order('created_at', { ascending: false });
+      setNotes((data as LessonNote[] | null) ?? []);
+    } catch {
+      setNotes([]);
+    } finally {
+      setLoadingNotes(false);
+    }
+  }
+
+  return (
+    <View style={[styles.section, { backgroundColor: theme.cardColor }]}>
+      <View style={styles.notesSectionHeader}>
+        <Text style={styles.sectionTitle}>{'LESSON NOTES'}</Text>
+        <TouchableOpacity style={styles.addNoteBtn} onPress={() => setShowAddNote(true)} activeOpacity={0.85}>
+          <Text style={styles.addNoteBtnText}>{'+ Add Note'}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {loadingNotes ? (
+        <Text style={[styles.notesEmptyText, { color: theme.subTextColor }]}>{'Loading...'}</Text>
+      ) : notes.length === 0 ? (
+        <Text style={[styles.notesEmptyText, { color: theme.subTextColor }]}>
+          {'No notes yet. Tap + Add Note to record your first lesson note.'}
+        </Text>
+      ) : (
+        notes.map((note, i) => (
+          <View
+            key={note.id}
+            style={[styles.noteRow, i < notes.length - 1 && { borderBottomWidth: 0.5, borderBottomColor: theme.borderColor }]}
+          >
+            <Text style={[styles.noteDate, { color: theme.subTextColor }]}>
+              {note.lesson_date ? formatDate(note.lesson_date + 'T00:00:00') : formatDate(note.created_at)}
+            </Text>
+            <Text style={[styles.noteBody, { color: theme.textColor }]}>{note.note}</Text>
+          </View>
+        ))
+      )}
+
+      {instructorId !== null && (
+        <AddNoteModal
+          visible={showAddNote}
+          instructorId={instructorId}
+          learnerId={learnerId}
+          onClose={() => setShowAddNote(false)}
+          onSaved={(note) => {
+            setNotes(prev => [note, ...prev]);
+            setShowAddNote(false);
+          }}
+        />
+      )}
+    </View>
   );
 }
 
@@ -1090,18 +1293,37 @@ export default function InstructorScreen() {
             supabase.from('profiles').select('id, username').in('id', learnerIds),
           ]);
 
+          let lastNoteDates: Map<string, string> = new Map();
+          try {
+            const { data: notesData } = await supabase
+              .from('instructor_lesson_notes')
+              .select('learner_id, created_at')
+              .eq('instructor_id', user.id)
+              .order('created_at', { ascending: false });
+            for (const n of (notesData as { learner_id: string; created_at: string }[] | null) ?? []) {
+              if (n.learner_id && !lastNoteDates.has(n.learner_id)) {
+                lastNoteDates.set(n.learner_id, n.created_at);
+              }
+            }
+          } catch {}
+
           const entries: LearnerEntry[] = accepted.map(rel => {
             const pd  = (progressRows as { id: string; progress: unknown }[] | null)?.find(p => p.id === rel.learner_id);
             const pf  = (profileRows  as { id: string; username: string }[] | null)?.find(p => p.id === rel.learner_id);
             const raw = pd?.progress as Partial<UserProgress> | undefined;
             const progress = raw ? ({ ...createFreshUserProgress(), ...raw } as UserProgress) : null;
-            return { rel, progress, username: pf?.username ?? null };
+            return {
+              rel,
+              progress,
+              username: pf?.username ?? null,
+              lastNoteDate: rel.learner_id ? (lastNoteDates.get(rel.learner_id) ?? null) : null,
+            };
           });
           setLearners(entries);
         } else {
           setLearners([]);
         }
-      } else {
+      } else if (mode === 'learner') {
         const { data: rels } = await supabase
           .from('instructor_relationships')
           .select('*')
@@ -1216,7 +1438,9 @@ const styles = StyleSheet.create({
     borderColor: '#F59E0B',
   },
   weakBadgeText: { fontSize: 11, fontWeight: '700', color: '#92400E' },
-  learnerCardChevron: { fontSize: 12, color: '#0D9488', fontWeight: '700', textAlign: 'right' },
+  learnerCardChevron: { fontSize: 12, color: '#0D9488', fontWeight: '700' },
+  learnerCardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  lastNoteText: { fontSize: 11, fontWeight: '500', fontStyle: 'italic' },
 
   // Detail view
   backRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
@@ -1473,6 +1697,34 @@ const styles = StyleSheet.create({
   },
   addEmailBtnText:  { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
   btnDisabled: { opacity: 0.45 },
+
+  // Lesson notes
+  notesSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  addNoteBtn: {
+    backgroundColor: '#0D9488',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  addNoteBtnText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
+  notesEmptyText: { fontSize: 13, fontStyle: 'italic', paddingVertical: 8 },
+  noteRow: { paddingVertical: 10, gap: 4 },
+  noteDate: { fontSize: 11, fontWeight: '600' },
+  noteBody: { fontSize: 14, lineHeight: 20 },
+  noteTextArea: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 10,
+    borderWidth: 1.5,
+    fontSize: 15,
+    padding: 12,
+    minHeight: 120,
+  },
+
   modalCancelBtn: {
     borderRadius: 12,
     paddingVertical: 13,

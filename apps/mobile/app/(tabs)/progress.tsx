@@ -3,6 +3,7 @@ import { loadSRState, SpacedRepetitionState } from '@/src/spacedRepetition';
 import { computeAndSavePassProbability, PassProbabilityResult } from '@/src/passProbability';
 import { allQuestions } from '@clearpass/content';
 import {
+  Alert,
   Linking,
   ScrollView,
   StyleSheet,
@@ -10,8 +11,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
+import { router } from 'expo-router';
 import {
   ACHIEVEMENTS,
   Achievement,
@@ -19,7 +20,10 @@ import {
   TopicCategory,
   UserProgress,
 } from '@clearpass/core';
-import { loadUserProgress } from '@/src/storage';
+import { getSessionHistory, getTopicAccuracy, getMasteredTopics, loadUserProgress, type SessionHistoryEntry } from '@/src/storage';
+import { getProxyUrl } from '@/src/proxyUrl';
+import { TOPIC_BADGES, type TopicBadge } from '@/src/badges';
+import { getComparativeStats } from '@/src/analytics';
 import { useTheme } from '@/src/theme';
 
 const TOPIC_LABELS: Record<TopicCategory, string> = {
@@ -37,6 +41,14 @@ const TOPIC_LABELS: Record<TopicCategory, string> = {
   [TopicCategory.DocumentsAndRegulations]: 'Documents and Regulations',
   [TopicCategory.AccidentsAndEmergencies]: 'Accidents and Emergencies',
   [TopicCategory.VehicleLoading]: 'Vehicle Loading',
+};
+
+type PassStory = {
+  id: string;
+  username: string | null;
+  score: number | null;
+  story: string | null;
+  test_date: string | null;
 };
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -87,18 +99,54 @@ export default function ProgressScreen() {
   const [progress, setProgress] = useState<UserProgress | null>(null);
   const [srState,  setSrState]  = useState<SpacedRepetitionState | null>(null);
   const [passProb, setPassProb] = useState<PassProbabilityResult | null>(null);
+  const [sessionHistory, setSessionHistory] = useState<SessionHistoryEntry[]>([]);
+  const [topicAccuracy, setTopicAccuracy] = useState<Record<string, { correct: number; total: number }>>({});
+  const [masteredTopics, setMasteredTopics] = useState<string[]>([]);
+  const [passStories, setPassStories] = useState<PassStory[]>([]);
+  const [hasOwnStory, setHasOwnStory] = useState(false);
   const [loaded,   setLoaded]   = useState(false);
   const theme = useTheme();
 
   useEffect(() => {
     void (async () => {
-      const [p, sr] = await Promise.all([loadUserProgress(), loadSRState()]);
+      const [p, sr, history, acc, mastered] = await Promise.all([
+        loadUserProgress(),
+        loadSRState(),
+        getSessionHistory(),
+        getTopicAccuracy(),
+        getMasteredTopics(),
+      ]);
       setProgress(p);
       setSrState(sr);
+      setSessionHistory(history);
+      setTopicAccuracy(acc);
+      setMasteredTopics(mastered);
       if (p) {
         const prob = await computeAndSavePassProbability(p, sr, allQuestions);
         setPassProb(prob);
       }
+
+      // Load public pass stories
+      try {
+        const { data: stories } = await supabase
+          .from('pass_stories')
+          .select('id, username, score, story, test_date')
+          .eq('shared', true)
+          .order('created_at', { ascending: false })
+          .limit(5);
+        if (stories) setPassStories(stories as PassStory[]);
+
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: own } = await supabase
+            .from('pass_stories')
+            .select('id')
+            .eq('user_id', user.id)
+            .maybeSingle();
+          setHasOwnStory(!!own);
+        }
+      } catch {}
+
       setLoaded(true);
     })();
   }, []);
@@ -107,10 +155,7 @@ export default function ProgressScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push('/auth'); return; }
     try {
-      const proxyUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-        ? 'https://clearpass-app-production.up.railway.app'
-        : 'http://localhost:3001';
-      const res = await fetch(`${proxyUrl}/api/create-checkout-session`, {
+      const res = await fetch(`${getProxyUrl()}/api/create-checkout-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id }),
@@ -232,6 +277,38 @@ export default function ProgressScreen() {
 
       <DueForReviewSection srState={srState} />
 
+      {sessionHistory.length > 0 && (
+        <>
+          <Text style={[styles.sectionLabel, { marginHorizontal: 16, marginTop: 8, marginBottom: 8 }]}>RECENT SESSIONS</Text>
+          <View style={[styles.recentSessionsCard, { backgroundColor: theme.cardColor, borderColor: theme.borderColor }]}>
+            {sessionHistory.slice(0, 10).map((entry, i) => {
+              const pct = entry.total > 0 ? entry.score / entry.total : 0;
+              const color = pct >= 0.7 ? '#16A34A' : pct >= 0.5 ? '#D97706' : '#DC2626';
+              const mins = Math.floor(entry.durationSeconds / 60);
+              const secs = entry.durationSeconds % 60;
+              const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+              return (
+                <View key={i} style={[styles.recentRow, i < Math.min(sessionHistory.length, 10) - 1 && { borderBottomWidth: 1, borderBottomColor: theme.borderColor }]}>
+                  <View style={styles.recentLeft}>
+                    <Text style={[styles.recentDate, { color: theme.subTextColor }]}>{formatDate(entry.date)}</Text>
+                    <Text style={[styles.recentTopic, { color: theme.textColor }]}>{entry.topic}</Text>
+                  </View>
+                  <View style={styles.recentRight}>
+                    <Text style={[styles.recentScore, { color }]}>{entry.score}/{entry.total}</Text>
+                    <Text style={[styles.recentTime, { color: theme.subTextColor }]}>{timeStr}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </>
+      )}
+
+      <TopicBadgesSection
+        topicAccuracy={topicAccuracy}
+        masteredTopics={masteredTopics}
+      />
+
       <View style={styles.achievementsHeader}>
         <Text style={styles.sectionLabel}>ACHIEVEMENTS</Text>
         <Text style={styles.achievementsCount}>
@@ -275,6 +352,41 @@ export default function ProgressScreen() {
           );
         })}
       </View>
+
+      {/* Pass Stories */}
+      {(passStories.length > 0 || !hasOwnStory) && (
+        <>
+          <Text style={styles.sectionLabel}>{'PASS STORIES'}</Text>
+          {!hasOwnStory && (
+            <TouchableOpacity
+              style={styles.shareStoryBtn}
+              onPress={() => router.push('/ipassed' as any)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.shareStoryBtnText}>{'[*] Share your story'}</Text>
+            </TouchableOpacity>
+          )}
+          {passStories.map(s => (
+            <View key={s.id} style={[styles.passStoryCard, { backgroundColor: theme.cardColor, borderColor: theme.borderColor }]}>
+              <View style={styles.passStoryHeader}>
+                <Text style={[styles.passStoryUser, { color: theme.textColor }]}>
+                  {s.username ?? 'Anonymous'}
+                </Text>
+                {s.score !== null && (
+                  <View style={styles.passScoreBadge}>
+                    <Text style={styles.passScoreText}>{String(s.score)}{'/50'}</Text>
+                  </View>
+                )}
+              </View>
+              {s.story ? (
+                <Text style={[styles.passStoryBody, { color: theme.subTextColor }]} numberOfLines={3}>
+                  {s.story}
+                </Text>
+              ) : null}
+            </View>
+          ))}
+        </>
+      )}
 
       {recentTests.length > 0 && (
         <>
@@ -505,6 +617,78 @@ function DueForReviewSection({ srState }: { srState: SpacedRepetitionState | nul
   );
 }
 
+function TopicBadgesSection({
+  topicAccuracy,
+  masteredTopics,
+}: {
+  topicAccuracy: Record<string, { correct: number; total: number }>;
+  masteredTopics: string[];
+}) {
+  const masteredSet = new Set(masteredTopics);
+  const theme = useTheme();
+  const earned = masteredTopics.length;
+
+  async function handleBadgeTap(badge: TopicBadge, earned: boolean) {
+    const acc = topicAccuracy[badge.topic];
+    const pct = acc && acc.total > 0 ? Math.round((acc.correct / acc.total) * 100) : 0;
+    const total = acc?.total ?? 0;
+    let platformLine = '';
+    try {
+      const stats = await getComparativeStats(badge.topic, pct);
+      if (stats && stats.totalAnswers >= 50) {
+        platformLine = `\nPlatform average: ${stats.platformAvgPct}%`;
+      }
+    } catch {}
+    if (earned) {
+      Alert.alert(badge.badgeName, `${badge.topic}\nYour accuracy: ${pct}%${platformLine}\n${badge.description}`);
+    } else {
+      const qNeeded = Math.max(0, 20 - total);
+      const msg = pct >= 80
+        ? `${badge.topic}\nAccuracy: ${pct}%${platformLine}\n${qNeeded} more questions needed.`
+        : `${badge.topic}\nAccuracy: ${pct}%${platformLine}\nNeed 80%+ on 20+ questions.\n${qNeeded > 0 ? qNeeded + ' more questions needed.' : 'Improve your accuracy to unlock.'}`;
+      Alert.alert(`[Locked] ${badge.badgeName}`, msg);
+    }
+  }
+
+  return (
+    <>
+      <View style={styles.badgesHeader}>
+        <Text style={styles.sectionLabel}>{'TOPIC BADGES'}</Text>
+        <Text style={styles.badgesCount}>{earned}{' / '}{TOPIC_BADGES.length}{' earned'}</Text>
+      </View>
+      <View style={styles.badgeGrid}>
+        {TOPIC_BADGES.map(badge => {
+          const isEarned = masteredSet.has(badge.topic);
+          const acc = topicAccuracy[badge.topic];
+          const pct = acc && acc.total > 0 ? Math.round((acc.correct / acc.total) * 100) : 0;
+          return (
+            <TouchableOpacity
+              key={badge.topicCategory}
+              style={[styles.badgeCell, isEarned ? styles.badgeCellEarned : styles.badgeCellLocked]}
+              onPress={() => void handleBadgeTap(badge, isEarned)}
+              activeOpacity={0.75}
+            >
+              <View style={[styles.badgeIconCircle, { backgroundColor: isEarned ? '#6366F1' : '#E5E7EB' }]}>
+                <Text style={[styles.badgeCellIcon, { color: isEarned ? '#FFFFFF' : '#9CA3AF' }]}>
+                  {isEarned ? '[v]' : '[x]'}
+                </Text>
+              </View>
+              <Text style={[styles.badgeCellName, { color: isEarned ? theme.textColor : '#9CA3AF' }]} numberOfLines={1}>
+                {badge.badgeName}
+              </Text>
+              {isEarned ? (
+                <Text style={styles.badgeCellPct}>{pct}{'%'}</Text>
+              ) : (
+                <Text style={styles.badgeCellLockLabel}>{'[lock]'}</Text>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </>
+  );
+}
+
 function AchievementCard({
   achievement,
   unlocked,
@@ -697,6 +881,27 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
+  recentSessionsCard: {
+    marginHorizontal: 16,
+    marginBottom: 24,
+    borderRadius: 12,
+    borderWidth: 0.5,
+    overflow: 'hidden',
+  },
+  recentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  recentLeft: { flex: 1, gap: 2 },
+  recentDate: { fontSize: 11, fontWeight: '500' },
+  recentTopic: { fontSize: 13, fontWeight: '600' },
+  recentRight: { alignItems: 'flex-end', gap: 2 },
+  recentScore: { fontSize: 14, fontWeight: '700' },
+  recentTime: { fontSize: 11, fontWeight: '500' },
+
   topicList: { gap: 10, marginBottom: 28 },
   topicRow: {
     backgroundColor: '#FFFFFF',
@@ -862,6 +1067,71 @@ const styles = StyleSheet.create({
   srBarCount:     { fontSize: 10, color: '#0D9488', fontWeight: '700' },
   srBarDay:       { fontSize: 10, color: '#9CA3AF', fontWeight: '500' },
   srBarDayToday:  { color: '#0D9488', fontWeight: '700' },
+
+  // ── Topic Badges ─────────────────────────────────────────────────────────────
+  badgesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  badgesCount: { fontSize: 12, color: '#6B7280', fontWeight: '500' },
+  badgeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 28,
+  },
+  badgeCell: {
+    width: '22%',
+    borderRadius: 12,
+    padding: 8,
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+  },
+  badgeCellEarned: { backgroundColor: '#FFFFFF', borderColor: '#6366F1' },
+  badgeCellLocked: { backgroundColor: '#F9FAFB', borderColor: '#E5E7EB' },
+  badgeIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeCellIcon: { fontSize: 10, fontWeight: '800' },
+  badgeCellName: { fontSize: 9, fontWeight: '700', textAlign: 'center' },
+  badgeCellPct: { fontSize: 9, fontWeight: '600', color: '#6366F1' },
+  badgeCellLockLabel: { fontSize: 8, color: '#D1D5DB', fontWeight: '600' },
+
+  // ── Pass Stories ─────────────────────────────────────────────────────────────
+  shareStoryBtn: {
+    backgroundColor: '#0D9488',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  shareStoryBtnText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
+  passStoryCard: {
+    borderRadius: 14,
+    borderWidth: 0.5,
+    padding: 14,
+    marginBottom: 10,
+    gap: 6,
+  },
+  passStoryHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  passStoryUser:   { fontSize: 14, fontWeight: '700' },
+  passScoreBadge: {
+    backgroundColor: '#F0FDFA',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 0.5,
+    borderColor: '#0D9488',
+  },
+  passScoreText: { fontSize: 12, fontWeight: '700', color: '#0D9488' },
+  passStoryBody: { fontSize: 13, lineHeight: 19 },
 
   proBanner: {
     flexDirection: 'row',

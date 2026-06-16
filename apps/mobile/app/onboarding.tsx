@@ -3,52 +3,83 @@ import {
   FlatList,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import { setOnboardingComplete, savePendingTestDate } from '@/src/storage';
 
-const ONBOARDING_KEY = '@clearpass/hasSeenOnboarding';
+type Slide = {
+  key: string;
+  emoji: string;
+  title: string;
+  subtitle: string;
+  isDateSlide?: boolean;
+};
 
-const SLIDES = [
+const SLIDES: Slide[] = [
   {
-    emoji: '🚗',
-    title: 'Pass First Time',
-    subtitle: "The UK's smartest theory test app. Learn faster, score higher.",
+    key: 'welcome',
+    emoji: '👋',
+    title: 'Welcome to ClearPass',
+    subtitle: 'Pass your theory test. First time.',
   },
   {
-    emoji: '📚',
-    title: 'Practice That Works',
-    subtitle: '1,000+ real theory questions, organised by topic. Learn at your own pace.',
+    key: 'practice',
+    emoji: '🎯',
+    title: 'Practice smarter',
+    subtitle: '700+ questions, adaptive to your weak spots. The more you use it, the more it personalises to you.',
   },
   {
-    emoji: '⚠️',
-    title: 'Hazard Perception',
-    subtitle: 'Video clips with real scoring — just like the actual DVSA test.',
+    key: 'progress',
+    emoji: '📈',
+    title: 'Track your progress',
+    subtitle: 'Mock tests, pass probability, topic badges and streaks. Know exactly when you are ready.',
   },
   {
-    emoji: '🏆',
-    title: 'Track Your Journey',
-    subtitle: 'Watch your car move closer to Test Ready as you improve.',
+    key: 'date',
+    emoji: '📅',
+    title: 'Set your test date',
+    subtitle: 'When is your theory test? We will build a personalised study plan.',
+    isDateSlide: true,
   },
 ];
 
-async function completeOnboarding() {
-  await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
+function parseDdMmYyyy(input: string): string | null {
+  const match = input.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return null;
+  const day   = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10) - 1;
+  const year  = parseInt(match[3], 10);
+  const d = new Date(year, month, day);
+  if (isNaN(d.getTime()) || d.getMonth() !== month) return null;
+  return d.toISOString();
+}
+
+async function finish(testDateIso: string | null) {
+  await setOnboardingComplete();
+  if (testDateIso) await savePendingTestDate(testDateIso);
   router.replace('/auth/signup');
 }
 
 export default function OnboardingScreen() {
   const { width } = useWindowDimensions();
   const [activeIndex, setActiveIndex] = useState(0);
-  const listRef = useRef<FlatList>(null);
+  const [dateInput, setDateInput]     = useState('');
+  const [dateError, setDateError]     = useState('');
+  const listRef = useRef<FlatList<Slide>>(null);
   const isLast = activeIndex === SLIDES.length - 1;
 
   function handleNext() {
     if (isLast) {
-      void completeOnboarding();
+      const parsed = dateInput.trim() ? parseDdMmYyyy(dateInput.trim()) : null;
+      if (dateInput.trim() && !parsed) {
+        setDateError('Enter a valid date (DD/MM/YYYY)');
+        return;
+      }
+      void finish(parsed);
       return;
     }
     const next = activeIndex + 1;
@@ -58,28 +89,37 @@ export default function OnboardingScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Skip link */}
-      <TouchableOpacity style={styles.skipBtn} onPress={() => void completeOnboarding()} activeOpacity={0.7}>
-        <Text style={styles.skipText}>{'Skip'}</Text>
-      </TouchableOpacity>
-
-      {/* Slides */}
+      {/* FlatList of slides */}
       <FlatList
         ref={listRef}
         data={SLIDES}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        keyExtractor={(_, i) => String(i)}
-        onMomentumScrollEnd={(e) => {
-          const idx = Math.round(e.nativeEvent.contentOffset.x / width);
-          setActiveIndex(idx);
-        }}
+        keyExtractor={(item) => item.key}
+        scrollEnabled={false}
         renderItem={({ item }) => (
           <View style={[styles.slide, { width }]}>
             <Text style={styles.emoji}>{item.emoji}</Text>
             <Text style={styles.title}>{item.title}</Text>
             <Text style={styles.subtitle}>{item.subtitle}</Text>
+
+            {item.isDateSlide && (
+              <View style={styles.dateBlock}>
+                <TextInput
+                  style={[styles.dateInput, dateError.length > 0 && styles.dateInputError]}
+                  value={dateInput}
+                  onChangeText={(t) => { setDateInput(t); setDateError(''); }}
+                  placeholder="DD/MM/YYYY"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={10}
+                />
+                {dateError.length > 0 && (
+                  <Text style={styles.dateError}>{dateError}</Text>
+                )}
+              </View>
+            )}
           </View>
         )}
       />
@@ -91,11 +131,23 @@ export default function OnboardingScreen() {
         ))}
       </View>
 
-      {/* Next / Get Started */}
+      {/* Footer */}
       <View style={styles.footer}>
         <TouchableOpacity style={styles.nextBtn} onPress={handleNext} activeOpacity={0.85}>
-          <Text style={styles.nextBtnText}>{isLast ? 'Get Started' : 'Next'}</Text>
+          <Text style={styles.nextBtnText}>
+            {isLast ? (dateInput.trim() ? "Let's Go" : "Let's Go") : 'Next'}
+          </Text>
         </TouchableOpacity>
+
+        {isLast && (
+          <TouchableOpacity
+            style={styles.skipBtn}
+            onPress={() => void finish(null)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.skipText}>{'Skip for now'}</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -103,16 +155,6 @@ export default function OnboardingScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F7F8FA' },
-
-  skipBtn: {
-    position: 'absolute',
-    top: 56,
-    right: 24,
-    zIndex: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  skipText: { fontSize: 14, color: '#6B7280', fontWeight: '600' },
 
   slide: {
     flex: 1,
@@ -122,9 +164,25 @@ const styles = StyleSheet.create({
     paddingTop: 80,
     gap: 20,
   },
-  emoji: { fontSize: 80 },
-  title: { fontSize: 30, fontWeight: '900', color: '#111827', textAlign: 'center', letterSpacing: 0.5 },
+  emoji:    { fontSize: 80 },
+  title:    { fontSize: 30, fontWeight: '900', color: '#111827', textAlign: 'center', letterSpacing: 0.5 },
   subtitle: { fontSize: 16, color: '#6B7280', textAlign: 'center', lineHeight: 24 },
+
+  dateBlock: { width: '100%', gap: 6 },
+  dateInput: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#0D9488',
+    padding: 16,
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#111827',
+    letterSpacing: 2,
+    textAlign: 'center',
+  },
+  dateInputError: { borderColor: '#EF4444' },
+  dateError: { fontSize: 13, color: '#EF4444', textAlign: 'center' },
 
   dots: {
     flexDirection: 'row',
@@ -146,6 +204,7 @@ const styles = StyleSheet.create({
   footer: {
     paddingHorizontal: 24,
     paddingBottom: 48,
+    gap: 12,
   },
   nextBtn: {
     backgroundColor: '#0D9488',
@@ -154,4 +213,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   nextBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
+  skipBtn: { alignItems: 'center', paddingVertical: 8 },
+  skipText: { fontSize: 14, color: '#9CA3AF', fontWeight: '600' },
 });
