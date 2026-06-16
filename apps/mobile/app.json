@@ -16,13 +16,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "co.uk.getclearpass.app",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      },
-      "associatedDomains": [
-        "applinks:getclearpass.co.uk"
-      ]
+      }
     },
     "android": {
       "adaptiveIcon": {
