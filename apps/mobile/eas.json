@@ -28,9 +28,9 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "FILL_IN_APPLE_ID_EMAIL",
-        "ascAppId": "FILL_IN_ASC_APP_ID",
-        "appleTeamId": "FILL_IN_TEAM_ID"
+        "appleId": "craig@zen-finance.co.uk",
+        "ascAppId": "6779180259",
+        "appleTeamId": "B5Q3T2GSF8"
       }
     }
   }

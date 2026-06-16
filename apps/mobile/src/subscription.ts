@@ -32,3 +32,7 @@ export async function incrementFreeQuestionsAnswered(): Promise<number> {
   await AsyncStorage.setItem(FREE_QUESTIONS_KEY, String(next));
   return next;
 }
+
+export async function resetFreeQuestionsAnswered(): Promise<void> {
+  await AsyncStorage.setItem(FREE_QUESTIONS_KEY, '0');
+}
