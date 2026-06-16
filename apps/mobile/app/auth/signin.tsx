@@ -14,13 +14,18 @@ import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
 
 export default function SignInScreen() {
-  const [email, setEmail]       = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState('');
+  const [email, setEmail]                       = useState('');
+  const [password, setPassword]                 = useState('');
+  const [loading, setLoading]                   = useState(false);
+  const [error, setError]                       = useState('');
+  const [emailUnconfirmed, setEmailUnconfirmed] = useState(false);
+  const [resendLoading, setResendLoading]       = useState(false);
+  const [resendMessage, setResendMessage]       = useState('');
 
   async function handleSignIn() {
     setError('');
+    setEmailUnconfirmed(false);
+    setResendMessage('');
     if (!email.trim() || !password) { setError('Please enter your email and password.'); return; }
 
     setLoading(true);
@@ -30,7 +35,11 @@ export default function SignInScreen() {
         password,
       });
       if (authError) {
-        setError(authError.message);
+        if (authError.message.toLowerCase().includes('email not confirmed')) {
+          setEmailUnconfirmed(true);
+        } else {
+          setError(authError.message);
+        }
       } else {
         await new Promise<void>((res) => setTimeout(res, 400));
         router.replace('/(tabs)/home');
@@ -39,6 +48,19 @@ export default function SignInScreen() {
       setError('An unexpected error occurred.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    setResendMessage('');
+    setResendLoading(true);
+    try {
+      const { error: resendError } = await supabase.auth.resend({ type: 'signup', email: email.trim() });
+      setResendMessage(resendError ? resendError.message : 'Verification email sent — check your inbox.');
+    } catch {
+      setResendMessage('Could not resend. Please try again.');
+    } finally {
+      setResendLoading(false);
     }
   }
 
@@ -70,6 +92,25 @@ export default function SignInScreen() {
           />
 
           {error.length > 0 && <Text style={styles.errorText}>{error}</Text>}
+
+          {emailUnconfirmed && (
+            <View style={styles.confirmBanner}>
+              <Text style={styles.confirmBannerText}>
+                {'Your email address hasn\'t been verified yet. Check your inbox for a verification link.'}
+              </Text>
+              <TouchableOpacity
+                style={[styles.resendBtn, resendLoading && styles.submitBtnDisabled]}
+                onPress={() => void handleResend()}
+                disabled={resendLoading}
+                activeOpacity={0.75}
+              >
+                {resendLoading
+                  ? <ActivityIndicator color="#0D9488" size="small" />
+                  : <Text style={styles.resendBtnText}>{'Resend verification email'}</Text>}
+              </TouchableOpacity>
+              {resendMessage.length > 0 && <Text style={styles.resendMessage}>{resendMessage}</Text>}
+            </View>
+          )}
 
           <TouchableOpacity
             style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
@@ -111,6 +152,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   errorText: { fontSize: 13, color: '#EF4444', marginTop: 2 },
+
+  confirmBanner: {
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    borderRadius: 12,
+    padding: 14,
+    gap: 8,
+  },
+  confirmBannerText: { fontSize: 13, color: '#92400E', lineHeight: 19 },
+  resendBtn: { alignItems: 'center', paddingVertical: 4 },
+  resendBtnText: { fontSize: 13, color: '#0D9488', fontWeight: '600' },
+  resendMessage: { fontSize: 12, color: '#6B7280', textAlign: 'center' },
+
   submitBtn: {
     backgroundColor: '#0D9488',
     borderRadius: 14,
