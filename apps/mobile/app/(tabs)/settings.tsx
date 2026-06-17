@@ -19,6 +19,7 @@ import { supabase } from '@/src/supabase';
 import { useAccessibility } from '@/src/AccessibilityContext';
 import type { AccessibilitySettings } from '@/src/AccessibilityContext';
 import { useTheme } from '@/src/theme';
+import { Colors } from '@/src/constants/theme';
 import { calculateReadiness } from '@clearpass/core';
 import { allQuestions, highwayCodeChapters, roadSigns } from '@clearpass/content';
 import { loadUserProgress, getMasteredTopics } from '@/src/storage';
@@ -591,7 +592,7 @@ export default function SettingsScreen() {
             <Switch
               value={settings[item.key]}
               onValueChange={(val) => setSetting(item.key, val)}
-              trackColor={{ false: '#E5E7EB', true: '#0D9488' }}
+              trackColor={{ false: '#E5E7EB', true: Colors.indigo }}
               thumbColor={settings[item.key] ? '#FFFFFF' : '#9CA3AF'}
               ios_backgroundColor={'#E5E7EB'}
             />
@@ -629,7 +630,7 @@ export default function SettingsScreen() {
           <Switch
             value={notifSettings.studyReminder}
             onValueChange={(val) => void handleToggleStudyReminder(val)}
-            trackColor={{ false: '#E5E7EB', true: '#0D9488' }}
+            trackColor={{ false: '#E5E7EB', true: Colors.indigo }}
             thumbColor={notifSettings.studyReminder ? '#FFFFFF' : '#9CA3AF'}
             ios_backgroundColor={'#E5E7EB'}
           />
@@ -650,7 +651,7 @@ export default function SettingsScreen() {
           <Switch
             value={notifSettings.streakProtection}
             onValueChange={(val) => void handleToggleStreakProtection(val)}
-            trackColor={{ false: '#E5E7EB', true: '#0D9488' }}
+            trackColor={{ false: '#E5E7EB', true: Colors.indigo }}
             thumbColor={notifSettings.streakProtection ? '#FFFFFF' : '#9CA3AF'}
             ios_backgroundColor={'#E5E7EB'}
           />
@@ -671,7 +672,7 @@ export default function SettingsScreen() {
           <Switch
             value={notifSettings.testCountdown}
             onValueChange={(val) => void handleToggleTestCountdown(val)}
-            trackColor={{ false: '#E5E7EB', true: '#0D9488' }}
+            trackColor={{ false: '#E5E7EB', true: Colors.indigo }}
             thumbColor={notifSettings.testCountdown ? '#FFFFFF' : '#9CA3AF'}
             ios_backgroundColor={'#E5E7EB'}
           />
@@ -750,7 +751,7 @@ export default function SettingsScreen() {
         ) : (
           <View style={[styles.row, styles.parentInputRow]}>
             <TextInput
-              style={[styles.parentEmailInput, { color: theme.textColor, borderColor: parentEmailInput.includes('@') ? '#0D9488' : '#E5E7EB' }]}
+              style={[styles.parentEmailInput, { color: theme.textColor, borderColor: parentEmailInput.includes('@') ? Colors.indigo : '#E5E7EB' }]}
               value={parentEmailInput}
               onChangeText={setParentEmailInput}
               placeholder="parent@example.com"
@@ -796,7 +797,7 @@ export default function SettingsScreen() {
             </Text>
             <Text style={[styles.description, {
               fontSize: theme.fontSize(12),
-              color: testResult?.passed ? '#0D9488' : testResult ? '#F59E0B' : theme.subTextColor,
+              color: testResult?.passed ? Colors.indigo : testResult ? '#F59E0B' : theme.subTextColor,
             }]}>
               {testResult?.passed
                 ? 'Passed [V]' + (testResult.score ? ' - Score: ' + String(testResult.score) + '/50' : '')
@@ -914,7 +915,7 @@ export default function SettingsScreen() {
 
             <Text style={[styles.modalFieldLabel, { color: theme.subTextColor }]}>{'Display Name'}</Text>
             <TextInput
-              style={[styles.modalInput, { color: theme.textColor, borderColor: editName.trim().length > 0 ? '#0D9488' : '#E5E7EB' }]}
+              style={[styles.modalInput, { color: theme.textColor, borderColor: editName.trim().length > 0 ? Colors.indigo : '#E5E7EB' }]}
               value={editName}
               onChangeText={setEditName}
               placeholder="Your display name"
@@ -1070,7 +1071,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -1082,12 +1083,12 @@ const styles = StyleSheet.create({
   editProfileBtn: {
     borderRadius: 8,
     borderWidth: 1.5,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
     paddingHorizontal: 12,
     paddingVertical: 6,
     flexShrink: 0,
   },
-  editProfileBtnText: { fontSize: 13, fontWeight: '700', color: '#0D9488' },
+  editProfileBtnText: { fontSize: 13, fontWeight: '700', color: Colors.indigo },
   profileBadgeRow: {
     marginTop: 10,
     paddingTop: 10,
@@ -1111,14 +1112,14 @@ const styles = StyleSheet.create({
   referralCopyBtn: {
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  referralCopyText:  { fontSize: 13, fontWeight: '700', color: '#0D9488' },
+  referralCopyText:  { fontSize: 13, fontWeight: '700', color: Colors.indigo },
   referralShareBtn: {
     borderRadius: 8,
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
@@ -1148,12 +1149,12 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 10,
-    backgroundColor: '#EEF2FF',
+    backgroundColor: Colors.indigoBg,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  iconText:    { fontSize: 10, fontWeight: '700', color: '#6366F1' },
+  iconText:    { fontSize: 10, fontWeight: '700', color: Colors.indigo },
   textWrap:    { flex: 1, gap: 2 },
   label:       { fontSize: 15, fontWeight: '600', color: '#111827' },
   description: { fontSize: 12, color: '#6B7280', lineHeight: 17 },
@@ -1166,7 +1167,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 12,
   },
-  cacheIcon: { fontSize: 13, fontWeight: '800', color: '#0D9488', width: 28, textAlign: 'center' },
+  cacheIcon: { fontSize: 13, fontWeight: '800', color: Colors.indigo, width: 28, textAlign: 'center' },
   cacheLastLabel: { fontSize: 13, fontWeight: '600', flex: 1 },
   cacheLastValue: { fontSize: 13, fontWeight: '700' },
   refreshCacheBtn: {
@@ -1174,12 +1175,12 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
     backgroundColor: '#FFFFFF',
     marginTop: -8,
   },
   refreshCacheBtnDisabled: { opacity: 0.5 },
-  refreshCacheBtnText: { color: '#0D9488', fontSize: 15, fontWeight: '700' },
+  refreshCacheBtnText: { color: Colors.indigo, fontSize: 15, fontWeight: '700' },
 
   // ── Note Box ──────────────────────────────────────────────────────────────────
   noteBox: {
@@ -1187,7 +1188,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     borderLeftWidth: 3,
-    borderLeftColor: '#0D9488',
+    borderLeftColor: Colors.indigo,
     marginTop: -8,
   },
   noteText: { fontSize: 13, color: '#6B7280', lineHeight: 18 },
@@ -1203,14 +1204,14 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   saveParentBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: 'center',
   },
   saveParentBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
   removeParentText: { fontSize: 13, fontWeight: '600', color: '#EF4444' },
-  parentSuccessText: { fontSize: 12, color: '#0D9488', fontWeight: '600', marginTop: 4 },
+  parentSuccessText: { fontSize: 12, color: Colors.indigo, fontWeight: '600', marginTop: 4 },
 
   // ── Instructor Button ─────────────────────────────────────────────────────────
   instructorBtn: {
@@ -1231,14 +1232,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     borderWidth: 1.5,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
     marginBottom: 4,
   },
-  testDayBtnText: { color: '#0D9488', fontSize: 16, fontWeight: '700' },
+  testDayBtnText: { color: Colors.indigo, fontSize: 16, fontWeight: '700' },
 
   // ── Bottom Buttons ────────────────────────────────────────────────────────────
   manageBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
@@ -1289,11 +1290,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
     marginBottom: -4,
   },
-  successText:          { fontSize: 14, fontWeight: '700', color: '#0D9488', textAlign: 'center' },
-  modalSaveBtn:         { backgroundColor: '#0D9488', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  successText:          { fontSize: 14, fontWeight: '700', color: Colors.indigo, textAlign: 'center' },
+  modalSaveBtn:         { backgroundColor: Colors.indigo, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   modalSaveBtnDisabled: { opacity: 0.6 },
   modalSaveBtnText:     { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   modalCancelBtn: {
@@ -1331,11 +1332,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0FDFA',
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
     paddingHorizontal: 12,
     paddingVertical: 8,
     marginLeft: 4,
     alignSelf: 'center',
   },
-  ampmText: { fontSize: 16, fontWeight: '800', color: '#0D9488' },
+  ampmText: { fontSize: 16, fontWeight: '800', color: Colors.indigo },
 });

@@ -12,6 +12,7 @@ import { loadUserProgress, saveUserProgress, createFreshUserProgress, getSession
 import { getStudyPlan, type StudyPace, type SimpleStudyPlan, type SimpleTask } from '@/src/studyPlan';
 import { TopicCategory } from '@clearpass/core';
 import { useTheme } from '@/src/theme';
+import { Colors } from '@/src/constants/theme';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -23,8 +24,8 @@ const PACE_LABELS: Record<StudyPace, string> = {
 };
 
 const PACE_COLORS: Record<StudyPace, string> = {
-  relaxed:    '#0D9488',
-  steady:     '#6366F1',
+  relaxed:    Colors.indigo,
+  steady:     Colors.indigo,
   intensive:  '#F59E0B',
   final_push: '#EF4444',
 };
@@ -78,7 +79,7 @@ function DayCard({ plan, isToday }: { plan: SimpleStudyPlan['weekPlan'][0]; isTo
   const theme = useTheme();
   const isRest = plan.task.type === 'rest';
   return (
-    <View style={[styles.dayCard, isToday && styles.dayCardToday, { backgroundColor: isToday ? '#0D9488' : theme.cardColor }]}>
+    <View style={[styles.dayCard, isToday && styles.dayCardToday, { backgroundColor: isToday ? Colors.indigo : theme.cardColor }]}>
       <Text style={[styles.dayName, { color: isToday ? 'rgba(255,255,255,0.8)' : theme.subTextColor }]}>
         {plan.dayName}
       </Text>
@@ -187,7 +188,7 @@ export default function StudyPlanScreen() {
             {'We will build a personalised day-by-day study plan for you.'}
           </Text>
           <TextInput
-            style={[styles.dateInput, { color: theme.textColor, borderColor: dateInput.length > 0 ? '#0D9488' : theme.borderColor }]}
+            style={[styles.dateInput, { color: theme.textColor, borderColor: dateInput.length > 0 ? Colors.indigo : theme.borderColor }]}
             value={dateInput}
             onChangeText={t => { setDateInput(t); setDateError(''); }}
             placeholder="DD/MM/YYYY"
@@ -248,7 +249,7 @@ export default function StudyPlanScreen() {
               <Text style={[styles.progressFraction, { color: theme.textColor }]}>
                 {sessionsThisWeek}{' / '}{weekTarget}{' sessions'}
               </Text>
-              <Text style={[styles.progressPct, { color: '#0D9488' }]}>{weekPct}{'%'}</Text>
+              <Text style={[styles.progressPct, { color: Colors.indigo }]}>{weekPct}{'%'}</Text>
             </View>
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: `${weekPct}%` as any }]} />
@@ -304,7 +305,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 0.5,
     borderTopWidth: 3,
-    borderTopColor: '#0D9488',
+    borderTopColor: Colors.indigo,
     padding: 18,
     gap: 10,
   },
@@ -322,7 +323,7 @@ const styles = StyleSheet.create({
   },
   dateError: { fontSize: 13, color: '#EF4444' },
   saveBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
@@ -331,7 +332,7 @@ const styles = StyleSheet.create({
 
   // Today's task
   todayCard: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 16,
     padding: 18,
     flexDirection: 'row',
@@ -372,7 +373,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     overflow: 'hidden',
   },
-  progressFill: { height: 6, backgroundColor: '#0D9488', borderRadius: 3 },
+  progressFill: { height: 6, backgroundColor: Colors.indigo, borderRadius: 3 },
 
   // 7-day scroll
   weekRow: { gap: 8, paddingBottom: 4 },
@@ -385,7 +386,7 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: '#E5E7EB',
   },
-  dayCardToday: { borderColor: '#0D9488', borderWidth: 2 },
+  dayCardToday: { borderColor: Colors.indigo, borderWidth: 2 },
   dayName: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
   dayIcon: { fontSize: 16 },
   dayType: { fontSize: 9, fontWeight: '600', textAlign: 'center' },

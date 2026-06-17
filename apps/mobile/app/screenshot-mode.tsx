@@ -12,6 +12,7 @@ import { allQuestions } from '@clearpass/content';
 import { TopicCategory } from '@clearpass/core';
 import type { UserProgress, MockTestResult } from '@clearpass/core';
 import type { SessionHistoryEntry } from '@/src/storage';
+import { Colors } from '@/src/constants/theme';
 
 // ── Demo data ─────────────────────────────────────────────────────────────────
 
@@ -177,7 +178,7 @@ const styles = StyleSheet.create({
   body:     { fontSize: 14, color: '#6B7280', lineHeight: 22 },
 
   seedBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 18,
     alignItems: 'center',

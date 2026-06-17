@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '@/src/constants/theme';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -32,29 +33,29 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#0D9488',
-        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarActiveTintColor: Colors.indigo,
+        tabBarInactiveTintColor: Colors.subtleText,
         tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
         tabBarStyle: Platform.select({
           web: {
             height: 60,
             paddingBottom: 8,
             borderTopWidth: 0.5,
-            borderTopColor: '#E5E7EB',
-            backgroundColor: '#FFFFFF',
+            borderTopColor: Colors.border,
+            backgroundColor: Colors.cardWhite,
           },
           default: {
             height: 60,
             paddingBottom: 8,
             borderTopWidth: 0.5,
-            borderTopColor: '#E5E7EB',
-            backgroundColor: '#FFFFFF',
+            borderTopColor: Colors.border,
+            backgroundColor: Colors.cardWhite,
           },
         }),
         headerStyle: {
-          backgroundColor: '#FFFFFF',
+          backgroundColor: Colors.cardWhite,
         },
-        headerTintColor: '#111827',
+        headerTintColor: Colors.textPrimary,
         headerShadowVisible: false,
         headerTitleStyle: {
           fontWeight: '700',

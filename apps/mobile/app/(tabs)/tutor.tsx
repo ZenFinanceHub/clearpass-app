@@ -15,6 +15,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { getTutorQuestionsUsed, incrementTutorQuestionsUsed } from '@/src/storage';
 import { isPremium } from '@/src/subscription';
 import { useTheme } from '@/src/theme';
+import { Colors } from '@/src/constants/theme';
 
 const FREE_LIMIT = 5;
 
@@ -224,7 +225,7 @@ export default function TutorScreen() {
           disabled={!canSend}
           activeOpacity={0.8}
         >
-          <Ionicons name="arrow-up-circle" size={36} color={canSend ? '#0D9488' : '#E5E7EB'} />
+          <Ionicons name="arrow-up-circle" size={36} color={canSend ? Colors.indigo : Colors.border} />
         </TouchableOpacity>
       </View>
 
@@ -287,20 +288,20 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   bubbleUser: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderBottomRightRadius: 4,
   },
   bubbleTutor: {
     backgroundColor: '#FFFFFF',
     borderBottomLeftRadius: 4,
     borderWidth: 0.5,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
   },
   bubbleTyping: { paddingVertical: 14, minWidth: 60, alignItems: 'center' },
   bubbleText: { fontSize: 14, lineHeight: 21 },
   bubbleTextUser: { color: '#FFFFFF' },
   bubbleTextTutor: { color: '#111827' },
-  typingDots: { fontSize: 20, fontWeight: '800', color: '#0D9488', letterSpacing: 2 },
+  typingDots: { fontSize: 20, fontWeight: '800', color: Colors.indigo, letterSpacing: 2 },
 
   bubbleTime: { fontSize: 10, fontWeight: '500', alignSelf: 'flex-end' },
   timeUser: { color: 'rgba(255,255,255,0.6)' },
@@ -313,7 +314,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 0.5,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: Colors.border,
     gap: 8,
   },
   textInput: {
@@ -326,7 +327,7 @@ const styles = StyleSheet.create({
     color: '#111827',
     maxHeight: 120,
     borderWidth: 0.5,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
   },
   sendBtn: { paddingBottom: 2 },
   sendBtnDisabled: { opacity: 0.4 },
@@ -347,13 +348,13 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 380,
     borderWidth: 1.5,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
   },
   paywallEmoji: { fontSize: 48, marginBottom: 4 },
   paywallTitle: { fontSize: 18, fontWeight: '800', color: '#111827', textAlign: 'center' },
   paywallBody: { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 21 },
   upgradeBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',

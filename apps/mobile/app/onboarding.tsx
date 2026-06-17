@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { setOnboardingComplete, savePendingTestDate } from '@/src/storage';
+import { Colors } from '@/src/constants/theme';
 
 type Slide = {
   key: string;
@@ -173,7 +174,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
     padding: 16,
     fontSize: 20,
     fontWeight: '600',
@@ -197,7 +198,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E7EB',
   },
   dotActive: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     width: 24,
   },
 
@@ -207,7 +208,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   nextBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 18,
     alignItems: 'center',

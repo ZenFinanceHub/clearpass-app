@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
+import { Colors } from '@/src/constants/theme';
 
 export default function ResetPasswordScreen() {
   const [password, setPassword]     = useState('');
@@ -60,7 +61,7 @@ export default function ResetPasswordScreen() {
   if (!sessionReady) {
     return (
       <View style={styles.waitContainer}>
-        <ActivityIndicator size="large" color="#0D9488" />
+        <ActivityIndicator size="large" color={Colors.indigo} />
         <Text style={styles.waitText}>{'Verifying your reset link...'}</Text>
       </View>
     );
@@ -130,7 +131,7 @@ const styles = StyleSheet.create({
   },
   errorText: { fontSize: 13, color: '#EF4444', marginTop: 2 },
   updateBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',

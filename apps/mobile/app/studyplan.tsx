@@ -21,6 +21,7 @@ import {
 } from '@/src/studyPlan';
 import { supabase } from '@/src/supabase';
 import { useTheme } from '@/src/theme';
+import { Colors } from '@/src/constants/theme';
 
 const DAILY_MINUTES_OPTIONS = [10, 20, 30, 45];
 
@@ -109,7 +110,7 @@ function DayCard({ day, isToday, isPast }: { day: StudyDay; isToday: boolean; is
           <View style={styles.todayBadge}>
             <Text style={styles.todayBadgeText}>TODAY</Text>
           </View>
-          <Text style={[styles.dayMins, { color: '#0D9488' }]}>{day.estimatedMinutes}{' min'}</Text>
+          <Text style={[styles.dayMins, { color: Colors.indigo }]}>{day.estimatedMinutes}{' min'}</Text>
         </View>
       )}
 
@@ -235,7 +236,7 @@ export default function StudyPlanScreen() {
   if (!loaded) {
     return (
       <View style={[styles.screen, styles.centered, { backgroundColor: theme.backgroundColor }]}>
-        <ActivityIndicator size="large" color="#0D9488" />
+        <ActivityIndicator size="large" color={Colors.indigo} />
       </View>
     );
   }
@@ -288,7 +289,7 @@ export default function StudyPlanScreen() {
 
       {generating ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#0D9488" />
+          <ActivityIndicator size="large" color={Colors.indigo} />
           <Text style={[styles.generatingText, { color: theme.textColor }]}>
             {'Claude is personalising your schedule...'}
           </Text>
@@ -499,7 +500,7 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: '#E5E7EB',
     borderTopWidth: 3,
-    borderTopColor: '#0D9488',
+    borderTopColor: Colors.indigo,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -508,7 +509,7 @@ const styles = StyleSheet.create({
   testDateLeft:      { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   testDateEmoji:     { fontSize: 28 },
   testDateTextBlock: { flex: 1 },
-  testDateLabel:     { fontSize: 10, fontWeight: '700', color: '#0D9488', letterSpacing: 1, marginBottom: 3 },
+  testDateLabel:     { fontSize: 10, fontWeight: '700', color: Colors.indigo, letterSpacing: 1, marginBottom: 3 },
   testDateValue:     { fontSize: 18, fontWeight: '800', color: '#111827', lineHeight: 22, marginBottom: 2 },
   testDateSub:       { fontSize: 12, color: '#6B7280', fontWeight: '500' },
   editBtn: {
@@ -520,11 +521,11 @@ const styles = StyleSheet.create({
     borderColor: '#99F6E4',
     marginLeft: 8,
   },
-  editBtnText: { fontSize: 13, fontWeight: '700', color: '#0D9488' },
+  editBtnText: { fontSize: 13, fontWeight: '700', color: Colors.indigo },
 
   // ── No Date Card ──────────────────────────────────────────────────────────
   noDateCard: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 16,
     padding: 16,
     flexDirection: 'row',
@@ -589,7 +590,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   dayCardToday: {
-    borderLeftColor: '#0D9488',
+    borderLeftColor: Colors.indigo,
     borderLeftWidth: 4,
     backgroundColor: '#F0FDFA',
   },
@@ -602,7 +603,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   todayBadge: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -611,7 +612,7 @@ const styles = StyleSheet.create({
 
   dayHeader:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   dayLabel:      { fontSize: 13, fontWeight: '700', color: '#374151' },
-  dayLabelToday: { color: '#0D9488', fontSize: 14 },
+  dayLabelToday: { color: Colors.indigo, fontSize: 14 },
   dayLabelPast:  { color: '#9CA3AF' },
   dayMins:       { fontSize: 12, color: '#6B7280', fontWeight: '500' },
 
@@ -621,7 +622,7 @@ const styles = StyleSheet.create({
   taskDescPast: { color: '#9CA3AF' },
 
   startBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: 'center',
@@ -642,14 +643,14 @@ const styles = StyleSheet.create({
   },
   chipSelected: {
     backgroundColor: '#F0FDFA',
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
   },
   chipText:         { fontSize: 15, fontWeight: '600', color: '#6B7280' },
-  chipTextSelected: { color: '#0D9488' },
+  chipTextSelected: { color: Colors.indigo },
   chipsHint:        { fontSize: 13, lineHeight: 18, marginBottom: 24 },
 
   generateBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
@@ -703,7 +704,7 @@ const styles = StyleSheet.create({
   },
   dateError:      { fontSize: 13, color: '#EF4444', marginBottom: 10 },
   modalSave: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
@@ -729,14 +730,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0FDFA',
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
     padding: 16,
     marginBottom: 16,
     gap: 12,
   },
   testDayCardEmoji:   { fontSize: 26 },
   testDayCardText:    { flex: 1 },
-  testDayCardTitle:   { fontSize: 15, fontWeight: '800', color: '#0D9488' },
+  testDayCardTitle:   { fontSize: 15, fontWeight: '800', color: Colors.indigo },
   testDayCardSub:     { fontSize: 12, color: '#14B8A6', marginTop: 2 },
-  testDayCardChevron: { fontSize: 24, color: '#0D9488', fontWeight: '700', lineHeight: 28 },
+  testDayCardChevron: { fontSize: 24, color: Colors.indigo, fontWeight: '700', lineHeight: 28 },
 });

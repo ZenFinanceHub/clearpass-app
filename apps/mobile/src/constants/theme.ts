@@ -25,7 +25,7 @@ export const Colors = {
   offWhite: '#F7F8FA',
   border: '#E5E7EB',
   surfaceGray: '#F3F4F6',
-} as const;
+};
 
 export type ColorKey = keyof typeof Colors;
 

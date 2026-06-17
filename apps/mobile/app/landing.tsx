@@ -11,6 +11,7 @@ import {
 import { router } from 'expo-router';
 import { getProxyUrl } from '@/src/proxyUrl';
 import { supabase } from '@/src/supabase';
+import { Colors } from '@/src/constants/theme';
 
 // TODO: replace with real pass stories from pass_stories table once collected
 const TESTIMONIALS = [
@@ -296,9 +297,8 @@ export default function LandingPage() {
   );
 }
 
-const TEAL = '#0D9488';
-const INDIGO = '#6366F1';
-const BG = '#F7F8FA';
+const TEAL = Colors.indigo;
+const BG = Colors.offWhite;
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: BG },

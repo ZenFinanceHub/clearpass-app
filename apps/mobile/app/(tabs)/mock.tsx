@@ -30,6 +30,7 @@ import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebration
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { ShareCardModal } from '@/src/components/ShareableCard';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
+import { Colors } from '@/src/constants/theme';
 
 const TOTAL_QUESTIONS = 50;
 const TIME_LIMIT_SECONDS = 57 * 60;
@@ -407,7 +408,7 @@ export default function MockScreen() {
             <View style={styles.legendRow}>
               <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#D1D5DB' }]} /><Text style={styles.legendLabel}>{'answered'}</Text></View>
               <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#F59E0B' }]} /><Text style={styles.legendLabel}>{'flagged'}</Text></View>
-              <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#6366F1' }]} /><Text style={styles.legendLabel}>{'current'}</Text></View>
+              <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: Colors.indigo }]} /><Text style={styles.legendLabel}>{'current'}</Text></View>
             </View>
             <ScrollView>
               <View style={styles.grid}>
@@ -514,7 +515,7 @@ function ResultsView({
       )}
 
       <View style={[styles.resultBadge, passed ? styles.resultBadgePass : styles.resultBadgeFail]}>
-        <Text style={[styles.verdictText, { color: passed ? '#0D9488' : '#EF4444' }]}>
+        <Text style={[styles.verdictText, { color: passed ? Colors.indigo : '#EF4444' }]}>
           {passed ? 'PASS' : 'FAIL'}
         </Text>
         <Text style={styles.scoreText}>{correct}{' / '}{TOTAL_QUESTIONS}</Text>
@@ -744,7 +745,7 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: '#E5E7EB',
     borderLeftWidth: 3,
-    borderLeftColor: '#6366F1',
+    borderLeftColor: Colors.indigo,
     gap: 10,
   },
   flaggedPill: {
@@ -771,9 +772,9 @@ const styles = StyleSheet.create({
     padding: 13,
     gap: 12,
   },
-  optionSelected: { borderColor: '#6366F1', borderWidth: 2, backgroundColor: '#EEF2FF' },
+  optionSelected: { borderColor: Colors.indigo, borderWidth: 2, backgroundColor: Colors.indigoBg },
   badge: { width: 30, height: 30, borderRadius: 8, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  badgeSelected: { backgroundColor: '#6366F1' },
+  badgeSelected: { backgroundColor: Colors.indigo },
   badgeText: { fontSize: 13, fontWeight: '800', color: '#6B7280' },
   badgeTextSelected: { color: '#FFFFFF' },
   optionText: { flex: 1, fontSize: 15, color: '#374151', lineHeight: 21 },
@@ -783,14 +784,14 @@ const styles = StyleSheet.create({
   navRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   navBtn: { backgroundColor: '#FFFFFF', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1, borderColor: '#E5E7EB' },
   navBtnDisabled: { borderColor: '#F3F4F6', backgroundColor: '#F3F4F6' },
-  navBtnText: { fontSize: 14, fontWeight: '700', color: '#0D9488' },
+  navBtnText: { fontSize: 14, fontWeight: '700', color: Colors.indigo },
   navBtnTextDisabled: { color: '#9CA3AF' },
   overviewBtn: { alignItems: 'center', paddingVertical: 4 },
   overviewCount: { fontSize: 15, fontWeight: '700', color: '#111827' },
   overviewHint: { fontSize: 10, color: '#9CA3AF', marginTop: 1 },
 
   // Submit
-  submitBtn: { backgroundColor: '#0D9488', borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 4 },
+  submitBtn: { backgroundColor: Colors.indigo, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 4 },
   submitBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
 
   // Grid modal
@@ -798,7 +799,7 @@ const styles = StyleSheet.create({
   modalBox: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '75%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   modalTitle: { fontSize: 17, fontWeight: '800', color: '#111827' },
-  modalClose: { fontSize: 15, fontWeight: '600', color: '#0D9488' },
+  modalClose: { fontSize: 15, fontWeight: '600', color: Colors.indigo },
   legendRow: { flexDirection: 'row', gap: 16, marginBottom: 16 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot: { width: 12, height: 12, borderRadius: 3 },
@@ -807,7 +808,7 @@ const styles = StyleSheet.create({
   gridCell: { width: 36, height: 36, borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   gridCellAnswered: { backgroundColor: '#D1D5DB', borderColor: '#D1D5DB' },
   gridCellFlagged: { backgroundColor: '#F59E0B', borderColor: '#F59E0B' },
-  gridCellCurrent: { backgroundColor: '#6366F1', borderColor: '#6366F1' },
+  gridCellCurrent: { backgroundColor: Colors.indigo, borderColor: Colors.indigo },
   gridCellText: { fontSize: 11, fontWeight: '700', color: '#9CA3AF' },
   gridCellTextBright: { color: '#FFFFFF' },
 
@@ -818,76 +819,76 @@ const styles = StyleSheet.create({
   infoCard: { flex: 1, minWidth: '45%', backgroundColor: '#FFFFFF', borderRadius: 14, padding: 16, alignItems: 'center', gap: 8, borderWidth: 0.5, borderColor: '#E5E7EB' },
   infoEmoji: { fontSize: 28 },
   infoCardText: { fontSize: 13, fontWeight: '600', textAlign: 'center' },
-  primaryBtn: { backgroundColor: '#0D9488', borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
+  primaryBtn: { backgroundColor: Colors.indigo, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
   primaryBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
   warningBox: { backgroundColor: '#FFFBEB', borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#F59E0B' },
   warningText: { fontSize: 13, color: '#D97706', textAlign: 'center', fontWeight: '500' },
 
   // Results view
-  achievementBanner: { backgroundColor: '#EEF2FF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#6366F1', borderLeftWidth: 4, borderLeftColor: '#6366F1' },
-  achievementTitle: { fontSize: 11, fontWeight: '800', color: '#6366F1', letterSpacing: 1, marginBottom: 6 },
+  achievementBanner: { backgroundColor: Colors.indigoBg, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.indigo, borderLeftWidth: 4, borderLeftColor: Colors.indigo },
+  achievementTitle: { fontSize: 11, fontWeight: '800', color: Colors.indigo, letterSpacing: 1, marginBottom: 6 },
   achievementItem: { fontSize: 14, fontWeight: '700', color: '#111827', marginBottom: 2 },
   resultBadge: { borderRadius: 20, borderWidth: 1.5, paddingVertical: 32, alignItems: 'center', gap: 6, backgroundColor: '#FFFFFF' },
-  resultBadgePass: { borderColor: '#0D9488' },
+  resultBadgePass: { borderColor: Colors.emerald },
   resultBadgeFail: { borderColor: '#EF4444' },
   verdictText: { fontSize: 40, fontWeight: '900', letterSpacing: 6 },
   scoreText: { fontSize: 52, fontWeight: '800', color: '#111827', lineHeight: 60 },
   passMarkText: { fontSize: 13, color: '#6B7280' },
   timeTakenText: { fontSize: 13, color: '#6B7280' },
-  xpBadge: { backgroundColor: '#EEF2FF', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 6, borderWidth: 1, borderColor: '#6366F1', marginTop: 4 },
-  xpBadgeText: { fontSize: 15, fontWeight: '700', color: '#6366F1' },
+  xpBadge: { backgroundColor: Colors.indigoBg, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 6, borderWidth: 1, borderColor: Colors.indigo, marginTop: 4 },
+  xpBadgeText: { fontSize: 15, fontWeight: '700', color: Colors.indigo },
   sectionLabel: { fontSize: 11, fontWeight: '800', color: '#6B7280', letterSpacing: 1, textTransform: 'uppercase' },
   topicTable: { gap: 6 },
   topicRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 10, padding: 10, gap: 8, borderWidth: 0.5, borderColor: '#E5E7EB' },
   topicName: { width: 110, fontSize: 12, fontWeight: '600' },
   topicBarTrack: { flex: 1, height: 8, backgroundColor: '#F3F4F6', borderRadius: 4, overflow: 'hidden' },
   topicBarFill: { height: 8, borderRadius: 4 },
-  barStrong: { backgroundColor: '#0D9488' },
+  barStrong: { backgroundColor: Colors.emerald },
   barWeak: { backgroundColor: '#F59E0B' },
   topicScore: { width: 32, fontSize: 12, fontWeight: '700', color: '#6B7280', textAlign: 'right' },
-  secondaryBtn: { backgroundColor: '#FFFFFF', borderRadius: 14, paddingVertical: 16, alignItems: 'center', borderWidth: 1, borderColor: '#0D9488' },
-  secondaryBtnText: { color: '#0D9488', fontSize: 16, fontWeight: '700' },
+  secondaryBtn: { backgroundColor: '#FFFFFF', borderRadius: 14, paddingVertical: 16, alignItems: 'center', borderWidth: 1, borderColor: Colors.indigo },
+  secondaryBtnText: { color: Colors.indigo, fontSize: 16, fontWeight: '700' },
 
   // Review view
   reviewHeader: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 0.5, borderBottomColor: '#E5E7EB', gap: 4 },
-  reviewBackBtn: { fontSize: 14, fontWeight: '600', color: '#0D9488' },
+  reviewBackBtn: { fontSize: 14, fontWeight: '600', color: Colors.indigo },
   reviewHeaderTitle: { fontSize: 20, fontWeight: '800' },
   filterRow: { flexDirection: 'row', padding: 12, gap: 8, backgroundColor: '#F7F8FA', borderBottomWidth: 0.5, borderBottomColor: '#E5E7EB' },
   filterTab: { flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB' },
-  filterTabActive: { backgroundColor: '#0D9488', borderColor: '#0D9488' },
+  filterTabActive: { backgroundColor: Colors.indigo, borderColor: Colors.indigo },
   filterTabText: { fontSize: 13, fontWeight: '600', color: '#6B7280' },
   filterTabTextActive: { color: '#FFFFFF' },
   reviewContent: { padding: 12, paddingBottom: 48, gap: 8 },
   emptyText: { textAlign: 'center', marginTop: 40, fontSize: 15 },
   reviewRow: { backgroundColor: '#FFFFFF', borderRadius: 14, overflow: 'hidden', borderWidth: 0.5, borderColor: '#E5E7EB' },
   reviewRowHeader: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 10 },
-  reviewQNum: { fontSize: 12, fontWeight: '800', color: '#6366F1', width: 32 },
+  reviewQNum: { fontSize: 12, fontWeight: '800', color: Colors.indigo, width: 32 },
   reviewPreview: { flex: 1, fontSize: 13 },
   reviewIcons: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   reviewFlagIcon: { fontSize: 14, fontWeight: '700', color: '#F59E0B' },
-  correctIcon: { fontSize: 14, fontWeight: '900', color: '#0D9488' },
+  correctIcon: { fontSize: 14, fontWeight: '900', color: Colors.emerald },
   wrongIcon: { fontSize: 14, fontWeight: '900', color: '#EF4444' },
   reviewExpanded: { paddingHorizontal: 14, paddingBottom: 14, gap: 12, borderTopWidth: 0.5, borderTopColor: '#E5E7EB' },
   reviewFullQ: { fontSize: 14, lineHeight: 21, paddingTop: 12 },
   reviewOptions: { gap: 6 },
   reviewOpt: { flexDirection: 'row', alignItems: 'flex-start', borderRadius: 10, padding: 10, gap: 10, backgroundColor: '#F7F8FA', borderWidth: 1, borderColor: '#E5E7EB' },
-  reviewOptCorrect: { backgroundColor: '#F0FDFA', borderColor: '#0D9488' },
+  reviewOptCorrect: { backgroundColor: '#F0FDFA', borderColor: Colors.emerald },
   reviewOptWrong:   { backgroundColor: '#FEF2F2', borderColor: '#EF4444' },
   reviewOptLabel: { fontSize: 12, fontWeight: '800', color: '#6B7280', width: 18 },
   reviewOptText: { flex: 1, fontSize: 13, color: '#374151' },
-  reviewOptTextCorrect: { color: '#0D9488', fontWeight: '600' },
+  reviewOptTextCorrect: { color: Colors.emerald, fontWeight: '600' },
   reviewOptTextWrong:   { color: '#EF4444', fontWeight: '600' },
-  explanationBox: { backgroundColor: '#F3F4F6', borderRadius: 10, padding: 12, borderLeftWidth: 3, borderLeftColor: '#0D9488' },
+  explanationBox: { backgroundColor: '#F3F4F6', borderRadius: 10, padding: 12, borderLeftWidth: 3, borderLeftColor: Colors.indigo },
   explanationText: { fontSize: 13, color: '#374151', lineHeight: 19 },
 
   tutorBtn: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
     backgroundColor: '#FFFFFF',
     paddingVertical: 12,
     alignItems: 'center',
   },
-  tutorBtnText: { color: '#0D9488', fontSize: 14, fontWeight: '700' },
+  tutorBtnText: { color: Colors.indigo, fontSize: 14, fontWeight: '700' },
 
 });

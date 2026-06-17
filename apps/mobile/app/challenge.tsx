@@ -20,6 +20,7 @@ import { allQuestions } from '@clearpass/content';
 import { supabase } from '@/src/supabase';
 import { createFreshUserProgress, loadUserProgress, saveUserProgress } from '@/src/storage';
 import { useTheme } from '@/src/theme';
+import { Colors } from '@/src/constants/theme';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -194,12 +195,12 @@ function ChallengeCard({
         <View style={styles.scoreRow}>
           <View style={styles.scoreBlock}>
             <Text style={styles.scoreLabel}>{'YOU'}</Text>
-            <Text style={[styles.scoreNum, { color: '#0D9488' }]}>{myScore}{'/10'}</Text>
+            <Text style={[styles.scoreNum, { color: Colors.indigo }]}>{myScore}{'/10'}</Text>
           </View>
           <Text style={[styles.vsSmall, { color: theme.subTextColor }]}>{'VS'}</Text>
           <View style={styles.scoreBlock}>
             <Text style={styles.scoreLabel}>{'THEM'}</Text>
-            <Text style={[styles.scoreNum, { color: '#6366F1' }]}>
+            <Text style={[styles.scoreNum, { color: Colors.indigo }]}>
               {oppScore !== null ? `${oppScore}/10` : '--'}
             </Text>
           </View>
@@ -342,7 +343,7 @@ function QuizView({
   if (submitting) {
     return (
       <View style={[styles.flex, styles.centerContent, { backgroundColor: theme.backgroundColor }]}>
-        <ActivityIndicator size="large" color="#0D9488" />
+        <ActivityIndicator size="large" color={Colors.indigo} />
         <Text style={[styles.calculatingText, { color: theme.textColor }]}>{'Calculating results...'}</Text>
       </View>
     );
@@ -495,7 +496,7 @@ function ResultsView({
           {myScore !== null && (
             <View style={styles.myScoreSummary}>
               <Text style={styles.myScoreLabel}>{'YOUR SCORE'}</Text>
-              <Text style={[styles.myScoreBig, { color: '#0D9488' }]}>{myScore}{'/10'}</Text>
+              <Text style={[styles.myScoreBig, { color: Colors.indigo }]}>{myScore}{'/10'}</Text>
               {myTime !== null && (
                 <Text style={[styles.myScoreTime, { color: theme.subTextColor }]}>{'Time: '}{formatTime(myTime)}</Text>
               )}
@@ -522,7 +523,7 @@ function ResultsView({
       ) : (
         <>
           <LinearGradient
-            colors={isDraw ? ['#6B7280', '#4B5563'] : iWon ? ['#F59E0B', '#D97706'] : ['#6366F1', '#4F46E5']}
+            colors={isDraw ? ['#6B7280', '#4B5563'] : iWon ? ['#F59E0B', '#D97706'] : [Colors.indigo, Colors.violet]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.winnerBanner}
@@ -535,11 +536,11 @@ function ResultsView({
 
           <View style={[styles.scoreCompare, { backgroundColor: theme.cardColor }]}>
             <View style={styles.playerBlock}>
-              <View style={[styles.compareAvatar, { backgroundColor: '#0D9488' }]}>
+              <View style={[styles.compareAvatar, { backgroundColor: Colors.indigo }]}>
                 <Text style={styles.compareAvatarText}>{'ME'}</Text>
               </View>
               <Text style={[styles.comparePlayerName, { color: theme.textColor }]}>{'You'}</Text>
-              <Text style={[styles.compareScore, { color: '#0D9488' }]}>{myScore}{'/10'}</Text>
+              <Text style={[styles.compareScore, { color: Colors.indigo }]}>{myScore}{'/10'}</Text>
               {myTime !== null && (
                 <Text style={[styles.compareTime, { color: theme.subTextColor }]}>{formatTime(myTime)}</Text>
               )}
@@ -548,13 +549,13 @@ function ResultsView({
             <Text style={[styles.vsBig, { color: theme.subTextColor }]}>{'VS'}</Text>
 
             <View style={styles.playerBlock}>
-              <View style={[styles.compareAvatar, { backgroundColor: '#6366F1' }]}>
+              <View style={[styles.compareAvatar, { backgroundColor: Colors.indigo }]}>
                 <Text style={styles.compareAvatarText}>{getInitials(opponentName)}</Text>
               </View>
               <Text style={[styles.comparePlayerName, { color: theme.textColor }]} numberOfLines={1}>
                 {opponentName}
               </Text>
-              <Text style={[styles.compareScore, { color: '#6366F1' }]}>{oppScore}{'/10'}</Text>
+              <Text style={[styles.compareScore, { color: Colors.indigo }]}>{oppScore}{'/10'}</Text>
               {oppTime !== null && (
                 <Text style={[styles.compareTime, { color: theme.subTextColor }]}>{formatTime(oppTime)}</Text>
               )}
@@ -775,7 +776,7 @@ function LobbyView({
 
   return (
     <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
-      <LinearGradient colors={['#0D9488', '#6366F1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.lobbyHeader}>
+      <LinearGradient colors={[Colors.indigo, Colors.violet]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.lobbyHeader}>
         <Text style={styles.lobbyTitle}>{'Challenge a Friend'}</Text>
         <Text style={styles.lobbySub}>{'10 questions. Same quiz. Who wins?'}</Text>
       </LinearGradient>
@@ -793,7 +794,7 @@ function LobbyView({
         </TouchableOpacity>
       </View>
 
-      {loading && <ActivityIndicator color="#0D9488" style={{ marginVertical: 20 }} />}
+      {loading && <ActivityIndicator color={Colors.indigo} style={{ marginVertical: 20 }} />}
 
       {incoming.length > 0 && (
         <>
@@ -853,7 +854,7 @@ function LobbyView({
                     return (
                       <TouchableOpacity
                         key={String(value)}
-                        style={[styles.topicOption, { borderColor: sel ? '#0D9488' : '#E5E7EB' }, sel && styles.topicOptionSelected]}
+                        style={[styles.topicOption, { borderColor: sel ? Colors.indigo : '#E5E7EB' }, sel && styles.topicOptionSelected]}
                         onPress={() => setSelectedTopic(value)}
                         activeOpacity={0.75}
                       >
@@ -1088,7 +1089,7 @@ const styles = StyleSheet.create({
   },
   startBtn: {
     flex: 1,
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
@@ -1131,7 +1132,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -1167,7 +1168,7 @@ const styles = StyleSheet.create({
   expiresText: { fontSize: 11, fontWeight: '500' },
 
   playBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
@@ -1179,9 +1180,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
   },
-  resultsBtnText: { color: '#0D9488', fontSize: 15, fontWeight: '700' },
+  resultsBtnText: { color: Colors.indigo, fontSize: 15, fontWeight: '700' },
 
   // ── Quiz ──────────────────────────────────────────────────────────────────────
   quizTopBar: {
@@ -1195,7 +1196,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E7EB',
   },
   quizVs:      { fontSize: 12, fontWeight: '600', flex: 1 },
-  quizTimer:   { fontSize: 22, fontWeight: '800', color: '#0D9488', fontVariant: ['tabular-nums'] },
+  quizTimer:   { fontSize: 22, fontWeight: '800', color: Colors.indigo, fontVariant: ['tabular-nums'] },
   quizCounter: { fontSize: 13, fontWeight: '600', flex: 1, textAlign: 'right' },
 
   quizContent: { padding: 16, paddingBottom: 48, gap: 12 },
@@ -1206,7 +1207,7 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: '#E5E7EB',
     borderLeftWidth: 3,
-    borderLeftColor: '#0D9488',
+    borderLeftColor: Colors.indigo,
   },
   questionText: { fontSize: 17, fontWeight: '600', lineHeight: 26 },
 
@@ -1221,9 +1222,9 @@ const styles = StyleSheet.create({
     padding: 13,
     gap: 12,
   },
-  optionSelected:       { borderColor: '#0D9488', borderWidth: 2, backgroundColor: '#F0FDFA' },
+  optionSelected:       { borderColor: Colors.indigo, borderWidth: 2, backgroundColor: '#F0FDFA' },
   optBadge:             { width: 30, height: 30, borderRadius: 8, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  optBadgeSelected:     { backgroundColor: '#0D9488' },
+  optBadgeSelected:     { backgroundColor: Colors.indigo },
   optBadgeText:         { fontSize: 13, fontWeight: '800', color: '#6B7280' },
   optBadgeTextSelected: { color: '#FFFFFF' },
   optionText:           { flex: 1, fontSize: 15, color: '#374151', lineHeight: 21 },
@@ -1232,16 +1233,16 @@ const styles = StyleSheet.create({
   quizNavRow:            { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
   quizNavBtn:            { backgroundColor: '#FFFFFF', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1, borderColor: '#E5E7EB' },
   quizNavBtnDisabled:    { borderColor: '#F3F4F6', backgroundColor: '#F3F4F6' },
-  quizNavBtnText:        { fontSize: 14, fontWeight: '700', color: '#0D9488' },
+  quizNavBtnText:        { fontSize: 14, fontWeight: '700', color: Colors.indigo },
   quizNavBtnDisabledText: { color: '#9CA3AF' },
-  quizSubmitBtn:         { backgroundColor: '#0D9488', borderRadius: 10, paddingHorizontal: 24, paddingVertical: 10 },
+  quizSubmitBtn:         { backgroundColor: Colors.indigo, borderRadius: 10, paddingHorizontal: 24, paddingVertical: 10 },
   quizSubmitBtnText:     { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 
   calculatingText: { fontSize: 16, fontWeight: '600' },
 
   // ── Results ───────────────────────────────────────────────────────────────────
   backRow: { paddingBottom: 4 },
-  backBtn: { fontSize: 14, fontWeight: '600', color: '#0D9488' },
+  backBtn: { fontSize: 14, fontWeight: '600', color: Colors.indigo },
 
   waitingCard: {
     borderRadius: 20,
@@ -1265,10 +1266,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderWidth: 1.5,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
     marginTop: 4,
   },
-  remindBtnText: { color: '#0D9488', fontSize: 14, fontWeight: '700' },
+  remindBtnText: { color: Colors.indigo, fontSize: 14, fontWeight: '700' },
 
   winnerBanner: {
     borderRadius: 20,
@@ -1303,15 +1304,15 @@ const styles = StyleSheet.create({
   vsBig:              { fontSize: 18, fontWeight: '800', marginHorizontal: 8 },
 
   xpEarnedCard: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: Colors.indigoBg,
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#6366F1',
+    borderColor: Colors.indigo,
     alignItems: 'center',
   },
-  xpEarnedText: { fontSize: 15, fontWeight: '700', color: '#6366F1' },
+  xpEarnedText: { fontSize: 15, fontWeight: '700', color: Colors.indigo },
 
   breakdownCard: {
     borderRadius: 16,
@@ -1333,13 +1334,13 @@ const styles = StyleSheet.create({
   breakdownRowBorder: { borderBottomWidth: 0.5, borderBottomColor: '#F3F4F6' },
   breakdownQNum:  { fontSize: 11, fontWeight: '700', width: 24 },
   breakdownQText: { flex: 1, fontSize: 12 },
-  tickGreen:  { fontSize: 13, fontWeight: '900', color: '#0D9488', width: 28, textAlign: 'center' },
+  tickGreen:  { fontSize: 13, fontWeight: '900', color: Colors.emerald, width: 28, textAlign: 'center' },
   tickRed:    { fontSize: 13, fontWeight: '900', color: '#EF4444', width: 28, textAlign: 'center' },
-  tickIndigo: { fontSize: 13, fontWeight: '900', color: '#6366F1', width: 28, textAlign: 'center' },
+  tickIndigo: { fontSize: 13, fontWeight: '900', color: Colors.indigo, width: 28, textAlign: 'center' },
   tickGrey:   { fontSize: 13, fontWeight: '900', color: '#D1D5DB', width: 28, textAlign: 'center' },
 
   challengeAgainBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
@@ -1351,9 +1352,9 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
   },
-  shareResultBtnText: { color: '#0D9488', fontSize: 16, fontWeight: '700' },
+  shareResultBtnText: { color: Colors.indigo, fontSize: 16, fontWeight: '700' },
 
   homeBtn: {
     borderRadius: 14,
@@ -1414,11 +1415,11 @@ const styles = StyleSheet.create({
   topicOptionSelected: { backgroundColor: '#F0FDFA' },
   topicEmoji:          { fontSize: 18, width: 26, textAlign: 'center' },
   topicLabel:          { flex: 1, fontSize: 14, fontWeight: '600' },
-  topicLabelSel:       { color: '#0D9488' },
-  topicCheck:          { fontSize: 14, fontWeight: '800', color: '#0D9488' },
+  topicLabelSel:       { color: Colors.indigo },
+  topicCheck:          { fontSize: 14, fontWeight: '800', color: Colors.indigo },
 
   modalNextBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
@@ -1457,7 +1458,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
   },
   linkNote: { fontSize: 13, lineHeight: 20 },
 
@@ -1473,7 +1474,7 @@ const styles = StyleSheet.create({
   backTabBtnText: { fontSize: 14, fontWeight: '600' },
   createBtn: {
     flex: 1,
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
@@ -1491,7 +1492,7 @@ const styles = StyleSheet.create({
     letterSpacing: 4,
   },
   joinBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',

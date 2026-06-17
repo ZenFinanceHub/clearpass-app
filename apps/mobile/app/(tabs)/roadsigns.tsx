@@ -30,6 +30,7 @@ import {
   searchRoadSigns,
   generateQuiz,
 } from '@clearpass/content';
+import { Colors } from '@/src/constants/theme';
 
 type ViewMode = 'grid' | 'detail' | 'quiz';
 
@@ -1305,7 +1306,7 @@ export default function RoadSignsScreen() {
         ) : null}
 
         <TouchableOpacity
-          style={[styles.primaryBtn, { backgroundColor: '#0D9488' }]}
+          style={[styles.primaryBtn, { backgroundColor: Colors.indigo }]}
           onPress={() => startQuiz(categorySigns, 5, selectedSign)}
           activeOpacity={0.85}
         >

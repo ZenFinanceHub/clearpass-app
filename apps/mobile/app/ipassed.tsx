@@ -22,6 +22,7 @@ import { loadUserProgress, saveUserProgress, createFreshUserProgress } from '@/s
 import { awardXp } from '@clearpass/core';
 import { useTheme } from '@/src/theme';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
+import { Colors } from '@/src/constants/theme';
 
 // ── Shared storage helpers (imported by home + settings) ──────────────────────
 
@@ -135,7 +136,7 @@ function PassedFlow() {
 
   return (
     <>
-      <LinearGradient colors={['#0D9488', '#4F46E5']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
+      <LinearGradient colors={[Colors.indigo, Colors.violet]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView style={styles.flex} contentContainerStyle={styles.passedContent} keyboardShouldPersistTaps="handled">
 
@@ -191,7 +192,7 @@ function PassedFlow() {
               value={shareStory}
               onValueChange={setShareStory}
               trackColor={{ false: 'rgba(255,255,255,0.3)', true: '#FFFFFF' }}
-              thumbColor={shareStory ? '#0D9488' : 'rgba(255,255,255,0.7)'}
+              thumbColor={shareStory ? Colors.indigo : 'rgba(255,255,255,0.7)'}
               ios_backgroundColor={'rgba(255,255,255,0.3)'}
             />
           </View>
@@ -284,9 +285,9 @@ function ResitFlow() {
       </TouchableOpacity>
 
       <View style={[styles.resitCard, { backgroundColor: theme.cardColor }]}>
-        <Text style={[styles.resitIcon, { color: '#0D9488' }]}>{'[OK]'}</Text>
+        <Text style={[styles.resitIcon, { color: Colors.indigo }]}>{'[OK]'}</Text>
         <Text style={[styles.resitHeading, { color: theme.textColor }]}>{"Don't worry"}</Text>
-        <Text style={[styles.resitStat, { color: '#0D9488' }]}>
+        <Text style={[styles.resitStat, { color: Colors.indigo }]}>
           {'54% of people need more than one attempt'}
         </Text>
         <Text style={[styles.resitBody, { color: theme.subTextColor }]}>
@@ -433,7 +434,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   scorePillTextActive: {
-    color: '#0D9488',
+    color: Colors.indigo,
   },
 
   storyInput: {
@@ -478,7 +479,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   submitBtnDisabled: { opacity: 0.6 },
-  submitBtnText: { color: '#0D9488', fontSize: 17, fontWeight: '800' },
+  submitBtnText: { color: Colors.indigo, fontSize: 17, fontWeight: '800' },
 
   // ── Review modal ──────────────────────────────────────────────────────────────
   reviewBackdrop: {
@@ -506,7 +507,7 @@ const styles = StyleSheet.create({
   reviewTitle: { fontSize: 22, fontWeight: '900', color: '#111827', textAlign: 'center' },
   reviewSub:   { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 20 },
   reviewBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
@@ -525,7 +526,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   backBtn:     { marginBottom: 4 },
-  backBtnText: { fontSize: 14, fontWeight: '600', color: '#0D9488' },
+  backBtnText: { fontSize: 14, fontWeight: '600', color: Colors.indigo },
 
   resitCard: {
     borderRadius: 20,
@@ -535,7 +536,7 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     alignItems: 'center',
     borderTopWidth: 4,
-    borderTopColor: '#0D9488',
+    borderTopColor: Colors.indigo,
   },
   resitIcon:    { fontSize: 20, fontWeight: '900', letterSpacing: 1 },
   resitHeading: { fontSize: 26, fontWeight: '900', textAlign: 'center' },
@@ -577,7 +578,7 @@ const styles = StyleSheet.create({
   orText: { fontSize: 13, fontWeight: '600' },
 
   tutorBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',

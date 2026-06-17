@@ -13,6 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
 import { getProxyUrl } from '@/src/proxyUrl';
+import { Colors } from '@/src/constants/theme';
 
 const FEATURES = [
   'Unlimited practice questions',
@@ -192,7 +193,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
     paddingVertical: 24,
     paddingHorizontal: 40,
     width: '100%',
@@ -201,12 +202,12 @@ const styles = StyleSheet.create({
   priceRow: { flexDirection: 'row', alignItems: 'baseline' },
   priceAmount: { fontSize: 48, fontWeight: '900', color: '#111827' },
   pricePeriod: { fontSize: 18, color: '#6B7280', fontWeight: '500' },
-  priceSub: { fontSize: 13, color: '#0D9488', fontWeight: '600' },
+  priceSub: { fontSize: 13, color: Colors.indigo, fontWeight: '600' },
 
   errorText: { fontSize: 13, color: '#EF4444', textAlign: 'center' },
 
   ctaBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 18,
     alignItems: 'center',
@@ -222,13 +223,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0FDFA',
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
     paddingVertical: 10,
     paddingHorizontal: 16,
     alignSelf: 'stretch',
     alignItems: 'center',
   },
-  referralBadgeText: { fontSize: 13, fontWeight: '700', color: '#0D9488' },
+  referralBadgeText: { fontSize: 13, fontWeight: '700', color: Colors.indigo },
 
   testBanner: {
     backgroundColor: '#FFFBEB',
