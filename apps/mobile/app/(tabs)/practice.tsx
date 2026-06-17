@@ -59,6 +59,7 @@ import { OfflineBanner } from '@/src/components/OfflineBanner';
 import * as Speech from 'expo-speech';
 import { useAccessibility } from '@/src/AccessibilityContext';
 import { useTheme } from '@/src/theme';
+import { Colors } from '@/src/constants/theme';
 import { getProxyUrl } from '@/src/proxyUrl';
 
 const SESSION_SIZE = 10;
@@ -849,7 +850,7 @@ export default function PracticeScreen() {
   if (phase === 'loading') {
     return (
       <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}>
-        <ActivityIndicator size="large" color="#0D9488" />
+        <ActivityIndicator size="large" color={Colors.indigo} />
         <Text style={styles.loadingText}>Loading questions...</Text>
       </View>
     );
@@ -1117,7 +1118,7 @@ export default function PracticeScreen() {
             </View>
           ) : aiLoading ? (
             <View style={styles.aiLoadingRow}>
-              <ActivityIndicator size="small" color="#0D9488" />
+              <ActivityIndicator size="small" color={Colors.indigo} />
               <Text style={styles.aiLoadingText}>Getting explanation...</Text>
             </View>
           ) : (
@@ -1236,7 +1237,7 @@ function StartView({
         onPress={hasWeakSpots ? onWeakSpot : undefined}
         activeOpacity={hasWeakSpots ? 0.85 : 1}
       >
-        <Text style={[styles.weakSpotButtonTitle, !hasWeakSpots && { color: '#9CA3AF' }]}>
+        <Text style={[styles.weakSpotButtonTitle, !hasWeakSpots && { color: Colors.subtleText }]}>
           {'[!] Weak Spots'}
           {hasWeakSpots ? ` (${weakSpotCount})` : ''}
         </Text>
@@ -1280,12 +1281,12 @@ function resultConfig(pct: number): {
   emoji: string;
 } {
   if (pct === 100)
-    return { borderColor: '#0D9488', accentColor: '#0D9488', label: 'PERFECT!', emoji: '🏆' };
+    return { borderColor: Colors.emerald, accentColor: Colors.emerald, label: 'PERFECT!', emoji: '🏆' };
   if (pct >= 80)
-    return { borderColor: '#6366F1', accentColor: '#6366F1', label: 'GREAT JOB!', emoji: '⭐' };
+    return { borderColor: Colors.indigo, accentColor: Colors.indigo, label: 'GREAT JOB!', emoji: '⭐' };
   if (pct >= 60)
-    return { borderColor: '#F59E0B', accentColor: '#F59E0B', label: 'NOT BAD!', emoji: '👍' };
-  return { borderColor: '#EF4444', accentColor: '#EF4444', label: 'KEEP GOING!', emoji: '💪' };
+    return { borderColor: Colors.amber, accentColor: Colors.amber, label: 'NOT BAD!', emoji: '👍' };
+  return { borderColor: Colors.red, accentColor: Colors.red, label: 'KEEP GOING!', emoji: '💪' };
 }
 
 function motivationalMessage(correct: number, total: number): string {
@@ -1481,7 +1482,7 @@ function BattleView({
 }) {
   const multiplier = Math.min(Math.max(combo, 1), 5);
   const comboColor =
-    combo >= 5 ? '#EF4444' : combo >= 3 ? '#F59E0B' : combo >= 2 ? '#0D9488' : '#9CA3AF';
+    combo >= 5 ? Colors.red : combo >= 3 ? Colors.amber : combo >= 2 ? Colors.indigo : Colors.subtleText;
   const theme = useTheme();
 
   return (
@@ -1595,7 +1596,7 @@ function BattleResultsScreen({
 }) {
   const excellent = score >= 12;
   const good = score >= 8;
-  const bannerColor = excellent ? '#0D9488' : good ? '#F59E0B' : '#EF4444';
+  const bannerColor = excellent ? Colors.emerald : good ? Colors.amber : Colors.red;
   const label = excellent ? 'EXCELLENT!' : good ? 'GOOD FIGHT!' : 'KEEP TRAINING!';
   const theme = useTheme();
 
@@ -1632,7 +1633,7 @@ function BattleResultsScreen({
           <Text style={styles.battleStatLabel}>Score</Text>
         </View>
         <View style={styles.battleStat}>
-          <Text style={[styles.battleStatValue, { color: xpEarned > 0 ? '#6366F1' : '#9CA3AF' }]}>
+          <Text style={[styles.battleStatValue, { color: xpEarned > 0 ? Colors.indigo : Colors.subtleText }]}>
             {xpEarned > 0 ? '+' + xpEarned : '0'}
           </Text>
           <Text style={styles.battleStatLabel}>XP</Text>
@@ -1701,8 +1702,8 @@ function WeakSpotView({
             {clearedCount}{' / '}{totalCount}{' cleared'}
           </Text>
         </View>
-        <View style={[styles.weakConsecBadge, consecutive > 0 ? { borderColor: '#0D9488' } : { borderColor: '#E5E7EB' }]}>
-          <Text style={[styles.weakConsecValue, { color: consecutive > 0 ? '#0D9488' : '#9CA3AF' }]}>
+        <View style={[styles.weakConsecBadge, consecutive > 0 ? { borderColor: Colors.emerald } : { borderColor: Colors.border }]}>
+          <Text style={[styles.weakConsecValue, { color: consecutive > 0 ? Colors.emerald : Colors.subtleText }]}>
             {consecutive}{'/3'}
           </Text>
           <Text style={[styles.weakConsecLabel, { color: theme.subTextColor }]}>streak</Text>
@@ -1787,7 +1788,7 @@ function WeakSpotResultsView({
   const theme = useTheme();
   const cleared = clearedQuestions.length;
   const allCleared = cleared === totalQuestions;
-  const bannerColor = allCleared ? '#0D9488' : cleared > 0 ? '#6366F1' : '#F59E0B';
+  const bannerColor = allCleared ? Colors.emerald : cleared > 0 ? Colors.indigo : Colors.amber;
   const topicSet = new Set(clearedQuestions.map(q => TOPIC_LABELS[q.topicCategory]));
 
   return (
@@ -1847,7 +1848,7 @@ function SpeedRoundView({
 }) {
   const theme = useTheme();
   const isLow = timeLeft < 20;
-  const timerColor = isLow ? '#EF4444' : '#0D9488';
+  const timerColor = isLow ? Colors.red : Colors.indigo;
 
   return (
     <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
@@ -1867,7 +1868,7 @@ function SpeedRoundView({
         </View>
       </View>
 
-      <View style={[styles.speedTimerBar, { backgroundColor: '#F3F4F6' }]}>
+      <View style={[styles.speedTimerBar, { backgroundColor: Colors.surfaceGray }]}>
         <View style={[styles.speedTimerFill, { width: `${(timeLeft / 90) * 100}%` as any, backgroundColor: timerColor }]} />
       </View>
 
@@ -1955,7 +1956,7 @@ function SpeedRoundResultsView({
   return (
     <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
       <View style={[styles.scoreBanner, { borderColor: cfg.borderColor }]}>
-        <Text style={[styles.speedRoundBadgeLabel, { color: '#EF4444' }]}>{'SPEED ROUND'}</Text>
+        <Text style={[styles.speedRoundBadgeLabel, { color: Colors.red }]}>{'SPEED ROUND'}</Text>
         <Text style={[styles.resultLabel, { color: cfg.accentColor }]}>{cfg.label}</Text>
         <Text style={styles.scoreValue}>{correct}{' / '}{total}</Text>
         <Text style={styles.scorePct}>{pct}{'%'}</Text>
@@ -2037,63 +2038,63 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 12,
   },
-  loadingText: { color: '#6B7280', fontSize: 15 },
+  loadingText: { color: Colors.mutedText, fontSize: 15 },
 
   // Start screen
   startContent: { padding: 24, paddingTop: 24, paddingBottom: 48 },
   startTitle: { fontSize: 28, fontWeight: '800', marginBottom: 8 },
-  startSub: { fontSize: 15, color: '#6B7280', marginBottom: 32, lineHeight: 22 },
+  startSub: { fontSize: 15, color: Colors.mutedText, marginBottom: 32, lineHeight: 22 },
   startOr: {
     textAlign: 'center',
-    color: '#9CA3AF',
+    color: Colors.subtleText,
     fontSize: 13,
     fontWeight: '600',
     marginVertical: 16,
   },
   battleButton: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.cardWhite,
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#EF4444',
+    borderColor: Colors.red,
   },
   battleButtonTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#EF4444',
+    color: Colors.red,
     marginBottom: 4,
   },
   battleButtonSubtitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#6B7280',
+    color: Colors.mutedText,
     marginBottom: 6,
   },
-  battleButtonSub: { fontSize: 12, color: '#6B7280', lineHeight: 18 },
+  battleButtonSub: { fontSize: 12, color: Colors.mutedText, lineHeight: 18 },
 
   // Progress bar
   progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  progressLabel: { fontSize: 13, color: '#6B7280', fontWeight: '500' },
-  progressPct: { fontSize: 13, color: '#6366F1', fontWeight: '700' },
+  progressLabel: { fontSize: 13, color: Colors.mutedText, fontWeight: '500' },
+  progressPct: { fontSize: 13, color: Colors.indigo, fontWeight: '700' },
   progressTrack: {
     height: 6,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: Colors.surfaceGray,
     borderRadius: 3,
     marginBottom: 16,
     overflow: 'hidden',
   },
-  progressFill: { height: 6, backgroundColor: '#0D9488', borderRadius: 3 },
+  progressFill: { height: 6, backgroundColor: Colors.indigo, borderRadius: 3 },
 
   // Question card
   questionCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.cardWhite,
     borderRadius: 20,
     padding: 20,
     marginBottom: 14,
     borderWidth: 0.5,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
     borderLeftWidth: 3,
-    borderLeftColor: '#6366F1',
+    borderLeftColor: Colors.indigo,
   },
   topicBadge: {
     alignSelf: 'flex-end',
@@ -2101,9 +2102,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     marginBottom: 10,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: Colors.surfaceGray,
     borderWidth: 0.5,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
   },
   topicBadgeEmoji: { fontSize: 16 },
   questionText: { fontSize: 17, fontWeight: '600', lineHeight: 26 },
@@ -2118,10 +2119,10 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 12,
   },
-  optionDefault: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' },
-  optionCorrect: { backgroundColor: '#F0FDFA', borderColor: '#0D9488', borderWidth: 2 },
-  optionWrong:   { backgroundColor: '#FEF2F2', borderColor: '#EF4444', borderWidth: 2 },
-  optionDimmed:  { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' },
+  optionDefault: { backgroundColor: Colors.cardWhite, borderColor: Colors.border },
+  optionCorrect: { backgroundColor: Colors.emeraldBg, borderColor: Colors.emerald, borderWidth: 2 },
+  optionWrong:   { backgroundColor: Colors.redBg, borderColor: Colors.red, borderWidth: 2 },
+  optionDimmed:  { backgroundColor: Colors.cardWhite, borderColor: Colors.border },
   badge: {
     width: 28,
     height: 28,
@@ -2130,53 +2131,53 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
-  badgeDefault: { backgroundColor: '#F3F4F6' },
-  badgeCorrect: { backgroundColor: '#0D9488' },
-  badgeWrong:   { backgroundColor: '#EF4444' },
+  badgeDefault: { backgroundColor: Colors.surfaceGray },
+  badgeCorrect: { backgroundColor: Colors.emerald },
+  badgeWrong:   { backgroundColor: Colors.red },
   badgeText: { fontSize: 13, fontWeight: '800' },
-  badgeTextDefault: { color: '#6B7280' },
-  badgeTextColored: { color: '#FFFFFF' },
+  badgeTextDefault: { color: Colors.mutedText },
+  badgeTextColored: { color: Colors.cardWhite },
   optionText: { flex: 1, fontSize: 15, lineHeight: 22 },
-  optionTextDefault: { color: '#111827' },
-  optionTextCorrect: { color: '#0D9488', fontWeight: '600' },
-  optionTextWrong:   { color: '#EF4444', fontWeight: '600' },
-  optionTextDimmed:  { color: '#9CA3AF' },
+  optionTextDefault: { color: Colors.textPrimary },
+  optionTextCorrect: { color: Colors.emerald, fontWeight: '600' },
+  optionTextWrong:   { color: Colors.red, fontWeight: '600' },
+  optionTextDimmed:  { color: Colors.subtleText },
 
   // Explanation
   explanation: { borderRadius: 12, padding: 16, marginBottom: 14, borderLeftWidth: 3 },
-  explanationGreen: { backgroundColor: '#F0FDFA', borderLeftColor: '#0D9488' },
-  explanationRed:   { backgroundColor: '#FEF2F2', borderLeftColor: '#EF4444' },
+  explanationGreen: { backgroundColor: Colors.emeraldBg, borderLeftColor: Colors.emerald },
+  explanationRed:   { backgroundColor: Colors.redBg, borderLeftColor: Colors.red },
   explanationTitle: { fontSize: 15, fontWeight: '700', marginBottom: 4 },
-  explanationTitleGreen: { color: '#0D9488' },
-  explanationTitleRed:   { color: '#EF4444' },
+  explanationTitleGreen: { color: Colors.emerald },
+  explanationTitleRed:   { color: Colors.red },
   explanationBody: { fontSize: 14, lineHeight: 21 },
   explanationBodyGreen: { color: '#065F46' },
   explanationBodyRed:   { color: '#991B1B' },
 
   // Buttons
   primaryButton: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 4,
     marginBottom: 10,
   },
-  primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  primaryButtonText: { color: Colors.cardWhite, fontSize: 16, fontWeight: '700' },
   outlineButton: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.cardWhite,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
     marginBottom: 10,
   },
-  outlineButtonText: { color: '#0D9488', fontSize: 16, fontWeight: '600' },
+  outlineButtonText: { color: Colors.indigo, fontSize: 16, fontWeight: '600' },
 
   // Results screen
   scoreBanner: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.cardWhite,
     borderRadius: 20,
     borderWidth: 1,
     paddingVertical: 32,
@@ -2185,12 +2186,12 @@ const styles = StyleSheet.create({
   },
   resultEmoji: { fontSize: 56, marginBottom: 8 },
   resultLabel: { fontSize: 22, fontWeight: '900', letterSpacing: 2, marginBottom: 8 },
-  scoreValue: { fontSize: 72, fontWeight: '900', color: '#111827', lineHeight: 80 },
-  scorePct: { fontSize: 20, color: '#6B7280', fontWeight: '600', marginTop: 4 },
+  scoreValue: { fontSize: 72, fontWeight: '900', color: Colors.textPrimary, lineHeight: 80 },
+  scorePct: { fontSize: 20, color: Colors.mutedText, fontWeight: '600', marginTop: 4 },
   xpNotif: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0D9488',
+    color: Colors.indigo,
     marginTop: 10,
   },
   motivationalMsg: {
@@ -2204,7 +2205,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#6B7280',
+    color: Colors.mutedText,
     letterSpacing: 1,
     textTransform: 'uppercase',
     marginBottom: 10,
@@ -2218,8 +2219,8 @@ const styles = StyleSheet.create({
     gap: 10,
     borderLeftWidth: 3,
   },
-  breakdownRowCorrect: { backgroundColor: '#F0FDFA', borderLeftColor: '#0D9488' },
-  breakdownRowWrong:   { backgroundColor: '#FEF2F2', borderLeftColor: '#EF4444' },
+  breakdownRowCorrect: { backgroundColor: Colors.emeraldBg, borderLeftColor: Colors.emerald },
+  breakdownRowWrong:   { backgroundColor: Colors.redBg, borderLeftColor: Colors.red },
   breakdownDot: {
     width: 26,
     height: 26,
@@ -2229,33 +2230,33 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     marginTop: 1,
   },
-  dotGreen: { backgroundColor: '#0D9488' },
-  dotRed:   { backgroundColor: '#EF4444' },
-  dotText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
-  breakdownText: { flex: 1, fontSize: 13, color: '#111827', lineHeight: 20 },
+  dotGreen: { backgroundColor: Colors.emerald },
+  dotRed:   { backgroundColor: Colors.red },
+  dotText: { color: Colors.cardWhite, fontSize: 12, fontWeight: '800' },
+  breakdownText: { flex: 1, fontSize: 13, color: Colors.textPrimary, lineHeight: 20 },
 
   tutorButton: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#0D9488',
-    backgroundColor: '#FFFFFF',
+    borderColor: Colors.indigo,
+    backgroundColor: Colors.cardWhite,
     paddingVertical: 14,
     alignItems: 'center',
     marginBottom: 8,
   },
-  tutorButtonText: { color: '#0D9488', fontSize: 15, fontWeight: '700' },
+  tutorButtonText: { color: Colors.indigo, fontSize: 15, fontWeight: '700' },
 
   // AI tutor
   explainButton: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: Colors.emeraldBg,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
     paddingVertical: 12,
     alignItems: 'center',
     marginBottom: 8,
   },
-  explainButtonText: { color: '#0D9488', fontSize: 14, fontWeight: '700' },
+  explainButtonText: { color: Colors.indigo, fontSize: 14, fontWeight: '700' },
   aiLoadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2264,46 +2265,46 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginBottom: 8,
   },
-  aiLoadingText: { color: '#6B7280', fontSize: 14 },
+  aiLoadingText: { color: Colors.mutedText, fontSize: 14 },
   aiCard: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: Colors.surfaceGray,
     borderRadius: 12,
     padding: 14,
     marginBottom: 8,
     borderLeftWidth: 3,
-    borderLeftColor: '#6366F1',
+    borderLeftColor: Colors.indigo,
   },
   aiCardTitle: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#6366F1',
+    color: Colors.indigo,
     letterSpacing: 1,
     marginBottom: 6,
   },
-  aiCardBody: { fontSize: 14, color: '#374151', lineHeight: 22 },
+  aiCardBody: { fontSize: 14, color: Colors.textDark, lineHeight: 22 },
 
   // Achievement banner
   achievementBanner: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: Colors.indigoBg,
     borderRadius: 14,
     padding: 14,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#6366F1',
+    borderColor: Colors.indigo,
     borderLeftWidth: 4,
-    borderLeftColor: '#6366F1',
+    borderLeftColor: Colors.indigo,
   },
   achievementBannerTitle: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#6366F1',
+    color: Colors.indigo,
     letterSpacing: 1,
     marginBottom: 6,
   },
   achievementBannerItem: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#111827',
+    color: Colors.textPrimary,
     marginBottom: 2,
   },
 
@@ -2319,12 +2320,12 @@ const styles = StyleSheet.create({
   battleLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#EF4444',
+    color: Colors.red,
     letterSpacing: 1,
   },
-  battleProgress: { fontSize: 13, fontWeight: '600', color: '#6B7280' },
+  battleProgress: { fontSize: 13, fontWeight: '600', color: Colors.mutedText },
   comboBadge: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: Colors.surfaceGray,
     borderRadius: 10,
     borderWidth: 1,
     paddingHorizontal: 10,
@@ -2333,19 +2334,19 @@ const styles = StyleSheet.create({
     minWidth: 54,
   },
   comboValue: { fontSize: 18, fontWeight: '900', lineHeight: 22 },
-  comboLabel: { fontSize: 9, fontWeight: '700', color: '#9CA3AF', letterSpacing: 0.5 },
+  comboLabel: { fontSize: 9, fontWeight: '700', color: Colors.subtleText, letterSpacing: 0.5 },
   battleScoreBadge: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: Colors.surfaceGray,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
     paddingHorizontal: 10,
     paddingVertical: 6,
     alignItems: 'center',
     minWidth: 54,
   },
-  battleScoreValue: { fontSize: 18, fontWeight: '900', color: '#111827', lineHeight: 22 },
-  battleScoreLabel: { fontSize: 9, fontWeight: '700', color: '#9CA3AF', letterSpacing: 0.5 },
+  battleScoreValue: { fontSize: 18, fontWeight: '900', color: Colors.textPrimary, lineHeight: 22 },
+  battleScoreLabel: { fontSize: 9, fontWeight: '700', color: Colors.subtleText, letterSpacing: 0.5 },
   battleTopicsRow: {
     flexDirection: 'row',
     gap: 8,
@@ -2353,7 +2354,7 @@ const styles = StyleSheet.create({
   },
   battleTopicChip: {
     fontSize: 20,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: Colors.surfaceGray,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -2363,10 +2364,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
   },
-  battleAutoAdvanceText: { fontSize: 13, color: '#9CA3AF', fontStyle: 'italic' },
+  battleAutoAdvanceText: { fontSize: 13, color: Colors.subtleText, fontStyle: 'italic' },
 
   // Battle results
-  battleResultScore: { fontSize: 72, fontWeight: '900', color: '#111827', lineHeight: 80 },
+  battleResultScore: { fontSize: 72, fontWeight: '900', color: Colors.textPrimary, lineHeight: 80 },
   battleStatRow: {
     flexDirection: 'row',
     gap: 12,
@@ -2374,48 +2375,48 @@ const styles = StyleSheet.create({
   },
   battleStat: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.cardWhite,
     borderRadius: 14,
     padding: 16,
     alignItems: 'center',
     borderWidth: 0.5,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
   },
   battleStatValue: {
     fontSize: 26,
     fontWeight: '800',
-    color: '#111827',
+    color: Colors.textPrimary,
     marginBottom: 4,
   },
-  battleStatLabel: { fontSize: 11, color: '#6B7280', fontWeight: '500' },
+  battleStatLabel: { fontSize: 11, color: Colors.mutedText, fontWeight: '500' },
   battleHint: {
-    backgroundColor: '#FFFBEB',
+    backgroundColor: Colors.amberBg,
     borderRadius: 12,
     padding: 14,
     marginBottom: 16,
     borderLeftWidth: 3,
-    borderLeftColor: '#FBBF24',
+    borderLeftColor: Colors.amber,
   },
-  battleHintText: { fontSize: 13, color: '#FBBF24', fontWeight: '600' },
+  battleHintText: { fontSize: 13, color: Colors.amber, fontWeight: '600' },
   battleExitButton: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.cardWhite,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  battleExitText: { fontSize: 12, fontWeight: '600', color: '#6B7280' },
+  battleExitText: { fontSize: 12, fontWeight: '600', color: Colors.mutedText },
 
   speakerBtn: {
     alignSelf: 'flex-end',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: Colors.surfaceGray,
     borderRadius: 6,
     marginBottom: 8,
   },
-  speakerBtnText: { fontSize: 11, fontWeight: '700' as const, color: '#6366F1' },
+  speakerBtnText: { fontSize: 11, fontWeight: '700' as const, color: Colors.indigo },
   bookmarkBtn: {
     position: 'absolute',
     top: 12,
@@ -2426,23 +2427,23 @@ const styles = StyleSheet.create({
 
   // Daily limit gate
   limitCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.cardWhite,
     borderRadius: 20,
     padding: 28,
     marginHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
     borderTopWidth: 3,
-    borderTopColor: '#FBBF24',
+    borderTopColor: Colors.amber,
     alignItems: 'center',
     gap: 12,
     maxWidth: 400,
     width: '100%',
   },
-  limitTitle: { fontSize: 22, fontWeight: '800', color: '#FBBF24', textAlign: 'center' },
-  limitBody: { fontSize: 15, color: '#6B7280', textAlign: 'center', lineHeight: 22 },
+  limitTitle: { fontSize: 22, fontWeight: '800', color: Colors.amber, textAlign: 'center' },
+  limitBody: { fontSize: 15, color: Colors.mutedText, textAlign: 'center', lineHeight: 22 },
   limitUpgradeBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 24,
@@ -2450,23 +2451,23 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     alignItems: 'center',
   },
-  limitUpgradeBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
-  limitNote: { fontSize: 13, color: '#6B7280', textAlign: 'center' },
+  limitUpgradeBtnText: { color: Colors.cardWhite, fontSize: 15, fontWeight: '700' },
+  limitNote: { fontSize: 13, color: Colors.mutedText, textAlign: 'center' },
   limitBackBtn: { paddingVertical: 8 },
-  limitBackText: { color: '#6B7280', fontSize: 14, fontWeight: '600' },
+  limitBackText: { color: Colors.mutedText, fontSize: 14, fontWeight: '600' },
 
   // Weak Spot Drill
   weakSpotButton: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.cardWhite,
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#F59E0B',
+    borderColor: Colors.amber,
   },
-  weakSpotButtonDisabled: { borderColor: '#E5E7EB', opacity: 0.7 },
-  weakSpotButtonTitle:    { fontSize: 18, fontWeight: '800', color: '#F59E0B', marginBottom: 4 },
-  weakSpotButtonSubtitle: { fontSize: 13, fontWeight: '600', color: '#6B7280', marginBottom: 6 },
-  weakSpotButtonSub:      { fontSize: 12, color: '#6B7280', lineHeight: 18 },
+  weakSpotButtonDisabled: { borderColor: Colors.border, opacity: 0.7 },
+  weakSpotButtonTitle:    { fontSize: 18, fontWeight: '800', color: Colors.amber, marginBottom: 4 },
+  weakSpotButtonSubtitle: { fontSize: 13, fontWeight: '600', color: Colors.mutedText, marginBottom: 6 },
+  weakSpotButtonSub:      { fontSize: 12, color: Colors.mutedText, lineHeight: 18 },
   weakHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2474,7 +2475,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   weakHeaderCenter: { alignItems: 'center', gap: 2 },
-  weakModeLabel: { fontSize: 11, fontWeight: '800', color: '#F59E0B', letterSpacing: 1 },
+  weakModeLabel: { fontSize: 11, fontWeight: '800', color: Colors.amber, letterSpacing: 1 },
   weakProgress:  { fontSize: 13, fontWeight: '600' },
   weakConsecBadge: {
     borderRadius: 10,
@@ -2488,58 +2489,58 @@ const styles = StyleSheet.create({
   weakConsecLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 0.5 },
   weakBarTrack: {
     height: 6,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: Colors.surfaceGray,
     borderRadius: 3,
     marginBottom: 14,
     overflow: 'hidden',
   },
-  weakBarFill: { height: 6, backgroundColor: '#0D9488', borderRadius: 3 },
+  weakBarFill: { height: 6, backgroundColor: Colors.emerald, borderRadius: 3 },
   weakClearedBanner: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: Colors.emeraldBg,
     borderRadius: 12,
     padding: 20,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#0D9488',
+    borderColor: Colors.emerald,
     marginBottom: 14,
   },
-  weakClearedText: { fontSize: 22, fontWeight: '900', color: '#0D9488' },
+  weakClearedText: { fontSize: 22, fontWeight: '900', color: Colors.emerald },
   weakResultBadgeLabel: { fontSize: 13, fontWeight: '800', letterSpacing: 1, marginBottom: 4 },
   weakTopicList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
   weakTopicChip: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: Colors.emeraldBg,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderWidth: 0.5,
-    borderColor: '#0D9488',
+    borderColor: Colors.emerald,
   },
-  weakTopicChipText: { fontSize: 13, fontWeight: '600', color: '#0D9488' },
+  weakTopicChipText: { fontSize: 13, fontWeight: '600', color: Colors.emerald },
 
   // Comparative stats
   comparativeCard: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: Colors.indigoBg,
     borderRadius: 12,
     padding: 14,
     marginBottom: 14,
     borderWidth: 0.5,
-    borderColor: '#6366F1',
+    borderColor: Colors.indigo,
   },
-  comparativeText: { fontSize: 14, color: '#374151', lineHeight: 20 },
-  comparativePct:  { fontWeight: '800', color: '#6366F1' },
-  comparativeAvg:  { fontSize: 12, color: '#6B7280', marginTop: 4 },
+  comparativeText: { fontSize: 14, color: Colors.textDark, lineHeight: 20 },
+  comparativePct:  { fontWeight: '800', color: Colors.indigo },
+  comparativeAvg:  { fontSize: 12, color: Colors.mutedText, marginTop: 4 },
 
   // Speed Round
   speedButton: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.cardWhite,
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#EF4444',
+    borderColor: Colors.red,
   },
-  speedButtonTitle: { fontSize: 18, fontWeight: '800', color: '#EF4444', marginBottom: 4 },
-  speedButtonSubtitle: { fontSize: 13, fontWeight: '600', color: '#6B7280', marginBottom: 6 },
-  speedButtonSub: { fontSize: 12, color: '#6B7280', lineHeight: 18 },
+  speedButtonTitle: { fontSize: 18, fontWeight: '800', color: Colors.red, marginBottom: 4 },
+  speedButtonSubtitle: { fontSize: 13, fontWeight: '600', color: Colors.mutedText, marginBottom: 6 },
+  speedButtonSub: { fontSize: 12, color: Colors.mutedText, lineHeight: 18 },
   speedHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2557,8 +2558,8 @@ const styles = StyleSheet.create({
   speedTimerValue: { fontSize: 32, fontWeight: '900', lineHeight: 36 },
   speedTimerLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 1 },
   speedProgressBox: { alignItems: 'flex-end', gap: 2 },
-  speedProgressText: { fontSize: 13, fontWeight: '600', color: '#6B7280' },
-  speedModeLabel: { fontSize: 10, fontWeight: '800', color: '#EF4444', letterSpacing: 1 },
+  speedProgressText: { fontSize: 13, fontWeight: '600', color: Colors.mutedText },
+  speedModeLabel: { fontSize: 10, fontWeight: '800', color: Colors.red, letterSpacing: 1 },
   speedTimerBar: { height: 6, borderRadius: 3, marginBottom: 14, overflow: 'hidden' },
   speedTimerFill: { height: 6, borderRadius: 3 },
   speedRoundBadgeLabel: { fontSize: 13, fontWeight: '800', letterSpacing: 1, marginBottom: 4 },
@@ -2567,29 +2568,29 @@ const styles = StyleSheet.create({
   speedStatValue: { fontSize: 20, fontWeight: '800' },
   speedStatLabel: { fontSize: 11, fontWeight: '500' },
   speedBonusTag: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: Colors.amberBg,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 6,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: '#FBBF24',
+    borderColor: Colors.amber,
   },
   speedBonusText: { fontSize: 13, fontWeight: '700', color: '#D97706' },
 
-  ruleLink: { color: '#0D9488', fontWeight: '700', textDecorationLine: 'underline' },
+  ruleLink: { color: Colors.indigo, fontWeight: '700', textDecorationLine: 'underline' },
 
   shareLink: { alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 16 },
-  shareLinkText: { fontSize: 14, color: '#0D9488', fontWeight: '600', textDecorationLine: 'underline' },
+  shareLinkText: { fontSize: 14, color: Colors.indigo, fontWeight: '600', textDecorationLine: 'underline' },
 
   // Session tutor nudge card
   sessionNudgeCard: {
-    backgroundColor: '#FFFBEB',
+    backgroundColor: Colors.amberBg,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#F59E0B',
+    borderColor: Colors.amber,
     borderLeftWidth: 3,
-    borderLeftColor: '#F59E0B',
+    borderLeftColor: Colors.amber,
     padding: 14,
     marginBottom: 16,
   },
@@ -2606,42 +2607,42 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
-  sessionNudgeDismiss: { fontSize: 15, color: '#9CA3AF', fontWeight: '600' },
+  sessionNudgeDismiss: { fontSize: 15, color: Colors.subtleText, fontWeight: '600' },
   sessionNudgeBody: { fontSize: 13, color: '#78350F', lineHeight: 18, marginBottom: 10 },
   sessionNudgeBtns: { flexDirection: 'row', gap: 8 },
   sessionNudgeAskBtn: {
     flex: 1,
-    backgroundColor: '#F59E0B',
+    backgroundColor: Colors.amber,
     borderRadius: 10,
     paddingVertical: 10,
     alignItems: 'center',
   },
-  sessionNudgeAskText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  sessionNudgeAskText: { color: Colors.cardWhite, fontSize: 13, fontWeight: '700' },
   sessionNudgeLaterBtn: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.cardWhite,
     borderRadius: 10,
     paddingVertical: 10,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
   },
-  sessionNudgeLaterText: { color: '#6B7280', fontSize: 13, fontWeight: '600' },
+  sessionNudgeLaterText: { color: Colors.mutedText, fontSize: 13, fontWeight: '600' },
 
   // Spaced repetition rating
   srRow: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.cardWhite,
     borderRadius: 12,
     borderWidth: 0.5,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
     padding: 12,
     marginBottom: 10,
   },
-  srRowLabel: { fontSize: 12, color: '#6B7280', fontWeight: '500', marginBottom: 8 },
+  srRowLabel: { fontSize: 12, color: Colors.mutedText, fontWeight: '500', marginBottom: 8 },
   srBtns:     { flexDirection: 'row', gap: 8 },
   easyBtn: {
     flex: 1,
-    backgroundColor: '#D1FAE5',
+    backgroundColor: Colors.emeraldBg,
     borderRadius: 8,
     paddingVertical: 10,
     alignItems: 'center',
@@ -2649,7 +2650,7 @@ const styles = StyleSheet.create({
   easyBtnText: { fontSize: 14, fontWeight: '700', color: '#065F46' },
   hardBtn: {
     flex: 1,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: Colors.amberBg,
     borderRadius: 8,
     paddingVertical: 10,
     alignItems: 'center',
