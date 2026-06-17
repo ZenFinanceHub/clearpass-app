@@ -17,11 +17,12 @@ import {
   searchHighwayCode,
 } from '@clearpass/content';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
+import { Colors } from '@/src/constants/theme';
 
 type ViewMode = 'list' | 'chapter' | 'rule';
 
-const TEAL = '#0D9488';
-const TEAL_LIGHT = '#F0FDFA';
+const TEAL = Colors.indigo;
+const TEAL_LIGHT = Colors.indigoBg;
 
 export default function HighwayCodeScreen() {
   const params = useLocalSearchParams<{ ruleNumber?: string }>();

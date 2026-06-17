@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { CelebrationEvent, CELEBRATION_CONFIGS } from '@/src/celebrations';
+import { Colors } from '@/src/constants/theme';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const PIECE_COUNT = 30;
@@ -250,18 +251,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderWidth: 1.5,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
     marginTop: 4,
   },
   xpBadgeText: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#0D9488',
+    color: Colors.indigo,
   },
 
   btnWrap: { width: '100%', marginTop: 8 },
   dismissBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',

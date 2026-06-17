@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Colors } from '@/src/constants/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,7 +52,7 @@ function fmtTime(seconds: number): string {
 function MockCard({ data }: { data: MockCardData }) {
   const pct = Math.round((data.score / data.total) * 100);
   return (
-    <LinearGradient colors={['#0D9488', '#4F46E5']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={cs.card}>
+    <LinearGradient colors={[Colors.indigo, Colors.violet]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={cs.card}>
       <Text style={cs.bgEmoji}>{'🚗'}</Text>
       <Text style={cs.appLabel}>{'CLEARPASS'}</Text>
       <Text style={cs.cardTitle}>{'Theory Test Result'}</Text>
@@ -92,7 +93,7 @@ function PracticeCard({ data }: { data: PracticeCardData }) {
       <Text style={[cs.bgEmoji, { color: 'rgba(13,148,136,0.18)' }]}>{'📚'}</Text>
       <Text style={[cs.appLabel, { color: '#0F766E' }]}>{'CLEARPASS'}</Text>
       <Text style={[cs.cardTitle, { color: '#134E4A' }]}>{'Practice Complete'}</Text>
-      <Text style={[cs.bigScore, { color: '#0D9488' }]}>{data.correct}{' / '}{data.total}</Text>
+      <Text style={[cs.bigScore, { color: Colors.indigo }]}>{data.correct}{' / '}{data.total}</Text>
       <Text style={[cs.pctLabel, { color: '#0F766E' }]}>{pct}{'%'}</Text>
       {!!data.topic && (
         <View style={cs.topicBadge}>
@@ -101,7 +102,7 @@ function PracticeCard({ data }: { data: PracticeCardData }) {
       )}
       {!!data.streakDays && data.streakDays > 0 && (
         <View style={[cs.streakPill, { backgroundColor: 'rgba(13,148,136,0.15)' }]}>
-          <Text style={[cs.streakText, { color: '#0D9488' }]}>{'🔥 '}{data.streakDays}{'-day streak'}</Text>
+          <Text style={[cs.streakText, { color: Colors.indigo }]}>{'🔥 '}{data.streakDays}{'-day streak'}</Text>
         </View>
       )}
       <Text style={[cs.footer, { color: '#0F766E' }]}>{'clearpass.app'}</Text>
@@ -338,7 +339,7 @@ const cs = StyleSheet.create({
   topicBadgeText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#0D9488',
+    color: Colors.indigo,
   },
   motivational: {
     fontSize: 13,
@@ -418,7 +419,7 @@ const ms = StyleSheet.create({
     alignItems: 'center',
   },
   shareBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
   },
   shareBtnText: {
     color: '#FFFFFF',
@@ -428,10 +429,10 @@ const ms = StyleSheet.create({
   saveBtn: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
   },
   saveBtnText: {
-    color: '#0D9488',
+    color: Colors.indigo,
     fontSize: 15,
     fontWeight: '700',
   },

@@ -2,6 +2,7 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import { useTheme } from '@/src/theme';
+import { Colors } from '@/src/constants/theme';
 
 const LAST_UPDATED = '4 June 2026';
 
@@ -137,7 +138,7 @@ const styles = StyleSheet.create({
   backArrow: { fontSize: 15, fontWeight: '600' },
 
   brand: { alignItems: 'center', marginBottom: 28, gap: 4 },
-  brandName: { fontSize: 28, fontWeight: '900', color: '#0D9488' },
+  brandName: { fontSize: 28, fontWeight: '900', color: Colors.indigo },
   brandSub:  { fontSize: 20, fontWeight: '700', color: '#111827' },
   updated:   { fontSize: 13, marginTop: 4 },
 

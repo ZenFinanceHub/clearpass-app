@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/src/theme';
+import { Colors } from '@/src/constants/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -422,7 +423,7 @@ function BreatheTab() {
         {PHASES.map((p, i) => (
           <View key={i} style={styles.phaseGuideRow}>
             <View style={[styles.phaseGuideDot, breathing && phaseIdx === i && styles.phaseGuideDotActive]} />
-            <Text style={[styles.phaseGuideText, { color: breathing && phaseIdx === i ? '#0D9488' : theme.subTextColor }]}>
+            <Text style={[styles.phaseGuideText, { color: breathing && phaseIdx === i ? Colors.indigo : theme.subTextColor }]}>
               {p.label}{' — '}{p.seconds}{'s'}
             </Text>
           </View>
@@ -588,7 +589,7 @@ export default function TestDayScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: theme.backgroundColor }]}>
       <LinearGradient
-        colors={['#0D9488', '#0891B2']}
+        colors={[Colors.indigo, Colors.violet]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.header}
@@ -647,9 +648,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 3,
     borderBottomColor: 'transparent',
   },
-  tabActive:     { borderBottomColor: '#0D9488' },
+  tabActive:     { borderBottomColor: Colors.indigo },
   tabText:       { fontSize: 13, fontWeight: '600', color: '#9CA3AF' },
-  tabTextActive: { color: '#0D9488' },
+  tabTextActive: { color: Colors.indigo },
 
   // Common tab layout
   tabContent: { padding: 20, paddingBottom: 60 },
@@ -669,7 +670,7 @@ const styles = StyleSheet.create({
     width: 200,
     height: 200,
     borderRadius: 100,
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
   },
   circleOverlay: {
     alignItems: 'center',
@@ -680,7 +681,7 @@ const styles = StyleSheet.create({
   circleIdleText: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.75)', textAlign: 'center' },
 
   startBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
@@ -704,7 +705,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#D1D5DB',
   },
-  phaseGuideDotActive: { backgroundColor: '#0D9488' },
+  phaseGuideDotActive: { backgroundColor: Colors.emerald },
   phaseGuideText:      { fontSize: 13, fontWeight: '500' },
 
   reassuranceSection: { marginTop: 28, gap: 10 },
@@ -712,7 +713,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     borderLeftWidth: 4,
-    borderLeftColor: '#0D9488',
+    borderLeftColor: Colors.indigo,
   },
   reassureText: { fontSize: 15, lineHeight: 22, fontWeight: '500' },
 
@@ -722,7 +723,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     overflow: 'hidden',
     borderLeftWidth: 4,
-    borderLeftColor: '#0D9488',
+    borderLeftColor: Colors.indigo,
   },
   topicHeader: {
     flexDirection: 'row',
@@ -735,7 +736,7 @@ const styles = StyleSheet.create({
   topicChevron: { fontSize: 11, fontWeight: '700' },
   topicBody:    { paddingHorizontal: 16, paddingBottom: 16, gap: 6 },
   factRow:      { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
-  factBullet:   { fontSize: 14, color: '#0D9488', lineHeight: 22 },
+  factBullet:   { fontSize: 14, color: Colors.indigo, lineHeight: 22 },
   factText:     { flex: 1, fontSize: 14, lineHeight: 22 },
   askTutorBtn: {
     marginTop: 12,
@@ -744,9 +745,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
   },
-  askTutorBtnText: { color: '#0D9488', fontSize: 14, fontWeight: '700' },
+  askTutorBtnText: { color: Colors.indigo, fontSize: 14, fontWeight: '700' },
 
   // Checklist
   checkSection:      { marginBottom: 24 },
@@ -774,7 +775,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkBoxTicked:   { backgroundColor: '#0D9488', borderColor: '#0D9488' },
+  checkBoxTicked:   { backgroundColor: Colors.emerald, borderColor: Colors.emerald },
   checkTick:        { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
   checkLabel:       { flex: 1, fontSize: 15, lineHeight: 22 },
   checkLabelTicked: { textDecorationLine: 'line-through' },
@@ -785,7 +786,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
     borderWidth: 2,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
   },
-  allTickedText: { fontSize: 20, fontWeight: '800', color: '#0D9488', textAlign: 'center' },
+  allTickedText: { fontSize: 20, fontWeight: '800', color: Colors.indigo, textAlign: 'center' },
 });

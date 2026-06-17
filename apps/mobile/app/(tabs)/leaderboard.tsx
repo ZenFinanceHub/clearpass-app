@@ -12,6 +12,7 @@ import { getXpLevel } from '@clearpass/core';
 import { supabase } from '@/src/supabase';
 import { loadUserProgress, syncProgressToCloud } from '@/src/storage';
 import { useTheme } from '@/src/theme';
+import { Colors } from '@/src/constants/theme';
 
 type LeaderboardEntry = {
   username: string;
@@ -72,7 +73,7 @@ export default function LeaderboardScreen() {
   if (loggedIn === null || loading) {
     return (
       <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}>
-        <ActivityIndicator size="large" color="#0D9488" />
+        <ActivityIndicator size="large" color={Colors.indigo} />
       </View>
     );
   }
@@ -179,7 +180,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#0D9488',
+    color: Colors.indigo,
     letterSpacing: 2,
     marginBottom: 4,
     textTransform: 'uppercase',
@@ -199,7 +200,7 @@ const styles = StyleSheet.create({
   },
   rowCurrentUser: {
     borderLeftWidth: 3,
-    borderLeftColor: '#0D9488',
+    borderLeftColor: Colors.indigo,
   },
   rankNum: {
     fontSize: 15,
@@ -211,7 +212,7 @@ const styles = StyleSheet.create({
   rowUsername: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 2 },
   rowLevel: { fontSize: 11, color: '#6B7280' },
   rowRight: { alignItems: 'flex-end', gap: 4 },
-  rowXp: { fontSize: 15, fontWeight: '800', color: '#0D9488' },
+  rowXp: { fontSize: 15, fontWeight: '800', color: Colors.indigo },
   streakBadge: {
     backgroundColor: '#FFFBEB',
     borderRadius: 6,
@@ -234,9 +235,9 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: '#E5E7EB',
     borderLeftWidth: 3,
-    borderLeftColor: '#0D9488',
+    borderLeftColor: Colors.indigo,
   },
-  yourRankText: { fontSize: 14, fontWeight: '700', color: '#0D9488' },
+  yourRankText: { fontSize: 14, fontWeight: '700', color: Colors.indigo },
 
   noAuthTitle: { fontSize: 20, fontWeight: '800', color: '#111827' },
   noAuthSub: {
@@ -246,7 +247,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   signInBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 32,

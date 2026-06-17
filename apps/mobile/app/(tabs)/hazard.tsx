@@ -16,6 +16,7 @@ import { loadUserProgress, saveUserProgress } from '@/src/storage';
 import { getHazardVideoList, getVideoUrl, type HazardClipMeta } from '@/src/hazardVideos';
 import { isPremium } from '@/src/subscription';
 import { useTheme } from '@/src/theme';
+import { Colors } from '@/src/constants/theme';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { ShareCardModal } from '@/src/components/ShareableCard';
@@ -252,7 +253,7 @@ export default function HazardScreen() {
     if (clipsLoading) {
       return (
         <View style={[styles.bg, styles.centerFill, { backgroundColor: theme.backgroundColor }]}>
-          <ActivityIndicator size="large" color="#0D9488" />
+          <ActivityIndicator size="large" color={Colors.indigo} />
           <Text style={[styles.sub, { color: theme.subTextColor }]}>{'Loading...'}</Text>
         </View>
       );
@@ -610,7 +611,7 @@ const styles = StyleSheet.create({
   heading: { fontSize: 26, fontWeight: '800', textAlign: 'center' },
   sub: { fontSize: 14, textAlign: 'center' },
   bodyText: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
-  clipCounter: { fontSize: 13, fontWeight: '700', color: '#6366F1', letterSpacing: 0.5 },
+  clipCounter: { fontSize: 13, fontWeight: '700', color: Colors.indigo, letterSpacing: 0.5 },
 
   card: {
     width: '100%' as any,
@@ -626,14 +627,14 @@ const styles = StyleSheet.create({
 
   stepRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   stepBadge: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: Colors.indigoBg,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 4,
     minWidth: 72,
     alignItems: 'center',
   },
-  stepBadgeText: { fontSize: 12, fontWeight: '700', color: '#6366F1' },
+  stepBadgeText: { fontSize: 12, fontWeight: '700', color: Colors.indigo },
   stepText: { fontSize: 13, color: '#374151', flex: 1 },
 
   statsRow: { flexDirection: 'row', gap: 12 },
@@ -649,7 +650,7 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 11, color: '#6B7280', marginTop: 2 },
 
   primaryBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 16,
     paddingHorizontal: 40,
@@ -726,7 +727,7 @@ const styles = StyleSheet.create({
   hazardLabel: { fontSize: 13, color: '#374151', flex: 1 },
   dots: { flexDirection: 'row', gap: 4 },
   dot: { width: 12, height: 12, borderRadius: 6 },
-  dotFilled: { backgroundColor: '#0D9488' },
+  dotFilled: { backgroundColor: Colors.emerald },
   dotEmpty: { backgroundColor: '#E5E7EB' },
 
   // Results
@@ -738,21 +739,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 3,
   },
-  passBadge: { backgroundColor: '#ECFDF5', borderColor: '#0D9488' },
+  passBadge: { backgroundColor: '#ECFDF5', borderColor: Colors.emerald },
   failBadge: { backgroundColor: '#FEF2F2', borderColor: '#EF4444' },
   resultBadgeText: { fontSize: 18, fontWeight: '900', color: '#111827' },
   totalScore: { fontSize: 48, fontWeight: '900' },
-  passText: { color: '#0D9488' },
+  passText: { color: Colors.emerald },
   failText: { color: '#EF4444' },
   xpBadge: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: Colors.indigoBg,
     borderRadius: 20,
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: '#6366F1',
+    borderColor: Colors.indigo,
   },
-  xpText: { fontSize: 15, fontWeight: '700', color: '#6366F1' },
+  xpText: { fontSize: 15, fontWeight: '700', color: Colors.indigo },
   breakdownRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -768,9 +769,9 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
   },
-  secondaryBtnText: { color: '#0D9488', fontSize: 16, fontWeight: '700' },
+  secondaryBtnText: { color: Colors.indigo, fontSize: 16, fontWeight: '700' },
 
   comingSoonCard: {
     backgroundColor: '#F0FDFA',
@@ -779,11 +780,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     borderWidth: 1.5,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
     marginHorizontal: 16,
     marginBottom: 24,
     maxWidth: 360,
     width: '90%' as any,
   },
-  comingSoonEmoji: { fontSize: 48, fontWeight: '900', color: '#0D9488' },
+  comingSoonEmoji: { fontSize: 48, fontWeight: '900', color: Colors.indigo },
 });

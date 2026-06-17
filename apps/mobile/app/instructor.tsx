@@ -21,6 +21,7 @@ import {
   UserProgress,
 } from '@clearpass/core';
 import { useTheme } from '@/src/theme';
+import { Colors } from '@/src/constants/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -175,7 +176,7 @@ function LearnerCard({ data, onPress }: { data: LearnerEntry; onPress: () => voi
       activeOpacity={0.85}
     >
       <View style={styles.learnerCardTop}>
-        <View style={[styles.avatarCircle, { backgroundColor: '#0D9488' }]}>
+        <View style={[styles.avatarCircle, { backgroundColor: Colors.indigo }]}>
           <Text style={styles.avatarText}>{initials}</Text>
         </View>
         <View style={styles.learnerMeta}>
@@ -264,7 +265,7 @@ function LearnerDetailView({
 
       {/* Learner header */}
       <View style={styles.detailHeader}>
-        <View style={[styles.avatarCircleLg, { backgroundColor: '#0D9488' }]}>
+        <View style={[styles.avatarCircleLg, { backgroundColor: Colors.indigo }]}>
           <Text style={styles.avatarTextLg}>{initials}</Text>
         </View>
         <Text style={[styles.detailName, { color: theme.textColor }]}>{name}</Text>
@@ -443,7 +444,7 @@ function AddNoteModal({
 
           <Text style={[styles.codeLabel, { color: theme.subTextColor }]}>{'Notes'}</Text>
           <TextInput
-            style={[styles.noteTextArea, { color: theme.textColor, borderColor: noteText.trim().length > 0 ? '#0D9488' : '#E5E7EB' }]}
+            style={[styles.noteTextArea, { color: theme.textColor, borderColor: noteText.trim().length > 0 ? Colors.indigo : '#E5E7EB' }]}
             value={noteText}
             onChangeText={setNoteText}
             placeholder="Add your lesson notes here..."
@@ -637,7 +638,7 @@ function AddLearnerModal({
                 {"Enter the learner's email address"}
               </Text>
               <TextInput
-                style={[styles.emailInput, { color: theme.textColor, borderColor: email.includes('@') ? '#0D9488' : '#E5E7EB' }]}
+                style={[styles.emailInput, { color: theme.textColor, borderColor: email.includes('@') ? Colors.indigo : '#E5E7EB' }]}
                 value={email}
                 onChangeText={setEmail}
                 placeholder="learner@example.com"
@@ -1146,7 +1147,7 @@ function LearnerModeView({
       ) : (
         instructors.map(rel => (
           <View key={rel.id} style={[styles.instructorCard, { backgroundColor: theme.cardColor }]}>
-            <View style={[styles.avatarCircle, { backgroundColor: '#6366F1' }]}>
+            <View style={[styles.avatarCircle, { backgroundColor: Colors.indigo }]}>
               <Text style={styles.avatarText}>
                 {getInitials(rel.learner_name ?? rel.learner_email ?? 'IN')}
               </Text>
@@ -1438,7 +1439,7 @@ const styles = StyleSheet.create({
     borderColor: '#F59E0B',
   },
   weakBadgeText: { fontSize: 11, fontWeight: '700', color: '#92400E' },
-  learnerCardChevron: { fontSize: 12, color: '#0D9488', fontWeight: '700' },
+  learnerCardChevron: { fontSize: 12, color: Colors.indigo, fontWeight: '700' },
   learnerCardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   lastNoteText: { fontSize: 11, fontWeight: '500', fontStyle: 'italic' },
 
@@ -1506,7 +1507,7 @@ const styles = StyleSheet.create({
   dotsRow: { flexDirection: 'row', justifyContent: 'space-between' },
   dotCol:  { alignItems: 'center', gap: 4 },
   dot: { width: 28, height: 28, borderRadius: 14 },
-  dotActive:   { backgroundColor: '#0D9488' },
+  dotActive:   { backgroundColor: Colors.indigo },
   dotInactive: { backgroundColor: '#E5E7EB' },
   dotLabel: { fontSize: 11, fontWeight: '600' },
 
@@ -1540,7 +1541,7 @@ const styles = StyleSheet.create({
 
   // Action buttons
   encourageBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
@@ -1551,9 +1552,9 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
   },
-  emailSummaryBtnText: { color: '#0D9488', fontSize: 16, fontWeight: '700' },
+  emailSummaryBtnText: { color: Colors.indigo, fontSize: 16, fontWeight: '700' },
 
   // Empty state (instructor)
   emptyState: { alignItems: 'center', padding: 32, gap: 12 },
@@ -1566,14 +1567,14 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
     marginTop: 8,
     width: '100%',
   },
   codeCardLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 1.5, marginBottom: 8 },
-  codeCardValue: { fontSize: 40, fontWeight: '900', color: '#0D9488', letterSpacing: 8 },
+  codeCardValue: { fontSize: 40, fontWeight: '900', color: Colors.indigo, letterSpacing: 8 },
   addLearnerBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 16,
     paddingHorizontal: 32,
@@ -1587,7 +1588,7 @@ const styles = StyleSheet.create({
   dashHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   dashTitle:  { fontSize: 22, fontWeight: '800' },
   addBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -1629,10 +1630,10 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
     marginTop: 4,
   },
-  enterCodeBtnText: { color: '#0D9488', fontSize: 16, fontWeight: '700' },
+  enterCodeBtnText: { color: Colors.indigo, fontSize: 16, fontWeight: '700' },
 
   // Modals
   modalOverlay: {
@@ -1653,7 +1654,7 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: '800' },
   modalTabRow: { flexDirection: 'row', borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#E5E7EB' },
   modalTab: { flex: 1, paddingVertical: 10, alignItems: 'center', backgroundColor: '#F9FAFB' },
-  modalTabActive: { backgroundColor: '#0D9488' },
+  modalTabActive: { backgroundColor: Colors.indigo },
   modalTabText: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
   modalTabTextActive: { color: '#FFFFFF' },
   codeDisplay: { alignItems: 'center', gap: 10 },
@@ -1664,9 +1665,9 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 24,
     borderWidth: 2,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
   },
-  codeText: { fontSize: 32, fontWeight: '900', color: '#0D9488', letterSpacing: 6 },
+  codeText: { fontSize: 32, fontWeight: '900', color: Colors.indigo, letterSpacing: 6 },
   codeHint: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
   emailEntry: { gap: 10 },
   emailLabel: { fontSize: 13 },
@@ -1690,7 +1691,7 @@ const styles = StyleSheet.create({
     letterSpacing: 6,
   },
   addEmailBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
@@ -1706,7 +1707,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   addNoteBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -1749,13 +1750,13 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 14,
     borderWidth: 1.5,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
   },
-  refLinkText: { fontSize: 14, fontWeight: '700', color: '#0D9488' },
+  refLinkText: { fontSize: 14, fontWeight: '700', color: Colors.indigo },
   refBtnRow: { flexDirection: 'row', gap: 10 },
   refCopyBtn: {
     flex: 1,
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
@@ -1767,9 +1768,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
   },
-  refShareBtnText: { color: '#0D9488', fontSize: 14, fontWeight: '700' },
+  refShareBtnText: { color: Colors.indigo, fontSize: 14, fontWeight: '700' },
 
   // Earnings section
   earningsSection: {
@@ -1795,9 +1796,9 @@ const styles = StyleSheet.create({
   },
   earningDate:   { fontSize: 13, fontWeight: '600' },
   earningDesc:   { fontSize: 12, marginTop: 2 },
-  earningAmount: { fontSize: 15, fontWeight: '800', color: '#0D9488' },
+  earningAmount: { fontSize: 15, fontWeight: '800', color: Colors.indigo },
   payoutBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
@@ -1813,9 +1814,9 @@ const styles = StyleSheet.create({
   summaryKey: { fontSize: 14 },
   summaryVal: { fontSize: 14, fontWeight: '700' },
   summaryEncourage: { borderRadius: 10, padding: 14, marginTop: 4 },
-  summaryEncourageText: { fontSize: 14, lineHeight: 22, color: '#0D9488', fontStyle: 'italic' },
+  summaryEncourageText: { fontSize: 14, lineHeight: 22, color: Colors.indigo, fontStyle: 'italic' },
   sendSummaryBtn: {
-    backgroundColor: '#6366F1',
+    backgroundColor: Colors.indigo,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',

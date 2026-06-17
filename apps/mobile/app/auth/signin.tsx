@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
+import { Colors } from '@/src/constants/theme';
 
 export default function SignInScreen() {
   const [email, setEmail]                       = useState('');
@@ -105,7 +106,7 @@ export default function SignInScreen() {
                 activeOpacity={0.75}
               >
                 {resendLoading
-                  ? <ActivityIndicator color="#0D9488" size="small" />
+                  ? <ActivityIndicator color={Colors.indigo} size="small" />
                   : <Text style={styles.resendBtnText}>{'Resend verification email'}</Text>}
               </TouchableOpacity>
               {resendMessage.length > 0 && <Text style={styles.resendMessage}>{resendMessage}</Text>}
@@ -138,7 +139,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F7F8FA' },
   inner: { flexGrow: 1, paddingHorizontal: 28, paddingTop: 80, paddingBottom: 48 },
 
-  logo: { fontSize: 36, fontWeight: '900', color: '#0D9488', letterSpacing: 2, marginBottom: 6 },
+  logo: { fontSize: 36, fontWeight: '900', color: Colors.indigo, letterSpacing: 2, marginBottom: 6 },
   tagline: { fontSize: 14, color: '#6B7280', marginBottom: 40 },
 
   form: { gap: 12, marginBottom: 24 },
@@ -163,11 +164,11 @@ const styles = StyleSheet.create({
   },
   confirmBannerText: { fontSize: 13, color: '#92400E', lineHeight: 19 },
   resendBtn: { alignItems: 'center', paddingVertical: 4 },
-  resendBtnText: { fontSize: 13, color: '#0D9488', fontWeight: '600' },
+  resendBtnText: { fontSize: 13, color: Colors.indigo, fontWeight: '600' },
   resendMessage: { fontSize: 12, color: '#6B7280', textAlign: 'center' },
 
   submitBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
@@ -177,9 +178,9 @@ const styles = StyleSheet.create({
   submitBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
 
   forgotLink: { alignItems: 'center', paddingVertical: 8 },
-  forgotText: { fontSize: 14, color: '#0D9488', fontWeight: '600' },
+  forgotText: { fontSize: 14, color: Colors.indigo, fontWeight: '600' },
 
   switchLink: { alignItems: 'center', paddingVertical: 8 },
   switchText: { fontSize: 14, color: '#6B7280' },
-  switchAccent: { color: '#0D9488', fontWeight: '600' },
+  switchAccent: { color: Colors.indigo, fontWeight: '600' },
 });

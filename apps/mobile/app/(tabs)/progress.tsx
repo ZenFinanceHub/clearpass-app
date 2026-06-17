@@ -25,6 +25,7 @@ import { getProxyUrl } from '@/src/proxyUrl';
 import { TOPIC_BADGES, type TopicBadge } from '@/src/badges';
 import { getComparativeStats } from '@/src/analytics';
 import { useTheme } from '@/src/theme';
+import { Colors } from '@/src/constants/theme';
 
 const TOPIC_LABELS: Record<TopicCategory, string> = {
   [TopicCategory.Alertness]: 'Alertness',
@@ -80,15 +81,15 @@ function goalDate(): string {
 }
 
 function barColor(pct: number): string {
-  if (pct >= 80) return '#6366F1';
+  if (pct >= 80) return Colors.indigo;
   if (pct >= 50) return '#F59E0B';
   return '#EF4444';
 }
 
 function getRank(score: number): { label: string; color: string } {
   if (score >= 80) return { label: 'Test Ready!', color: '#F59E0B' };
-  if (score >= 60) return { label: 'Advanced', color: '#6366F1' };
-  if (score >= 40) return { label: 'Intermediate', color: '#0D9488' };
+  if (score >= 60) return { label: 'Advanced', color: Colors.indigo };
+  if (score >= 40) return { label: 'Intermediate', color: Colors.indigo };
   if (score >= 20) return { label: 'Improving', color: '#3B82F6' };
   return { label: 'Learner', color: '#9CA3AF' };
 }
@@ -239,7 +240,7 @@ export default function ProgressScreen() {
         <Text
           style={[
             styles.goalStatus,
-            { color: progress.readinessScore >= 80 ? '#0D9488' : '#6B7280' },
+            { color: progress.readinessScore >= 80 ? Colors.indigo : '#6B7280' },
           ]}
         >
           {progress.readinessScore >= 80
@@ -668,7 +669,7 @@ function TopicBadgesSection({
               onPress={() => void handleBadgeTap(badge, isEarned)}
               activeOpacity={0.75}
             >
-              <View style={[styles.badgeIconCircle, { backgroundColor: isEarned ? '#6366F1' : '#E5E7EB' }]}>
+              <View style={[styles.badgeIconCircle, { backgroundColor: isEarned ? Colors.indigo : '#E5E7EB' }]}>
                 <Text style={[styles.badgeCellIcon, { color: isEarned ? '#FFFFFF' : '#9CA3AF' }]}>
                   {isEarned ? '[v]' : '[x]'}
                 </Text>
@@ -754,7 +755,7 @@ const styles = StyleSheet.create({
   emptyBody: { fontSize: 15, color: '#6B7280', textAlign: 'center', lineHeight: 22 },
   emptyButton: {
     marginTop: 8,
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 32,
@@ -782,7 +783,7 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: '#E5E7EB',
     borderLeftWidth: 3,
-    borderLeftColor: '#6366F1',
+    borderLeftColor: Colors.indigo,
   },
   goalCardLabel: {
     fontSize: 11,
@@ -799,7 +800,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 8,
   },
-  goalBarFill: { height: 8, backgroundColor: '#0D9488', borderRadius: 4 },
+  goalBarFill: { height: 8, backgroundColor: Colors.indigo, borderRadius: 4 },
   goalStatus: { fontSize: 13, fontWeight: '600' },
 
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 28 },
@@ -815,7 +816,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 3,
   },
   statQuestions: { borderTopColor: '#EF4444' },
-  statMocks: { borderTopColor: '#6366F1' },
+  statMocks: { borderTopColor: Colors.indigo },
   statStreak: { borderTopColor: '#F59E0B' },
   statBest: { borderTopColor: '#10B981' },
   statEmoji: { fontSize: 24, marginBottom: 4 },
@@ -841,7 +842,7 @@ const styles = StyleSheet.create({
   achievementCardPlaceholder: { flex: 1 },
   achievementUnlocked: {
     backgroundColor: '#FFFFFF',
-    borderColor: '#6366F1',
+    borderColor: Colors.indigo,
   },
   achievementLocked: {
     backgroundColor: '#F9FAFB',
@@ -860,10 +861,10 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderWidth: 0.5,
   },
-  achievementXpBadgeUnlocked: { backgroundColor: '#EEF2FF', borderColor: '#6366F1' },
+  achievementXpBadgeUnlocked: { backgroundColor: Colors.indigoBg, borderColor: Colors.indigo },
   achievementXpBadgeLocked: { backgroundColor: '#F3F4F6', borderColor: '#E5E7EB' },
   achievementXpText: { fontSize: 10, fontWeight: '700' },
-  achievementXpTextUnlocked: { color: '#6366F1' },
+  achievementXpTextUnlocked: { color: Colors.indigo },
   achievementXpTextLocked: { color: '#9CA3AF' },
   achievementTitle: { fontWeight: '700', marginBottom: 4 },
   achievementTitleUnlocked: { color: '#111827', fontSize: 15 },
@@ -939,7 +940,7 @@ const styles = StyleSheet.create({
   badgePass: { backgroundColor: '#ECFDF5' },
   badgeFail: { backgroundColor: '#FEF2F2' },
   badgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
-  badgePassText: { color: '#0D9488' },
+  badgePassText: { color: Colors.emerald },
   badgeFailText: { color: '#EF4444' },
 
   // ── Pass Probability Card ─────────────────────────────────────────────────
@@ -949,7 +950,7 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: '#E5E7EB',
     borderTopWidth: 3,
-    borderTopColor: '#6366F1',
+    borderTopColor: Colors.indigo,
     padding: 18,
     marginBottom: 24,
   },
@@ -1029,17 +1030,17 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: '#E5E7EB',
     borderTopWidth: 3,
-    borderTopColor: '#0D9488',
+    borderTopColor: Colors.indigo,
     padding: 16,
     marginBottom: 12,
   },
   srCardTop:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
-  srDueCount:     { fontSize: 40, fontWeight: '900', color: '#0D9488', lineHeight: 46 },
+  srDueCount:     { fontSize: 40, fontWeight: '900', color: Colors.indigo, lineHeight: 46 },
   srDueLabel:     { fontSize: 13, fontWeight: '500', marginTop: 2 },
   srCardRight:    { alignItems: 'flex-end', paddingTop: 4 },
   srTotalLabel:   { fontSize: 12, color: '#9CA3AF', fontWeight: '500' },
   srReviewBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: 'center',
@@ -1063,10 +1064,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     justifyContent: 'flex-end',
   },
-  srBarFill:      { width: '100%', backgroundColor: '#0D9488', borderRadius: 4 },
-  srBarCount:     { fontSize: 10, color: '#0D9488', fontWeight: '700' },
+  srBarFill:      { width: '100%', backgroundColor: Colors.indigo, borderRadius: 4 },
+  srBarCount:     { fontSize: 10, color: Colors.indigo, fontWeight: '700' },
   srBarDay:       { fontSize: 10, color: '#9CA3AF', fontWeight: '500' },
-  srBarDayToday:  { color: '#0D9488', fontWeight: '700' },
+  srBarDayToday:  { color: Colors.indigo, fontWeight: '700' },
 
   // ── Topic Badges ─────────────────────────────────────────────────────────────
   badgesHeader: {
@@ -1090,7 +1091,7 @@ const styles = StyleSheet.create({
     gap: 4,
     borderWidth: 1,
   },
-  badgeCellEarned: { backgroundColor: '#FFFFFF', borderColor: '#6366F1' },
+  badgeCellEarned: { backgroundColor: '#FFFFFF', borderColor: Colors.indigo },
   badgeCellLocked: { backgroundColor: '#F9FAFB', borderColor: '#E5E7EB' },
   badgeIconCircle: {
     width: 36,
@@ -1101,12 +1102,12 @@ const styles = StyleSheet.create({
   },
   badgeCellIcon: { fontSize: 10, fontWeight: '800' },
   badgeCellName: { fontSize: 9, fontWeight: '700', textAlign: 'center' },
-  badgeCellPct: { fontSize: 9, fontWeight: '600', color: '#6366F1' },
+  badgeCellPct: { fontSize: 9, fontWeight: '600', color: Colors.indigo },
   badgeCellLockLabel: { fontSize: 8, color: '#D1D5DB', fontWeight: '600' },
 
   // ── Pass Stories ─────────────────────────────────────────────────────────────
   shareStoryBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
@@ -1128,9 +1129,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderWidth: 0.5,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
   },
-  passScoreText: { fontSize: 12, fontWeight: '700', color: '#0D9488' },
+  passScoreText: { fontSize: 12, fontWeight: '700', color: Colors.emerald },
   passStoryBody: { fontSize: 13, lineHeight: 19 },
 
   proBanner: {

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { Colors } from '@/src/constants/theme';
 
 const PROXY_URL = 'https://clearpass-app-production.up.railway.app';
 
@@ -35,7 +36,7 @@ export default function ConfirmParentScreen() {
     <View style={styles.container}>
       {status === 'loading' && (
         <>
-          <ActivityIndicator size="large" color="#0D9488" />
+          <ActivityIndicator size="large" color={Colors.indigo} />
           <Text style={styles.loadingText}>{'Confirming...'}</Text>
         </>
       )}
@@ -85,19 +86,19 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     backgroundColor: '#F0FDFA',
     borderWidth: 2,
-    borderColor: '#0D9488',
+    borderColor: Colors.indigo,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
   },
   iconWrapError: { backgroundColor: '#FEF2F2', borderColor: '#EF4444' },
-  icon: { fontSize: 22, fontWeight: '900', color: '#0D9488' },
+  icon: { fontSize: 22, fontWeight: '900', color: Colors.indigo },
   iconError: { color: '#EF4444' },
   title: { fontSize: 26, fontWeight: '800', color: '#111827', textAlign: 'center' },
   body: { fontSize: 15, color: '#6B7280', textAlign: 'center', lineHeight: 22, maxWidth: 320 },
   loadingText: { fontSize: 15, color: '#6B7280', marginTop: 12 },
   cta: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 32,

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
+import { Colors } from '@/src/constants/theme';
 
 const BANNER_H = 38;
 
@@ -41,7 +42,7 @@ export function OfflineBanner() {
 const styles = StyleSheet.create({
   wrapper: {
     overflow: 'hidden',
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
   },
   banner: {
     height: BANNER_H,

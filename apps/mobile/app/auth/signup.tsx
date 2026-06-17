@@ -13,6 +13,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/src/supabase';
+import { Colors } from '@/src/constants/theme';
 
 const PENDING_USERNAME_KEY = '@clearpass/pending_username';
 const REFERRAL_CODE_KEY    = 'referral_code';
@@ -146,7 +147,7 @@ export default function SignUpScreen() {
             activeOpacity={0.75}
           >
             {resendLoading
-              ? <ActivityIndicator color="#0D9488" />
+              ? <ActivityIndicator color={Colors.indigo} />
               : <Text style={styles.resendBtnText}>{'Resend verification email'}</Text>}
           </TouchableOpacity>
 
@@ -227,14 +228,14 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F7F8FA' },
   inner: { flexGrow: 1, paddingHorizontal: 28, paddingTop: 80, paddingBottom: 48 },
 
-  logo: { fontSize: 36, fontWeight: '900', color: '#0D9488', letterSpacing: 2, marginBottom: 6 },
+  logo: { fontSize: 36, fontWeight: '900', color: Colors.indigo, letterSpacing: 2, marginBottom: 6 },
   tagline: { fontSize: 14, color: '#6B7280', marginBottom: 40 },
 
   confirmTitle: { fontSize: 24, fontWeight: '800', color: '#111827', marginBottom: 12, marginTop: 16 },
   confirmBody: { fontSize: 15, color: '#6B7280', lineHeight: 22, marginBottom: 32 },
   confirmEmail: { color: '#111827', fontWeight: '600' },
   resendBtn: { alignItems: 'center', paddingVertical: 12, marginTop: 8 },
-  resendBtnText: { fontSize: 14, color: '#0D9488', fontWeight: '600' },
+  resendBtnText: { fontSize: 14, color: Colors.indigo, fontWeight: '600' },
   resendMessage: { fontSize: 13, color: '#6B7280', textAlign: 'center', marginTop: 8 },
 
   form: { gap: 12, marginBottom: 24 },
@@ -251,7 +252,7 @@ const styles = StyleSheet.create({
   warnText:  { fontSize: 12, color: '#F59E0B', marginTop: -4 },
   errorText: { fontSize: 13, color: '#EF4444', marginTop: 2 },
   submitBtn: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
@@ -262,5 +263,5 @@ const styles = StyleSheet.create({
 
   switchLink: { alignItems: 'center', paddingVertical: 8 },
   switchText: { fontSize: 14, color: '#6B7280' },
-  switchAccent: { color: '#0D9488', fontWeight: '600' },
+  switchAccent: { color: Colors.indigo, fontWeight: '600' },
 });
