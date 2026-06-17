@@ -1,4 +1,5 @@
 import { useAccessibility } from './AccessibilityContext';
+export { Colors, Typography, Radii } from './constants/theme';
 
 export function useTheme() {
   const { settings } = useAccessibility();

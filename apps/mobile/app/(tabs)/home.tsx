@@ -46,6 +46,7 @@ import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { allQuestions } from '@clearpass/content';
 import { supabase } from '@/src/supabase';
 import { useTheme } from '@/src/theme';
+import { Colors } from '@/src/constants/theme';
 import { useNetwork } from '@/src/NetworkContext';
 
 // ─── Road map constants ───────────────────────────────────────────────────────
@@ -134,7 +135,7 @@ function RoadSegment({
         top: cy - ROAD_W / 2,
         width: len,
         height: ROAD_W,
-        backgroundColor: '#0D9488',
+        backgroundColor: Colors.navy,
         overflow: 'hidden',
         transform: [{ rotate: `${angle}deg` }],
       }}
@@ -167,7 +168,7 @@ function RoadSegment({
               width: DASH_LEN,
               height: 4,
               borderRadius: 2,
-              backgroundColor: '#F59E0B',
+              backgroundColor: Colors.amber,
               marginRight: GAP_LEN,
             }}
           />
@@ -211,9 +212,9 @@ function MilestoneMarker({
   const isHigh = pos.y < 145;
 
   const ringColor =
-    state === 'complete' ? '#0D9488' :
-    state === 'current'  ? '#6366F1' :
-    '#E5E7EB';
+    state === 'complete' ? Colors.emerald :
+    state === 'current'  ? Colors.indigo :
+    Colors.border;
 
   const glowOpacity = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.15, 0.52] });
   const glowScale   = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [1.0,  1.28] });
@@ -233,7 +234,7 @@ function MilestoneMarker({
             width:  (CIRCLE_R + 12) * 2,
             height: (CIRCLE_R + 12) * 2,
             borderRadius: CIRCLE_R + 12,
-            backgroundColor: '#6366F1',
+            backgroundColor: Colors.indigo,
             opacity: glowOpacity,
             transform: [{ scale: glowScale }],
           }}
@@ -255,7 +256,7 @@ function MilestoneMarker({
           alignItems: 'center',
           justifyContent: 'center',
           transform: state === 'current' ? [{ scale: 1.15 }] : undefined,
-          shadowColor: state === 'current' ? '#6366F1' : '#D1D5DB',
+          shadowColor: state === 'current' ? Colors.indigo : '#D1D5DB',
           shadowOffset: { width: 0, height: 4 },
           shadowOpacity: state === 'current' ? 0.55 : 0.3,
           shadowRadius: state === 'current' ? 10 : 4,
@@ -294,15 +295,15 @@ function MilestoneMarker({
         >
           <View
             style={{
-              backgroundColor: '#EEF2FF',
+              backgroundColor: Colors.indigoBg,
               borderRadius: 6,
               paddingHorizontal: 7,
               paddingVertical: 3,
               borderWidth: 1,
-              borderColor: '#6366F1',
+              borderColor: Colors.indigo,
             }}
           >
-            <Text style={{ fontSize: 8, fontWeight: '800', color: '#6366F1', letterSpacing: 0.5 }}>
+            <Text style={{ fontSize: 8, fontWeight: '800', color: Colors.indigo, letterSpacing: 0.5 }}>
               {'YOU ARE HERE'}
             </Text>
           </View>
@@ -466,23 +467,23 @@ function RoadMapHero({ progress }: { progress: UserProgress | null }) {
 // ─── NudgesSection ────────────────────────────────────────────────────────────
 
 const NUDGE_BORDER: Record<NudgeType, string> = {
-  struggling_topic:   '#F59E0B',
-  mock_score_dropped: '#F59E0B',
-  streak_at_risk:     '#EF4444',
-  milestone_close:    '#0D9488',
-  ready_for_mock:     '#0D9488',
-  weak_area_detected: '#F59E0B',
-  inactivity:         '#F59E0B',
+  struggling_topic:   Colors.amber,
+  mock_score_dropped: Colors.amber,
+  streak_at_risk:     Colors.red,
+  milestone_close:    Colors.indigo,
+  ready_for_mock:     Colors.indigo,
+  weak_area_detected: Colors.amber,
+  inactivity:         Colors.amber,
 };
 
 const NUDGE_ACTION_BG: Record<NudgeType, string> = {
-  struggling_topic:   '#FFFBEB',
-  mock_score_dropped: '#FFFBEB',
-  streak_at_risk:     '#FEF2F2',
-  milestone_close:    '#F0FDFA',
-  ready_for_mock:     '#F0FDFA',
-  weak_area_detected: '#FFFBEB',
-  inactivity:         '#FFFBEB',
+  struggling_topic:   Colors.amberBg,
+  mock_score_dropped: Colors.amberBg,
+  streak_at_risk:     Colors.redBg,
+  milestone_close:    Colors.indigoBg,
+  ready_for_mock:     Colors.indigoBg,
+  weak_area_detected: Colors.amberBg,
+  inactivity:         Colors.amberBg,
 };
 
 const NUDGE_EMOJI: Record<NudgeType, string> = {
@@ -883,20 +884,20 @@ export default function HomeScreen() {
   const daysLeft = testDate ? getDaysRemaining(testDate) : null;
 
   let countdownMsg   = '';
-  let countdownColor = '#0D9488';
+  let countdownColor = Colors.indigo;
   if (daysLeft !== null) {
     if (daysLeft <= 0) {
       countdownMsg = 'Good luck on your test today!';
-      countdownColor = '#6366F1';
+      countdownColor = Colors.violet;
     } else if (daysLeft <= 7) {
       countdownMsg = 'Almost there! Make sure you are ready!';
-      countdownColor = '#EF4444';
+      countdownColor = Colors.red;
     } else if (daysLeft <= 30) {
       countdownMsg = 'Keep practising hard!';
-      countdownColor = '#F59E0B';
+      countdownColor = Colors.amber;
     } else {
       countdownMsg = 'You have got plenty of time - stay consistent!';
-      countdownColor = '#0D9488';
+      countdownColor = Colors.indigo;
     }
   }
 
@@ -936,7 +937,7 @@ export default function HomeScreen() {
       contentContainerStyle={styles.content}
     >
       {/* Hero Header */}
-      <LinearGradient colors={['#0D9488', '#6366F1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroHeader}>
+      <LinearGradient colors={[Colors.indigo, Colors.violet]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroHeader}>
         <View style={styles.heroTopRow}>
           <Text style={[styles.heroGreeting, { fontSize: theme.fontSize(22), fontFamily: theme.fontFamily }]}>
             {'Hey, '}{username ? username + '!' : 'there!'}{' 👋'}
@@ -1067,7 +1068,7 @@ export default function HomeScreen() {
           activeOpacity={0.85}
         >
           <LinearGradient
-            colors={['#0D9488', '#0891B2']}
+            colors={[Colors.indigo, Colors.violet]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.testDayGradient}
@@ -1088,7 +1089,7 @@ export default function HomeScreen() {
       {showResultBanner && (
         <View style={styles.resultBannerWrap}>
           <LinearGradient
-            colors={['#0D9488', '#6366F1']}
+            colors={[Colors.indigo, Colors.violet]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.resultBannerGradient}
@@ -1512,7 +1513,7 @@ const styles = StyleSheet.create({
   nudgesLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#9CA3AF',
+    color: Colors.subtleText,
     letterSpacing: 1,
     marginBottom: 8,
   },
@@ -1521,10 +1522,10 @@ const styles = StyleSheet.create({
     paddingRight: 16,
   },
   nudgeCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.cardWhite,
     borderRadius: 14,
     borderWidth: 0.5,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
     borderLeftWidth: 3,
     padding: 14,
     width: 272,
@@ -1545,12 +1546,12 @@ const styles = StyleSheet.create({
   nudgeTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#111827',
+    color: Colors.textPrimary,
     flex: 1,
     marginRight: 6,
   },
-  nudgeDismiss: { fontSize: 15, color: '#9CA3AF', lineHeight: 22, fontWeight: '600' },
-  nudgeBody: { fontSize: 12, color: '#6B7280', lineHeight: 18, marginBottom: 10 },
+  nudgeDismiss: { fontSize: 15, color: Colors.subtleText, lineHeight: 22, fontWeight: '600' },
+  nudgeBody: { fontSize: 12, color: Colors.mutedText, lineHeight: 18, marginBottom: 10 },
   nudgeAction: {
     borderRadius: 8,
     paddingVertical: 8,
@@ -1568,7 +1569,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     borderTopWidth: 0.5,
     borderBottomWidth: 0.5,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
     height: 320,
     overflow: 'hidden',
   },
@@ -1618,10 +1619,10 @@ const styles = StyleSheet.create({
 
   // ── XP Card ──────────────────────────────────────────────────────────────────
   xpCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.cardWhite,
     borderRadius: 20,
     borderWidth: 0.5,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
     margin: 16,
     padding: 24,
     overflow: 'hidden',
@@ -1629,48 +1630,48 @@ const styles = StyleSheet.create({
   xpDecorCar: { position: 'absolute', top: 12, right: 16, fontSize: 40, opacity: 0.06 },
   xpTopRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
   xpBadge: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: Colors.indigoBg,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderWidth: 0.5,
-    borderColor: '#6366F1',
+    borderColor: Colors.indigo,
   },
-  xpBadgeText: { fontSize: 11, fontWeight: '700', color: '#6366F1', letterSpacing: 1 },
-  xpScore:     { fontSize: 48, fontWeight: '900', color: '#111827', lineHeight: 56 },
+  xpBadgeText: { fontSize: 11, fontWeight: '700', color: Colors.indigo, letterSpacing: 1 },
+  xpScore:     { fontSize: 48, fontWeight: '900', color: Colors.textPrimary, lineHeight: 56 },
   xpBarTrack: {
     width: '100%',
     height: 6,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: Colors.surfaceGray,
     borderRadius: 3,
     overflow: 'hidden',
     marginBottom: 10,
   },
-  xpBarFill: { height: 6, backgroundColor: '#0D9488', borderRadius: 3 },
-  xpMsg:     { fontSize: 12, color: '#6B7280', fontWeight: '500' },
+  xpBarFill: { height: 6, backgroundColor: Colors.indigo, borderRadius: 3 },
+  xpMsg:     { fontSize: 12, color: Colors.mutedText, fontWeight: '500' },
 
   // ── Countdown Card ────────────────────────────────────────────────────────────
   countdownCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.cardWhite,
     borderRadius: 14,
     borderWidth: 0.5,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
     borderTopWidth: 3,
-    borderTopColor: '#FBBF24',
+    borderTopColor: Colors.amber,
     marginHorizontal: 16,
     marginBottom: 4,
     padding: 16,
   },
   countdownTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  countdownLabel:    { fontSize: 11, fontWeight: '700', color: '#FBBF24', letterSpacing: 1 },
-  countdownChange:   { fontSize: 12, color: '#6B7280', fontWeight: '500' },
+  countdownLabel:    { fontSize: 11, fontWeight: '700', color: Colors.amber, letterSpacing: 1 },
+  countdownChange:   { fontSize: 12, color: Colors.mutedText, fontWeight: '500' },
   countdownBody:     { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 6 },
-  countdownDays:     { fontSize: 48, fontWeight: '900', color: '#111827', lineHeight: 56 },
-  countdownDaysLabel: { fontSize: 16, color: '#6B7280', fontWeight: '500' },
+  countdownDays:     { fontSize: 48, fontWeight: '900', color: Colors.textPrimary, lineHeight: 56 },
+  countdownDaysLabel: { fontSize: 16, color: Colors.mutedText, fontWeight: '500' },
   countdownMsg:      { fontSize: 13, fontWeight: '600' },
 
   setDateRow:  { marginHorizontal: 16, marginBottom: 4, paddingVertical: 8 },
-  setDateText: { fontSize: 13, color: '#6B7280', fontWeight: '500' },
+  setDateText: { fontSize: 13, color: Colors.mutedText, fontWeight: '500' },
 
   // ── Test Result Banner ────────────────────────────────────────────────────────
   resultBannerWrap: {
@@ -1701,7 +1702,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   resultBannerPassText: {
-    color: '#0D9488',
+    color: Colors.indigo,
     fontSize: 14,
     fontWeight: '800',
   },
@@ -1737,9 +1738,9 @@ const styles = StyleSheet.create({
   actionCard: {
     borderRadius: 14,
     padding: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.cardWhite,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
     gap: 4,
   },
   actionEmoji: { fontSize: 22, marginBottom: 4 },
@@ -1748,7 +1749,7 @@ const styles = StyleSheet.create({
 
   challengeCard: {
     borderLeftWidth: 3,
-    borderLeftColor: '#0D9488',
+    borderLeftColor: Colors.indigo,
     flex: 1,
   },
   challengeCardInner: {
@@ -1763,7 +1764,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   challengeBadge: {
-    backgroundColor: '#EF4444',
+    backgroundColor: Colors.red,
     borderRadius: 12,
     minWidth: 24,
     height: 24,
@@ -1777,12 +1778,12 @@ const styles = StyleSheet.create({
   studyPlanCard: {
     marginHorizontal: 16,
     marginBottom: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.cardWhite,
     borderRadius: 14,
     borderWidth: 0.5,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
     borderLeftWidth: 3,
-    borderLeftColor: '#0D9488',
+    borderLeftColor: Colors.indigo,
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1790,75 +1791,75 @@ const styles = StyleSheet.create({
   studyPlanLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   studyPlanEmoji: { fontSize: 26 },
   studyPlanTextBlock: { flex: 1 },
-  studyPlanLabel: { fontSize: 11, fontWeight: '700', color: '#0D9488', letterSpacing: 1, marginBottom: 3 },
-  studyPlanSummary: { fontSize: 13, fontWeight: '600', color: '#374151' },
+  studyPlanLabel: { fontSize: 11, fontWeight: '700', color: Colors.indigo, letterSpacing: 1, marginBottom: 3 },
+  studyPlanSummary: { fontSize: 13, fontWeight: '600', color: Colors.textDark },
   studyPlanChevron: { marginLeft: 8 },
-  studyPlanChevronText: { fontSize: 22, color: '#9CA3AF', fontWeight: '400', lineHeight: 26 },
+  studyPlanChevronText: { fontSize: 22, color: Colors.subtleText, fontWeight: '400', lineHeight: 26 },
 
   // ── Daily Challenge Card ──────────────────────────────────────────────────────
   dcCard: {
     marginHorizontal: 16,
     marginBottom: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.cardWhite,
     borderRadius: 16,
     borderWidth: 0.5,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
     borderTopWidth: 3,
-    borderTopColor: '#0D9488',
+    borderTopColor: Colors.indigo,
     padding: 16,
   },
   dcCardComplete: { opacity: 0.6 },
   dcTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  dcLabel:  { fontSize: 11, fontWeight: '700', color: '#0D9488', letterSpacing: 1, flex: 1 },
-  dcCompleteBadge: { backgroundColor: '#ECFDF5', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
-  dcCompleteText:  { fontSize: 10, fontWeight: '800', color: '#0D9488', letterSpacing: 0.5 },
+  dcLabel:  { fontSize: 11, fontWeight: '700', color: Colors.indigo, letterSpacing: 1, flex: 1 },
+  dcCompleteBadge: { backgroundColor: Colors.emeraldBg, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
+  dcCompleteText:  { fontSize: 10, fontWeight: '800', color: Colors.emerald, letterSpacing: 0.5 },
   dcXpBadge: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: Colors.emeraldBg,
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderWidth: 0.5,
-    borderColor: '#0D9488',
+    borderColor: Colors.emerald,
   },
-  dcXpText:        { fontSize: 11, fontWeight: '700', color: '#0D9488' },
+  dcXpText:        { fontSize: 11, fontWeight: '700', color: Colors.emerald },
   dcDesc:          { fontSize: 14, fontWeight: '600', marginBottom: 10, lineHeight: 20 },
-  dcDescComplete:  { color: '#6B7280' },
+  dcDescComplete:  { color: Colors.mutedText },
   dcBarTrack: {
     height: 6,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: Colors.surfaceGray,
     borderRadius: 3,
     overflow: 'hidden',
     marginTop: 10,
     marginBottom: 6,
   },
-  dcBarFill:    { height: 6, backgroundColor: '#0D9488', borderRadius: 3 },
-  dcProgress:   { fontSize: 12, color: '#6B7280', fontWeight: '500' },
+  dcBarFill:    { height: 6, backgroundColor: Colors.indigo, borderRadius: 3 },
+  dcProgress:   { fontSize: 12, color: Colors.mutedText, fontWeight: '500' },
 
   // ── Tip Card ──────────────────────────────────────────────────────────────────
   tipCard: {
     marginHorizontal: 16,
     marginTop: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.cardWhite,
     borderRadius: 16,
     borderWidth: 0.5,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
     borderLeftWidth: 3,
-    borderLeftColor: '#6366F1',
+    borderLeftColor: Colors.violet,
     padding: 16,
   },
-  tipTitle: { fontSize: 11, fontWeight: '700', color: '#6366F1', letterSpacing: 1, marginBottom: 6 },
+  tipTitle: { fontSize: 11, fontWeight: '700', color: Colors.violet, letterSpacing: 1, marginBottom: 6 },
   tipBody:  { fontSize: 13, lineHeight: 20 },
 
   // ── Question of the Day ───────────────────────────────────────────────────────
   qotdCard: {
     marginHorizontal: 16,
     marginTop: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.cardWhite,
     borderRadius: 16,
     borderWidth: 0.5,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
     borderLeftWidth: 3,
-    borderLeftColor: '#0D9488',
+    borderLeftColor: Colors.indigo,
     padding: 16,
   },
   qotdHeader: {
@@ -1867,13 +1868,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 8,
   },
-  qotdLabel:   { fontSize: 11, fontWeight: '700', color: '#0D9488', letterSpacing: 1 },
-  qotdXpBadge: { backgroundColor: '#CCFBF1', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
-  qotdXpText:  { fontSize: 11, fontWeight: '700', color: '#0D9488' },
+  qotdLabel:   { fontSize: 11, fontWeight: '700', color: Colors.indigo, letterSpacing: 1 },
+  qotdXpBadge: { backgroundColor: Colors.emeraldBg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
+  qotdXpText:  { fontSize: 11, fontWeight: '700', color: Colors.emerald },
   qotdQuestion: { fontSize: 14, fontWeight: '600', lineHeight: 20, marginBottom: 8 },
-  qotdTap:     { fontSize: 12, color: '#9CA3AF', fontWeight: '500' },
+  qotdTap:     { fontSize: 12, color: Colors.subtleText, fontWeight: '500' },
   qotdOptions: { gap: 8, marginTop: 4 },
-  qotdOption:  { borderRadius: 8, padding: 10, borderWidth: 0.5, borderColor: '#E5E7EB' },
+  qotdOption:  { borderRadius: 8, padding: 10, borderWidth: 0.5, borderColor: Colors.border },
   qotdOptionText: { fontSize: 13, fontWeight: '500' },
   qotdExplanation: { fontSize: 12, lineHeight: 18, marginTop: 8, fontStyle: 'italic' },
 
@@ -1886,30 +1887,30 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   modalCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.cardWhite,
     borderRadius: 20,
     padding: 24,
     width: '100%',
     borderWidth: 0.5,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
   },
   modalTitle:    { fontSize: 20, fontWeight: '800', marginBottom: 6 },
   modalSub:      { fontSize: 14, marginBottom: 16, lineHeight: 20 },
   dateInput: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: Colors.surfaceGray,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    color: '#111827',
+    borderColor: Colors.border,
+    color: Colors.textPrimary,
     fontSize: 18,
     fontWeight: '600',
     padding: 14,
     marginBottom: 8,
     letterSpacing: 2,
   },
-  dateError:      { fontSize: 13, color: '#EF4444', marginBottom: 10 },
+  dateError:      { fontSize: 13, color: Colors.red, marginBottom: 10 },
   modalSave: {
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
@@ -1918,14 +1919,14 @@ const styles = StyleSheet.create({
   },
   modalSaveText:  { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   modalCancel: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.cardWhite,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: Colors.border,
   },
-  modalCancelText: { color: '#6B7280', fontSize: 15, fontWeight: '600' },
+  modalCancelText: { color: Colors.mutedText, fontSize: 15, fontWeight: '600' },
 
   // ── Schedule Mock Test Card ────────────────────────────────────────────────────
   scheduleMockCard: {
@@ -1934,7 +1935,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 0.5,
     borderTopWidth: 3,
-    borderTopColor: '#6366F1',
+    borderTopColor: Colors.indigo,
     padding: 14,
   },
   scheduleMockHeader: {
@@ -1942,10 +1943,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  scheduleMockLabel: { fontSize: 11, fontWeight: '700', color: '#6366F1', letterSpacing: 1, marginBottom: 2 },
+  scheduleMockLabel: { fontSize: 11, fontWeight: '700', color: Colors.indigo, letterSpacing: 1, marginBottom: 2 },
   scheduleMockSub:   { fontSize: 12, fontWeight: '500' },
   scheduleMockAddBtn: {
-    backgroundColor: '#6366F1',
+    backgroundColor: Colors.indigo,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 7,
@@ -1962,7 +1963,7 @@ const styles = StyleSheet.create({
   scheduledItemLeft: { flex: 1, gap: 1 },
   scheduledItemLabel: { fontSize: 13, fontWeight: '600' },
   scheduledItemTime:  { fontSize: 12, fontWeight: '500' },
-  scheduledItemCancel: { fontSize: 18, color: '#9CA3AF', fontWeight: '600', paddingHorizontal: 4 },
+  scheduledItemCancel: { fontSize: 18, color: Colors.subtleText, fontWeight: '600', paddingHorizontal: 4 },
 
   // ── Schedule Time Picker ───────────────────────────────────────────────────────
   scheduleTimeRow: {
@@ -1973,8 +1974,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   scheduleTimeUnit: { alignItems: 'center', gap: 4 },
-  scheduleArrow: { padding: 8, borderRadius: 6, backgroundColor: '#F3F4F6', width: 44, alignItems: 'center' },
-  scheduleArrowText: { fontSize: 12, color: '#374151', fontWeight: '700' },
+  scheduleArrow: { padding: 8, borderRadius: 6, backgroundColor: Colors.surfaceGray, width: 44, alignItems: 'center' },
+  scheduleArrowText: { fontSize: 12, color: Colors.textDark, fontWeight: '700' },
   scheduleTimeValue: { fontSize: 30, fontWeight: '800', lineHeight: 36, minWidth: 44, textAlign: 'center' },
   scheduleTimeSep:   { fontSize: 30, fontWeight: '800', lineHeight: 36 },
 
@@ -1985,23 +1986,23 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 0.5,
     borderTopWidth: 3,
-    borderTopColor: '#6366F1',
+    borderTopColor: Colors.indigo,
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   todayTaskLeft: { flex: 1, gap: 2 },
-  todayTaskLabel: { fontSize: 10, fontWeight: '700', color: '#6366F1', letterSpacing: 1 },
+  todayTaskLabel: { fontSize: 10, fontWeight: '700', color: Colors.indigo, letterSpacing: 1 },
   todayTaskTitle: { fontSize: 15, fontWeight: '700' },
   todayTaskSub:   { fontSize: 12, fontWeight: '500' },
-  todayTaskChevron: { fontSize: 20, color: '#9CA3AF', fontWeight: '400', marginLeft: 8 },
+  todayTaskChevron: { fontSize: 20, color: Colors.subtleText, fontWeight: '400', marginLeft: 8 },
 
   // ── I Passed Button ────────────────────────────────────────────────────────────
   iPassedBtn: {
     marginHorizontal: 16,
     marginBottom: 12,
-    backgroundColor: '#0D9488',
+    backgroundColor: Colors.indigo,
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 20,
