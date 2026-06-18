@@ -10,10 +10,13 @@ const SIGN_IMAGES: Record<string, any> = {
   'side-road-right':      require('../assets/signs/505.1R.jpg'),
   'roundabout-warning':   require('../assets/signs/506.1.jpg'),
   'sharp-bend-left':      require('../assets/signs/507.1.jpg'),
+  'sharp-bend-right':     require('../assets/signs/507.RLL.jpg'),
+  'double-bend-left':     require('../assets/signs/507.1LRR.jpg'),
   'staggered-junction':   require('../assets/signs/507.1RL.jpg'),
   'steep-descent':        require('../assets/signs/508.1.jpg'),
   'uneven-road':          require('../assets/signs/509.1.jpg'),
   'traffic-signals':      require('../assets/signs/510.jpg'),
+  'camera-ahead':         require('../assets/signs/563.jpg'),
   'road-narrows-both':    require('../assets/signs/516.jpg'),
   'road-narrows-right':   require('../assets/signs/517.jpg'),
   'slippery-road':        require('../assets/signs/518.jpg'),
@@ -66,36 +69,48 @@ const SIGN_IMAGES: Record<string, any> = {
   'no-u-turns':           require('../assets/signs/regulatory-signs-jpg/614.jpg'),
   'no-entry':             require('../assets/signs/regulatory-signs-jpg/616.jpg'),
   'no-vehicles':          require('../assets/signs/regulatory-signs-jpg/617.jpg'),
+  'no-cycling':           require('../assets/signs/regulatory-signs-jpg/622.4.jpg'),
   'no-motor-vehicles':    require('../assets/signs/regulatory-signs-jpg/619.jpg'),
   'no-overtaking':        require('../assets/signs/regulatory-signs-jpg/632.jpg'),
+  'min-speed-30':         require('../assets/signs/regulatory-signs-jpg/651.jpg'),
 
   // ── Bus, cycle and pedestrian signs ──────────────────────────────────────
   'no-through-road':               require('../assets/signs/bus-and-cycle-signs-jpg/816.jpg'),
   'buses-cycles-only':             require('../assets/signs/bus-and-cycle-signs-jpg/953.jpg'),
   'cycles-only':                   require('../assets/signs/bus-and-cycle-signs-jpg/955.jpg'),
+  'pedestrians-only':              require('../assets/signs/bus-and-cycle-signs-jpg/956.jpg'),
   'cycles-pedestrians-segregated': require('../assets/signs/bus-and-cycle-signs-jpg/957.jpg'),
 
   // ── Information signs ────────────────────────────────────────────────────
   'parking-place':        require('../assets/signs/information-signs-jpg/801.jpg'),
   'one-way-traffic':      require('../assets/signs/information-signs-jpg/810.jpg'),
+  'hospital':             require('../assets/signs/information-signs-jpg/2711.jpg'),
   'lane-closed-overhead': require('../assets/signs/information-signs-jpg/872.1.jpg'),
 
   // ── Motorway signs ───────────────────────────────────────────────────────
   'motorway-start':       require('../assets/signs/motorway-signs-jpg/2901.jpg'),
   'motorway-direction':   require('../assets/signs/motorway-signs-jpg/2902.jpg'),
+  'end-motorway':         require('../assets/signs/motorway-signs-jpg/2903.jpg'),
+  'variable-speed-limit': require('../assets/signs/motorway-signs-jpg/6001.jpg'),
   'countdown-300':        require('../assets/signs/motorway-signs-jpg/823.jpg'),
   'countdown-200':        require('../assets/signs/motorway-signs-jpg/824.jpg'),
   'countdown-100':        require('../assets/signs/motorway-signs-jpg/825.jpg'),
 
   // ── Direction / tourist signs ─────────────────────────────────────────────
   'primary-route-direction': require('../assets/signs/direction-and-tourist-signs-jpg/2025.jpg'),
+  'local-route-direction':   require('../assets/signs/direction-and-tourist-signs-jpg/2301.jpg'),
   'tourist-attraction':      require('../assets/signs/direction-and-tourist-signs-jpg/2201.jpg'),
 
+  // ── On-street parking / red route signs ──────────────────────────────────
+  'red-route':            require('../assets/signs/on-street-parking-jpg/663.jpg'),
+
   // ── Road works signs ─────────────────────────────────────────────────────
-  'road-works-ahead':     require('../assets/signs/road-works-and-temporary-jpg/7001.jpg'),
-  'men-at-work':          require('../assets/signs/road-works-and-temporary-jpg/7001.1.jpg'),
-  'loose-chippings':      require('../assets/signs/road-works-and-temporary-jpg/7009.jpg'),
-  'road-works-lights':    require('../assets/signs/road-works-and-temporary-jpg/7021.jpg'),
+  'road-works-ahead':       require('../assets/signs/road-works-and-temporary-jpg/7001.jpg'),
+  'men-at-work':            require('../assets/signs/road-works-and-temporary-jpg/7001.1.jpg'),
+  'loose-chippings':        require('../assets/signs/road-works-and-temporary-jpg/7009.jpg'),
+  'width-restriction-works':require('../assets/signs/road-works-and-temporary-jpg/7012.jpg'),
+  'contra-flow':            require('../assets/signs/road-works-and-temporary-jpg/7013.jpg'),
+  'road-works-lights':      require('../assets/signs/road-works-and-temporary-jpg/7021.jpg'),
 };
 
 export default SIGN_IMAGES;
