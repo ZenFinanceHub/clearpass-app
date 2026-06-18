@@ -13,6 +13,7 @@ const SIGN_IMAGES: Record<string, any> = {
   'staggered-junction':   require('../assets/signs/507.1RL.jpg'),
   'steep-descent':        require('../assets/signs/508.1.jpg'),
   'uneven-road':          require('../assets/signs/509.1.jpg'),
+  'traffic-signals':      require('../assets/signs/510.jpg'),
   'road-narrows-both':    require('../assets/signs/516.jpg'),
   'road-narrows-right':   require('../assets/signs/517.jpg'),
   'slippery-road':        require('../assets/signs/518.jpg'),
@@ -29,6 +30,7 @@ const SIGN_IMAGES: Record<string, any> = {
   'two-way-traffic-ahead':require('../assets/signs/545.jpg'),
   'ford':                 require('../assets/signs/546.jpg'),
   'opening-bridge':       require('../assets/signs/548.jpg'),
+  'low-aircraft':         require('../assets/signs/549.jpg'),
   'wild-animals':         require('../assets/signs/551.1.jpg'),
   'farm-animals':         require('../assets/signs/551.2.jpg'),
   'falling-rocks':        require('../assets/signs/555.jpg'),
@@ -91,7 +93,7 @@ const SIGN_IMAGES: Record<string, any> = {
 
   // ── Road works signs ─────────────────────────────────────────────────────
   'road-works-ahead':     require('../assets/signs/road-works-and-temporary-jpg/7001.jpg'),
-  'men-at-work':          require('../assets/signs/road-works-and-temporary-jpg/7001.jpg'),
+  'men-at-work':          require('../assets/signs/road-works-and-temporary-jpg/7001.1.jpg'),
   'loose-chippings':      require('../assets/signs/road-works-and-temporary-jpg/7009.jpg'),
   'road-works-lights':    require('../assets/signs/road-works-and-temporary-jpg/7021.jpg'),
 };

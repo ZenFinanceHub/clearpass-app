@@ -529,6 +529,7 @@ function ProhibSymbol({ id }: { id: string }) {
           <Circle cx="50" cy="63" r="4" fill={BK} />
           <Line x1="43" y1="42" x2="55" y2="42" stroke={BK} strokeWidth="4" strokeLinecap="round" />
           <Line x1="67" y1="63" x2="61" y2="44" stroke={BK} strokeWidth="4" strokeLinecap="round" />
+          <Path d="M74,18 L26,82" stroke={RD} strokeWidth="9" strokeLinecap="round" />
         </G>
       );
     case 'no-right-turn':
