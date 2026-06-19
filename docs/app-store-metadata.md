@@ -32,8 +32,8 @@ Take timed 50-question mock tests that mirror the real DVSA format exactly. Deta
 **Hazard Perception Practice**
 Train your eye for danger with hazard perception clips designed to match the real test format. Essential for passing the full theory test.
 
-**89 UK Road Signs**
-Browse and learn all official UK road signs with detailed SVG illustrations. Filter by category and test yourself with the road signs practice mode.
+**88 Official UK Road Signs**
+Browse and learn all official UK road signs using real DVSA images. Filter by category and test yourself with the road signs practice mode.
 
 **Track Every Step of Your Journey**
 - Daily study streaks keep you consistent
