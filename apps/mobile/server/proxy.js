@@ -464,7 +464,7 @@ app.post('/api/send-challenge-notification', async (req, res) => {
       .eq('id', challenged_user_id)
       .single();
 
-    const token = (profile as { expo_push_token?: string } | null)?.expo_push_token;
+    const token = profile?.expo_push_token;
     if (!token) return res.json({ sent: false, reason: 'no_token' });
 
     const resp = await fetch('https://exp.host/--/api/v2/push/send', {
