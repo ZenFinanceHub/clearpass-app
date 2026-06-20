@@ -1,12 +1,10 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  FlatList,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  useWindowDimensions,
 } from 'react-native';
 import { router } from 'expo-router';
 import { setOnboardingComplete, savePendingTestDate } from '@/src/storage';
@@ -66,12 +64,11 @@ async function finish(testDateIso: string | null) {
 }
 
 export default function OnboardingScreen() {
-  const { width } = useWindowDimensions();
   const [activeIndex, setActiveIndex] = useState(0);
   const [dateInput, setDateInput]     = useState('');
   const [dateError, setDateError]     = useState('');
-  const listRef = useRef<FlatList<Slide>>(null);
   const isLast = activeIndex === SLIDES.length - 1;
+  const slide  = SLIDES[activeIndex];
 
   function handleNext() {
     if (isLast) {
@@ -83,47 +80,34 @@ export default function OnboardingScreen() {
       void finish(parsed);
       return;
     }
-    const next = activeIndex + 1;
-    listRef.current?.scrollToIndex({ index: next, animated: true });
-    setActiveIndex(next);
+    setActiveIndex((i) => i + 1);
   }
 
   return (
     <View style={styles.container}>
-      {/* FlatList of slides */}
-      <FlatList
-        ref={listRef}
-        data={SLIDES}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => item.key}
-        scrollEnabled={false}
-        renderItem={({ item }) => (
-          <View style={[styles.slide, { width }]}>
-            <Text style={styles.emoji}>{item.emoji}</Text>
-            <Text style={styles.title}>{item.title}</Text>
-            <Text style={styles.subtitle}>{item.subtitle}</Text>
+      {/* Current slide */}
+      <View style={styles.slide}>
+        <Text style={styles.emoji}>{slide.emoji}</Text>
+        <Text style={styles.title}>{slide.title}</Text>
+        <Text style={styles.subtitle}>{slide.subtitle}</Text>
 
-            {item.isDateSlide && (
-              <View style={styles.dateBlock}>
-                <TextInput
-                  style={[styles.dateInput, dateError.length > 0 && styles.dateInputError]}
-                  value={dateInput}
-                  onChangeText={(t) => { setDateInput(t); setDateError(''); }}
-                  placeholder="DD/MM/YYYY"
-                  placeholderTextColor="#9CA3AF"
-                  keyboardType="numbers-and-punctuation"
-                  maxLength={10}
-                />
-                {dateError.length > 0 && (
-                  <Text style={styles.dateError}>{dateError}</Text>
-                )}
-              </View>
+        {slide.isDateSlide && (
+          <View style={styles.dateBlock}>
+            <TextInput
+              style={[styles.dateInput, dateError.length > 0 && styles.dateInputError]}
+              value={dateInput}
+              onChangeText={(t) => { setDateInput(t); setDateError(''); }}
+              placeholder="DD/MM/YYYY"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="numbers-and-punctuation"
+              maxLength={10}
+            />
+            {dateError.length > 0 && (
+              <Text style={styles.dateError}>{dateError}</Text>
             )}
           </View>
         )}
-      />
+      </View>
 
       {/* Pagination dots */}
       <View style={styles.dots}>
@@ -162,7 +146,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 40,
-    paddingTop: 80,
     gap: 20,
   },
   emoji:    { fontSize: 80 },
