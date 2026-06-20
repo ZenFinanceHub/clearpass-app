@@ -33,11 +33,11 @@ const SIGN_IMAGES: Record<string, any> = {
   'two-way-traffic-ahead':require('../assets/signs/545.jpg'),
   'ford':                 require('../assets/signs/546.jpg'),
   'opening-bridge':       require('../assets/signs/548.jpg'),
-  'low-aircraft':         require('../assets/signs/549.jpg'),
-  'wild-animals':         require('../assets/signs/551.1.jpg'),
-  'farm-animals':         require('../assets/signs/551.2.jpg'),
-  'falling-rocks':        require('../assets/signs/555.jpg'),
-  'risk-of-ice':          require('../assets/signs/558.jpg'),
+  'low-aircraft':         require('../assets/signs/550.jpg'),
+  'wild-animals':         require('../assets/signs/552.jpg'),
+  'farm-animals':         require('../assets/signs/553.jpg'),
+  'falling-rocks':        require('../assets/signs/556.jpg'),
+  'risk-of-ice':          require('../assets/signs/557.jpg'),
 
   // ── Level crossing signs ──────────────────────────────────────────────────
   'level-crossing-barriers':    require('../assets/signs/level-crossing-signs-jpg/770.jpg'),

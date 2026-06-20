@@ -75,7 +75,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'side-road-right',
-    name: 'Side road ahead on right',
+    name: 'Side road',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -223,7 +223,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'slippery-road',
-    name: 'Slippery road ahead',
+    name: 'Slippery road',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -276,7 +276,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'children',
-    name: 'Children near road',
+    name: 'Children going to or from school',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -289,7 +289,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'elderly-people',
-    name: 'Elderly people likely to cross',
+    name: 'Frail pedestrians likely to cross',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -328,7 +328,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'farm-animals',
-    name: 'Cattle or farm animals',
+    name: 'Cattle',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -341,7 +341,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'falling-rocks',
-    name: 'Risk of falling rocks',
+    name: 'Risk of falling or fallen rocks',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -448,7 +448,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'humpback-bridge',
-    name: 'Humpback bridge',
+    name: 'Hump bridge',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -461,7 +461,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'quayside',
-    name: 'Quayside or river bank ahead',
+    name: 'Quayside or river bank',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -474,7 +474,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'two-way-traffic-ahead',
-    name: 'Two-way traffic ahead',
+    name: 'Two-way traffic on route crossing ahead',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
