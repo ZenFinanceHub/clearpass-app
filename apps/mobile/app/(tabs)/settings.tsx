@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Animated,
   Modal,
@@ -745,6 +746,7 @@ export default function SettingsScreen() {
         activeOpacity={0.85}
         disabled={refreshingCache}
       >
+        {refreshingCache && <ActivityIndicator color="#FFFFFF" size="small" style={{ marginRight: 8 }} />}
         <Text style={styles.refreshCacheBtnText}>
           {refreshingCache ? 'Refreshing...' : 'Refresh Cache'}
         </Text>
@@ -1213,6 +1215,8 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
     borderWidth: 1.5,
     borderColor: Colors.indigo,
     backgroundColor: '#FFFFFF',
