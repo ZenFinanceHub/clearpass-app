@@ -31,6 +31,9 @@ import {
   generateQuiz,
 } from '@clearpass/content';
 import { Colors } from '@/src/constants/theme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CelebrationModal } from '@/src/components/CelebrationModal';
+import { CelebrationEvent } from '@/src/celebrations';
 
 type ViewMode = 'grid' | 'detail' | 'quiz';
 
@@ -1045,6 +1048,7 @@ export default function RoadSignsScreen() {
   const [quizScore, setQuizScore] = useState(0);
   const [quizDone, setQuizDone] = useState(false);
   const [quizReturnSign, setQuizReturnSign] = useState<RoadSign | null>(null);
+  const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
 
   const filteredSigns = useMemo<RoadSign[]>(() => {
     if (searchQuery.trim()) return searchRoadSigns(searchQuery);
@@ -1086,11 +1090,21 @@ export default function RoadSignsScreen() {
   const handleQuizNext = useCallback(() => {
     if (quizIndex + 1 >= quizQuestions.length) {
       setQuizDone(true);
+      const finalScore = quizScore + (quizSelected === quizQuestions[quizIndex]?.correctIndex ? 1 : 0);
+      const pct = Math.round((finalScore / quizQuestions.length) * 100);
+      if (pct >= 70) {
+        void AsyncStorage.getItem('@clearpass/signs_quiz_passed').then((v) => {
+          if (!v) {
+            void AsyncStorage.setItem('@clearpass/signs_quiz_passed', '1');
+            setActiveCelebration('milestone_reached');
+          }
+        });
+      }
     } else {
       setQuizIndex((i) => i + 1);
       setQuizSelected(null);
     }
-  }, [quizIndex, quizQuestions.length]);
+  }, [quizIndex, quizQuestions, quizScore, quizSelected]);
 
   const goBackFromQuiz = useCallback(() => {
     if (quizReturnSign) {
@@ -1113,10 +1127,14 @@ export default function RoadSignsScreen() {
       const pct = Math.round((quizScore / quizQuestions.length) * 100);
       const passed = pct >= 70;
       return (
-        <ScrollView
-          style={[styles.screen, { backgroundColor: theme.backgroundColor }]}
-          contentContainerStyle={styles.content}
-        >
+        <>
+          {activeCelebration && (
+            <CelebrationModal event={activeCelebration} onDismiss={() => setActiveCelebration(null)} />
+          )}
+          <ScrollView
+            style={[styles.screen, { backgroundColor: theme.backgroundColor }]}
+            contentContainerStyle={styles.content}
+          >
           <TouchableOpacity style={styles.backBtn} onPress={goBackFromQuiz} activeOpacity={0.7}>
             <Text style={[styles.backBtnText, { color: SIGN_RED }]}>
               {'<- '}
@@ -1162,7 +1180,8 @@ export default function RoadSignsScreen() {
           >
             <Text style={[styles.secondaryBtnText, { color: SIGN_RED }]}>Back to signs</Text>
           </TouchableOpacity>
-        </ScrollView>
+          </ScrollView>
+        </>
       );
     }
 

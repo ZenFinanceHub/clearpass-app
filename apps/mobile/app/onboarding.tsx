@@ -198,5 +198,5 @@ const styles = StyleSheet.create({
   },
   nextBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
   skipBtn: { alignItems: 'center', paddingVertical: 8 },
-  skipText: { fontSize: 14, color: '#9CA3AF', fontWeight: '600' },
+  skipText: { fontSize: 14, color: '#6B7280', fontWeight: '600' },
 });

@@ -2046,7 +2046,7 @@ const styles = StyleSheet.create({
   startSub: { fontSize: 15, color: Colors.mutedText, marginBottom: 32, lineHeight: 22 },
   startOr: {
     textAlign: 'center',
-    color: Colors.subtleText,
+    color: Colors.mutedText,
     fontSize: 13,
     fontWeight: '600',
     marginVertical: 16,
@@ -2334,7 +2334,7 @@ const styles = StyleSheet.create({
     minWidth: 54,
   },
   comboValue: { fontSize: 18, fontWeight: '900', lineHeight: 22 },
-  comboLabel: { fontSize: 9, fontWeight: '700', color: Colors.subtleText, letterSpacing: 0.5 },
+  comboLabel: { fontSize: 9, fontWeight: '700', color: Colors.mutedText, letterSpacing: 0.5 },
   battleScoreBadge: {
     backgroundColor: Colors.surfaceGray,
     borderRadius: 10,
@@ -2346,7 +2346,7 @@ const styles = StyleSheet.create({
     minWidth: 54,
   },
   battleScoreValue: { fontSize: 18, fontWeight: '900', color: Colors.textPrimary, lineHeight: 22 },
-  battleScoreLabel: { fontSize: 9, fontWeight: '700', color: Colors.subtleText, letterSpacing: 0.5 },
+  battleScoreLabel: { fontSize: 9, fontWeight: '700', color: Colors.mutedText, letterSpacing: 0.5 },
   battleTopicsRow: {
     flexDirection: 'row',
     gap: 8,
@@ -2364,7 +2364,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
   },
-  battleAutoAdvanceText: { fontSize: 13, color: Colors.subtleText, fontStyle: 'italic' },
+  battleAutoAdvanceText: { fontSize: 13, color: Colors.mutedText, fontStyle: 'italic' },
 
   // Battle results
   battleResultScore: { fontSize: 72, fontWeight: '900', color: Colors.textPrimary, lineHeight: 80 },
@@ -2607,7 +2607,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
-  sessionNudgeDismiss: { fontSize: 15, color: Colors.subtleText, fontWeight: '600' },
+  sessionNudgeDismiss: { fontSize: 15, color: Colors.mutedText, fontWeight: '600' },
   sessionNudgeBody: { fontSize: 13, color: '#78350F', lineHeight: 18, marginBottom: 10 },
   sessionNudgeBtns: { flexDirection: 'row', gap: 8 },
   sessionNudgeAskBtn: {

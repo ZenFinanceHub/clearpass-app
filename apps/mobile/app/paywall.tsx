@@ -14,6 +14,7 @@ import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
 import { getProxyUrl } from '@/src/proxyUrl';
 import { Colors } from '@/src/constants/theme';
+import { ScaleButton } from '@/src/components/ScaleButton';
 
 const FEATURES = [
   'Unlimited practice questions',
@@ -128,18 +129,18 @@ export default function PaywallScreen() {
               {'Premium is not yet available for direct purchase on Android. You can subscribe via our website.'}
             </Text>
           </View>
-          <TouchableOpacity
+          <ScaleButton
             style={styles.ctaBtn}
             onPress={() => void Linking.openURL('https://getclearpass.co.uk')}
             activeOpacity={0.85}
           >
             <Text style={styles.ctaBtnText}>{'Visit getclearpass.co.uk'}</Text>
-          </TouchableOpacity>
+          </ScaleButton>
         </>
       ) : (
         <>
           {error.length > 0 && <Text style={styles.errorText}>{error}</Text>}
-          <TouchableOpacity
+          <ScaleButton
             style={[styles.ctaBtn, loading && styles.ctaBtnDisabled]}
             onPress={() => void handleSubscribe()}
             disabled={loading}
@@ -149,7 +150,7 @@ export default function PaywallScreen() {
               ? <ActivityIndicator color="#FFFFFF" />
               : <Text style={styles.ctaBtnText}>{'Start Learning Now'}</Text>
             }
-          </TouchableOpacity>
+          </ScaleButton>
         </>
       )}
 
@@ -217,7 +218,7 @@ const styles = StyleSheet.create({
   ctaBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
 
   skipBtn: { paddingVertical: 8 },
-  skipText: { fontSize: 14, color: '#9CA3AF' },
+  skipText: { fontSize: 14, color: '#6B7280' },
 
   referralBadge: {
     backgroundColor: '#F0FDFA',

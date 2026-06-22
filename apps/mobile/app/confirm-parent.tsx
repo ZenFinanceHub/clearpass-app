@@ -105,5 +105,5 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   ctaText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
-  footer: { position: 'absolute', bottom: 32, fontSize: 12, color: '#9CA3AF' },
+  footer: { position: 'absolute', bottom: 32, fontSize: 12, color: '#6B7280' },
 });

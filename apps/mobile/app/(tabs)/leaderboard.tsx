@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
   streakText: { fontSize: 11, fontWeight: '700', color: '#D97706' },
 
   emptyList: { padding: 20, alignItems: 'center' },
-  emptyListText: { fontSize: 14, color: '#9CA3AF' },
+  emptyListText: { fontSize: 14, color: '#6B7280' },
 
   yourRankCard: {
     marginTop: 20,

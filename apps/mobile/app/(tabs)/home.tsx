@@ -41,6 +41,8 @@ import { loadSRState } from '@/src/spacedRepetition';
 import { computeAndSavePassProbability, PassProbabilityResult } from '@/src/passProbability';
 import { generateNudges, saveNudges, loadNudges, dismissNudge, TutorNudge, NudgeType } from '@/src/tutorNudges';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
+import { ScaleButton } from '@/src/components/ScaleButton';
+import { SkeletonBox } from '@/src/components/SkeletonBox';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { allQuestions } from '@clearpass/content';
@@ -499,22 +501,26 @@ const NUDGE_EMOJI: Record<NudgeType, string> = {
 function NudgesSection({
   nudges,
   onDismiss,
+  screenWidth,
 }: {
   nudges: TutorNudge[];
   onDismiss: (id: string) => void;
+  screenWidth: number;
 }) {
   if (nudges.length === 0) return null;
+  const nudgeCardW = Math.min(Math.round(screenWidth * 0.72), 272);
   const visible = nudges.slice(0, 2);
   return (
     <View style={styles.nudgesSection}>
       <Text style={styles.nudgesLabel}>{'AI TUTOR TIPS'}</Text>
+      <View style={{ position: 'relative' }}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.nudgesScroll}>
         {visible.map(nudge => {
           const borderColor = NUDGE_BORDER[nudge.type];
           const actionBg    = NUDGE_ACTION_BG[nudge.type];
           const emoji       = NUDGE_EMOJI[nudge.type];
           return (
-            <View key={nudge.id} style={[styles.nudgeCard, { borderLeftColor: borderColor }]}>
+            <View key={nudge.id} style={[styles.nudgeCard, { borderLeftColor: borderColor, width: nudgeCardW }]}>
               <View style={styles.nudgeHeader}>
                 <Text style={styles.nudgeEmoji}>{emoji}</Text>
                 <View style={styles.nudgeTitleRow}>
@@ -542,6 +548,16 @@ function NudgesSection({
           );
         })}
       </ScrollView>
+      {visible.length > 1 && (
+        <LinearGradient
+          colors={['rgba(247,248,250,0)', 'rgba(247,248,250,0.9)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.nudgeFade}
+          pointerEvents="none"
+        />
+      )}
+      </View>
     </View>
   );
 }
@@ -603,6 +619,7 @@ function getDaysRemaining(testDateIso: string): number {
 
 export default function HomeScreen() {
   const [progress, setProgress]       = useState<UserProgress | null>(null);
+  const [isLoading, setIsLoading]     = useState(true);
   const [username, setUsername]       = useState<string | null>(null);
   const [showDateModal, setShowDateModal] = useState(false);
   const [dateInput, setDateInput]     = useState('');
@@ -654,6 +671,7 @@ export default function HomeScreen() {
         updated = withDate;
       }
       setProgress(updated);
+      setIsLoading(false);
 
       // Load scheduled mock tests, pruning past ones
       try {
@@ -976,10 +994,26 @@ export default function HomeScreen() {
       </LinearGradient>
 
       {/* Road Map Hero */}
-      <RoadMapHero progress={progress} />
+      {isLoading ? (
+        <View style={{ paddingHorizontal: 16, paddingVertical: 12, gap: 10 }}>
+          <SkeletonBox height={120} borderRadius={16} />
+        </View>
+      ) : (
+        <RoadMapHero progress={progress} />
+      )}
 
       {/* Tutor Nudges */}
-      <NudgesSection nudges={nudges} onDismiss={(id) => void handleDismissNudge(id)} />
+      {isLoading ? (
+        <View style={{ paddingHorizontal: 16, paddingVertical: 8, gap: 8 }}>
+          <SkeletonBox width={80} height={10} borderRadius={4} />
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <SkeletonBox width={240} height={90} borderRadius={14} />
+            <SkeletonBox width={240} height={90} borderRadius={14} />
+          </View>
+        </View>
+      ) : (
+        <NudgesSection nudges={nudges} onDismiss={(id) => void handleDismissNudge(id)} screenWidth={dims?.width ?? 375} />
+      )}
 
       {/* XP Card */}
       <View style={styles.xpCard}>
@@ -1118,41 +1152,41 @@ export default function HomeScreen() {
       {/* Action Grid */}
       <View style={styles.actionGrid}>
         <View style={styles.actionCards}>
-          <TouchableOpacity style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/(tabs)/practice')} activeOpacity={0.8}>
+          <ScaleButton style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/(tabs)/practice')} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'🎯'}</Text>
             <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Practice</Text>
             <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>Random questions</Text>
-          </TouchableOpacity>
+          </ScaleButton>
 
-          <TouchableOpacity style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/(tabs)/mock')} activeOpacity={0.8}>
+          <ScaleButton style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/(tabs)/mock')} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'📋'}</Text>
             <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Mock Test</Text>
             <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>57 minutes</Text>
-          </TouchableOpacity>
+          </ScaleButton>
 
-          <TouchableOpacity style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/roadsigns' as any)} activeOpacity={0.8}>
+          <ScaleButton style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/roadsigns' as any)} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'🚦'}</Text>
             <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Road Signs</Text>
             <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>89 UK signs</Text>
-          </TouchableOpacity>
+          </ScaleButton>
 
-          <TouchableOpacity style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/highwaycode' as any)} activeOpacity={0.8}>
+          <ScaleButton style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/highwaycode' as any)} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'🛣️'}</Text>
             <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Highway Code</Text>
             <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>Official rules</Text>
-          </TouchableOpacity>
+          </ScaleButton>
 
-          <TouchableOpacity style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/hazard' as any)} activeOpacity={0.8}>
+          <ScaleButton style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/hazard' as any)} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'⚠️'}</Text>
             <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Hazard</Text>
             <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>14 clips</Text>
-          </TouchableOpacity>
+          </ScaleButton>
 
-          <TouchableOpacity style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/(tabs)/learn')} activeOpacity={0.8}>
+          <ScaleButton style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/(tabs)/learn')} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'📊'}</Text>
             <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Progress & More</Text>
             <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>Leaderboard, AI Tutor</Text>
-          </TouchableOpacity>
+          </ScaleButton>
         </View>
 
         <View style={styles.actionRow}>
@@ -1513,13 +1547,20 @@ const styles = StyleSheet.create({
   nudgesLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: Colors.subtleText,
+    color: Colors.mutedText,
     letterSpacing: 1,
     marginBottom: 8,
   },
   nudgesScroll: {
     gap: 12,
     paddingRight: 16,
+  },
+  nudgeFade: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 48,
   },
   nudgeCard: {
     backgroundColor: Colors.cardWhite,
@@ -1528,7 +1569,6 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderLeftWidth: 3,
     padding: 14,
-    width: 272,
   },
   nudgeHeader: {
     flexDirection: 'row',
@@ -1550,7 +1590,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 6,
   },
-  nudgeDismiss: { fontSize: 15, color: Colors.subtleText, lineHeight: 22, fontWeight: '600' },
+  nudgeDismiss: { fontSize: 15, color: Colors.mutedText, lineHeight: 22, fontWeight: '600' },
   nudgeBody: { fontSize: 12, color: Colors.mutedText, lineHeight: 18, marginBottom: 10 },
   nudgeAction: {
     borderRadius: 8,
@@ -1626,6 +1666,11 @@ const styles = StyleSheet.create({
     margin: 16,
     padding: 24,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 6,
+    elevation: 3,
   },
   xpDecorCar: { position: 'absolute', top: 12, right: 16, fontSize: 40, opacity: 0.06 },
   xpTopRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
@@ -1739,9 +1784,14 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 14,
     backgroundColor: Colors.cardWhite,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: Colors.border,
     gap: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   actionEmoji: { fontSize: 22, marginBottom: 4 },
   actionTitle: { fontSize: 14, fontWeight: '700', marginBottom: 0 },
@@ -1794,7 +1844,7 @@ const styles = StyleSheet.create({
   studyPlanLabel: { fontSize: 11, fontWeight: '700', color: Colors.indigo, letterSpacing: 1, marginBottom: 3 },
   studyPlanSummary: { fontSize: 13, fontWeight: '600', color: Colors.textDark },
   studyPlanChevron: { marginLeft: 8 },
-  studyPlanChevronText: { fontSize: 22, color: Colors.subtleText, fontWeight: '400', lineHeight: 26 },
+  studyPlanChevronText: { fontSize: 22, color: Colors.mutedText, fontWeight: '400', lineHeight: 26 },
 
   // ── Daily Challenge Card ──────────────────────────────────────────────────────
   dcCard: {
@@ -1872,7 +1922,7 @@ const styles = StyleSheet.create({
   qotdXpBadge: { backgroundColor: Colors.emeraldBg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
   qotdXpText:  { fontSize: 11, fontWeight: '700', color: Colors.emerald },
   qotdQuestion: { fontSize: 14, fontWeight: '600', lineHeight: 20, marginBottom: 8 },
-  qotdTap:     { fontSize: 12, color: Colors.subtleText, fontWeight: '500' },
+  qotdTap:     { fontSize: 12, color: Colors.mutedText, fontWeight: '500' },
   qotdOptions: { gap: 8, marginTop: 4 },
   qotdOption:  { borderRadius: 8, padding: 10, borderWidth: 0.5, borderColor: Colors.border },
   qotdOptionText: { fontSize: 13, fontWeight: '500' },
@@ -1963,7 +2013,7 @@ const styles = StyleSheet.create({
   scheduledItemLeft: { flex: 1, gap: 1 },
   scheduledItemLabel: { fontSize: 13, fontWeight: '600' },
   scheduledItemTime:  { fontSize: 12, fontWeight: '500' },
-  scheduledItemCancel: { fontSize: 18, color: Colors.subtleText, fontWeight: '600', paddingHorizontal: 4 },
+  scheduledItemCancel: { fontSize: 18, color: Colors.mutedText, fontWeight: '600', paddingHorizontal: 4 },
 
   // ── Schedule Time Picker ───────────────────────────────────────────────────────
   scheduleTimeRow: {
@@ -1996,7 +2046,7 @@ const styles = StyleSheet.create({
   todayTaskLabel: { fontSize: 10, fontWeight: '700', color: Colors.indigo, letterSpacing: 1 },
   todayTaskTitle: { fontSize: 15, fontWeight: '700' },
   todayTaskSub:   { fontSize: 12, fontWeight: '500' },
-  todayTaskChevron: { fontSize: 20, color: Colors.subtleText, fontWeight: '400', marginLeft: 8 },
+  todayTaskChevron: { fontSize: 20, color: Colors.mutedText, fontWeight: '400', marginLeft: 8 },
 
   // ── I Passed Button ────────────────────────────────────────────────────────────
   iPassedBtn: {

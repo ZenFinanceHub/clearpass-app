@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
+  Animated,
   Modal,
   Platform,
   ScrollView,
@@ -139,6 +141,20 @@ export default function SettingsScreen() {
   const [editName, setEditName]           = useState('');
   const [saving, setSaving]               = useState(false);
   const [successMsg, setSuccessMsg]       = useState('');
+
+  // Toast
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+  const toastTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showSavedToast() {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    Animated.sequence([
+      Animated.timing(toastOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.delay(1400),
+      Animated.timing(toastOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
+    ]).start();
+    toastTimer.current = setTimeout(() => { toastOpacity.setValue(0); }, 2000);
+  }
 
   // Instructor state
   const [linkedInstructorCount, setLinkedInstructorCount] = useState(0);
@@ -432,6 +448,7 @@ export default function SettingsScreen() {
       const updated = { ...notifSettings, studyReminder: false };
       setNotifSettings(updated);
       await saveNotificationSettings(updated);
+      showSavedToast();
     }
   }
 
@@ -446,6 +463,7 @@ export default function SettingsScreen() {
     };
     setNotifSettings(updated);
     await saveNotificationSettings(updated);
+    showSavedToast();
   }
 
   function handleCancelTimePicker() {
@@ -460,11 +478,13 @@ export default function SettingsScreen() {
       const updated = { ...notifSettings, streakProtection: true };
       setNotifSettings(updated);
       await saveNotificationSettings(updated);
+      showSavedToast();
     } else {
       await cancelStreakProtection();
       const updated = { ...notifSettings, streakProtection: false };
       setNotifSettings(updated);
       await saveNotificationSettings(updated);
+      showSavedToast();
     }
   }
 
@@ -480,11 +500,13 @@ export default function SettingsScreen() {
       const updated = { ...notifSettings, testCountdown: true };
       setNotifSettings(updated);
       await saveNotificationSettings(updated);
+      showSavedToast();
     } else {
       await cancelTestCountdown();
       const updated = { ...notifSettings, testCountdown: false };
       setNotifSettings(updated);
       await saveNotificationSettings(updated);
+      showSavedToast();
     }
   }
 
@@ -509,6 +531,7 @@ export default function SettingsScreen() {
   // ─── Render ──────────────────────────────────────────────────────────────
 
   return (
+    <View style={styles.container}>
     <ScrollView
       style={[styles.scroll, { backgroundColor: theme.backgroundColor }]}
       contentContainerStyle={styles.content}
@@ -591,7 +614,7 @@ export default function SettingsScreen() {
             </View>
             <Switch
               value={settings[item.key]}
-              onValueChange={(val) => setSetting(item.key, val)}
+              onValueChange={(val) => { setSetting(item.key, val); showSavedToast(); }}
               trackColor={{ false: '#E5E7EB', true: Colors.indigo }}
               thumbColor={settings[item.key] ? '#FFFFFF' : '#9CA3AF'}
               ios_backgroundColor={'#E5E7EB'}
@@ -723,6 +746,7 @@ export default function SettingsScreen() {
         activeOpacity={0.85}
         disabled={refreshingCache}
       >
+        {refreshingCache && <ActivityIndicator color="#FFFFFF" size="small" style={{ marginRight: 8 }} />}
         <Text style={styles.refreshCacheBtnText}>
           {refreshingCache ? 'Refreshing...' : 'Refresh Cache'}
         </Text>
@@ -1043,14 +1067,31 @@ export default function SettingsScreen() {
         </View>
       </Modal>
     </ScrollView>
+
+    {/* Saved toast */}
+    <Animated.View style={[styles.savedToast, { opacity: toastOpacity }]} pointerEvents="none">
+      <Text style={styles.savedToastText}>{'Saved ✓'}</Text>
+    </Animated.View>
+    </View>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  container: { flex: 1 },
   scroll:   { flex: 1 },
   content:  { padding: 20, paddingBottom: 40, gap: 16 },
+  savedToast: {
+    position: 'absolute',
+    bottom: 32,
+    alignSelf: 'center',
+    backgroundColor: '#111827',
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  savedToastText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
 
   sectionHeader: { fontSize: 22, fontWeight: '800', color: '#111827' },
   sectionSub:    { fontSize: 14, color: '#6B7280', lineHeight: 20, marginTop: -8 },
@@ -1143,7 +1184,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: '#E5E7EB',
   },
-  chevron: { fontSize: 22, color: '#9CA3AF', fontWeight: '400', lineHeight: 26 },
+  chevron: { fontSize: 22, color: '#6B7280', fontWeight: '400', lineHeight: 26 },
 
   iconWrap: {
     width: 44,
@@ -1174,6 +1215,8 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
     borderWidth: 1.5,
     borderColor: Colors.indigo,
     backgroundColor: '#FFFFFF',

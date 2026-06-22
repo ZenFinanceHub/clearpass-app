@@ -207,6 +207,14 @@ export default function TutorScreen() {
         )}
       </ScrollView>
 
+      {/* Thinking progress bar */}
+      {isLoading && (
+        <View style={styles.thinkingBar}>
+          <View style={styles.thinkingBarFill} />
+          <Text style={styles.thinkingBarText}>{'AI is thinking…'}</Text>
+        </View>
+      )}
+
       {/* Input bar */}
       <View style={styles.inputBar}>
         <TextInput
@@ -307,7 +315,7 @@ const styles = StyleSheet.create({
 
   bubbleTime: { fontSize: 10, fontWeight: '500', alignSelf: 'flex-end' },
   timeUser: { color: 'rgba(255,255,255,0.6)' },
-  timeTutor: { color: '#9CA3AF' },
+  timeTutor: { color: '#6B7280' },
 
   inputBar: {
     flexDirection: 'row',
@@ -333,6 +341,22 @@ const styles = StyleSheet.create({
   },
   sendBtn: { paddingBottom: 2 },
   sendBtnDisabled: { opacity: 0.4 },
+
+  thinkingBar: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    backgroundColor: Colors.indigoBg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  thinkingBarFill: {
+    height: 3,
+    width: 36,
+    borderRadius: 2,
+    backgroundColor: Colors.indigo,
+  },
+  thinkingBarText: { fontSize: 12, color: Colors.indigo, fontWeight: '600' },
 
   paywallOverlay: {
     flex: 1,
@@ -365,5 +389,5 @@ const styles = StyleSheet.create({
   },
   upgradeBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   dismissBtn: { paddingVertical: 8 },
-  dismissText: { fontSize: 14, color: '#9CA3AF' },
+  dismissText: { fontSize: 14, color: '#6B7280' },
 });
