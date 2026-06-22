@@ -1100,8 +1100,19 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Set test date link */}
-      {!testDate && (
+      {/* Test date nudge — shown when no date is set and user has started practising */}
+      {!testDate && (progress?.totalQuestionsAnswered ?? 0) >= 5 && (
+        <TouchableOpacity style={styles.testDateNudge} onPress={handleOpenModal} activeOpacity={0.85}>
+          <Text style={styles.testDateNudgeEmoji}>{'📅'}</Text>
+          <View style={styles.testDateNudgeBody}>
+            <Text style={styles.testDateNudgeTitle}>{'Set your test date'}</Text>
+            <Text style={styles.testDateNudgeSub}>{'Get a personalised countdown and study plan tailored to when you want to pass.'}</Text>
+          </View>
+          <Text style={styles.testDateNudgeChevron}>{'›'}</Text>
+        </TouchableOpacity>
+      )}
+      {/* Fallback: subtle link when user hasn't started yet */}
+      {!testDate && (progress?.totalQuestionsAnswered ?? 0) < 5 && (
         <TouchableOpacity style={styles.setDateRow} onPress={handleOpenModal}>
           <Text style={styles.setDateText}>Set your test date</Text>
         </TouchableOpacity>
@@ -1793,6 +1804,23 @@ const styles = StyleSheet.create({
 
   setDateRow:  { marginHorizontal: 16, marginBottom: 4, paddingVertical: 8 },
   setDateText: { fontSize: 13, color: Colors.mutedText, fontWeight: '500' },
+  testDateNudge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.indigoBg,
+    borderRadius: 16,
+    borderWidth: 0.5,
+    borderColor: Colors.indigo,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 14,
+    gap: 12,
+  },
+  testDateNudgeEmoji: { fontSize: 28 },
+  testDateNudgeBody: { flex: 1 },
+  testDateNudgeTitle: { fontSize: 15, fontWeight: '700', color: Colors.indigo, marginBottom: 2 },
+  testDateNudgeSub: { fontSize: 12, color: Colors.mutedText, lineHeight: 17 },
+  testDateNudgeChevron: { fontSize: 22, fontWeight: '300', color: Colors.indigo },
 
   // ── Test Result Banner ────────────────────────────────────────────────────────
   resultBannerWrap: {
