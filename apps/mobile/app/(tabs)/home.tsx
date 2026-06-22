@@ -41,6 +41,7 @@ import { loadSRState } from '@/src/spacedRepetition';
 import { computeAndSavePassProbability, PassProbabilityResult } from '@/src/passProbability';
 import { generateNudges, saveNudges, loadNudges, dismissNudge, TutorNudge, NudgeType } from '@/src/tutorNudges';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
+import { ScaleButton } from '@/src/components/ScaleButton';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { allQuestions } from '@clearpass/content';
@@ -1118,41 +1119,41 @@ export default function HomeScreen() {
       {/* Action Grid */}
       <View style={styles.actionGrid}>
         <View style={styles.actionCards}>
-          <TouchableOpacity style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/(tabs)/practice')} activeOpacity={0.8}>
+          <ScaleButton style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/(tabs)/practice')} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'🎯'}</Text>
             <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Practice</Text>
             <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>Random questions</Text>
-          </TouchableOpacity>
+          </ScaleButton>
 
-          <TouchableOpacity style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/(tabs)/mock')} activeOpacity={0.8}>
+          <ScaleButton style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/(tabs)/mock')} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'📋'}</Text>
             <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Mock Test</Text>
             <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>57 minutes</Text>
-          </TouchableOpacity>
+          </ScaleButton>
 
-          <TouchableOpacity style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/roadsigns' as any)} activeOpacity={0.8}>
+          <ScaleButton style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/roadsigns' as any)} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'🚦'}</Text>
             <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Road Signs</Text>
             <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>89 UK signs</Text>
-          </TouchableOpacity>
+          </ScaleButton>
 
-          <TouchableOpacity style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/highwaycode' as any)} activeOpacity={0.8}>
+          <ScaleButton style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/highwaycode' as any)} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'🛣️'}</Text>
             <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Highway Code</Text>
             <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>Official rules</Text>
-          </TouchableOpacity>
+          </ScaleButton>
 
-          <TouchableOpacity style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/hazard' as any)} activeOpacity={0.8}>
+          <ScaleButton style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/hazard' as any)} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'⚠️'}</Text>
             <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Hazard</Text>
             <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>14 clips</Text>
-          </TouchableOpacity>
+          </ScaleButton>
 
-          <TouchableOpacity style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/(tabs)/learn')} activeOpacity={0.8}>
+          <ScaleButton style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/(tabs)/learn')} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'📊'}</Text>
             <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Progress & More</Text>
             <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>Leaderboard, AI Tutor</Text>
-          </TouchableOpacity>
+          </ScaleButton>
         </View>
 
         <View style={styles.actionRow}>

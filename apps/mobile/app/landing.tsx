@@ -12,6 +12,7 @@ import { router } from 'expo-router';
 import { getProxyUrl } from '@/src/proxyUrl';
 import { supabase } from '@/src/supabase';
 import { Colors } from '@/src/constants/theme';
+import { ScaleButton } from '@/src/components/ScaleButton';
 
 // TODO: replace with real pass stories from pass_stories table once collected
 const TESTIMONIALS = [
@@ -90,9 +91,9 @@ export default function LandingPage() {
           <TouchableOpacity onPress={() => router.push('/auth')} activeOpacity={0.75}>
             <Text style={styles.navSignIn}>{'Sign In'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navCta} onPress={() => router.push('/auth')} activeOpacity={0.85} accessibilityLabel="Start Free">
+          <ScaleButton style={styles.navCta} onPress={() => router.push('/auth')} activeOpacity={0.85} accessibilityLabel="Start Free">
             <Text style={styles.navCtaText}>{'Start Free'}</Text>
-          </TouchableOpacity>
+          </ScaleButton>
         </View>
       </View>
 
@@ -108,12 +109,12 @@ export default function LandingPage() {
           <Text style={styles.heroH1Accent}>{'First Time'}</Text>
           <Text style={styles.heroSub}>{'The UK\'s smartest revision app. AI tutor, personalised study plan, and the only app built for dyslexic learners.'}</Text>
           <View style={styles.heroBtns}>
-            <TouchableOpacity style={styles.btnPrimary} onPress={() => router.push('/auth')} activeOpacity={0.85} accessibilityLabel="Start learning for free">
+            <ScaleButton style={styles.btnPrimary} onPress={() => router.push('/auth')} activeOpacity={0.85} accessibilityLabel="Start learning for free">
               <Text style={styles.btnPrimaryText}>{'Start Free →'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.btnOutline} onPress={() => router.push('/auth')} activeOpacity={0.85}>
+            </ScaleButton>
+            <ScaleButton style={styles.btnOutline} onPress={() => router.push('/auth')} activeOpacity={0.85}>
               <Text style={styles.btnOutlineText}>{'See How It Works'}</Text>
-            </TouchableOpacity>
+            </ScaleButton>
           </View>
           <Text style={styles.heroMicro}>{'No credit card · Free to start · Cancel anytime'}</Text>
           <View style={styles.heroSocial}>
@@ -248,9 +249,9 @@ export default function LandingPage() {
                   <Text style={styles.planFeatureText}>{f}</Text>
                 </View>
               ))}
-              <TouchableOpacity style={styles.planCtaFree} onPress={() => router.push('/auth')} activeOpacity={0.85}>
+              <ScaleButton style={styles.planCtaFree} onPress={() => router.push('/auth')} activeOpacity={0.85}>
                 <Text style={styles.planCtaFreeText}>{'Get started free'}</Text>
-              </TouchableOpacity>
+              </ScaleButton>
             </View>
 
             {/* Pro card */}
@@ -269,9 +270,9 @@ export default function LandingPage() {
                   <Text style={styles.planFeatureTextPro}>{f}</Text>
                 </View>
               ))}
-              <TouchableOpacity style={styles.planCtaPro} onPress={() => void handleGetPro()} activeOpacity={0.85}>
+              <ScaleButton style={styles.planCtaPro} onPress={() => void handleGetPro()} activeOpacity={0.85}>
                 <Text style={styles.planCtaProText}>{'Start Learning Now'}</Text>
-              </TouchableOpacity>
+              </ScaleButton>
               <Text style={styles.planSmall}>{'The theory test costs £23. ClearPass pays for itself.'}</Text>
             </View>
           </View>
