@@ -993,6 +993,30 @@ export default function HomeScreen() {
         </View>
       </LinearGradient>
 
+      {/* Streak Card — shown when streak >= 2 */}
+      {!isLoading && streak >= 2 && (
+        <View style={styles.streakCard}>
+          <Text style={styles.streakCardFlame}>{'🔥'}</Text>
+          <View style={styles.streakCardBody}>
+            <Text style={styles.streakCardCount}>{streak}{'-day streak'}</Text>
+            <Text style={styles.streakCardMsg}>
+              {streak >= 30
+                ? 'Legendary! One month of daily study.'
+                : streak >= 14
+                ? "Two weeks strong — you're building a real habit!"
+                : streak >= 7
+                ? 'A full week! Consistency is your superpower.'
+                : 'Keep it up — every day makes a difference.'}
+            </Text>
+          </View>
+          <View style={styles.streakDots}>
+            {[0,1,2,3,4,5,6].map(i => (
+              <View key={i} style={[styles.streakDot, i < Math.min(streak, 7) ? styles.streakDotFilled : styles.streakDotEmpty]} />
+            ))}
+          </View>
+        </View>
+      )}
+
       {/* Road Map Hero */}
       {isLoading ? (
         <View style={{ paddingHorizontal: 16, paddingVertical: 12, gap: 10 }}>
@@ -1537,6 +1561,29 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: 10,
   },
+
+  // ── Streak Card ──────────────────────────────────────────────────────────────
+  streakCard: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 18,
+    borderWidth: 0.5,
+    borderColor: '#F59E0B',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  streakCardFlame: { fontSize: 36 },
+  streakCardBody: { flex: 1, minWidth: 160 },
+  streakCardCount: { fontSize: 17, fontWeight: '800', color: '#92400E', marginBottom: 2 },
+  streakCardMsg: { fontSize: 13, color: '#B45309', lineHeight: 18 },
+  streakDots: { flexDirection: 'row', gap: 4, paddingTop: 2 },
+  streakDot: { width: 8, height: 8, borderRadius: 4 },
+  streakDotFilled: { backgroundColor: '#F59E0B' },
+  streakDotEmpty: { backgroundColor: '#FDE68A' },
 
   // ── Nudges ───────────────────────────────────────────────────────────────────
   nudgesSection: {
