@@ -510,6 +510,7 @@ function NudgesSection({
   return (
     <View style={styles.nudgesSection}>
       <Text style={styles.nudgesLabel}>{'AI TUTOR TIPS'}</Text>
+      <View style={{ position: 'relative' }}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.nudgesScroll}>
         {visible.map(nudge => {
           const borderColor = NUDGE_BORDER[nudge.type];
@@ -544,6 +545,16 @@ function NudgesSection({
           );
         })}
       </ScrollView>
+      {visible.length > 1 && (
+        <LinearGradient
+          colors={['rgba(247,248,250,0)', 'rgba(247,248,250,0.9)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.nudgeFade}
+          pointerEvents="none"
+        />
+      )}
+      </View>
     </View>
   );
 }
@@ -1540,6 +1551,13 @@ const styles = StyleSheet.create({
   nudgesScroll: {
     gap: 12,
     paddingRight: 16,
+  },
+  nudgeFade: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 48,
   },
   nudgeCard: {
     backgroundColor: Colors.cardWhite,
