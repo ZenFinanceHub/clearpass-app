@@ -144,7 +144,12 @@ export default function LeaderboardScreen() {
 
         {topTen.length === 0 && (
           <View style={styles.emptyList}>
-            <Text style={styles.emptyListText}>No entries yet - be the first!</Text>
+            <Text style={styles.emptyListEmoji}>{'🏆'}</Text>
+            <Text style={styles.emptyListTitle}>{'No one here yet'}</Text>
+            <Text style={styles.emptyListSub}>{'Be the first on the board — answer questions to earn XP and claim the top spot.'}</Text>
+            <TouchableOpacity style={styles.emptyListBtn} onPress={() => router.push('/(tabs)/practice')} activeOpacity={0.85}>
+              <Text style={styles.emptyListBtnText}>{'Start practising →'}</Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -223,8 +228,18 @@ const styles = StyleSheet.create({
   },
   streakText: { fontSize: 11, fontWeight: '700', color: '#D97706' },
 
-  emptyList: { padding: 20, alignItems: 'center' },
-  emptyListText: { fontSize: 14, color: '#6B7280' },
+  emptyList: { paddingVertical: 40, paddingHorizontal: 24, alignItems: 'center', gap: 8 },
+  emptyListEmoji: { fontSize: 52, marginBottom: 4 },
+  emptyListTitle: { fontSize: 18, fontWeight: '800', color: '#111827' },
+  emptyListSub: { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 22 },
+  emptyListBtn: {
+    marginTop: 8,
+    backgroundColor: Colors.indigo,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+  },
+  emptyListBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 
   yourRankCard: {
     marginTop: 20,

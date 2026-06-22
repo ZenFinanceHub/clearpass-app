@@ -34,6 +34,7 @@ import { Colors } from '@/src/constants/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { CelebrationEvent } from '@/src/celebrations';
+import * as Haptics from 'expo-haptics';
 
 type ViewMode = 'grid' | 'detail' | 'quiz';
 
@@ -1080,8 +1081,12 @@ export default function RoadSignsScreen() {
     (optionIndex: number) => {
       if (quizSelected !== null) return;
       setQuizSelected(optionIndex);
-      if (optionIndex === quizQuestions[quizIndex].correctIndex) {
+      const correct = optionIndex === quizQuestions[quizIndex].correctIndex;
+      if (correct) {
         setQuizScore((s) => s + 1);
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } else {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
     },
     [quizSelected, quizIndex, quizQuestions],

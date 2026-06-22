@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Linking,
   ScrollView,
   StyleSheet,
@@ -57,6 +58,7 @@ import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { ShareCardModal } from '@/src/components/ShareableCard';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
 import * as Speech from 'expo-speech';
+import * as Haptics from 'expo-haptics';
 import { useAccessibility } from '@/src/AccessibilityContext';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
@@ -187,6 +189,34 @@ export default function PracticeScreen() {
   const weakClearedRef = useRef<Set<string>>(new Set());
   const weakAnsweredRef3 = useRef(false);
   const weakAttemptsRef  = useRef(0);
+
+  const optionScales = useRef([0,1,2,3].map(() => new Animated.Value(1))).current;
+
+  // Reset option scales each new question
+  useEffect(() => {
+    optionScales.forEach(s => s.setValue(1));
+  }, [currentIndex]);
+
+  // Bounce the correct answer card when revealed
+  useEffect(() => {
+    if (selectedIndex === null || questions.length === 0) return;
+    const q = questions[currentIndex];
+    if (!q) return;
+    const correctScale = optionScales[q.correctIndex];
+    Animated.spring(correctScale, {
+      toValue: 1.04,
+      useNativeDriver: true,
+      speed: 60,
+      bounciness: 10,
+    }).start(() => {
+      Animated.spring(correctScale, {
+        toValue: 1,
+        useNativeDriver: true,
+        speed: 30,
+        bounciness: 3,
+      }).start();
+    });
+  }, [selectedIndex]);
 
   useEffect(() => {
     void getWeakSpotQuestions().then(ids => setWeakSpotCount(ids.length));
@@ -449,6 +479,9 @@ export default function PracticeScreen() {
     if (settings.soundEffects) {
       if (correct) playCorrect(); else playWrong();
     }
+    void (correct
+      ? Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      : Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error));
 
     speedResultsRef2.current = [...speedResultsRef2.current, { question: q, selectedIndex: optionIndex, correct }];
     setSpeedDisplay(prev => ({ ...prev, selected: optionIndex }));
@@ -527,6 +560,9 @@ export default function PracticeScreen() {
     const correct = optionIndex === item.question.correctIndex;
 
     if (settings.soundEffects) { if (correct) playCorrect(); else playWrong(); }
+    void (correct
+      ? Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      : Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error));
     void recordWeakSpotResult(item.question.id, correct);
 
     const newConsecutive = correct ? item.consecutive + 1 : 0;
@@ -625,6 +661,9 @@ export default function PracticeScreen() {
       if (settings.soundEffects) {
         if (correct) playCorrect(); else playWrong();
       }
+      void (correct
+        ? Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+        : Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error));
 
       void recordWeakSpotResult(question.id, correct);
 
@@ -1051,24 +1090,29 @@ export default function PracticeScreen() {
           }
 
           return (
-            <TouchableOpacity
-              key={idx}
-              style={[styles.option, cardStyle, settings.highContrast ? { borderWidth: 2, borderColor: isAnswered ? undefined : theme.borderColor } : undefined]}
-              onPress={() => {
-                if (isAnswered) {
-                  if (settings.textToSpeech) { Speech.stop(); Speech.speak(option, { language: 'en-GB' }); }
-                  return;
-                }
-                void handleAnswer(idx);
-              }}
-              activeOpacity={!isAnswered || settings.textToSpeech ? 0.75 : 1}
-              disabled={isAnswered && !settings.textToSpeech}
-            >
-              <View style={[styles.badge, badgeStyle]}>
-                <Text style={[styles.badgeText, badgeTextStyle]}>{LABELS[idx]}</Text>
-              </View>
-              <Text style={[styles.optionText, textStyle, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing }]}>{option}</Text>
-            </TouchableOpacity>
+            <Animated.View key={idx} style={{ transform: [{ scale: optionScales[idx] }] }}>
+              <TouchableOpacity
+                style={[styles.option, cardStyle, settings.highContrast ? { borderWidth: 2, borderColor: isAnswered ? undefined : theme.borderColor } : undefined]}
+                onPress={() => {
+                  if (isAnswered) {
+                    if (settings.textToSpeech) { Speech.stop(); Speech.speak(option, { language: 'en-GB' }); }
+                    return;
+                  }
+                  Animated.sequence([
+                    Animated.timing(optionScales[idx], { toValue: 0.95, duration: 70, useNativeDriver: true }),
+                    Animated.spring(optionScales[idx], { toValue: 1, useNativeDriver: true, speed: 50, bounciness: 4 }),
+                  ]).start();
+                  void handleAnswer(idx);
+                }}
+                activeOpacity={!isAnswered || settings.textToSpeech ? 0.75 : 1}
+                disabled={isAnswered && !settings.textToSpeech}
+              >
+                <View style={[styles.badge, badgeStyle]}>
+                  <Text style={[styles.badgeText, badgeTextStyle]}>{LABELS[idx]}</Text>
+                </View>
+                <Text style={[styles.optionText, textStyle, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing }]}>{option}</Text>
+              </TouchableOpacity>
+            </Animated.View>
           );
         })}
       </View>
@@ -1356,6 +1400,11 @@ function ResultsScreen({
         {xpGained > 0 && (
           <Text style={styles.xpNotif}>{'+'}{xpGained}{' XP earned!'}</Text>
         )}
+        {(streakDays ?? 0) >= 2 && (
+          <View style={styles.resultStreakPill}>
+            <Text style={styles.resultStreakText}>{'🔥 '}{streakDays}{'-day streak'}</Text>
+          </View>
+        )}
       </View>
 
       {comparative && comparative.totalAnswers >= 50 && sessionTopic && (
@@ -1410,6 +1459,37 @@ function ResultsScreen({
           </View>
         </View>
       )}
+
+      {(() => {
+        const topicMap: Record<string, { correct: number; total: number }> = {};
+        results.forEach(({ question, correct: isCorrect }) => {
+          const label = TOPIC_LABELS[question.topicCategory as TopicCategory] ?? 'Other';
+          if (!topicMap[label]) topicMap[label] = { correct: 0, total: 0 };
+          topicMap[label].total++;
+          if (isCorrect) topicMap[label].correct++;
+        });
+        const topics = Object.entries(topicMap);
+        if (topics.length <= 1) return null;
+        return (
+          <>
+            <Text style={styles.sectionLabel}>{'Topics Covered'}</Text>
+            <View style={styles.topicSummaryList}>
+              {topics.map(([label, { correct: c, total: t }]) => {
+                const tpct = Math.round((c / t) * 100);
+                return (
+                  <View key={label} style={styles.topicSummaryRow}>
+                    <Text style={styles.topicSummaryLabel} numberOfLines={1}>{label}</Text>
+                    <View style={styles.topicSummaryBar}>
+                      <View style={[styles.topicSummaryFill, { width: `${tpct}%` as any, backgroundColor: tpct >= 70 ? Colors.emerald : tpct >= 40 ? Colors.amber : Colors.red }]} />
+                    </View>
+                    <Text style={styles.topicSummaryPct}>{tpct}{'%'}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        );
+      })()}
 
       <Text style={styles.sectionLabel}>Question Breakdown</Text>
       <View style={styles.breakdownList}>
@@ -2194,6 +2274,22 @@ const styles = StyleSheet.create({
     color: Colors.indigo,
     marginTop: 10,
   },
+  resultStreakPill: {
+    marginTop: 10,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderWidth: 0.5,
+    borderColor: '#F59E0B',
+  },
+  resultStreakText: { fontSize: 14, fontWeight: '700', color: '#92400E' },
+  topicSummaryList: { gap: 10, marginBottom: 20 },
+  topicSummaryRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  topicSummaryLabel: { width: 120, fontSize: 12, fontWeight: '600', color: Colors.textPrimary },
+  topicSummaryBar: { flex: 1, height: 8, borderRadius: 4, backgroundColor: '#E5E7EB', overflow: 'hidden' },
+  topicSummaryFill: { height: '100%', borderRadius: 4 },
+  topicSummaryPct: { width: 36, fontSize: 12, fontWeight: '700', color: Colors.mutedText, textAlign: 'right' },
   motivationalMsg: {
     fontSize: 16,
     textAlign: 'center',

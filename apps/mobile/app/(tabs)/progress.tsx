@@ -5,6 +5,7 @@ import { allQuestions } from '@clearpass/content';
 import {
   Alert,
   Linking,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -106,6 +107,7 @@ export default function ProgressScreen() {
   const [passStories, setPassStories] = useState<PassStory[]>([]);
   const [hasOwnStory, setHasOwnStory] = useState(false);
   const [loaded,   setLoaded]   = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const theme = useTheme();
 
   useEffect(() => {
@@ -152,6 +154,29 @@ export default function ProgressScreen() {
     })();
   }, []);
 
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      const [p, sr, history, acc, mastered] = await Promise.all([
+        loadUserProgress(),
+        loadSRState(),
+        getSessionHistory(),
+        getTopicAccuracy(),
+        getMasteredTopics(),
+      ]);
+      setProgress(p);
+      setSrState(sr);
+      setSessionHistory(history);
+      setTopicAccuracy(acc);
+      setMasteredTopics(mastered);
+      if (p) {
+        const prob = await computeAndSavePassProbability(p, sr, allQuestions);
+        setPassProb(prob);
+      }
+    } catch {}
+    setRefreshing(false);
+  }
+
   async function handleUpgrade() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push('/auth'); return; }
@@ -175,16 +200,26 @@ export default function ProgressScreen() {
   if (!hasActivity) {
     return (
       <View style={[styles.emptyContainer, { backgroundColor: theme.backgroundColor }]}>
-        <Text style={[styles.emptyTitle, { fontSize: theme.fontSize(20), fontFamily: theme.fontFamily, color: theme.textColor }]}>No activity yet</Text>
-        <Text style={[styles.emptyBody, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(22), color: theme.subTextColor }]}>
-          Start practising to see your progress here
+        <Text style={styles.emptyIllustration}>{'📊'}</Text>
+        <Text style={[styles.emptyTitle, { fontSize: theme.fontSize(22), fontFamily: theme.fontFamily, color: theme.textColor }]}>
+          {'Your stats will appear here'}
+        </Text>
+        <Text style={[styles.emptyBody, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(22), color: theme.subTextColor }]}>
+          {'Answer a few questions and your pass probability, streaks, weak spots and badges will all show up here.'}
         </Text>
         <TouchableOpacity
           style={styles.emptyButton}
           onPress={() => router.push('/(tabs)/practice')}
           activeOpacity={0.85}
         >
-          <Text style={styles.emptyButtonText}>Start Practising</Text>
+          <Text style={styles.emptyButtonText}>{'Start your first session →'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.emptySecondary}
+          onPress={() => router.push('/(tabs)/mock')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.emptySecondaryText}>{'Or take a full mock test'}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -209,7 +244,11 @@ export default function ProgressScreen() {
   }
 
   return (
-    <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={[styles.content, { backgroundColor: theme.backgroundColor }]}>
+    <ScrollView
+      style={[styles.scroll, { backgroundColor: theme.backgroundColor }]}
+      contentContainerStyle={[styles.content, { backgroundColor: theme.backgroundColor }]}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void handleRefresh(); }} tintColor={Colors.indigo} />}
+    >
       <Text style={[styles.screenTitle, { fontSize: theme.fontSize(26), fontFamily: theme.fontFamily, color: theme.textColor }]}>Your Progress</Text>
 
       {!(progress.isPro ?? false) && (
@@ -751,8 +790,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     gap: 12,
   },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  emptyBody: { fontSize: 15, color: '#6B7280', textAlign: 'center', lineHeight: 22 },
+  emptyIllustration: { fontSize: 56, marginBottom: 4 },
+  emptyTitle: { fontSize: 20, fontWeight: '800', color: '#111827', textAlign: 'center' },
+  emptyBody: { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 22 },
   emptyButton: {
     marginTop: 8,
     backgroundColor: Colors.indigo,
@@ -761,6 +801,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   emptyButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  emptySecondary: { marginTop: 4, paddingVertical: 8, paddingHorizontal: 16 },
+  emptySecondaryText: { fontSize: 14, fontWeight: '600', color: Colors.indigo },
 
   screenTitle: { fontSize: 26, fontWeight: '800', color: '#111827', marginBottom: 12 },
 

@@ -3,6 +3,7 @@ import {
   Animated,
   Easing,
   Modal,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -649,7 +650,34 @@ export default function HomeScreen() {
   const { isOffline } = useNetwork();
   const dims = useClientDimensions();
   const [studyPlan, setStudyPlan] = useState<SimpleStudyPlan | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const cardW: '30%' | '47%' = dims && dims.width >= 600 ? '30%' : '47%';
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      const fresh = await loadUserProgress();
+      if (fresh) {
+        setProgress(fresh);
+        const [srState] = await Promise.all([loadSRState()]);
+        const prob = await computeAndSavePassProbability(fresh, srState, allQuestions);
+        setPassProb(prob);
+        const generated = generateNudges(fresh, srState, allQuestions);
+        const existing = await loadNudges();
+        const dismissedIds = new Set(
+          (existing?.nudges ?? []).filter(n => n.dismissed).map(n => n.id),
+        );
+        const withDismissals = generated.map(n =>
+          dismissedIds.has(n.id) ? { ...n, dismissed: true } : n,
+        );
+        await saveNudges(withDismissals);
+        setNudges(withDismissals.filter(n => !n.dismissed));
+      }
+      const plan = await loadStudyPlan();
+      setAiStudyPlan(plan);
+    } catch {}
+    setRefreshing(false);
+  }
 
   useEffect(() => {
     void (async () => {
@@ -953,6 +981,7 @@ export default function HomeScreen() {
     <ScrollView
       style={[styles.scroll, { backgroundColor: theme.backgroundColor }]}
       contentContainerStyle={styles.content}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void handleRefresh(); }} tintColor={Colors.indigo} />}
     >
       {/* Hero Header */}
       <LinearGradient colors={[Colors.indigo, Colors.violet]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroHeader}>
@@ -992,6 +1021,30 @@ export default function HomeScreen() {
           <View style={[styles.heroBarFill, { width: `${passProb ? passProb.probability : readinessPct}%` as any }]} />
         </View>
       </LinearGradient>
+
+      {/* Streak Card — shown when streak >= 2 */}
+      {!isLoading && streak >= 2 && (
+        <View style={styles.streakCard}>
+          <Text style={styles.streakCardFlame}>{'🔥'}</Text>
+          <View style={styles.streakCardBody}>
+            <Text style={styles.streakCardCount}>{streak}{'-day streak'}</Text>
+            <Text style={styles.streakCardMsg}>
+              {streak >= 30
+                ? 'Legendary! One month of daily study.'
+                : streak >= 14
+                ? "Two weeks strong — you're building a real habit!"
+                : streak >= 7
+                ? 'A full week! Consistency is your superpower.'
+                : 'Keep it up — every day makes a difference.'}
+            </Text>
+          </View>
+          <View style={styles.streakDots}>
+            {[0,1,2,3,4,5,6].map(i => (
+              <View key={i} style={[styles.streakDot, i < Math.min(streak, 7) ? styles.streakDotFilled : styles.streakDotEmpty]} />
+            ))}
+          </View>
+        </View>
+      )}
 
       {/* Road Map Hero */}
       {isLoading ? (
@@ -1047,8 +1100,19 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Set test date link */}
-      {!testDate && (
+      {/* Test date nudge — shown when no date is set and user has started practising */}
+      {!testDate && (progress?.totalQuestionsAnswered ?? 0) >= 5 && (
+        <TouchableOpacity style={styles.testDateNudge} onPress={handleOpenModal} activeOpacity={0.85}>
+          <Text style={styles.testDateNudgeEmoji}>{'📅'}</Text>
+          <View style={styles.testDateNudgeBody}>
+            <Text style={styles.testDateNudgeTitle}>{'Set your test date'}</Text>
+            <Text style={styles.testDateNudgeSub}>{'Get a personalised countdown and study plan tailored to when you want to pass.'}</Text>
+          </View>
+          <Text style={styles.testDateNudgeChevron}>{'›'}</Text>
+        </TouchableOpacity>
+      )}
+      {/* Fallback: subtle link when user hasn't started yet */}
+      {!testDate && (progress?.totalQuestionsAnswered ?? 0) < 5 && (
         <TouchableOpacity style={styles.setDateRow} onPress={handleOpenModal}>
           <Text style={styles.setDateText}>Set your test date</Text>
         </TouchableOpacity>
@@ -1538,6 +1602,29 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
+  // ── Streak Card ──────────────────────────────────────────────────────────────
+  streakCard: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 18,
+    borderWidth: 0.5,
+    borderColor: '#F59E0B',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  streakCardFlame: { fontSize: 36 },
+  streakCardBody: { flex: 1, minWidth: 160 },
+  streakCardCount: { fontSize: 17, fontWeight: '800', color: '#92400E', marginBottom: 2 },
+  streakCardMsg: { fontSize: 13, color: '#B45309', lineHeight: 18 },
+  streakDots: { flexDirection: 'row', gap: 4, paddingTop: 2 },
+  streakDot: { width: 8, height: 8, borderRadius: 4 },
+  streakDotFilled: { backgroundColor: '#F59E0B' },
+  streakDotEmpty: { backgroundColor: '#FDE68A' },
+
   // ── Nudges ───────────────────────────────────────────────────────────────────
   nudgesSection: {
     paddingHorizontal: 16,
@@ -1717,6 +1804,23 @@ const styles = StyleSheet.create({
 
   setDateRow:  { marginHorizontal: 16, marginBottom: 4, paddingVertical: 8 },
   setDateText: { fontSize: 13, color: Colors.mutedText, fontWeight: '500' },
+  testDateNudge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.indigoBg,
+    borderRadius: 16,
+    borderWidth: 0.5,
+    borderColor: Colors.indigo,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 14,
+    gap: 12,
+  },
+  testDateNudgeEmoji: { fontSize: 28 },
+  testDateNudgeBody: { flex: 1 },
+  testDateNudgeTitle: { fontSize: 15, fontWeight: '700', color: Colors.indigo, marginBottom: 2 },
+  testDateNudgeSub: { fontSize: 12, color: Colors.mutedText, lineHeight: 17 },
+  testDateNudgeChevron: { fontSize: 22, fontWeight: '300', color: Colors.indigo },
 
   // ── Test Result Banner ────────────────────────────────────────────────────────
   resultBannerWrap: {
