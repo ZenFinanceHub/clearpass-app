@@ -5,6 +5,7 @@ import { allQuestions } from '@clearpass/content';
 import {
   Alert,
   Linking,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -106,6 +107,7 @@ export default function ProgressScreen() {
   const [passStories, setPassStories] = useState<PassStory[]>([]);
   const [hasOwnStory, setHasOwnStory] = useState(false);
   const [loaded,   setLoaded]   = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const theme = useTheme();
 
   useEffect(() => {
@@ -151,6 +153,29 @@ export default function ProgressScreen() {
       setLoaded(true);
     })();
   }, []);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      const [p, sr, history, acc, mastered] = await Promise.all([
+        loadUserProgress(),
+        loadSRState(),
+        getSessionHistory(),
+        getTopicAccuracy(),
+        getMasteredTopics(),
+      ]);
+      setProgress(p);
+      setSrState(sr);
+      setSessionHistory(history);
+      setTopicAccuracy(acc);
+      setMasteredTopics(mastered);
+      if (p) {
+        const prob = await computeAndSavePassProbability(p, sr, allQuestions);
+        setPassProb(prob);
+      }
+    } catch {}
+    setRefreshing(false);
+  }
 
   async function handleUpgrade() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -219,7 +244,11 @@ export default function ProgressScreen() {
   }
 
   return (
-    <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={[styles.content, { backgroundColor: theme.backgroundColor }]}>
+    <ScrollView
+      style={[styles.scroll, { backgroundColor: theme.backgroundColor }]}
+      contentContainerStyle={[styles.content, { backgroundColor: theme.backgroundColor }]}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void handleRefresh(); }} tintColor={Colors.indigo} />}
+    >
       <Text style={[styles.screenTitle, { fontSize: theme.fontSize(26), fontFamily: theme.fontFamily, color: theme.textColor }]}>Your Progress</Text>
 
       {!(progress.isPro ?? false) && (

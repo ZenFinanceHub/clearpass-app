@@ -3,6 +3,7 @@ import {
   Animated,
   Easing,
   Modal,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -649,7 +650,34 @@ export default function HomeScreen() {
   const { isOffline } = useNetwork();
   const dims = useClientDimensions();
   const [studyPlan, setStudyPlan] = useState<SimpleStudyPlan | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const cardW: '30%' | '47%' = dims && dims.width >= 600 ? '30%' : '47%';
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      const fresh = await loadUserProgress();
+      if (fresh) {
+        setProgress(fresh);
+        const [srState] = await Promise.all([loadSRState()]);
+        const prob = await computeAndSavePassProbability(fresh, srState, allQuestions);
+        setPassProb(prob);
+        const generated = generateNudges(fresh, srState, allQuestions);
+        const existing = await loadNudges();
+        const dismissedIds = new Set(
+          (existing?.nudges ?? []).filter(n => n.dismissed).map(n => n.id),
+        );
+        const withDismissals = generated.map(n =>
+          dismissedIds.has(n.id) ? { ...n, dismissed: true } : n,
+        );
+        await saveNudges(withDismissals);
+        setNudges(withDismissals.filter(n => !n.dismissed));
+      }
+      const plan = await loadStudyPlan();
+      setAiStudyPlan(plan);
+    } catch {}
+    setRefreshing(false);
+  }
 
   useEffect(() => {
     void (async () => {
@@ -953,6 +981,7 @@ export default function HomeScreen() {
     <ScrollView
       style={[styles.scroll, { backgroundColor: theme.backgroundColor }]}
       contentContainerStyle={styles.content}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void handleRefresh(); }} tintColor={Colors.indigo} />}
     >
       {/* Hero Header */}
       <LinearGradient colors={[Colors.indigo, Colors.violet]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroHeader}>
