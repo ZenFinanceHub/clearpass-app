@@ -27,6 +27,7 @@ import {
 import { isPremium } from '@/src/subscription';
 import { useTheme } from '@/src/theme';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
+import * as Haptics from 'expo-haptics';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { ShareCardModal } from '@/src/components/ShareableCard';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
@@ -177,6 +178,7 @@ export default function MockScreen() {
     next[currentIndex] = optionIndex;
     answersRef.current = next;
     setUserAnswers([...next]);
+    void Haptics.selectionAsync();
   }
 
   function toggleFlag(idx: number) {
@@ -250,6 +252,9 @@ export default function MockScreen() {
     } catch {}
 
     setResultData({ correct, timeTaken, byTopic, xpEarned, newAchievements, passed, streakDays: updatedProgress.studyStreakDays ?? 0 });
+    void (passed
+      ? Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      : Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning));
     setPhase('results');
   }
 

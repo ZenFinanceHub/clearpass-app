@@ -57,6 +57,7 @@ import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { ShareCardModal } from '@/src/components/ShareableCard';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
 import * as Speech from 'expo-speech';
+import * as Haptics from 'expo-haptics';
 import { useAccessibility } from '@/src/AccessibilityContext';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
@@ -449,6 +450,9 @@ export default function PracticeScreen() {
     if (settings.soundEffects) {
       if (correct) playCorrect(); else playWrong();
     }
+    void (correct
+      ? Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      : Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error));
 
     speedResultsRef2.current = [...speedResultsRef2.current, { question: q, selectedIndex: optionIndex, correct }];
     setSpeedDisplay(prev => ({ ...prev, selected: optionIndex }));
@@ -527,6 +531,9 @@ export default function PracticeScreen() {
     const correct = optionIndex === item.question.correctIndex;
 
     if (settings.soundEffects) { if (correct) playCorrect(); else playWrong(); }
+    void (correct
+      ? Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      : Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error));
     void recordWeakSpotResult(item.question.id, correct);
 
     const newConsecutive = correct ? item.consecutive + 1 : 0;
@@ -625,6 +632,9 @@ export default function PracticeScreen() {
       if (settings.soundEffects) {
         if (correct) playCorrect(); else playWrong();
       }
+      void (correct
+        ? Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+        : Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error));
 
       void recordWeakSpotResult(question.id, correct);
 
