@@ -47,7 +47,7 @@ export const roadSigns: RoadSign[] = [
 
   {
     id: 'crossroads',
-    name: 'Crossroads ahead',
+    name: 'Crossroads',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -61,7 +61,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 't-junction',
-    name: 'T-junction ahead',
+    name: 'T-junction with priority over vehicles from the right',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -101,7 +101,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'roundabout-warning',
-    name: 'Roundabout ahead',
+    name: 'Roundabout',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -115,7 +115,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'sharp-bend-left',
-    name: 'Sharp bend to left',
+    name: 'Bend to left',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -129,7 +129,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'sharp-bend-right',
-    name: 'Sharp bend to right',
+    name: 'Bend to right',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -143,7 +143,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'double-bend-left',
-    name: 'Double bend, first to left',
+    name: 'Double bend first to left',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -184,7 +184,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'uneven-road',
-    name: 'Uneven road surface',
+    name: 'Uneven road',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -262,7 +262,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'school-crossing',
-    name: 'School crossing patrol',
+    name: 'School crossing patrol ahead',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -302,7 +302,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'horse-riders',
-    name: 'Horse riders ahead',
+    name: 'Accompanied horses or ponies',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -315,7 +315,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'wild-animals',
-    name: 'Wild animals crossing',
+    name: 'Wild animals',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -341,7 +341,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'falling-rocks',
-    name: 'Risk of falling or fallen rocks',
+    name: 'Falling or fallen rocks',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -367,7 +367,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'traffic-signals',
-    name: 'Traffic signals ahead',
+    name: 'Traffic signals',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -380,7 +380,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'level-crossing-barriers',
-    name: 'Level crossing with barriers',
+    name: 'Level crossing with barrier or gate ahead',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -393,7 +393,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'level-crossing-no-barriers',
-    name: 'Level crossing without barriers',
+    name: 'Level crossing without barrier or gate ahead',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -474,7 +474,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'two-way-traffic-ahead',
-    name: 'Two-way traffic on route crossing ahead',
+    name: 'Two-way traffic crosses one-way road',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -487,7 +487,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'ford',
-    name: 'Ford ahead',
+    name: 'Ford',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -513,7 +513,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'low-aircraft',
-    name: 'Low-flying aircraft',
+    name: 'Low-flying aircraft or sudden aircraft noise',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -526,7 +526,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'opening-bridge',
-    name: 'Opening or swing bridge',
+    name: 'Opening or swing bridge ahead',
     category: SignCategory.Warning,
     shape: 'triangle',
     borderColor: RED,
@@ -640,7 +640,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'no-entry',
-    name: 'No entry',
+    name: 'No entry for vehicular traffic',
     category: SignCategory.Regulatory,
     shape: 'circle',
     borderColor: RED,
@@ -654,7 +654,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'no-vehicles',
-    name: 'No vehicles',
+    name: 'No vehicles except bicycles being pushed',
     category: SignCategory.Regulatory,
     shape: 'circle',
     borderColor: RED,
@@ -668,7 +668,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'no-motor-vehicles',
-    name: 'Motor vehicles prohibited',
+    name: 'No motor vehicles',
     category: SignCategory.Regulatory,
     shape: 'circle',
     borderColor: RED,
@@ -694,7 +694,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'no-right-turn',
-    name: 'Turn right prohibited',
+    name: 'No right turn',
     category: SignCategory.Regulatory,
     shape: 'circle',
     borderColor: RED,
@@ -708,7 +708,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'no-left-turn',
-    name: 'Turn left prohibited',
+    name: 'No left turn',
     category: SignCategory.Regulatory,
     shape: 'circle',
     borderColor: RED,
@@ -750,7 +750,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'give-way',
-    name: 'Give way',
+    name: 'Give way to traffic on major road',
     category: SignCategory.Regulatory,
     shape: 'inverted-triangle',
     borderColor: RED,
@@ -764,7 +764,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'stop-sign',
-    name: 'Stop',
+    name: 'Stop and give way',
     category: SignCategory.Regulatory,
     shape: 'octagon',
     borderColor: RED,
@@ -781,7 +781,7 @@ export const roadSigns: RoadSign[] = [
 
   {
     id: 'turn-left-ahead',
-    name: 'Turn left ahead (mandatory)',
+    name: 'Turn left ahead',
     category: SignCategory.Mandatory,
     shape: 'circle',
     borderColor: BLUE,
@@ -795,7 +795,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'turn-right-ahead',
-    name: 'Turn right ahead (mandatory)',
+    name: 'Turn right ahead',
     category: SignCategory.Mandatory,
     shape: 'circle',
     borderColor: BLUE,
@@ -851,7 +851,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'cycles-pedestrians-segregated',
-    name: 'Segregated route for cycles and pedestrians',
+    name: 'Segregated pedal cycle and pedestrian route',
     category: SignCategory.Mandatory,
     shape: 'rectangle',
     borderColor: BLUE,
@@ -865,7 +865,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'cycles-only',
-    name: 'Route for cycles only',
+    name: 'Route to be used by pedal cycles only',
     category: SignCategory.Mandatory,
     shape: 'circle',
     borderColor: BLUE,
@@ -921,7 +921,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'buses-cycles-only',
-    name: 'Route for buses and cycles',
+    name: 'Buses and cycles only',
     category: SignCategory.Mandatory,
     shape: 'rectangle',
     borderColor: BLUE,
@@ -1008,7 +1008,7 @@ export const roadSigns: RoadSign[] = [
   },
   {
     id: 'no-through-road',
-    name: 'No through road',
+    name: 'No through road for vehicles',
     category: SignCategory.Information,
     shape: 'rectangle',
     borderColor: BLACK,
@@ -1182,7 +1182,7 @@ export const roadSigns: RoadSign[] = [
 
   {
     id: 'road-works-ahead',
-    name: 'Road works ahead',
+    name: 'Road works',
     category: SignCategory.RoadWorks,
     shape: 'triangle',
     borderColor: RED,
