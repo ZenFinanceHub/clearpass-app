@@ -1400,6 +1400,11 @@ function ResultsScreen({
         {xpGained > 0 && (
           <Text style={styles.xpNotif}>{'+'}{xpGained}{' XP earned!'}</Text>
         )}
+        {(streakDays ?? 0) >= 2 && (
+          <View style={styles.resultStreakPill}>
+            <Text style={styles.resultStreakText}>{'🔥 '}{streakDays}{'-day streak'}</Text>
+          </View>
+        )}
       </View>
 
       {comparative && comparative.totalAnswers >= 50 && sessionTopic && (
@@ -1454,6 +1459,37 @@ function ResultsScreen({
           </View>
         </View>
       )}
+
+      {(() => {
+        const topicMap: Record<string, { correct: number; total: number }> = {};
+        results.forEach(({ question, correct: isCorrect }) => {
+          const label = TOPIC_LABELS[question.topicCategory as TopicCategory] ?? 'Other';
+          if (!topicMap[label]) topicMap[label] = { correct: 0, total: 0 };
+          topicMap[label].total++;
+          if (isCorrect) topicMap[label].correct++;
+        });
+        const topics = Object.entries(topicMap);
+        if (topics.length <= 1) return null;
+        return (
+          <>
+            <Text style={styles.sectionLabel}>{'Topics Covered'}</Text>
+            <View style={styles.topicSummaryList}>
+              {topics.map(([label, { correct: c, total: t }]) => {
+                const tpct = Math.round((c / t) * 100);
+                return (
+                  <View key={label} style={styles.topicSummaryRow}>
+                    <Text style={styles.topicSummaryLabel} numberOfLines={1}>{label}</Text>
+                    <View style={styles.topicSummaryBar}>
+                      <View style={[styles.topicSummaryFill, { width: `${tpct}%` as any, backgroundColor: tpct >= 70 ? Colors.emerald : tpct >= 40 ? Colors.amber : Colors.red }]} />
+                    </View>
+                    <Text style={styles.topicSummaryPct}>{tpct}{'%'}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        );
+      })()}
 
       <Text style={styles.sectionLabel}>Question Breakdown</Text>
       <View style={styles.breakdownList}>
@@ -2238,6 +2274,22 @@ const styles = StyleSheet.create({
     color: Colors.indigo,
     marginTop: 10,
   },
+  resultStreakPill: {
+    marginTop: 10,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderWidth: 0.5,
+    borderColor: '#F59E0B',
+  },
+  resultStreakText: { fontSize: 14, fontWeight: '700', color: '#92400E' },
+  topicSummaryList: { gap: 10, marginBottom: 20 },
+  topicSummaryRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  topicSummaryLabel: { width: 120, fontSize: 12, fontWeight: '600', color: Colors.textPrimary },
+  topicSummaryBar: { flex: 1, height: 8, borderRadius: 4, backgroundColor: '#E5E7EB', overflow: 'hidden' },
+  topicSummaryFill: { height: '100%', borderRadius: 4 },
+  topicSummaryPct: { width: 36, fontSize: 12, fontWeight: '700', color: Colors.mutedText, textAlign: 'right' },
   motivationalMsg: {
     fontSize: 16,
     textAlign: 'center',
