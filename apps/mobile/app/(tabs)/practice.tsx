@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Linking,
   ScrollView,
   StyleSheet,
@@ -188,6 +189,34 @@ export default function PracticeScreen() {
   const weakClearedRef = useRef<Set<string>>(new Set());
   const weakAnsweredRef3 = useRef(false);
   const weakAttemptsRef  = useRef(0);
+
+  const optionScales = useRef([0,1,2,3].map(() => new Animated.Value(1))).current;
+
+  // Reset option scales each new question
+  useEffect(() => {
+    optionScales.forEach(s => s.setValue(1));
+  }, [currentIndex]);
+
+  // Bounce the correct answer card when revealed
+  useEffect(() => {
+    if (selectedIndex === null || questions.length === 0) return;
+    const q = questions[currentIndex];
+    if (!q) return;
+    const correctScale = optionScales[q.correctIndex];
+    Animated.spring(correctScale, {
+      toValue: 1.04,
+      useNativeDriver: true,
+      speed: 60,
+      bounciness: 10,
+    }).start(() => {
+      Animated.spring(correctScale, {
+        toValue: 1,
+        useNativeDriver: true,
+        speed: 30,
+        bounciness: 3,
+      }).start();
+    });
+  }, [selectedIndex]);
 
   useEffect(() => {
     void getWeakSpotQuestions().then(ids => setWeakSpotCount(ids.length));
@@ -1061,24 +1090,29 @@ export default function PracticeScreen() {
           }
 
           return (
-            <TouchableOpacity
-              key={idx}
-              style={[styles.option, cardStyle, settings.highContrast ? { borderWidth: 2, borderColor: isAnswered ? undefined : theme.borderColor } : undefined]}
-              onPress={() => {
-                if (isAnswered) {
-                  if (settings.textToSpeech) { Speech.stop(); Speech.speak(option, { language: 'en-GB' }); }
-                  return;
-                }
-                void handleAnswer(idx);
-              }}
-              activeOpacity={!isAnswered || settings.textToSpeech ? 0.75 : 1}
-              disabled={isAnswered && !settings.textToSpeech}
-            >
-              <View style={[styles.badge, badgeStyle]}>
-                <Text style={[styles.badgeText, badgeTextStyle]}>{LABELS[idx]}</Text>
-              </View>
-              <Text style={[styles.optionText, textStyle, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing }]}>{option}</Text>
-            </TouchableOpacity>
+            <Animated.View key={idx} style={{ transform: [{ scale: optionScales[idx] }] }}>
+              <TouchableOpacity
+                style={[styles.option, cardStyle, settings.highContrast ? { borderWidth: 2, borderColor: isAnswered ? undefined : theme.borderColor } : undefined]}
+                onPress={() => {
+                  if (isAnswered) {
+                    if (settings.textToSpeech) { Speech.stop(); Speech.speak(option, { language: 'en-GB' }); }
+                    return;
+                  }
+                  Animated.sequence([
+                    Animated.timing(optionScales[idx], { toValue: 0.95, duration: 70, useNativeDriver: true }),
+                    Animated.spring(optionScales[idx], { toValue: 1, useNativeDriver: true, speed: 50, bounciness: 4 }),
+                  ]).start();
+                  void handleAnswer(idx);
+                }}
+                activeOpacity={!isAnswered || settings.textToSpeech ? 0.75 : 1}
+                disabled={isAnswered && !settings.textToSpeech}
+              >
+                <View style={[styles.badge, badgeStyle]}>
+                  <Text style={[styles.badgeText, badgeTextStyle]}>{LABELS[idx]}</Text>
+                </View>
+                <Text style={[styles.optionText, textStyle, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing }]}>{option}</Text>
+              </TouchableOpacity>
+            </Animated.View>
           );
         })}
       </View>
