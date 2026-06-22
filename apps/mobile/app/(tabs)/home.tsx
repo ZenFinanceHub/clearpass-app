@@ -42,6 +42,7 @@ import { computeAndSavePassProbability, PassProbabilityResult } from '@/src/pass
 import { generateNudges, saveNudges, loadNudges, dismissNudge, TutorNudge, NudgeType } from '@/src/tutorNudges';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
 import { ScaleButton } from '@/src/components/ScaleButton';
+import { SkeletonBox } from '@/src/components/SkeletonBox';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { allQuestions } from '@clearpass/content';
@@ -604,6 +605,7 @@ function getDaysRemaining(testDateIso: string): number {
 
 export default function HomeScreen() {
   const [progress, setProgress]       = useState<UserProgress | null>(null);
+  const [isLoading, setIsLoading]     = useState(true);
   const [username, setUsername]       = useState<string | null>(null);
   const [showDateModal, setShowDateModal] = useState(false);
   const [dateInput, setDateInput]     = useState('');
@@ -655,6 +657,7 @@ export default function HomeScreen() {
         updated = withDate;
       }
       setProgress(updated);
+      setIsLoading(false);
 
       // Load scheduled mock tests, pruning past ones
       try {
@@ -977,10 +980,26 @@ export default function HomeScreen() {
       </LinearGradient>
 
       {/* Road Map Hero */}
-      <RoadMapHero progress={progress} />
+      {isLoading ? (
+        <View style={{ paddingHorizontal: 16, paddingVertical: 12, gap: 10 }}>
+          <SkeletonBox height={120} borderRadius={16} />
+        </View>
+      ) : (
+        <RoadMapHero progress={progress} />
+      )}
 
       {/* Tutor Nudges */}
-      <NudgesSection nudges={nudges} onDismiss={(id) => void handleDismissNudge(id)} />
+      {isLoading ? (
+        <View style={{ paddingHorizontal: 16, paddingVertical: 8, gap: 8 }}>
+          <SkeletonBox width={80} height={10} borderRadius={4} />
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <SkeletonBox width={240} height={90} borderRadius={14} />
+            <SkeletonBox width={240} height={90} borderRadius={14} />
+          </View>
+        </View>
+      ) : (
+        <NudgesSection nudges={nudges} onDismiss={(id) => void handleDismissNudge(id)} />
+      )}
 
       {/* XP Card */}
       <View style={styles.xpCard}>
