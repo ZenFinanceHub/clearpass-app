@@ -81,6 +81,7 @@ export default function SignInScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
             autoComplete="email"
+            testID="email-input"
           />
           <TextInput
             style={styles.input}
@@ -90,6 +91,7 @@ export default function SignInScreen() {
             placeholderTextColor="#9CA3AF"
             secureTextEntry
             autoComplete="password"
+            testID="password-input"
           />
 
           {error.length > 0 && <Text style={styles.errorText}>{error}</Text>}
@@ -118,6 +120,7 @@ export default function SignInScreen() {
             onPress={() => void handleSignIn()}
             disabled={loading}
             activeOpacity={0.85}
+            accessibilityLabel="Sign in"
           >
             {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.submitBtnText}>{'Sign In'}</Text>}
           </TouchableOpacity>

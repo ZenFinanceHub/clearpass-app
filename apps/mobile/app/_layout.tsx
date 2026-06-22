@@ -125,7 +125,8 @@ export default function RootLayout() {
   return (
     <AccessibilityProvider>
       <NetworkProvider>
-      <>
+      {/* suppressHydrationWarning catches minor SSG/client mismatches from RN web internals */}
+      <View style={{ flex: 1 }} suppressHydrationWarning>
         <Stack>
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
@@ -163,7 +164,7 @@ export default function RootLayout() {
             <Text style={toastStyles.text}>{'Downloading content for offline use...'}</Text>
           </View>
         )}
-      </>
+      </View>
       </NetworkProvider>
     </AccessibilityProvider>
   );

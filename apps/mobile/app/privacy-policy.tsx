@@ -12,7 +12,7 @@ export default function PrivacyPolicyScreen() {
   return (
     <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7} accessibilityLabel="Go back">
           <Text style={[styles.backArrow, { color: theme.textColor }]}>{'<- Back'}</Text>
         </TouchableOpacity>
       </View>

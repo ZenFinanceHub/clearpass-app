@@ -8,10 +8,10 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useClientDimensions } from '@/src/hooks/useClientDimensions';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
 import {
@@ -630,9 +630,9 @@ export default function HomeScreen() {
   const [scheduleError, setScheduleError]   = useState('');
   const theme = useTheme();
   const { isOffline } = useNetwork();
-  const { width: winW } = useWindowDimensions();
+  const dims = useClientDimensions();
   const [studyPlan, setStudyPlan] = useState<SimpleStudyPlan | null>(null);
-  const cardW: `${number}%` = winW >= 600 ? '30%' : '47%';
+  const cardW: '30%' | '47%' = dims && dims.width >= 600 ? '30%' : '47%';
 
   useEffect(() => {
     void (async () => {

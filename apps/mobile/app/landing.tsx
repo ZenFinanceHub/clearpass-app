@@ -90,7 +90,7 @@ export default function LandingPage() {
           <TouchableOpacity onPress={() => router.push('/auth')} activeOpacity={0.75}>
             <Text style={styles.navSignIn}>{'Sign In'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navCta} onPress={() => router.push('/auth')} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.navCta} onPress={() => router.push('/auth')} activeOpacity={0.85} accessibilityLabel="Start Free">
             <Text style={styles.navCtaText}>{'Start Free'}</Text>
           </TouchableOpacity>
         </View>
@@ -108,7 +108,7 @@ export default function LandingPage() {
           <Text style={styles.heroH1Accent}>{'First Time'}</Text>
           <Text style={styles.heroSub}>{'The UK\'s smartest revision app. AI tutor, personalised study plan, and the only app built for dyslexic learners.'}</Text>
           <View style={styles.heroBtns}>
-            <TouchableOpacity style={styles.btnPrimary} onPress={() => router.push('/auth')} activeOpacity={0.85}>
+            <TouchableOpacity style={styles.btnPrimary} onPress={() => router.push('/auth')} activeOpacity={0.85} accessibilityLabel="Start learning for free">
               <Text style={styles.btnPrimaryText}>{'Start Free →'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.btnOutline} onPress={() => router.push('/auth')} activeOpacity={0.85}>
