@@ -501,11 +501,14 @@ const NUDGE_EMOJI: Record<NudgeType, string> = {
 function NudgesSection({
   nudges,
   onDismiss,
+  screenWidth,
 }: {
   nudges: TutorNudge[];
   onDismiss: (id: string) => void;
+  screenWidth: number;
 }) {
   if (nudges.length === 0) return null;
+  const nudgeCardW = Math.min(Math.round(screenWidth * 0.72), 272);
   const visible = nudges.slice(0, 2);
   return (
     <View style={styles.nudgesSection}>
@@ -517,7 +520,7 @@ function NudgesSection({
           const actionBg    = NUDGE_ACTION_BG[nudge.type];
           const emoji       = NUDGE_EMOJI[nudge.type];
           return (
-            <View key={nudge.id} style={[styles.nudgeCard, { borderLeftColor: borderColor }]}>
+            <View key={nudge.id} style={[styles.nudgeCard, { borderLeftColor: borderColor, width: nudgeCardW }]}>
               <View style={styles.nudgeHeader}>
                 <Text style={styles.nudgeEmoji}>{emoji}</Text>
                 <View style={styles.nudgeTitleRow}>
@@ -1009,7 +1012,7 @@ export default function HomeScreen() {
           </View>
         </View>
       ) : (
-        <NudgesSection nudges={nudges} onDismiss={(id) => void handleDismissNudge(id)} />
+        <NudgesSection nudges={nudges} onDismiss={(id) => void handleDismissNudge(id)} screenWidth={dims?.width ?? 375} />
       )}
 
       {/* XP Card */}
@@ -1566,7 +1569,6 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderLeftWidth: 3,
     padding: 14,
-    width: 272,
   },
   nudgeHeader: {
     flexDirection: 'row',
