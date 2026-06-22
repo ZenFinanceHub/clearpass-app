@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
   btnPrimaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
   btnOutline: { borderRadius: 12, paddingVertical: 14, paddingHorizontal: 24, borderWidth: 1.5, borderColor: '#E5E7EB', backgroundColor: '#FFFFFF' },
   btnOutlineText: { color: '#374151', fontSize: 15, fontWeight: '600' },
-  heroMicro: { fontSize: 12, color: '#9CA3AF', marginBottom: 28, textAlign: 'center' },
+  heroMicro: { fontSize: 12, color: '#6B7280', marginBottom: 28, textAlign: 'center' },
   heroSocial: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB',
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
   planCtaFreeText: { fontSize: 15, fontWeight: '700', color: '#374151' },
   planCtaPro: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 8, backgroundColor: TEAL },
   planCtaProText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
-  planSmall: { fontSize: 12, color: '#9CA3AF', textAlign: 'center', marginTop: 12, lineHeight: 18 },
+  planSmall: { fontSize: 12, color: '#6B7280', textAlign: 'center', marginTop: 12, lineHeight: 18 },
 
   // ── Testimonials ──────────────────────────────────────────────────────────────
   testimonialGrid: { gap: 14 },

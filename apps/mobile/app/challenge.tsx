@@ -1165,7 +1165,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#E5E7EB',
   },
   scoreBlock:  { alignItems: 'center', gap: 2 },
-  scoreLabel:  { fontSize: 10, fontWeight: '700', color: '#9CA3AF', letterSpacing: 1 },
+  scoreLabel:  { fontSize: 10, fontWeight: '700', color: '#6B7280', letterSpacing: 1 },
   scoreNum:    { fontSize: 28, fontWeight: '800', lineHeight: 32 },
   vsSmall:     { fontSize: 14, fontWeight: '800' },
 
@@ -1262,7 +1262,7 @@ const styles = StyleSheet.create({
   waitingSub:   { fontSize: 13, textAlign: 'center' },
 
   myScoreSummary: { alignItems: 'center', gap: 4, marginTop: 8 },
-  myScoreLabel:   { fontSize: 10, fontWeight: '700', color: '#9CA3AF', letterSpacing: 1 },
+  myScoreLabel:   { fontSize: 10, fontWeight: '700', color: '#6B7280', letterSpacing: 1 },
   myScoreBig:     { fontSize: 48, fontWeight: '800', lineHeight: 54 },
   myScoreTime:    { fontSize: 13 },
 

@@ -788,7 +788,7 @@ const styles = StyleSheet.create({
   navBtnTextDisabled: { color: '#9CA3AF' },
   overviewBtn: { alignItems: 'center', paddingVertical: 4 },
   overviewCount: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  overviewHint: { fontSize: 10, color: '#9CA3AF', marginTop: 1 },
+  overviewHint: { fontSize: 10, color: '#6B7280', marginTop: 1 },
 
   // Submit
   submitBtn: { backgroundColor: Colors.indigo, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 4 },
@@ -809,7 +809,7 @@ const styles = StyleSheet.create({
   gridCellAnswered: { backgroundColor: '#D1D5DB', borderColor: '#D1D5DB' },
   gridCellFlagged: { backgroundColor: '#F59E0B', borderColor: '#F59E0B' },
   gridCellCurrent: { backgroundColor: Colors.indigo, borderColor: Colors.indigo },
-  gridCellText: { fontSize: 11, fontWeight: '700', color: '#9CA3AF' },
+  gridCellText: { fontSize: 11, fontWeight: '700', color: '#6B7280' },
   gridCellTextBright: { color: '#FFFFFF' },
 
   // Start view

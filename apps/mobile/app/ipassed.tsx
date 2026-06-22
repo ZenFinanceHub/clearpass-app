@@ -516,7 +516,7 @@ const styles = StyleSheet.create({
   },
   reviewBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   reviewSkip:     { paddingVertical: 10 },
-  reviewSkipText: { fontSize: 14, color: '#9CA3AF', fontWeight: '500' },
+  reviewSkipText: { fontSize: 14, color: '#6B7280', fontWeight: '500' },
 
   // ── Resit flow ────────────────────────────────────────────────────────────────
   resitContent: {

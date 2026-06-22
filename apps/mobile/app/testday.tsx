@@ -649,7 +649,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   tabActive:     { borderBottomColor: Colors.indigo },
-  tabText:       { fontSize: 13, fontWeight: '600', color: '#9CA3AF' },
+  tabText:       { fontSize: 13, fontWeight: '600', color: '#6B7280' },
   tabTextActive: { color: Colors.indigo },
 
   // Common tab layout
@@ -754,7 +754,7 @@ const styles = StyleSheet.create({
   checkSectionTitle: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#9CA3AF',
+    color: '#6B7280',
     letterSpacing: 1.5,
     marginBottom: 10,
   },

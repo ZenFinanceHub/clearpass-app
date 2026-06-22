@@ -1143,7 +1143,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: '#E5E7EB',
   },
-  chevron: { fontSize: 22, color: '#9CA3AF', fontWeight: '400', lineHeight: 26 },
+  chevron: { fontSize: 22, color: '#6B7280', fontWeight: '400', lineHeight: 26 },
 
   iconWrap: {
     width: 44,

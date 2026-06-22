@@ -993,7 +993,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   circleNum: { fontSize: 26, fontWeight: '900', lineHeight: 30 },
-  circleNumLabel: { fontSize: 10, color: '#9CA3AF', fontWeight: '600', letterSpacing: 0.5 },
+  circleNumLabel: { fontSize: 10, color: '#6B7280', fontWeight: '600', letterSpacing: 0.5 },
 
   ppBreakdown: { gap: 10, marginBottom: 16 },
   bbRow: { gap: 4 },
@@ -1018,7 +1018,7 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 4,
   },
-  ppFocusTitle: { fontSize: 11, fontWeight: '700', color: '#9CA3AF', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 2 },
+  ppFocusTitle: { fontSize: 11, fontWeight: '700', color: '#6B7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 2 },
   ppFocusArea: { fontSize: 15, fontWeight: '800', color: '#111827' },
   ppFocusRec: { fontSize: 13, color: '#6B7280', lineHeight: 20 },
 
@@ -1038,7 +1038,7 @@ const styles = StyleSheet.create({
   srDueCount:     { fontSize: 40, fontWeight: '900', color: Colors.indigo, lineHeight: 46 },
   srDueLabel:     { fontSize: 13, fontWeight: '500', marginTop: 2 },
   srCardRight:    { alignItems: 'flex-end', paddingTop: 4 },
-  srTotalLabel:   { fontSize: 12, color: '#9CA3AF', fontWeight: '500' },
+  srTotalLabel:   { fontSize: 12, color: '#6B7280', fontWeight: '500' },
   srReviewBtn: {
     backgroundColor: Colors.indigo,
     borderRadius: 10,
@@ -1066,7 +1066,7 @@ const styles = StyleSheet.create({
   },
   srBarFill:      { width: '100%', backgroundColor: Colors.indigo, borderRadius: 4 },
   srBarCount:     { fontSize: 10, color: Colors.indigo, fontWeight: '700' },
-  srBarDay:       { fontSize: 10, color: '#9CA3AF', fontWeight: '500' },
+  srBarDay:       { fontSize: 10, color: '#6B7280', fontWeight: '500' },
   srBarDayToday:  { color: Colors.indigo, fontWeight: '700' },
 
   // ── Topic Badges ─────────────────────────────────────────────────────────────

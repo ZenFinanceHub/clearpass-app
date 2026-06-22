@@ -1513,7 +1513,7 @@ const styles = StyleSheet.create({
   nudgesLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: Colors.subtleText,
+    color: Colors.mutedText,
     letterSpacing: 1,
     marginBottom: 8,
   },
@@ -1550,7 +1550,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 6,
   },
-  nudgeDismiss: { fontSize: 15, color: Colors.subtleText, lineHeight: 22, fontWeight: '600' },
+  nudgeDismiss: { fontSize: 15, color: Colors.mutedText, lineHeight: 22, fontWeight: '600' },
   nudgeBody: { fontSize: 12, color: Colors.mutedText, lineHeight: 18, marginBottom: 10 },
   nudgeAction: {
     borderRadius: 8,
@@ -1794,7 +1794,7 @@ const styles = StyleSheet.create({
   studyPlanLabel: { fontSize: 11, fontWeight: '700', color: Colors.indigo, letterSpacing: 1, marginBottom: 3 },
   studyPlanSummary: { fontSize: 13, fontWeight: '600', color: Colors.textDark },
   studyPlanChevron: { marginLeft: 8 },
-  studyPlanChevronText: { fontSize: 22, color: Colors.subtleText, fontWeight: '400', lineHeight: 26 },
+  studyPlanChevronText: { fontSize: 22, color: Colors.mutedText, fontWeight: '400', lineHeight: 26 },
 
   // ── Daily Challenge Card ──────────────────────────────────────────────────────
   dcCard: {
@@ -1872,7 +1872,7 @@ const styles = StyleSheet.create({
   qotdXpBadge: { backgroundColor: Colors.emeraldBg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
   qotdXpText:  { fontSize: 11, fontWeight: '700', color: Colors.emerald },
   qotdQuestion: { fontSize: 14, fontWeight: '600', lineHeight: 20, marginBottom: 8 },
-  qotdTap:     { fontSize: 12, color: Colors.subtleText, fontWeight: '500' },
+  qotdTap:     { fontSize: 12, color: Colors.mutedText, fontWeight: '500' },
   qotdOptions: { gap: 8, marginTop: 4 },
   qotdOption:  { borderRadius: 8, padding: 10, borderWidth: 0.5, borderColor: Colors.border },
   qotdOptionText: { fontSize: 13, fontWeight: '500' },
@@ -1963,7 +1963,7 @@ const styles = StyleSheet.create({
   scheduledItemLeft: { flex: 1, gap: 1 },
   scheduledItemLabel: { fontSize: 13, fontWeight: '600' },
   scheduledItemTime:  { fontSize: 12, fontWeight: '500' },
-  scheduledItemCancel: { fontSize: 18, color: Colors.subtleText, fontWeight: '600', paddingHorizontal: 4 },
+  scheduledItemCancel: { fontSize: 18, color: Colors.mutedText, fontWeight: '600', paddingHorizontal: 4 },
 
   // ── Schedule Time Picker ───────────────────────────────────────────────────────
   scheduleTimeRow: {
@@ -1996,7 +1996,7 @@ const styles = StyleSheet.create({
   todayTaskLabel: { fontSize: 10, fontWeight: '700', color: Colors.indigo, letterSpacing: 1 },
   todayTaskTitle: { fontSize: 15, fontWeight: '700' },
   todayTaskSub:   { fontSize: 12, fontWeight: '500' },
-  todayTaskChevron: { fontSize: 20, color: Colors.subtleText, fontWeight: '400', marginLeft: 8 },
+  todayTaskChevron: { fontSize: 20, color: Colors.mutedText, fontWeight: '400', marginLeft: 8 },
 
   // ── I Passed Button ────────────────────────────────────────────────────────────
   iPassedBtn: {

@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
 
   bubbleTime: { fontSize: 10, fontWeight: '500', alignSelf: 'flex-end' },
   timeUser: { color: 'rgba(255,255,255,0.6)' },
-  timeTutor: { color: '#9CA3AF' },
+  timeTutor: { color: '#6B7280' },
 
   inputBar: {
     flexDirection: 'row',
@@ -365,5 +365,5 @@ const styles = StyleSheet.create({
   },
   upgradeBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   dismissBtn: { paddingVertical: 8 },
-  dismissText: { fontSize: 14, color: '#9CA3AF' },
+  dismissText: { fontSize: 14, color: '#6B7280' },
 });

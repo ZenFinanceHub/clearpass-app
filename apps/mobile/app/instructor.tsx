@@ -1468,7 +1468,7 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     gap: 12,
   },
-  probCardLabel: { fontSize: 11, fontWeight: '800', color: '#9CA3AF', letterSpacing: 1.5 },
+  probCardLabel: { fontSize: 11, fontWeight: '800', color: '#6B7280', letterSpacing: 1.5 },
   probCircle: {
     width: 140,
     height: 140,
@@ -1503,7 +1503,7 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: '#E5E7EB',
   },
-  sectionTitle: { fontSize: 11, fontWeight: '800', color: '#9CA3AF', letterSpacing: 1.5 },
+  sectionTitle: { fontSize: 11, fontWeight: '800', color: '#6B7280', letterSpacing: 1.5 },
   dotsRow: { flexDirection: 'row', justifyContent: 'space-between' },
   dotCol:  { alignItems: 'center', gap: 4 },
   dot: { width: 28, height: 28, borderRadius: 14 },

@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
   ctaBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
 
   skipBtn: { paddingVertical: 8 },
-  skipText: { fontSize: 14, color: '#9CA3AF' },
+  skipText: { fontSize: 14, color: '#6B7280' },
 
   referralBadge: {
     backgroundColor: '#F0FDFA',
