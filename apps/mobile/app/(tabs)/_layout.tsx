@@ -36,22 +36,18 @@ export default function TabLayout() {
         tabBarActiveTintColor: Colors.indigo,
         tabBarInactiveTintColor: Colors.subtleText,
         tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
-        tabBarStyle: Platform.select({
-          web: {
-            height: 60,
-            paddingBottom: 8,
-            borderTopWidth: 0.5,
-            borderTopColor: Colors.border,
-            backgroundColor: Colors.cardWhite,
-          },
-          default: {
-            height: 60,
-            paddingBottom: 8,
-            borderTopWidth: 0.5,
-            borderTopColor: Colors.border,
-            backgroundColor: Colors.cardWhite,
-          },
-        }),
+        tabBarStyle: {
+          height: 60,
+          paddingTop: 6,
+          paddingBottom: 8,
+          borderTopWidth: 0.5,
+          borderTopColor: Colors.border,
+          backgroundColor: Colors.cardWhite,
+        },
+        tabBarItemStyle: {
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
         headerStyle: {
           backgroundColor: Colors.cardWhite,
         },

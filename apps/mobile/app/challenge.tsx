@@ -776,6 +776,10 @@ function LobbyView({
 
   return (
     <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
+      <TouchableOpacity onPress={() => router.back()} style={styles.lobbyBackBtn} activeOpacity={0.7}>
+        <Text style={[styles.backBtn, { color: theme.textColor }]}>{'← Back'}</Text>
+      </TouchableOpacity>
+
       <LinearGradient colors={[Colors.indigo, Colors.violet]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.lobbyHeader}>
         <Text style={styles.lobbyTitle}>{'Challenge a Friend'}</Text>
         <Text style={styles.lobbySub}>{'10 questions. Same quiz. Who wins?'}</Text>
@@ -1241,8 +1245,9 @@ const styles = StyleSheet.create({
   calculatingText: { fontSize: 16, fontWeight: '600' },
 
   // ── Results ───────────────────────────────────────────────────────────────────
-  backRow: { paddingBottom: 4 },
-  backBtn: { fontSize: 14, fontWeight: '600', color: Colors.indigo },
+  backRow:      { paddingBottom: 4 },
+  backBtn:      { fontSize: 14, fontWeight: '600', color: Colors.indigo },
+  lobbyBackBtn: { paddingVertical: 8, paddingHorizontal: 4, alignSelf: 'flex-start' },
 
   waitingCard: {
     borderRadius: 20,
