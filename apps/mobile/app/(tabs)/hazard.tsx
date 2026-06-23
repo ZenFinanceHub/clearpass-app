@@ -13,7 +13,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { HazardClipResult, HazardWindow, calculateHazardTotal, scoreClip } from '@clearpass/core';
 import { hazardClips } from '@clearpass/content';
 import { loadUserProgress, saveUserProgress } from '@/src/storage';
-import { getHazardVideoList, getVideoUrl, type HazardClipMeta } from '@/src/hazardVideos';
+import { getHazardVideoList, getVideoUrl, buildHazardClip, type HazardClipMeta } from '@/src/hazardVideos';
 import { isPremium } from '@/src/subscription';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
@@ -22,7 +22,7 @@ import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { ShareCardModal } from '@/src/components/ShareableCard';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
 
-type Phase = 'info' | 'pre-clip' | 'player' | 'clip-result' | 'results';
+type Phase = 'info' | 'pre-clip' | 'player' | 'clip-result' | 'solution' | 'results';
 
 function makeVideoHtml(url: string): string {
   return `<!DOCTYPE html>
@@ -117,6 +117,7 @@ export default function HazardScreen() {
   const [clipsLoading, setClipsLoading] = useState(true);
   const [supabaseClips, setSupabaseClips] = useState<HazardClipMeta[]>([]);
   const [activeClips, setActiveClips] = useState(hazardClips);
+  const [solutionVideoUrl, setSolutionVideoUrl] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -149,15 +150,26 @@ export default function HazardScreen() {
   }
 
   function handleNextClip() {
-    if (clipIndex + 1 < hazardClips.length) {
+    const totalClips = activeClips.length > 0 ? activeClips.length : hazardClips.length;
+    if (clipIndex + 1 < totalClips) {
       setClipIndex((i) => i + 1);
       setClicks([]);
       setCurrentTime(0);
       setMuted(true);
+      setSolutionVideoUrl(null);
       setPhase('pre-clip');
     } else {
       setPhase('results');
     }
+  }
+
+  function handleWatchSolution() {
+    const meta = supabaseClips[clipIndex];
+    if (!meta?.has_solution_clip || !meta.solution_start_s) return;
+    // The video URL is the same as the clip — we seek to solution_start_s in the solution phase
+    const existingClip = activeClips[clipIndex];
+    setSolutionVideoUrl(existingClip?.videoUrl ?? null);
+    setPhase('solution');
   }
 
   async function handleFinish(results: HazardClipResult[]) {
@@ -221,22 +233,13 @@ export default function HazardScreen() {
     if (!premium) { router.push('/paywall'); return; }
 
     if (supabaseClips.length > 0) {
-      // Load signed URLs and build clip objects compatible with the local format
       const built = await Promise.all(
-        supabaseClips.map(async (sc, i) => {
+        supabaseClips.map(async (sc) => {
           const url = await getVideoUrl(sc.storage_path);
-          const base = hazardClips[i % Math.max(hazardClips.length, 1)];
-          return {
-            ...(base ?? hazardClips[0]),
-            id: sc.id,
-            title: sc.title,
-            durationSec: sc.duration_seconds,
-            videoUrl: url ?? '',
-            youtubeId: undefined,
-          };
+          return buildHazardClip(sc, url ?? '');
         }),
       );
-      setActiveClips(built as typeof hazardClips);
+      setActiveClips(built);
     }
     setClipIndex(0);
     setClicks([]);
@@ -503,9 +506,65 @@ export default function HazardScreen() {
           {' tap(s) recorded'}
         </Text>
 
+        {supabaseClips[clipIndex]?.has_solution_clip && (
+          <TouchableOpacity style={styles.secondaryBtn} onPress={handleWatchSolution} activeOpacity={0.85}>
+            <Text style={styles.secondaryBtnText}>{'Watch Solution'}</Text>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity style={styles.primaryBtn} onPress={handleNextClip} activeOpacity={0.85}>
           <Text style={styles.primaryBtnText}>{isLast ? 'See Results' : 'Next Clip'}</Text>
         </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // ── SOLUTION CLIP ─────────────────────────────────────────────────────────
+
+  if (phase === 'solution') {
+    const meta = supabaseClips[clipIndex];
+    const seekTo = meta?.solution_start_s ?? 60;
+    const solHtml = solutionVideoUrl ? `<!DOCTYPE html>
+<html><head><meta name="viewport" content="width=device-width, initial-scale=1">
+<style>* { margin:0; padding:0; box-sizing:border-box; } body { background:#000; width:100vw; height:100vh; overflow:hidden; } video { width:100%; height:100%; object-fit:cover; display:block; }</style>
+</head><body>
+<video id="v" src="${solutionVideoUrl}" autoplay playsinline muted></video>
+<script>
+var v = document.getElementById('v');
+v.addEventListener('loadedmetadata', function() { v.currentTime = ${String(seekTo)}; v.play().catch(function(){}); });
+v.addEventListener('ended', function() { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ended' })); });
+</script></body></html>` : '';
+
+    const isLast = clipIndex + 1 === (activeClips.length > 0 ? activeClips.length : hazardClips.length);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const WebView = (require('react-native-webview') as { default: React.ComponentType<any> }).default;
+
+    return (
+      <View style={styles.playerScreen}>
+        <View style={styles.videoWrap}>
+          {solutionVideoUrl ? (
+            <WebView
+              key={`solution-${clipIndex}`}
+              source={{ html: solHtml }}
+              style={StyleSheet.absoluteFillObject}
+              scrollEnabled={false}
+              allowsInlineMediaPlayback
+              mediaPlaybackRequiresUserAction={false}
+              onMessage={() => handleNextClip()}
+            />
+          ) : null}
+          <View style={[styles.hud, { top: 16, bottom: undefined }]} pointerEvents="none">
+            <Text style={styles.hudText}>{'Solution clip'}</Text>
+            <Text style={styles.hudText}>{'Hazard shown with red circle'}</Text>
+          </View>
+        </View>
+        <View style={styles.tapHintBar}>
+          <TouchableOpacity onPress={handleNextClip} activeOpacity={0.85}>
+            <Text style={[styles.tapHintText, { color: Colors.indigo, fontWeight: '700' }]}>
+              {isLast ? 'See Results →' : 'Next Clip →'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
