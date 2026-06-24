@@ -126,7 +126,7 @@ export default function RootLayout() {
     <AccessibilityProvider>
       <NetworkProvider>
       <>
-        <Stack>
+        <Stack screenOptions={{ title: 'ClearPass' }}>
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
           <Stack.Screen name="landing" options={{ headerShown: false }} />
