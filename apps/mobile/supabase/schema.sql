@@ -42,3 +42,42 @@ CREATE POLICY "Anyone can read leaderboard" ON user_progress FOR SELECT USING (t
 DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
 CREATE POLICY "Users can insert own profile" ON profiles
   FOR INSERT WITH CHECK (true);
+
+-- Hazard perception clips catalogue
+CREATE TABLE IF NOT EXISTS hazard_clips (
+  id             TEXT PRIMARY KEY,
+  title          TEXT NOT NULL,
+  duration_seconds INTEGER NOT NULL,
+  storage_path   TEXT NOT NULL,
+  thumbnail_path TEXT,
+  difficulty     TEXT NOT NULL DEFAULT 'medium' CHECK (difficulty IN ('easy','medium','hard')),
+  sort_order     INTEGER NOT NULL DEFAULT 0,
+  is_active      BOOLEAN NOT NULL DEFAULT true,
+  -- 'time' for CGI clips 1-10 (SS.centiseconds), 'frame' for all others (25fps)
+  scoring_method TEXT NOT NULL DEFAULT 'time' CHECK (scoring_method IN ('time','frame')),
+  -- Clips 1-10 include a solution clip in the second minute
+  has_solution_clip BOOLEAN NOT NULL DEFAULT false,
+  solution_start_s  FLOAT,
+  -- JSONB array of hazard windows:
+  -- [{ "hazard_number": 1, "bands": [{ "points": 5, "start_s": 18.19, "end_s": 19.18 }, ...] }]
+  scoring_windows JSONB NOT NULL DEFAULT '[]',
+  created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE hazard_clips ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone can read active clips" ON hazard_clips FOR SELECT USING (is_active = true);
+
+-- Per-user hazard perception attempt log
+CREATE TABLE IF NOT EXISTS hazard_attempts (
+  id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id    UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  clip_id    TEXT REFERENCES hazard_clips(id),
+  score      INTEGER NOT NULL,
+  max_score  INTEGER NOT NULL,
+  clicks     JSONB NOT NULL DEFAULT '[]',
+  attempted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE hazard_attempts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can insert own attempts" ON hazard_attempts FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can read own attempts" ON hazard_attempts FOR SELECT USING (auth.uid() = user_id);

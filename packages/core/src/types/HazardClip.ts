@@ -1,6 +1,14 @@
+export interface ScoringBand {
+  points: number;
+  startSec: number;
+  endSec: number;
+}
+
 export interface HazardWindow {
   startSec: number;
   endSec: number;
+  // DVSA-style explicit bands (5 → 1 pts). When present, used instead of simplified thirds scoring.
+  bands?: ScoringBand[];
 }
 
 export interface HazardClip {
