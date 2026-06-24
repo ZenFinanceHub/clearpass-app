@@ -3,6 +3,7 @@ import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Linking } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { Stack, useSegments } from 'expo-router';
+import Head from 'expo-router/head';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -126,6 +127,7 @@ export default function RootLayout() {
     <AccessibilityProvider>
       <NetworkProvider>
       <>
+        <Head><title>ClearPass</title></Head>
         <Stack screenOptions={{ title: 'ClearPass' }}>
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
