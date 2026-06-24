@@ -253,4 +253,18 @@ export const vehicleLoadingQuestions: Question[] = [
     topicCategory: TopicCategory.VehicleLoading,
     difficulty: 1,
   },
+  {
+    id: "AB2488",
+    questionText: "What restrictions apply if you're towing a trailer on a three-lane motorway?",
+    options: [
+      "You must not exceed 50 mph",
+      "You must not overtake",
+      "You must have a stabiliser fitted",
+      "You must not use the right-hand lane",
+    ],
+    correctIndex: 3,
+    explanation: "The motorway regulations for towing a trailer state that you must not use the right-hand lane of a three-lane motorway unless directed to do so (for example, at roadworks or due to a lane closure), and must not exceed 60 mph.",
+    topicCategory: TopicCategory.VehicleLoading,
+    difficulty: 1,
+  },
 ];

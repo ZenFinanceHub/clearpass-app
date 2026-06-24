@@ -337,4 +337,18 @@ export const documentsAndRegulationsQuestions: Question[] = [
     topicCategory: TopicCategory.DocumentsAndRegulations,
     difficulty: 1,
   },
+  {
+    id: "AB2819",
+    questionText: "What's the maximum fine for driving or riding without insurance?",
+    options: [
+      "Unlimited",
+      "£500",
+      "£1,000",
+      "£5,000",
+    ],
+    correctIndex: 0,
+    explanation: "Driving or riding without insurance is a serious offence. As well as an unlimited fine, you may be disqualified or incur penalty points.",
+    topicCategory: TopicCategory.DocumentsAndRegulations,
+    difficulty: 1,
+  },
 ];

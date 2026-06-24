@@ -757,4 +757,32 @@ export const motorwayRulesQuestions: Question[] = [
     topicCategory: TopicCategory.MotorwayRules,
     difficulty: 1,
   },
+  {
+    id: "AB2225",
+    questionText: "Which vehicles are not allowed to use the right-hand lane of a three-lane motorway?",
+    options: [
+      "Small delivery vans",
+      "Motorcycles",
+      "Vehicles towing a trailer",
+      "Motorcycle and sidecar outfits",
+    ],
+    correctIndex: 2,
+    explanation: "On the motorway, any vehicle towing a trailer is restricted to 60 mph. It's not allowed in the right-hand lane, as it might hold up faster-moving traffic that wishes to overtake in that lane.",
+    topicCategory: TopicCategory.MotorwayRules,
+    difficulty: 1,
+  },
+  {
+    id: "AB2950",
+    questionText: "You have stopped in an emergency area. What must you do before you rejoin the carriageway?",
+    options: [
+      "Use the emergency telephone",
+      "Give an arm signal as you're moving off",
+      "Switch on your vehicle's headlights",
+      "Move away with your hazard lights on",
+    ],
+    correctIndex: 0,
+    explanation: "To rejoin the carriageway from an emergency area, you must use the emergency telephone and follow the operator's advice. A lane may have to be closed so that you can rejoin the carriageway safely.",
+    topicCategory: TopicCategory.MotorwayRules,
+    difficulty: 1,
+  },
 ];

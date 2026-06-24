@@ -925,4 +925,18 @@ export const rulesOfTheRoadQuestions: Question[] = [
     topicCategory: TopicCategory.RulesOfTheRoad,
     difficulty: 1,
   },
+  {
+    id: "AB2628",
+    questionText: "What's the nearest you may park to a junction?",
+    options: [
+      "10 metres (32 feet)",
+      "12 metres (39 feet)",
+      "15 metres (49 feet)",
+      "20 metres (66 feet)",
+    ],
+    correctIndex: 0,
+    explanation: "Do not park within 10 metres (32 feet) of a junction (unless in an authorised parking place). This is to allow drivers emerging from, or turning into, the junction a clear view of the road they're joining. It also allows them to see hazards such as pedestrians or cyclists at the junction.",
+    topicCategory: TopicCategory.RulesOfTheRoad,
+    difficulty: 1,
+  },
 ];
