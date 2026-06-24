@@ -53,6 +53,7 @@ export const attitudeQuestions: Question[] = [
     "Your view ahead will be reduced",
     ],
     correctIndex: 3,
+    imageUrl: "https://secavejbaapapvvqbwed.supabase.co/storage/v1/object/public/question-images/IMG_1279.jpg",
     explanation: "Staying back will increase your view of the road ahead. This will help you to see any hazards that might occur and give you more time to react.",
     topicCategory: TopicCategory.Attitude,
     difficulty: 1,
