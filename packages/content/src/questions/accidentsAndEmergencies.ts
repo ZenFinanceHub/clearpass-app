@@ -487,6 +487,7 @@ export const accidentsAndEmergenciesQuestions: Question[] = [
     "",
     ],
     correctIndex: 1,
+    imageUrl: "https://secavejbaapapvvqbwed.supabase.co/storage/v1/object/public/question-images/TS4051.png",
     explanation: "Tankers will display a hazard warning plate on the side and rear of the vehicle. Details of hazard warning symbols are given in The Highway Code. If a tanker is involved in a collision, you may need to report the tanker's hazard labelling to the emergency services.",
     topicCategory: TopicCategory.AccidentsAndEmergencies,
     difficulty: 1,

@@ -795,6 +795,7 @@ export const safetyAndYourVehicleQuestions: Question[] = [
     "It's powered by unleaded petrol",
     ],
     correctIndex: 2,
+    imageUrl: "https://secavejbaapapvvqbwed.supabase.co/storage/v1/object/public/question-images/TS4681.png",
     explanation: "Trams are powered by electricity and therefore do not emit exhaust fumes. They ease traffic congestion by offering drivers an alternative to using their car, particularly in busy cities and towns.",
     topicCategory: TopicCategory.SafetyAndYourVehicle,
     difficulty: 1,

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Image,
   Modal,
   ScrollView,
   StyleSheet,
@@ -339,6 +340,9 @@ export default function MockScreen() {
             <View style={styles.flaggedPill}>
               <Text style={styles.flaggedPillText}>{'FLAGGED'}</Text>
             </View>
+          )}
+          {q.imageUrl && (
+            <Image source={{ uri: q.imageUrl }} style={styles.questionImage} resizeMode="contain" />
           )}
           <Text style={[styles.questionText, { fontSize: theme.fontSize(17), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(26), color: theme.textColor }]}>
             {q.questionText}
@@ -763,6 +767,7 @@ const styles = StyleSheet.create({
     borderColor: '#F59E0B',
   },
   flaggedPillText: { fontSize: 10, fontWeight: '800', color: '#F59E0B', letterSpacing: 1 },
+  questionImage: { width: '100%', height: 160, borderRadius: 8, marginBottom: 12 },
   questionText: { fontSize: 17, fontWeight: '600', lineHeight: 26 },
 
   // Options

@@ -39,6 +39,7 @@ export const safetyMarginsQuestions: Question[] = [
     "To be positioned safely if you skid",
     ],
     correctIndex: 0,
+    imageUrl: "https://secavejbaapapvvqbwed.supabase.co/storage/v1/object/public/question-images/TS4636.png",
     explanation: "Keeping to the left as you approach right-hand bends will give you an earlier view around the bend and allow you to see any hazards sooner. It also reduces the risk of collision with any oncoming vehicle that may have drifted over the centre line while taking the bend.",
     topicCategory: TopicCategory.SafetyMargins,
     difficulty: 1,
