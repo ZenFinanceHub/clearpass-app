@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { HazardClipResult, HazardWindow, calculateHazardTotal, scoreClip } from '@clearpass/core';
+import { HazardClipResult, HazardSessionResult, HazardWindow, UserProgress, calculateHazardTotal, scoreClip } from '@clearpass/core';
 import { hazardClips } from '@clearpass/content';
 import { loadUserProgress, saveUserProgress } from '@/src/storage';
 import { getHazardVideoList, getVideoUrl, buildHazardClip, type HazardClipMeta } from '@/src/hazardVideos';
@@ -118,16 +118,26 @@ export default function HazardScreen() {
   const [supabaseClips, setSupabaseClips] = useState<HazardClipMeta[]>([]);
   const [activeClips, setActiveClips] = useState(hazardClips);
   const [solutionVideoUrl, setSolutionVideoUrl] = useState<string | null>(null);
+  const [singleClipMode, setSingleClipMode] = useState(false);
+  const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
 
   useFocusEffect(
     useCallback(() => {
-      void loadUserProgress();
+      void loadUserProgress().then(p => setUserProgress(p));
       void getHazardVideoList().then(clips => {
         setSupabaseClips(clips);
         setClipsLoading(false);
       });
     }, []),
   );
+
+  function getClipStats(clipId: string): { best: number; max: number; attempts: number } | null {
+    const entries = (userProgress?.hazardPerceptionHistory ?? []).filter(h => h.clipId === clipId);
+    if (entries.length === 0) return null;
+    const best = Math.max(...entries.map(e => e.score));
+    const maxScore = entries.find(e => e.score === best)!.maxScore;
+    return { best, max: maxScore, attempts: entries.length };
+  }
 
   const clip = activeClips[clipIndex] ?? hazardClips[0];
 
@@ -151,7 +161,7 @@ export default function HazardScreen() {
 
   function handleNextClip() {
     const totalClips = activeClips.length > 0 ? activeClips.length : hazardClips.length;
-    if (clipIndex + 1 < totalClips) {
+    if (!singleClipMode && clipIndex + 1 < totalClips) {
       setClipIndex((i) => i + 1);
       setClicks([]);
       setCurrentTime(0);
@@ -177,20 +187,22 @@ export default function HazardScreen() {
     if (progress) {
       const total = calculateHazardTotal(results);
       const xp = 20 + (total.passed ? 50 : 0);
+      const newEntries: HazardSessionResult[] = singleClipMode
+        ? results.map(r => ({
+            date: new Date().toISOString(),
+            score: r.score,
+            maxScore: r.maxScore,
+            passed: r.score > 0,
+            clipId: r.clipId,
+          }))
+        : [{ date: new Date().toISOString(), score: total.score, maxScore: total.maxScore, passed: total.passed }];
       const updated = {
         ...progress,
         xp: (progress.xp ?? 0) + xp,
-        hazardPerceptionHistory: [
-          ...(progress.hazardPerceptionHistory ?? []),
-          {
-            date: new Date().toISOString(),
-            score: total.score,
-            maxScore: total.maxScore,
-            passed: total.passed,
-          },
-        ],
+        hazardPerceptionHistory: [...(progress.hazardPerceptionHistory ?? []), ...newEntries],
       };
       await saveUserProgress(updated);
+      setUserProgress(updated);
 
       try {
         const celebEvents = await checkAndTriggerCelebrations(updated);
@@ -202,7 +214,12 @@ export default function HazardScreen() {
         }
       } catch {}
     }
-    router.replace('/(tabs)/home');
+    if (singleClipMode) {
+      setSingleClipMode(false);
+      setPhase('info');
+    } else {
+      router.replace('/(tabs)/home');
+    }
   }
 
   function handleCelebDismiss() {
@@ -214,18 +231,48 @@ export default function HazardScreen() {
       setActiveCelebration(null);
       if (pendingHomeRef.current) {
         pendingHomeRef.current = false;
-        router.replace('/(tabs)/home');
+        if (singleClipMode) {
+          setSingleClipMode(false);
+          setPhase('info');
+        } else {
+          router.replace('/(tabs)/home');
+        }
       }
     }
   }
 
   function handleRestart() {
-    setPhase('info');
+    if (singleClipMode) {
+      setClipIndex(0);
+      setClicks([]);
+      setCurrentTime(0);
+      setClipResults([]);
+      setMuted(true);
+      setPhase('pre-clip');
+    } else {
+      setPhase('info');
+      setClipIndex(0);
+      setClicks([]);
+      setCurrentTime(0);
+      setClipResults([]);
+      setMuted(true);
+    }
+  }
+
+  async function handleStartSingleClip(meta: HazardClipMeta) {
+    const premium = await isPremium();
+    if (!premium) { router.push('/paywall'); return; }
+    const url = await getVideoUrl(meta.storage_path);
+    const built = buildHazardClip(meta, url ?? '');
+    setActiveClips([built]);
+    setSingleClipMode(true);
     setClipIndex(0);
     setClicks([]);
     setCurrentTime(0);
     setClipResults([]);
     setMuted(true);
+    setSolutionVideoUrl(null);
+    setPhase('pre-clip');
   }
 
   async function handleStartPractice() {
@@ -286,57 +333,59 @@ export default function HazardScreen() {
       );
     }
 
-    const clipsToUse = supabaseClips.length > 0 ? supabaseClips : hazardClips;
-    const maxPts = clipsToUse.length * 5;
+    const attempted = (userProgress?.hazardPerceptionHistory ?? []).filter(h => h.clipId).length;
     return (
       <View style={styles.bg}>
         <OfflineBanner />
-      <ScrollView style={{ flex: 1, backgroundColor: theme.backgroundColor }} contentContainerStyle={styles.scrollContent}>
-        <Text style={[styles.heading, { fontSize: theme.fontSize(26), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Hazard Perception'}</Text>
-        <Text style={[styles.sub, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>{'UK Theory Test Practice'}</Text>
+        <ScrollView style={{ flex: 1, backgroundColor: theme.backgroundColor }} contentContainerStyle={styles.scrollContent}>
+          <Text style={[styles.heading, { fontSize: theme.fontSize(26), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Hazard Perception'}</Text>
+          <Text style={[styles.sub, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>{'Tap a clip to practise it, or run the full test'}</Text>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>{'How it works'}</Text>
-          {(
-            [
-              ['Watch', 'Each clip shows a driving scene'],
-              ['Tap', 'Press when you see a developing hazard'],
-              ['Score', 'Earlier tap = higher score (3, 4 or 5 pts)'],
-              ['Warning', 'Rapid clicking scores 0 -- anti-cheat active'],
-            ] as [string, string][]
-          ).map(([label, text]) => (
-            <View key={label} style={styles.stepRow}>
-              <View style={styles.stepBadge}>
-                <Text style={styles.stepBadgeText}>{label}</Text>
-              </View>
-              <Text style={styles.stepText}>{text}</Text>
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.statsRow}>
-          {(
-            [
-              [String(clipsToUse.length), 'clips'],
-              [String(maxPts), 'max pts'],
+          <View style={styles.statsRow}>
+            {([
+              [String(supabaseClips.length), 'clips'],
+              [String(attempted), 'played'],
               ['~60%', 'to pass'],
-            ] as [string, string][]
-          ).map(([num, lbl]) => (
-            <View key={lbl} style={styles.statPill}>
-              <Text style={styles.statNum}>{num}</Text>
-              <Text style={styles.statLabel}>{lbl}</Text>
-            </View>
-          ))}
-        </View>
+            ] as [string, string][]).map(([num, lbl]) => (
+              <View key={lbl} style={styles.statPill}>
+                <Text style={styles.statNum}>{num}</Text>
+                <Text style={styles.statLabel}>{lbl}</Text>
+              </View>
+            ))}
+          </View>
 
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          onPress={() => void handleStartPractice()}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.primaryBtnText}>{'Start Practice'}</Text>
-        </TouchableOpacity>
-      </ScrollView>
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => void handleStartPractice()} activeOpacity={0.85}>
+            <Text style={styles.primaryBtnText}>{'Practice All ({n} clips)'.replace('{n}', String(supabaseClips.length))}</Text>
+          </TouchableOpacity>
+
+          <View style={styles.grid}>
+            {supabaseClips.map((meta, i) => {
+              const stats = getClipStats(meta.id);
+              const passed = stats && stats.best >= Math.ceil(stats.max * 0.6);
+              return (
+                <TouchableOpacity
+                  key={meta.id}
+                  style={[styles.clipCard, stats ? (passed ? styles.clipCardPassed : styles.clipCardFailed) : null]}
+                  onPress={() => void handleStartSingleClip(meta)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.clipNum}>{'#' + String(i + 1).padStart(2, '0')}</Text>
+                  <Text style={styles.clipCardTitle} numberOfLines={2}>{meta.title}</Text>
+                  {stats ? (
+                    <View style={styles.clipScoreRow}>
+                      <Text style={[styles.clipScoreNum, passed ? styles.passText : styles.failText]}>
+                        {stats.best + '/' + stats.max}
+                      </Text>
+                      <Text style={styles.clipAttempts}>{stats.attempts + '×'}</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.clipNotAttempted}>{'Not played'}</Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ScrollView>
       </View>
     );
   }
@@ -606,7 +655,7 @@ v.addEventListener('ended', function() { window.ReactNativeWebView.postMessage(J
               {'Clip '}
               {i + 1}
               {': '}
-              {hazardClips[i]?.title ?? 'Unknown'}
+              {activeClips[i]?.title ?? 'Unknown'}
             </Text>
             <Text style={[styles.breakdownScore, r.score > 0 ? styles.passText : styles.failText]}>
               {r.score}
@@ -831,6 +880,26 @@ const styles = StyleSheet.create({
     borderColor: Colors.indigo,
   },
   secondaryBtnText: { color: Colors.indigo, fontSize: 16, fontWeight: '700' },
+
+  // Clip grid
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, width: '100%' as any, maxWidth: 480, marginTop: 4 },
+  clipCard: {
+    width: '47%' as any,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    gap: 6,
+    borderWidth: 0.5,
+    borderColor: '#E5E7EB',
+  },
+  clipCardPassed: { borderColor: '#10B981', borderWidth: 1.5, backgroundColor: '#F0FDF4' },
+  clipCardFailed: { borderColor: '#F87171', borderWidth: 1.5, backgroundColor: '#FFF5F5' },
+  clipNum: { fontSize: 11, fontWeight: '700', color: Colors.indigo, letterSpacing: 0.5 },
+  clipCardTitle: { fontSize: 13, fontWeight: '600', color: '#111827', lineHeight: 18 },
+  clipScoreRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 },
+  clipScoreNum: { fontSize: 14, fontWeight: '800' },
+  clipAttempts: { fontSize: 11, color: '#9CA3AF' },
+  clipNotAttempted: { fontSize: 11, color: '#9CA3AF', marginTop: 2 },
 
   comingSoonCard: {
     backgroundColor: '#F0FDFA',
