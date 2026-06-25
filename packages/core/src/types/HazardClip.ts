@@ -33,4 +33,5 @@ export interface HazardSessionResult {
   score: number;
   maxScore: number;
   passed: boolean;
+  clipId?: string;
 }
