@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import { Pip } from '@/src/components/Pip';
 import { supabase } from '@/src/supabase';
 
 const ONBOARDING_KEY = '@clearpass/onboarding_complete';
@@ -72,7 +73,7 @@ export default function OnboardingScreen() {
     <View style={styles.container}>
       <View style={styles.hero}>
         <View style={styles.glowCircle}>
-          <Text style={styles.carEmoji}>{'🚗'}</Text>
+          <Pip size={110} mood="wave" />
         </View>
 
         <Text style={styles.title}>ClearPass</Text>
@@ -100,7 +101,7 @@ export default function OnboardingScreen() {
 
         <TouchableOpacity
           style={styles.tryButton}
-          onPress={() => router.push('/taster')}
+          onPress={() => router.push('/taster' as never)}
           activeOpacity={0.85}
         >
           <Text style={styles.tryButtonText}>{'Try 5 questions — no signup needed'}</Text>
@@ -136,7 +137,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 32,
   },
-  carEmoji: { fontSize: 72 },
   title: {
     fontSize: 40,
     fontWeight: '900',

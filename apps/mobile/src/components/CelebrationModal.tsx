@@ -11,6 +11,21 @@ import {
 } from 'react-native';
 import { CelebrationEvent, CELEBRATION_CONFIGS } from '@/src/celebrations';
 import { Colors } from '@/src/constants/theme';
+import { Pip, PipMood } from './Pip';
+
+const PIP_MOODS: Partial<Record<CelebrationEvent, PipMood>> = {
+  first_practice_complete: 'wave',
+  streak_7_days:           'happy',
+  streak_30_days:          'celebrate',
+  '100_questions':         'happy',
+  '500_questions':         'celebrate',
+  first_mock_pass:         'celebrate',
+  three_mocks_pass:        'celebrate',
+  hazard_pass:             'happy',
+  milestone_reached:       'happy',
+  level_up:                'wave',
+  test_ready:              'celebrate',
+};
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const PIECE_COUNT = 30;
@@ -121,13 +136,13 @@ export function CelebrationModal({
     }));
   }, []);
 
-  // Emoji bounce: 1 → 1.25 → 1, 3 iterations
+  // Pip bounce: 1 → 1.18 → 1, 3 iterations
   const bounceAnim = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
         Animated.timing(bounceAnim, {
-          toValue: 1.28,
+          toValue: 1.18,
           duration: 360,
           easing: Easing.out(Easing.back(2.5)),
           useNativeDriver: true,
@@ -168,12 +183,11 @@ export function CelebrationModal({
 
         {/* Card */}
         <View style={styles.card}>
-          <Animated.Text
-            style={[styles.emoji, { transform: [{ scale: bounceAnim }] }]}
-          >
-            {config.emoji}
-          </Animated.Text>
+          <Animated.View style={{ transform: [{ scale: bounceAnim }] }}>
+            <Pip size={88} mood={PIP_MOODS[event] ?? 'happy'} />
+          </Animated.View>
 
+          <Text style={styles.eventEmoji}>{config.emoji}</Text>
           <Text style={styles.title}>{config.title}</Text>
           <Text style={styles.subtitle}>{config.subtitle}</Text>
 
@@ -227,6 +241,12 @@ const styles = StyleSheet.create({
     fontSize: 80,
     lineHeight: 96,
     textAlign: 'center',
+  },
+  eventEmoji: {
+    fontSize: 32,
+    lineHeight: 38,
+    textAlign: 'center',
+    marginTop: -4,
   },
 
   title: {
