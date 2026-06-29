@@ -38,6 +38,13 @@ const SYSTEM_PROMPT =
 const WELCOME =
   "Hi! I'm your AI driving theory tutor 👋 Ask me anything about the Highway Code, road signs, or theory test questions.";
 
+const STARTER_PROMPTS = [
+  'Explain a road sign to me',
+  'Help me with stopping distances',
+  'Quiz me on hazard perception',
+  'What are the most common theory test mistakes?',
+];
+
 type Msg = { id: string; role: 'user' | 'assistant'; content: string; time: string };
 
 function nowTime(): string {
@@ -161,12 +168,19 @@ export default function TutorScreen() {
 
   const canSend = input.trim().length > 0 && !isLoading;
 
+  const showStarters = messages.length === 1 && !isLoading && !params.questionText && !params.freeMessage;
+
   return (
     <KeyboardAvoidingView
       style={[styles.flex, { backgroundColor: theme.backgroundColor }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
     >
+      {/* Scope banner */}
+      <View style={styles.scopeBanner}>
+        <Text style={styles.scopeText}>{'Theory test tutor — DVSA content only'}</Text>
+      </View>
+
       <ScrollView
         ref={scrollRef}
         style={styles.flex}
@@ -194,6 +208,22 @@ export default function TutorScreen() {
             </View>
           </View>
         ))}
+
+        {/* Starter prompt chips — shown only on fresh empty chat */}
+        {showStarters && (
+          <View style={styles.starterGrid}>
+            {STARTER_PROMPTS.map((prompt) => (
+              <TouchableOpacity
+                key={prompt}
+                style={styles.starterChip}
+                onPress={() => void sendText(prompt)}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.starterChipText}>{prompt}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         {isLoading && (
           <View style={[styles.bubbleRow, styles.rowTutor]}>
@@ -390,4 +420,29 @@ const styles = StyleSheet.create({
   upgradeBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   dismissBtn: { paddingVertical: 8 },
   dismissText: { fontSize: 14, color: '#6B7280' },
+
+  // Scope banner
+  scopeBanner: {
+    backgroundColor: Colors.indigoBg,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderBottomWidth: 0.5,
+    borderBottomColor: Colors.border,
+    alignItems: 'center',
+  },
+  scopeText: { fontSize: 12, color: Colors.indigo, fontWeight: '600' },
+
+  // Starter prompts
+  starterGrid: { gap: 8, marginTop: 8 },
+  starterChip: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignSelf: 'flex-start',
+    maxWidth: '90%',
+  },
+  starterChipText: { fontSize: 14, color: Colors.indigo, fontWeight: '600' },
 });
