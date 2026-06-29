@@ -7,6 +7,7 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import { Pip } from '@/src/components/Pip';
 import { Question, TopicCategory } from '@clearpass/core';
 import { allQuestions, questionsByTopic } from '@clearpass/content';
 import * as Haptics from 'expo-haptics';
@@ -83,9 +84,7 @@ export default function TasterScreen() {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
         <View style={styles.resultsCard}>
-          <Text style={styles.resultsEmoji}>
-            {correctCount >= 4 ? '🎉' : correctCount >= 3 ? '👍' : '📚'}
-          </Text>
+          <Pip size={90} mood={correctCount >= 4 ? 'celebrate' : correctCount >= 3 ? 'happy' : 'curious'} />
           <View style={styles.scoreCircle}>
             <Text style={styles.scoreNum}>{correctCount}</Text>
             <Text style={styles.scoreOf}>{'/ 5'}</Text>
@@ -244,7 +243,6 @@ const styles = StyleSheet.create({
 
   // Results
   resultsCard: { alignItems: 'center', gap: 12, marginBottom: 24, paddingVertical: 8 },
-  resultsEmoji: { fontSize: 48 },
   scoreCircle: { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
   scoreNum: { fontSize: 64, fontWeight: '900', color: '#F1F0FF', lineHeight: 72 },
   scoreOf: { fontSize: 24, fontWeight: '700', color: '#6B7280', paddingBottom: 10 },

@@ -32,6 +32,7 @@ import * as Haptics from 'expo-haptics';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { ShareCardModal } from '@/src/components/ShareableCard';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
+import { Pip } from '@/src/components/Pip';
 import { Colors } from '@/src/constants/theme';
 
 const TOTAL_QUESTIONS = 50;
@@ -572,6 +573,7 @@ function ResultsView({
       )}
 
       <View style={[styles.resultBadge, passed ? styles.resultBadgePass : styles.resultBadgeFail]}>
+        <Pip size={80} mood={passed ? 'celebrate' : 'sympathetic'} />
         <Text style={[styles.verdictText, { color: passed ? Colors.indigo : '#EF4444' }]}>
           {passed ? 'PASS' : 'FAIL'}
         </Text>
