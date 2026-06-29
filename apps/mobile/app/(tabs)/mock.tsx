@@ -37,6 +37,9 @@ import { Colors } from '@/src/constants/theme';
 const TOTAL_QUESTIONS = 50;
 const TIME_LIMIT_SECONDS = 57 * 60;
 const PASS_MARK = 43;
+const QUICK_QUESTIONS = 25;
+const QUICK_TIME_SECONDS = 28 * 60;
+const QUICK_PASS_MARK = 22;
 const LABELS = ['A', 'B', 'C', 'D'];
 
 const TOPIC_LABELS: Record<TopicCategory, string> = {
@@ -56,7 +59,7 @@ const TOPIC_LABELS: Record<TopicCategory, string> = {
   [TopicCategory.VehicleLoading]: 'Vehicle Loading',
 };
 
-function buildTestQuestions(): Question[] {
+function buildTestQuestions(count: number = TOTAL_QUESTIONS): Question[] {
   const selected: Question[] = [];
   const usedIds = new Set<string>();
 
@@ -73,7 +76,7 @@ function buildTestQuestions(): Question[] {
     const j = Math.floor(Math.random() * (i + 1));
     [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
   }
-  selected.push(...remaining.slice(0, TOTAL_QUESTIONS - selected.length));
+  selected.push(...remaining.slice(0, count - selected.length));
 
   for (let i = selected.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -105,7 +108,7 @@ function scoreTest(questions: Question[], answers: (number | null)[]): { correct
 
 type Phase = 'start' | 'test' | 'review' | 'results';
 type ReviewFilter = 'all' | 'wrong' | 'flagged';
-type ResultData = { correct: number; timeTaken: number; byTopic: ByTopic; xpEarned: number; newAchievements: Achievement[]; passed: boolean; streakDays: number };
+type ResultData = { correct: number; timeTaken: number; byTopic: ByTopic; xpEarned: number; newAchievements: Achievement[]; passed: boolean; streakDays: number; total: number; passMark: number };
 
 export default function MockScreen() {
   const theme = useTheme();
@@ -121,11 +124,15 @@ export default function MockScreen() {
   const [celebQueue, setCelebQueue] = useState<CelebrationEvent[]>([]);
   const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
   const [isPaused, setIsPaused] = useState(false);
+  const [mockMode, setMockMode] = useState<'standard' | 'quick'>('standard');
 
   const questionsRef = useRef<Question[]>([]);
   const answersRef = useRef<(number | null)[]>([]);
   const timeRemainingRef = useRef(TIME_LIMIT_SECONDS);
   const hasSubmittedRef = useRef(false);
+  const activeLimitRef = useRef(TIME_LIMIT_SECONDS);
+  const activePassMarkRef = useRef(PASS_MARK);
+  const activeTotalRef = useRef(TOTAL_QUESTIONS);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useFocusEffect(
@@ -157,19 +164,26 @@ export default function MockScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeRemaining, phase]);
 
-  function handleStart() {
+  function handleStart(mode: 'standard' | 'quick') {
+    const activeTotal = mode === 'quick' ? QUICK_QUESTIONS : TOTAL_QUESTIONS;
+    const activeTime = mode === 'quick' ? QUICK_TIME_SECONDS : TIME_LIMIT_SECONDS;
+    const activeMark = mode === 'quick' ? QUICK_PASS_MARK : PASS_MARK;
+    setMockMode(mode);
+    activeLimitRef.current = activeTime;
+    activePassMarkRef.current = activeMark;
+    activeTotalRef.current = activeTotal;
     hasSubmittedRef.current = false;
     setIsPaused(false);
-    const qs = buildTestQuestions();
+    const qs = buildTestQuestions(activeTotal);
     const initialAnswers: (number | null)[] = Array(qs.length).fill(null);
     questionsRef.current = qs;
     answersRef.current = initialAnswers;
-    timeRemainingRef.current = TIME_LIMIT_SECONDS;
+    timeRemainingRef.current = activeTime;
     setQuestions(qs);
     setUserAnswers(initialAnswers);
     setFlagged(new Set());
     setCurrentIndex(0);
-    setTimeRemaining(TIME_LIMIT_SECONDS);
+    setTimeRemaining(activeTime);
     setResultData(null);
     setExpandedRows(new Set());
     setShowGrid(false);
@@ -207,9 +221,9 @@ export default function MockScreen() {
 
     const qs = questionsRef.current;
     const ans = answersRef.current;
-    const timeTaken = TIME_LIMIT_SECONDS - Math.max(0, timeRemainingRef.current);
+    const timeTaken = activeLimitRef.current - Math.max(0, timeRemainingRef.current);
     const { correct, byTopic } = scoreTest(qs, ans);
-    const passed = correct >= PASS_MARK;
+    const passed = correct >= activePassMarkRef.current;
 
     const topicBreakdown = Object.values(TopicCategory).reduce((acc, cat) => {
       const t = byTopic[cat];
@@ -254,7 +268,7 @@ export default function MockScreen() {
       }
     } catch {}
 
-    setResultData({ correct, timeTaken, byTopic, xpEarned, newAchievements, passed, streakDays: updatedProgress.studyStreakDays ?? 0 });
+    setResultData({ correct, timeTaken, byTopic, xpEarned, newAchievements, passed, streakDays: updatedProgress.studyStreakDays ?? 0, total: activeTotalRef.current, passMark: activePassMarkRef.current });
     void (passed
       ? Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       : Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning));
@@ -479,14 +493,7 @@ export default function MockScreen() {
 }
 
 // ── START VIEW ──
-const INFO_CARDS = [
-  { emoji: '📝', text: '50 questions' },
-  { emoji: '⏱', text: '57 minutes' },
-  { emoji: '✅', text: 'Pass mark: 43/50' },
-  { emoji: '🔁', text: 'Change & flag answers' },
-];
-
-function StartView({ onStart }: { onStart: () => void }) {
+function StartView({ onStart }: { onStart: (mode: 'standard' | 'quick') => void }) {
   const theme = useTheme();
   return (
     <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
@@ -494,22 +501,37 @@ function StartView({ onStart }: { onStart: () => void }) {
         {'Mock Theory Test'}
       </Text>
       <Text style={[styles.screenSub, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>
-        {'Conditions: Just like the real DVSA test'}
+        {'Choose your session length'}
       </Text>
 
-      <View style={styles.infoGrid}>
-        {INFO_CARDS.map(({ emoji, text }) => (
-          <View key={text} style={styles.infoCard}>
-            <Text style={styles.infoEmoji}>{emoji}</Text>
-            <Text style={[styles.infoCardText, { fontSize: theme.fontSize(13), fontFamily: theme.fontFamily, color: theme.textColor }]}>
-              {text}
-            </Text>
-          </View>
-        ))}
-      </View>
+      <TouchableOpacity style={[styles.modeCard, { backgroundColor: theme.cardColor, borderColor: Colors.indigo }]} onPress={() => onStart('standard')} activeOpacity={0.85}>
+        <View style={styles.modeCardHeader}>
+          <Text style={styles.modeCardTitle}>{'Standard Mock'}</Text>
+          <View style={styles.modeCardBadge}><Text style={styles.modeCardBadgeText}>{'DVSA Format'}</Text></View>
+        </View>
+        <View style={styles.modeCardStats}>
+          <View style={styles.modeStat}><Text style={styles.modeStatEmoji}>{'📝'}</Text><Text style={[styles.modeStatText, { color: theme.textColor }]}>{'50 questions'}</Text></View>
+          <View style={styles.modeStat}><Text style={styles.modeStatEmoji}>{'⏱'}</Text><Text style={[styles.modeStatText, { color: theme.textColor }]}>{'57 minutes'}</Text></View>
+          <View style={styles.modeStat}><Text style={styles.modeStatEmoji}>{'✅'}</Text><Text style={[styles.modeStatText, { color: theme.textColor }]}>{'Pass: 43/50'}</Text></View>
+        </View>
+        <View style={styles.modeCardBtn}>
+          <Text style={styles.modeCardBtnText}>{'Start Standard Test'}</Text>
+        </View>
+      </TouchableOpacity>
 
-      <TouchableOpacity style={styles.primaryBtn} onPress={onStart} activeOpacity={0.85}>
-        <Text style={styles.primaryBtnText}>{'Start Test'}</Text>
+      <TouchableOpacity style={[styles.modeCard, styles.modeCardQuick, { backgroundColor: theme.cardColor }]} onPress={() => onStart('quick')} activeOpacity={0.85}>
+        <View style={styles.modeCardHeader}>
+          <Text style={styles.modeCardTitle}>{'Quick Mock'}</Text>
+          <View style={[styles.modeCardBadge, styles.modeCardBadgeQuick]}><Text style={styles.modeCardBadgeText}>{'~28 min'}</Text></View>
+        </View>
+        <View style={styles.modeCardStats}>
+          <View style={styles.modeStat}><Text style={styles.modeStatEmoji}>{'📝'}</Text><Text style={[styles.modeStatText, { color: theme.textColor }]}>{'25 questions'}</Text></View>
+          <View style={styles.modeStat}><Text style={styles.modeStatEmoji}>{'⏱'}</Text><Text style={[styles.modeStatText, { color: theme.textColor }]}>{'28 minutes'}</Text></View>
+          <View style={styles.modeStat}><Text style={styles.modeStatEmoji}>{'✅'}</Text><Text style={[styles.modeStatText, { color: theme.textColor }]}>{'Pass: 22/25'}</Text></View>
+        </View>
+        <View style={[styles.modeCardBtn, styles.modeCardBtnQuick]}>
+          <Text style={styles.modeCardBtnText}>{'Start Quick Mock'}</Text>
+        </View>
       </TouchableOpacity>
 
       <View style={styles.warningBox}>
@@ -531,7 +553,7 @@ function ResultsView({
 }) {
   const theme = useTheme();
   const [showShareCard, setShowShareCard] = useState(false);
-  const { correct, timeTaken, byTopic, xpEarned, newAchievements, passed, streakDays } = data;
+  const { correct, timeTaken, byTopic, xpEarned, newAchievements, passed, streakDays, total, passMark } = data;
 
   const topicRows = (Object.entries(byTopic) as [TopicCategory, TopicTally][])
     .filter(([, t]) => t.total > 0)
@@ -553,8 +575,8 @@ function ResultsView({
         <Text style={[styles.verdictText, { color: passed ? Colors.indigo : '#EF4444' }]}>
           {passed ? 'PASS' : 'FAIL'}
         </Text>
-        <Text style={styles.scoreText}>{correct}{' / '}{TOTAL_QUESTIONS}</Text>
-        <Text style={styles.passMarkText}>{'Pass mark: '}{PASS_MARK}{'/50'}</Text>
+        <Text style={styles.scoreText}>{correct}{' / '}{total}</Text>
+        <Text style={styles.passMarkText}>{'Pass mark: '}{passMark}{'/'}{total}</Text>
         <Text style={styles.timeTakenText}>{'Completed in '}{formatTime(timeTaken)}</Text>
         {xpEarned > 0 && (
           <View style={styles.xpBadge}>
@@ -600,7 +622,7 @@ function ResultsView({
       <ShareCardModal
         visible={showShareCard}
         onClose={() => setShowShareCard(false)}
-        data={{ type: 'mock', score: correct, total: TOTAL_QUESTIONS, passed, timeTakenSeconds: timeTaken, streakDays }}
+        data={{ type: 'mock', score: correct, total, passed, timeTakenSeconds: timeTaken, streakDays }}
       />
     )}
   </>
@@ -880,6 +902,21 @@ const styles = StyleSheet.create({
   infoCard: { flex: 1, minWidth: '45%', backgroundColor: '#FFFFFF', borderRadius: 14, padding: 16, alignItems: 'center', gap: 8, borderWidth: 0.5, borderColor: '#E5E7EB' },
   infoEmoji: { fontSize: 28 },
   infoCardText: { fontSize: 13, fontWeight: '600', textAlign: 'center' },
+  // Mode selection cards
+  modeCard: { borderRadius: 16, padding: 20, borderWidth: 2, borderColor: Colors.indigo, gap: 14 },
+  modeCardQuick: { borderColor: Colors.orange },
+  modeCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  modeCardTitle: { fontSize: 19, fontWeight: '700', color: Colors.textPrimary },
+  modeCardBadge: { backgroundColor: Colors.indigoBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 },
+  modeCardBadgeQuick: { backgroundColor: Colors.orangeBg },
+  modeCardBadgeText: { fontSize: 12, fontWeight: '600', color: Colors.indigo },
+  modeCardStats: { flexDirection: 'row', gap: 12 },
+  modeStat: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  modeStatEmoji: { fontSize: 16 },
+  modeStatText: { fontSize: 13, fontWeight: '500' },
+  modeCardBtn: { backgroundColor: Colors.indigo, borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
+  modeCardBtnQuick: { backgroundColor: Colors.orange },
+  modeCardBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   primaryBtn: { backgroundColor: Colors.indigo, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
   primaryBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
   warningBox: { backgroundColor: '#FFFBEB', borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#F59E0B' },
