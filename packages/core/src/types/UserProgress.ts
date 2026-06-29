@@ -19,4 +19,6 @@ export interface UserProgress {
   isPro: boolean;
   dailyQuestionsAnswered: number;
   hazardPerceptionHistory: HazardSessionResult[];
+  streakFreezeCount?: number;
+  streakFreezeLastReplenished?: string;
 }

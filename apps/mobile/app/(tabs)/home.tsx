@@ -919,6 +919,7 @@ export default function HomeScreen() {
   const xp      = progress?.xp ?? 0;
   const xpData  = getXpLevel(xp);
   const streak  = progress?.studyStreakDays ?? 0;
+  const freezeCount = (progress?.isPro ? progress.streakFreezeCount : 0) ?? 0;
   const tip     = DAILY_TIPS[new Date().getDay() % 3];
   const readinessPct = progress ? calculateReadiness(progress).score : 0;
 
@@ -1046,6 +1047,7 @@ export default function HomeScreen() {
                 <Text style={styles.statusEmoji}>{'🔥'}</Text>
                 <Text style={styles.statusValue}>{streak}</Text>
                 <Text style={styles.statusLabel}>{'day streak'}</Text>
+                {freezeCount > 0 && <Text style={styles.statusFreezeIcon}>{'❄️'}</Text>}
               </View>
               <View style={styles.statusDivider} />
             </>
@@ -1665,6 +1667,7 @@ const styles = StyleSheet.create({
   statusEmoji: { fontSize: 18, marginBottom: 2 },
   statusValue: { fontSize: 15, fontWeight: '800', color: Colors.textPrimary },
   statusLabel: { fontSize: 10, color: Colors.mutedText, fontWeight: '500', marginTop: 1 },
+  statusFreezeIcon: { fontSize: 11, marginTop: 1 },
   statusDivider: { width: 0.5, height: 28, backgroundColor: Colors.border },
   statusXpBar: { width: '80%', height: 3, backgroundColor: Colors.surfaceGray, borderRadius: 2, overflow: 'hidden', marginTop: 4 },
   statusXpFill: { height: 3, backgroundColor: Colors.indigo, borderRadius: 2 },

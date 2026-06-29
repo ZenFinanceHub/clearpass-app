@@ -128,6 +128,8 @@ export function createFreshUserProgress(): UserProgress {
     isPro: false,
     dailyQuestionsAnswered: 0,
     hazardPerceptionHistory: [],
+    streakFreezeCount: 0,
+    streakFreezeLastReplenished: '',
   };
 }
 
@@ -280,11 +282,29 @@ export function updateStudyStreak(progress: UserProgress): UserProgress {
   const nowDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const lastDay = new Date(last.getFullYear(), last.getMonth(), last.getDate());
   const diffDays = Math.round((nowDay.getTime() - lastDay.getTime()) / 86400000);
+
   let streak = progress.studyStreakDays;
+  let freezeCount = progress.streakFreezeCount ?? 0;
+  let freezeLastReplenished = progress.streakFreezeLastReplenished ?? '';
+
+  // Pro users: replenish up to 2 freeze tokens once per week
+  if (progress.isPro) {
+    const lastRep = freezeLastReplenished ? new Date(freezeLastReplenished) : new Date(0);
+    const daysSinceRep = Math.round((nowDay.getTime() - lastRep.getTime()) / 86400000);
+    if (daysSinceRep >= 7) {
+      freezeCount = 2;
+      freezeLastReplenished = nowDay.toISOString();
+    }
+  }
+
   if (diffDays === 1) {
     streak = streak + 1;
+  } else if (diffDays === 2 && progress.isPro && freezeCount > 0) {
+    // Freeze absorbs one missed day — streak stays intact
+    freezeCount -= 1;
   } else if (diffDays > 1) {
     streak = 1;
   }
-  return { ...progress, studyStreakDays: streak };
+
+  return { ...progress, studyStreakDays: streak, streakFreezeCount: freezeCount, streakFreezeLastReplenished: freezeLastReplenished };
 }
