@@ -185,6 +185,7 @@ export default function SettingsScreen() {
   const { isDismissed: supportDismissed, restore: restoreSupport } = useSupportDismissed();
   const [supportOpen, setSupportOpen] = useState(false);
   const [isPro, setIsPro] = useState(false);
+  const [freezeCount, setFreezeCount] = useState(0);
 
   // Notification state
   const [notifSettings, setNotifSettings]   = useState<NotificationSettings>(DEFAULT_NOTIF_SETTINGS);
@@ -247,6 +248,7 @@ export default function SettingsScreen() {
         setUserTestDate(progress.testDate ?? null);
         setUserReadiness(calculateReadiness(progress).score);
         setUserStreak(progress.studyStreakDays ?? 0);
+        setFreezeCount(progress.streakFreezeCount ?? 0);
       }
 
       // Load badge count
@@ -573,6 +575,23 @@ export default function SettingsScreen() {
           <Text style={styles.subscriptionBtnText}>{isPro ? 'Manage' : 'Upgrade'}</Text>
         </View>
       </TouchableOpacity>
+
+      {/* ── Streak Freeze (Pro only) ────────────────────────────────────────── */}
+      {isPro && (
+        <View style={[styles.freezeCard, { backgroundColor: theme.cardColor }]}>
+          <View style={styles.freezeCardLeft}>
+            <Text style={styles.freezeCardTitle}>{'❄️  Streak Freeze'}</Text>
+            <Text style={[styles.freezeCardSub, { color: theme.subTextColor }]}>
+              {freezeCount > 0
+                ? `${freezeCount} freeze${freezeCount === 1 ? '' : 's'} available — automatically used if you miss a day`
+                : 'No freezes left — replenishes weekly (up to 2)'}
+            </Text>
+          </View>
+          <View style={[styles.freezeCountBadge, { backgroundColor: freezeCount > 0 ? '#DBEAFE' : Colors.border }]}>
+            <Text style={[styles.freezeCountText, { color: freezeCount > 0 ? '#1D4ED8' : Colors.mutedText }]}>{freezeCount}</Text>
+          </View>
+        </View>
+      )}
 
       {/* ── Profile Section ─────────────────────────────────────────────────── */}
       <Text style={[styles.sectionHeader, { fontSize: theme.fontSize(22), fontFamily: theme.fontFamily, color: theme.textColor }]}>
@@ -1166,6 +1185,12 @@ const styles = StyleSheet.create({
   subscriptionDetail: { fontSize: 12, fontWeight: '500', lineHeight: 17 },
   subscriptionBtn: { borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
   subscriptionBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  freezeCard: { borderRadius: 14, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  freezeCardLeft: { flex: 1, gap: 4 },
+  freezeCardTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  freezeCardSub: { fontSize: 12, lineHeight: 17 },
+  freezeCountBadge: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  freezeCountText: { fontSize: 18, fontWeight: '800' },
   sectionSub:    { fontSize: 14, color: '#6B7280', lineHeight: 20, marginTop: -8 },
 
   // ── Profile Card ─────────────────────────────────────────────────────────────
