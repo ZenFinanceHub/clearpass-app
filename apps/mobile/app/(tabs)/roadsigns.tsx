@@ -36,7 +36,7 @@ import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { CelebrationEvent } from '@/src/celebrations';
 import * as Haptics from 'expo-haptics';
 
-type ViewMode = 'grid' | 'detail' | 'quiz';
+type ViewMode = 'grid' | 'detail' | 'quiz' | 'flashcard';
 
 const SIGN_RED = '#CC0000';
 const SIGN_BLUE = '#003399';
@@ -56,6 +56,7 @@ const CARD_W = 112;
 const GRID_SIGN = 44;
 const DETAIL_SIGN = 110;
 const QUIZ_SIGN = 90;
+const FLASH_SIGN = 130;
 
 // ── Warning sign SVG symbols ──────────────────────────────────────────────────
 
@@ -1051,6 +1052,11 @@ export default function RoadSignsScreen() {
   const [quizReturnSign, setQuizReturnSign] = useState<RoadSign | null>(null);
   const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
 
+  const [flashcardSigns, setFlashcardSigns] = useState<RoadSign[]>([]);
+  const [flashcardIndex, setFlashcardIndex] = useState(0);
+  const [flashcardFlipped, setFlashcardFlipped] = useState(false);
+  const [flashcardKnown, setFlashcardKnown] = useState<Set<string>>(new Set());
+
   const filteredSigns = useMemo<RoadSign[]>(() => {
     if (searchQuery.trim()) return searchRoadSigns(searchQuery);
     if (activeCategory === 'all') return roadSigns;
@@ -1124,6 +1130,32 @@ export default function RoadSignsScreen() {
   const goBackFromDetail = useCallback(() => {
     setViewMode('grid');
     setSelectedSign(null);
+  }, []);
+
+  const startFlashcards = useCallback(() => {
+    const src = filteredSigns.length > 0 ? filteredSigns : roadSigns;
+    setFlashcardSigns([...src].sort(() => Math.random() - 0.5));
+    setFlashcardIndex(0);
+    setFlashcardFlipped(false);
+    setFlashcardKnown(new Set());
+    setViewMode('flashcard');
+  }, [filteredSigns]);
+
+  const handleFlashcardGotIt = useCallback(() => {
+    setFlashcardKnown((prev) => {
+      const next = new Set(prev);
+      next.add(flashcardSigns[flashcardIndex]?.id ?? '');
+      return next;
+    });
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setFlashcardIndex((i) => i + 1);
+    setFlashcardFlipped(false);
+  }, [flashcardSigns, flashcardIndex]);
+
+  const handleFlashcardSkip = useCallback(() => {
+    void Haptics.selectionAsync();
+    setFlashcardIndex((i) => i + 1);
+    setFlashcardFlipped(false);
   }, []);
 
   // ── Quiz view ───────────────────────────────────────────────────────────────
@@ -1270,6 +1302,117 @@ export default function RoadSignsScreen() {
     );
   }
 
+  // ── Flashcard view ──────────────────────────────────────────────────────────
+  if (viewMode === 'flashcard') {
+    const isDone = flashcardIndex >= flashcardSigns.length;
+    const knownCount = flashcardKnown.size;
+
+    if (isDone) {
+      const pct = flashcardSigns.length > 0 ? Math.round((knownCount / flashcardSigns.length) * 100) : 0;
+      return (
+        <ScrollView style={[styles.screen, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => setViewMode('grid')} activeOpacity={0.7}>
+            <Text style={[styles.backBtnText, { color: Colors.indigo }]}>{'<- Road Signs'}</Text>
+          </TouchableOpacity>
+
+          <View style={styles.scoreCentreWrapper}>
+            <View style={[styles.scoreCircle, { borderColor: pct >= 70 ? '#16A34A' : Colors.indigo }]}>
+              <Text style={[styles.scoreCirclePct, { color: pct >= 70 ? '#16A34A' : Colors.indigo }]}>{pct}{'%'}</Text>
+              <Text style={styles.scoreCircleLabel}>{knownCount}{'/'}{flashcardSigns.length}</Text>
+            </View>
+            <Text style={[styles.scoreHeading, { color: theme.textColor }]}>
+              {pct >= 70 ? 'Great work!' : 'Keep practising'}
+            </Text>
+            <Text style={[styles.scoreSub, { color: theme.subTextColor }]}>
+              {pct >= 70
+                ? 'You know most of these signs.'
+                : 'Review the ones you missed and go again.'}
+            </Text>
+          </View>
+
+          <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: Colors.indigo }]} onPress={startFlashcards} activeOpacity={0.85}>
+            <Text style={styles.primaryBtnText}>{'Go again'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.secondaryBtn, { borderColor: Colors.indigo }]} onPress={() => setViewMode('grid')} activeOpacity={0.85}>
+            <Text style={[styles.secondaryBtnText, { color: Colors.indigo }]}>{'Back to signs'}</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      );
+    }
+
+    const sign = flashcardSigns[flashcardIndex];
+    return (
+      <ScrollView style={[styles.screen, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
+        <View style={styles.quizTopRow}>
+          <TouchableOpacity onPress={() => setViewMode('grid')} activeOpacity={0.7}>
+            <Text style={[styles.backBtnText, { color: Colors.indigo }]}>{'<- Exit'}</Text>
+          </TouchableOpacity>
+          <Text style={[styles.quizProgress, { color: theme.subTextColor }]}>{flashcardIndex + 1}{' / '}{flashcardSigns.length}</Text>
+        </View>
+
+        <View style={styles.quizProgressBar}>
+          <View style={[styles.quizProgressFill, { width: `${(flashcardIndex / flashcardSigns.length) * 100}%` as `${number}%`, backgroundColor: Colors.indigo }]} />
+        </View>
+
+        <View style={styles.flashKnownRow}>
+          <Text style={styles.flashKnownText}>{knownCount}{' known'}</Text>
+          <Text style={[styles.flashKnownText, { color: theme.subTextColor }]}>{flashcardSigns.length - flashcardIndex}{' remaining'}</Text>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.flashCard, { backgroundColor: theme.cardColor, borderColor: flashcardFlipped ? Colors.indigo : theme.borderColor }]}
+          onPress={() => { if (!flashcardFlipped) setFlashcardFlipped(true); }}
+          activeOpacity={flashcardFlipped ? 1 : 0.85}
+        >
+          <View style={styles.flashSignWrapper}>
+            <SignVisual sign={sign} size={FLASH_SIGN} />
+          </View>
+
+          {flashcardFlipped ? (
+            <View style={styles.flashContent}>
+              <Text style={[styles.flashSignName, { color: theme.textColor }]}>{sign.name}</Text>
+              <CategoryBadge category={sign.category} />
+              <Text style={[styles.flashMeaning, { color: theme.textColor }]}>{sign.meaning}</Text>
+            </View>
+          ) : (
+            <View style={styles.flashRevealHint}>
+              <Text style={[styles.flashRevealText, { color: theme.subTextColor }]}>{'Tap to reveal'}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {flashcardFlipped ? (
+          <View style={styles.flashActions}>
+            <TouchableOpacity style={styles.flashSkipBtn} onPress={handleFlashcardSkip} activeOpacity={0.85}>
+              <Text style={styles.flashSkipText}>{'↩ Review again'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.flashGotItBtn} onPress={handleFlashcardGotIt} activeOpacity={0.85}>
+              <Text style={styles.flashGotItText}>{'✓ Got it'}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.flashNav}>
+            <TouchableOpacity
+              style={[styles.flashNavBtn, flashcardIndex === 0 && styles.flashNavBtnDisabled]}
+              onPress={() => { setFlashcardIndex((i) => i - 1); setFlashcardFlipped(false); }}
+              disabled={flashcardIndex === 0}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.flashNavText, { color: flashcardIndex === 0 ? theme.subTextColor : Colors.indigo }]}>{'← Prev'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.flashNavBtn}
+              onPress={() => { setFlashcardIndex((i) => i + 1); setFlashcardFlipped(false); }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.flashNavText, { color: Colors.indigo }]}>{'Next →'}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </ScrollView>
+    );
+  }
+
   // ── Detail view ─────────────────────────────────────────────────────────────
   if (viewMode === 'detail' && selectedSign) {
     const categorySigns = roadSigns.filter((s) => s.category === selectedSign.category);
@@ -1356,16 +1499,17 @@ export default function RoadSignsScreen() {
         <View style={{ flex: 1 }}>
           <Text style={[styles.screenTitle, { color: theme.textColor }]}>Road Signs</Text>
           <Text style={[styles.screenSub, { color: theme.subTextColor }]}>
-            {roadSigns.length}{'  UK signs — tap to learn, quiz to test'}
+            {roadSigns.length}{' UK signs — tap to learn'}
           </Text>
         </View>
-        <TouchableOpacity
-          style={[styles.quizLaunchBtn, { backgroundColor: SIGN_RED }]}
-          onPress={() => startQuiz(filteredSigns.length > 0 ? filteredSigns : roadSigns, 10, null)}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.quizLaunchText}>Quiz</Text>
-        </TouchableOpacity>
+        <View style={styles.gridHeaderBtns}>
+          <TouchableOpacity style={[styles.headerBtn, { backgroundColor: Colors.indigo }]} onPress={startFlashcards} activeOpacity={0.85}>
+            <Text style={styles.headerBtnText}>{'Cards'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.headerBtn, { backgroundColor: SIGN_RED }]} onPress={() => startQuiz(filteredSigns.length > 0 ? filteredSigns : roadSigns, 10, null)} activeOpacity={0.85}>
+            <Text style={styles.headerBtnText}>{'Quiz'}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={[styles.searchBar, { borderColor: theme.borderColor }]}>
@@ -1478,6 +1622,38 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   quizLaunchText: { color: '#FFFFFF', fontWeight: '800', fontSize: 13 },
+  gridHeaderBtns: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  headerBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  headerBtnText: { color: '#FFFFFF', fontWeight: '800', fontSize: 13 },
+
+  // Flashcard
+  flashKnownRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  flashKnownText: { fontSize: 13, fontWeight: '600', color: '#16A34A' },
+  flashCard: {
+    borderRadius: 20,
+    borderWidth: 2,
+    padding: 24,
+    alignItems: 'center',
+    gap: 20,
+    marginBottom: 16,
+    minHeight: 280,
+    justifyContent: 'center',
+  },
+  flashSignWrapper: { alignItems: 'center', justifyContent: 'center', minHeight: FLASH_SIGN + 10 },
+  flashRevealHint: { alignItems: 'center', paddingTop: 8 },
+  flashRevealText: { fontSize: 15, fontWeight: '500', fontStyle: 'italic' },
+  flashContent: { alignItems: 'center', gap: 10, width: '100%' },
+  flashSignName: { fontSize: 20, fontWeight: '800', textAlign: 'center' },
+  flashMeaning: { fontSize: 14, lineHeight: 22, textAlign: 'center', color: '#374151' },
+  flashActions: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  flashSkipBtn: { flex: 1, paddingVertical: 14, borderRadius: 14, borderWidth: 1.5, borderColor: '#9CA3AF', alignItems: 'center', backgroundColor: '#FFFFFF' },
+  flashSkipText: { fontSize: 15, fontWeight: '700', color: '#6B7280' },
+  flashGotItBtn: { flex: 1, paddingVertical: 14, borderRadius: 14, backgroundColor: '#16A34A', alignItems: 'center' },
+  flashGotItText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
+  flashNav: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  flashNavBtn: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12 },
+  flashNavBtnDisabled: { opacity: 0.3 },
+  flashNavText: { fontSize: 15, fontWeight: '700' },
 
   searchBar: {
     flexDirection: 'row',
