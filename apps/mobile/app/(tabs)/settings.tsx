@@ -35,6 +35,7 @@ import {
   type CacheStatus,
 } from '@/src/offlineCache';
 import { getTestResult, type TestResult } from '../ipassed';
+import { isPremium } from '@/src/subscription';
 import { useSupportDismissed } from '@/src/components/support/hooks/useSupportDismissed';
 import { ClearPassSupportNative } from '@/src/components/support/ClearPassSupportNative';
 import {
@@ -183,6 +184,7 @@ export default function SettingsScreen() {
   // Support state
   const { isDismissed: supportDismissed, restore: restoreSupport } = useSupportDismissed();
   const [supportOpen, setSupportOpen] = useState(false);
+  const [isPro, setIsPro] = useState(false);
 
   // Notification state
   const [notifSettings, setNotifSettings]   = useState<NotificationSettings>(DEFAULT_NOTIF_SETTINGS);
@@ -273,6 +275,10 @@ export default function SettingsScreen() {
       // Load test result
       const tr = await getTestResult();
       setTestResult(tr);
+
+      // Load subscription status
+      const pro = await isPremium();
+      setIsPro(pro);
     })();
   }, []);
 
@@ -542,6 +548,32 @@ export default function SettingsScreen() {
       style={[styles.scroll, { backgroundColor: theme.backgroundColor }]}
       contentContainerStyle={styles.content}
     >
+      {/* ══ YOUR ACCOUNT ════════════════════════════════════════════════════════ */}
+      <Text style={[styles.sectionHeader, { fontSize: theme.fontSize(13), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>
+        {'YOUR ACCOUNT'}
+      </Text>
+
+      {/* Subscription status — always at the top of account */}
+      <TouchableOpacity
+        style={[styles.subscriptionCard, { backgroundColor: isPro ? Colors.indigo : theme.cardColor, borderColor: isPro ? Colors.indigo : Colors.border }]}
+        onPress={() => router.push('/paywall')}
+        activeOpacity={0.85}
+      >
+        <View style={styles.subscriptionCardLeft}>
+          <Text style={[styles.subscriptionBadge, { color: isPro ? '#FFFFFF' : Colors.indigo }]}>
+            {isPro ? '★ ClearPass Pro' : 'Free Plan'}
+          </Text>
+          <Text style={[styles.subscriptionDetail, { color: isPro ? 'rgba(255,255,255,0.8)' : theme.subTextColor }]}>
+            {isPro
+              ? 'Unlimited questions · AI Tutor · All mock tests'
+              : '10 questions/day · Upgrade for full access'}
+          </Text>
+        </View>
+        <View style={[styles.subscriptionBtn, { backgroundColor: isPro ? 'rgba(255,255,255,0.2)' : Colors.indigo }]}>
+          <Text style={styles.subscriptionBtnText}>{isPro ? 'Manage' : 'Upgrade'}</Text>
+        </View>
+      </TouchableOpacity>
+
       {/* ── Profile Section ─────────────────────────────────────────────────── */}
       <Text style={[styles.sectionHeader, { fontSize: theme.fontSize(22), fontFamily: theme.fontFamily, color: theme.textColor }]}>
         {'Profile'}
@@ -596,6 +628,106 @@ export default function SettingsScreen() {
           </View>
         )}
       </View>
+
+      {/* ── Account rows ─────────────────────────────────────────────────────── */}
+      <View style={[styles.group, { backgroundColor: theme.cardColor }]}>
+        <TouchableOpacity
+          style={[styles.row, styles.rowBorder]}
+          onPress={() => router.push('/ipassed' as any)}
+          activeOpacity={0.75}
+        >
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>
+              {'My Test Result'}
+            </Text>
+            <Text style={[styles.description, {
+              fontSize: theme.fontSize(12),
+              color: testResult?.passed ? Colors.indigo : testResult ? '#B45309' : theme.subTextColor,
+            }]}>
+              {testResult?.passed
+                ? 'Passed [V]' + (testResult.score ? ' - Score: ' + String(testResult.score) + '/50' : '')
+                : testResult
+                  ? 'Resit booked'
+                  : 'Record your test result ->'}
+            </Text>
+          </View>
+          <Text style={styles.chevron}>{'>'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.row, styles.rowBorder]}
+          onPress={() => router.push('/instructor?mode=learner' as any)}
+          activeOpacity={0.75}
+        >
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Linked Instructors'}</Text>
+            <Text style={[styles.description, { fontSize: theme.fontSize(12), color: theme.subTextColor }]}>
+              {linkedInstructorCount > 0
+                ? `${linkedInstructorCount} instructor${linkedInstructorCount === 1 ? '' : 's'} monitoring your progress`
+                : 'No instructors linked yet'}
+            </Text>
+          </View>
+          <Text style={styles.chevron}>{'›'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.row, styles.rowBorder]}
+          onPress={() => void handleChangePassword()}
+          activeOpacity={0.75}
+        >
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Change Password'}</Text>
+          </View>
+          <Text style={styles.chevron}>{'›'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.row, styles.rowBorder]}
+          onPress={async () => {
+            if (supportDismissed) await restoreSupport();
+            setSupportOpen(true);
+          }}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+          accessibilityLabel="Get support"
+        >
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'💬 Get Support'}</Text>
+            <Text style={[styles.description, { fontSize: theme.fontSize(12), color: theme.subTextColor }]}>{'Chat with our AI support assistant'}</Text>
+          </View>
+          <Text style={styles.chevron}>{'›'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => router.push('/instructor?mode=instructor' as any)} activeOpacity={0.85}>
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Instructor / Parent Dashboard'}</Text>
+          </View>
+          <Text style={styles.chevron}>{'›'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => router.push('/testday' as any)} activeOpacity={0.85}>
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'🎯 Test Day Mode'}</Text>
+            <Text style={[styles.description, { fontSize: theme.fontSize(12), color: theme.subTextColor }]}>{'Preview test-day conditions'}</Text>
+          </View>
+          <Text style={styles.chevron}>{'›'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.row}
+          onPress={handleDeleteAccount}
+          activeOpacity={0.75}
+        >
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: '#EF4444' }]}>{'Delete Account'}</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+
+      {/* ══ APP PREFERENCES ═════════════════════════════════════════════════════ */}
+      <Text style={[styles.sectionHeader, { fontSize: theme.fontSize(13), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>
+        {'APP PREFERENCES'}
+      </Text>
 
       {/* ── Accessibility Section ────────────────────────────────────────────── */}
       <Text style={[styles.sectionHeader, { fontSize: theme.fontSize(22), fontFamily: theme.fontFamily, color: theme.textColor }]}>
@@ -810,108 +942,6 @@ export default function SettingsScreen() {
         </Text>
       </View>
 
-      {/* ── Account Section ──────────────────────────────────────────────────── */}
-      <Text style={[styles.sectionHeader, { fontSize: theme.fontSize(22), fontFamily: theme.fontFamily, color: theme.textColor }]}>
-        {'Account'}
-      </Text>
-
-      <View style={[styles.group, { backgroundColor: theme.cardColor }]}>
-        <TouchableOpacity
-          style={[styles.row, styles.rowBorder]}
-          onPress={() => router.push('/ipassed' as any)}
-          activeOpacity={0.75}
-        >
-          <View style={styles.textWrap}>
-            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>
-              {'My Test Result'}
-            </Text>
-            <Text style={[styles.description, {
-              fontSize: theme.fontSize(12),
-              color: testResult?.passed ? Colors.indigo : testResult ? '#B45309' : theme.subTextColor,
-            }]}>
-              {testResult?.passed
-                ? 'Passed [V]' + (testResult.score ? ' - Score: ' + String(testResult.score) + '/50' : '')
-                : testResult
-                  ? 'Resit booked'
-                  : 'Record your test result ->'}
-            </Text>
-          </View>
-          <Text style={styles.chevron}>{'>'}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.row, styles.rowBorder]}
-          onPress={() => router.push('/instructor?mode=learner' as any)}
-          activeOpacity={0.75}
-        >
-          <View style={styles.textWrap}>
-            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Linked Instructors'}</Text>
-            <Text style={[styles.description, { fontSize: theme.fontSize(12), color: theme.subTextColor }]}>
-              {linkedInstructorCount > 0
-                ? `${linkedInstructorCount} instructor${linkedInstructorCount === 1 ? '' : 's'} monitoring your progress`
-                : 'No instructors linked yet'}
-            </Text>
-          </View>
-          <Text style={styles.chevron}>{'›'}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.row, styles.rowBorder]}
-          onPress={() => void handleChangePassword()}
-          activeOpacity={0.75}
-        >
-          <View style={styles.textWrap}>
-            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Change Password'}</Text>
-          </View>
-          <Text style={styles.chevron}>{'›'}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.row, styles.rowBorder]}
-          onPress={async () => {
-            if (supportDismissed) await restoreSupport();
-            setSupportOpen(true);
-          }}
-          activeOpacity={0.75}
-          accessibilityRole="button"
-          accessibilityLabel="Get support"
-        >
-          <View style={styles.textWrap}>
-            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'💬 Get Support'}</Text>
-            <Text style={[styles.description, { fontSize: theme.fontSize(12), color: theme.subTextColor }]}>{'Chat with our AI support assistant'}</Text>
-          </View>
-          <Text style={styles.chevron}>{'›'}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.row}
-          onPress={handleDeleteAccount}
-          activeOpacity={0.75}
-        >
-          <View style={styles.textWrap}>
-            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: '#EF4444' }]}>{'Delete Account'}</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-
-      {/* ── Instructor/Parent Dashboard ──────────────────────────────────────── */}
-      <TouchableOpacity
-        style={styles.instructorBtn}
-        onPress={() => router.push('/instructor?mode=instructor' as any)}
-        activeOpacity={0.85}
-      >
-        <Text style={styles.instructorBtnText}>{'Instructor / Parent Dashboard'}</Text>
-      </TouchableOpacity>
-
-      {/* ── Test Day Prep ────────────────────────────────────────────────────── */}
-      <TouchableOpacity
-        style={styles.testDayBtn}
-        onPress={() => router.push('/testday' as any)}
-        activeOpacity={0.85}
-      >
-        <Text style={styles.testDayBtnText}>{'🎯  Test Day Mode (Preview)'}</Text>
-      </TouchableOpacity>
-
       {/* ── About Section ────────────────────────────────────────────────────── */}
       <Text style={[styles.sectionHeader, { fontSize: theme.fontSize(22), fontFamily: theme.fontFamily, color: theme.textColor }]}>
         {'About'}
@@ -937,11 +967,6 @@ export default function SettingsScreen() {
           <Text style={[styles.description, { color: theme.subTextColor }]}>{'1.0.0'}</Text>
         </View>
       </View>
-
-      {/* ── Bottom Actions ───────────────────────────────────────────────────── */}
-      <TouchableOpacity style={styles.manageBtn} onPress={() => router.push('/paywall')} activeOpacity={0.85}>
-        <Text style={styles.manageBtnText}>{'Manage Subscription'}</Text>
-      </TouchableOpacity>
 
       <TouchableOpacity style={styles.signOutBtn} onPress={() => void handleSignOut()} activeOpacity={0.85}>
         <Text style={styles.signOutBtnText}>{'Sign Out'}</Text>
@@ -1125,6 +1150,22 @@ const styles = StyleSheet.create({
   savedToastText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
 
   sectionHeader: { fontSize: 22, fontWeight: '800', color: '#111827' },
+
+  subscriptionCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  subscriptionCardLeft: { flex: 1, marginRight: 12 },
+  subscriptionBadge: { fontSize: 16, fontWeight: '800', marginBottom: 4 },
+  subscriptionDetail: { fontSize: 12, fontWeight: '500', lineHeight: 17 },
+  subscriptionBtn: { borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
+  subscriptionBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
   sectionSub:    { fontSize: 14, color: '#6B7280', lineHeight: 20, marginTop: -8 },
 
   // ── Profile Card ─────────────────────────────────────────────────────────────
