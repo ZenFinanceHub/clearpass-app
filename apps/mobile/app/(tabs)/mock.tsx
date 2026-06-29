@@ -120,6 +120,7 @@ export default function MockScreen() {
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [celebQueue, setCelebQueue] = useState<CelebrationEvent[]>([]);
   const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
 
   const questionsRef = useRef<Question[]>([]);
   const answersRef = useRef<(number | null)[]>([]);
@@ -137,7 +138,7 @@ export default function MockScreen() {
   );
 
   useEffect(() => {
-    if (phase !== 'test') {
+    if (phase !== 'test' || isPaused) {
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
       return;
     }
@@ -149,7 +150,7 @@ export default function MockScreen() {
       });
     }, 1000);
     return () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
-  }, [phase]);
+  }, [phase, isPaused]);
 
   useEffect(() => {
     if (phase === 'test' && timeRemaining <= 0) void doSubmit();
@@ -158,6 +159,7 @@ export default function MockScreen() {
 
   function handleStart() {
     hasSubmittedRef.current = false;
+    setIsPaused(false);
     const qs = buildTestQuestions();
     const initialAnswers: (number | null)[] = Array(qs.length).fill(null);
     questionsRef.current = qs;
@@ -325,9 +327,12 @@ export default function MockScreen() {
         <Text style={[styles.qCounter, { fontFamily: theme.fontFamily, color: theme.subTextColor }]}>
           {'Q '}{currentIndex + 1}{' / '}{questions.length}
         </Text>
-        <Text style={[styles.timerText, isWarning && styles.timerWarn]}>
-          {formatTime(timeRemaining)}
-        </Text>
+        <TouchableOpacity style={styles.timerGroup} onPress={() => setIsPaused(true)} activeOpacity={0.8}>
+          <Text style={[styles.timerText, isWarning && styles.timerWarn]}>
+            {formatTime(timeRemaining)}
+          </Text>
+          <Text style={styles.pauseHint}>{'tap to pause'}</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.flagTouchable} onPress={() => toggleFlag(currentIndex)} activeOpacity={0.7}>
           <Text style={[styles.flagIcon, isFlagged && styles.flagIconActive]}>{'[!]'}</Text>
         </TouchableOpacity>
@@ -403,6 +408,27 @@ export default function MockScreen() {
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      {/* Pause overlay */}
+      {isPaused && (
+        <View style={styles.pauseOverlay}>
+          <View style={styles.pauseCard}>
+            <Text style={styles.pauseTitle}>{'Test Paused'}</Text>
+            <Text style={[styles.timerText, isWarning && styles.timerWarn, { marginVertical: 8 }]}>
+              {formatTime(timeRemaining)}
+            </Text>
+            <Text style={styles.pauseNote}>
+              {'Real DVSA tests cannot be paused — this is for practice only'}
+            </Text>
+            <TouchableOpacity style={styles.resumeBtn} onPress={() => setIsPaused(false)} activeOpacity={0.85}>
+              <Text style={styles.resumeBtnText}>{'Resume Test'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.abandonBtn} onPress={() => { setIsPaused(false); void doSubmit(); }} activeOpacity={0.85}>
+              <Text style={styles.abandonBtnText}>{'Submit & End Test'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* Grid overview modal */}
       <Modal visible={showGrid} transparent animationType="slide" onRequestClose={() => setShowGrid(false)}>
@@ -487,7 +513,7 @@ function StartView({ onStart }: { onStart: () => void }) {
       </TouchableOpacity>
 
       <View style={styles.warningBox}>
-        <Text style={styles.warningText}>{'Once started, the timer cannot be paused'}</Text>
+        <Text style={styles.warningText}>{'Tap the timer during the test to pause — real DVSA tests cannot be paused'}</Text>
       </View>
     </ScrollView>
   );
@@ -740,11 +766,36 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E7EB',
   },
   qCounter: { fontSize: 14, fontWeight: '600', width: 80 },
+  timerGroup: { alignItems: 'center' },
   timerText: { fontSize: 22, fontWeight: '800', color: '#111827', fontVariant: ['tabular-nums'], textAlign: 'center' },
+  pauseHint: { fontSize: 9, color: '#9CA3AF', marginTop: 1, textAlign: 'center' },
   timerWarn: { color: '#EF4444' },
   flagTouchable: { width: 80, alignItems: 'flex-end' },
   flagIcon: { fontSize: 18, fontWeight: '800', color: '#9CA3AF' },
   flagIconActive: { color: '#F59E0B' },
+
+  // Pause overlay
+  pauseOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15,23,42,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+  },
+  pauseCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 28,
+    width: '82%',
+    alignItems: 'center',
+    gap: 12,
+  },
+  pauseTitle: { fontSize: 22, fontWeight: '900', color: '#111827' },
+  pauseNote: { fontSize: 12, color: '#6B7280', textAlign: 'center', lineHeight: 18 },
+  resumeBtn: { backgroundColor: Colors.indigo, borderRadius: 14, paddingVertical: 15, width: '100%', alignItems: 'center', marginTop: 4 },
+  resumeBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  abandonBtn: { borderRadius: 14, paddingVertical: 12, width: '100%', alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB' },
+  abandonBtnText: { color: '#6B7280', fontSize: 14, fontWeight: '600' },
 
   // Question card
   questionCard: {
