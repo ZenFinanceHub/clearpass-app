@@ -1017,6 +1017,19 @@ export default function HomeScreen() {
         <Text style={[styles.heroProbLabel, { fontSize: theme.fontSize(11), fontFamily: theme.fontFamily }]}>
           {'Pass Probability'}
         </Text>
+        {(() => {
+          const prob = passProb ? passProb.probability : readinessPct;
+          const { label, bg } = prob >= 70
+            ? { label: 'Test Ready', bg: 'rgba(16,185,129,0.25)' }
+            : prob >= 45
+            ? { label: 'Almost There', bg: 'rgba(245,158,11,0.25)' }
+            : { label: 'Needs Work', bg: 'rgba(239,68,68,0.25)' };
+          return (
+            <View style={[styles.probPill, { backgroundColor: bg }]}>
+              <Text style={styles.probPillText}>{label}</Text>
+            </View>
+          );
+        })()}
         <View style={styles.heroBarTrack}>
           <View style={[styles.heroBarFill, { width: `${passProb ? passProb.probability : readinessPct}%` as any }]} />
         </View>
@@ -1604,8 +1617,16 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.75)',
     fontWeight: '600',
     letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  probPill: {
+    alignSelf: 'flex-start',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     marginBottom: 10,
   },
+  probPillText: { fontSize: 11, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.5 },
 
   // ── Streak Card ──────────────────────────────────────────────────────────────
   // ── Status Bar (merged streak + XP + level) ──────────────────────────────────
