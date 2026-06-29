@@ -35,6 +35,8 @@ import {
   type CacheStatus,
 } from '@/src/offlineCache';
 import { getTestResult, type TestResult } from '../ipassed';
+import { useSupportDismissed } from '@/src/components/support/hooks/useSupportDismissed';
+import { ClearPassSupportNative } from '@/src/components/support/ClearPassSupportNative';
 import {
   NotificationSettings,
   DEFAULT_NOTIF_SETTINGS,
@@ -177,6 +179,10 @@ export default function SettingsScreen() {
 
   // Test result state
   const [testResult, setTestResult] = useState<TestResult | null>(null);
+
+  // Support state
+  const { isDismissed: supportDismissed, restore: restoreSupport } = useSupportDismissed();
+  const [supportOpen, setSupportOpen] = useState(false);
 
   // Notification state
   const [notifSettings, setNotifSettings]   = useState<NotificationSettings>(DEFAULT_NOTIF_SETTINGS);
@@ -861,6 +867,23 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
+          style={[styles.row, styles.rowBorder]}
+          onPress={async () => {
+            if (supportDismissed) await restoreSupport();
+            setSupportOpen(true);
+          }}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+          accessibilityLabel="Get support"
+        >
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'💬 Get Support'}</Text>
+            <Text style={[styles.description, { fontSize: theme.fontSize(12), color: theme.subTextColor }]}>{'Chat with our AI support assistant'}</Text>
+          </View>
+          <Text style={styles.chevron}>{'›'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={styles.row}
           onPress={handleDeleteAccount}
           activeOpacity={0.75}
@@ -1072,6 +1095,14 @@ export default function SettingsScreen() {
     <Animated.View style={[styles.savedToast, { opacity: toastOpacity }]} pointerEvents="none">
       <Text style={styles.savedToastText}>{'Saved ✓'}</Text>
     </Animated.View>
+
+    {/* Support modal — standalone=false so no duplicate floating button */}
+    {supportOpen && (
+      <ClearPassSupportNative
+        standalone={false}
+        initialOpen={true}
+      />
+    )}
     </View>
   );
 }

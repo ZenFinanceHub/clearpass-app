@@ -15,6 +15,7 @@
     "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.106.0",
     "@clearpass/ai": "file:../../packages/ai",
     "@clearpass/content": "file:../../packages/content",
     "@clearpass/core": "file:../../packages/core",

@@ -9,6 +9,8 @@ import { useFonts } from 'expo-font';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import NetInfo from '@react-native-community/netinfo';
+import { ClearPassSupport } from '@/src/components/support/ClearPassSupport';
+import { ClearPassSupportNative } from '@/src/components/support/ClearPassSupportNative';
 import { AccessibilityProvider } from '@/src/AccessibilityContext';
 import { NetworkProvider } from '@/src/NetworkContext';
 import { handleIncomingUrl } from '@/src/deepLinks';
@@ -160,6 +162,8 @@ export default function RootLayout() {
           <Stack.Screen name="study-plan"     options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="light" />
+        <ClearPassSupport />
+        <ClearPassSupportNative />
         {showCachingToast && (
           <View style={toastStyles.toast} pointerEvents="none">
             <Text style={toastStyles.text}>{'Downloading content for offline use...'}</Text>
