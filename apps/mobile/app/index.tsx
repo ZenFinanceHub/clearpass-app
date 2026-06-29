@@ -95,11 +95,19 @@ export default function OnboardingScreen() {
           onPress={() => void handleGetStarted()}
           activeOpacity={0.85}
         >
-          <Text style={styles.primaryButtonText}>Get Started</Text>
+          <Text style={styles.primaryButtonText}>{'Get Started'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.tryButton}
+          onPress={() => router.push('/taster')}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.tryButtonText}>{'Try 5 questions — no signup needed'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => void handleSignIn()} activeOpacity={0.75}>
-          <Text style={styles.signInLink}>Sign In</Text>
+          <Text style={styles.signInLink}>{'Sign In'}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -181,6 +189,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+  tryButton: {
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#3D3D52',
+  },
+  tryButtonText: {
+    color: '#A78BFA',
+    fontSize: 14,
+    fontWeight: '600',
   },
   signInLink: {
     color: '#6B7280',
