@@ -138,6 +138,7 @@ export default function PracticeScreen() {
   const [speedTimeUsed, setSpeedTimeUsed] = useState(0);
 
   const [weakSpotCount, setWeakSpotCount] = useState(0);
+  const [dueCount, setDueCount] = useState(0);
   const [weakDisplay, setWeakDisplay] = useState<{
     selected: number | null;
     consecutive: number;
@@ -221,6 +222,7 @@ export default function PracticeScreen() {
 
   useEffect(() => {
     void getWeakSpotQuestions().then(ids => setWeakSpotCount(ids.length));
+    void getDueQuestions(allQuestions.map(q => q.id), 100).then(ids => setDueCount(ids.length));
   }, [phase === 'start' ? phase : null]);
 
   // Auto-speak question + options when a new question loads (no answer yet)
@@ -882,6 +884,7 @@ export default function PracticeScreen() {
           onSpeedRound={() => startSpeedRound()}
           onWeakSpot={() => void startWeakSpotDrill()}
           weakSpotCount={weakSpotCount}
+          dueCount={dueCount}
         />
       </>
     );
@@ -1258,12 +1261,14 @@ function StartView({
   onSpeedRound,
   onWeakSpot,
   weakSpotCount,
+  dueCount,
 }: {
   onStart: () => void;
   onBattle: () => void;
   onSpeedRound: () => void;
   onWeakSpot: () => void;
   weakSpotCount: number;
+  dueCount: number;
 }) {
   const theme = useTheme();
   const hasWeakSpots = weakSpotCount >= 5;
@@ -1276,6 +1281,9 @@ function StartView({
 
       <TouchableOpacity style={styles.primaryButton} onPress={onStart} activeOpacity={0.85}>
         <Text style={styles.primaryButtonText}>Start Practice</Text>
+        {dueCount > 0 && (
+          <Text style={styles.dueBadge}>{dueCount}{' question'}{dueCount === 1 ? '' : 's'}{' due today'}</Text>
+        )}
       </TouchableOpacity>
 
       <Text style={styles.startOr}>{'- or -'}</Text>
@@ -2258,6 +2266,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   primaryButtonText: { color: Colors.cardWhite, fontSize: 16, fontWeight: '700' },
+  dueBadge: { color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '500', marginTop: 4 },
   outlineButton: {
     backgroundColor: Colors.cardWhite,
     borderRadius: 14,
