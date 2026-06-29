@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { CLEARPASS_SYSTEM_PROMPT } from '../src/components/support/lib/systemPrompt';
 import { sendEscalation } from '../src/components/support/lib/escalation';
 
-export const config = { runtime: 'edge' };
+export const config = { supportsResponseStreaming: true };
 
 interface RequestBody {
   messages: { role: 'user' | 'assistant'; content: string }[];
