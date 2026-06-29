@@ -1527,17 +1527,35 @@ function ResultsScreen({
         <Text style={styles.shareLinkText}>{'Share Result'}</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.primaryButton} onPress={onPlayAgain} activeOpacity={0.85}>
-        <Text style={styles.primaryButtonText}>Play Again</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.outlineButton}
-        onPress={() => router.replace('/(tabs)/home')}
-        activeOpacity={0.85}
-      >
-        <Text style={styles.outlineButtonText}>Back to Home</Text>
-      </TouchableOpacity>
+      {/* Next-step recommendation */}
+      {pct >= 75 ? (
+        <>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => router.push('/(tabs)/mock')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.primaryButtonText}>{'Take a Mock Test'}</Text>
+            <Text style={styles.dueBadge}>{'Great score — test your readiness with a full mock'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.outlineButton} onPress={onPlayAgain} activeOpacity={0.85}>
+            <Text style={styles.outlineButtonText}>Practice Again</Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <>
+          <TouchableOpacity style={styles.primaryButton} onPress={onPlayAgain} activeOpacity={0.85}>
+            <Text style={styles.primaryButtonText}>Practice Again</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.outlineButton}
+            onPress={() => router.replace('/(tabs)/home')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.outlineButtonText}>Back to Home</Text>
+          </TouchableOpacity>
+        </>
+      )}
     </ScrollView>
 
     {showShareCard && (
