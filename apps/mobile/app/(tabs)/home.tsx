@@ -1022,26 +1022,30 @@ export default function HomeScreen() {
         </View>
       </LinearGradient>
 
-      {/* Streak Card — shown when streak >= 2 */}
-      {!isLoading && streak >= 2 && (
-        <View style={styles.streakCard}>
-          <Text style={styles.streakCardFlame}>{'🔥'}</Text>
-          <View style={styles.streakCardBody}>
-            <Text style={styles.streakCardCount}>{streak}{'-day streak'}</Text>
-            <Text style={styles.streakCardMsg}>
-              {streak >= 30
-                ? 'Legendary! One month of daily study.'
-                : streak >= 14
-                ? "Two weeks strong — you're building a real habit!"
-                : streak >= 7
-                ? 'A full week! Consistency is your superpower.'
-                : 'Keep it up — every day makes a difference.'}
-            </Text>
+      {/* Status Bar — streak + XP + level combined */}
+      {!isLoading && (
+        <View style={styles.statusBar}>
+          {streak > 0 && (
+            <>
+              <View style={styles.statusItem}>
+                <Text style={styles.statusEmoji}>{'🔥'}</Text>
+                <Text style={styles.statusValue}>{streak}</Text>
+                <Text style={styles.statusLabel}>{'day streak'}</Text>
+              </View>
+              <View style={styles.statusDivider} />
+            </>
+          )}
+          <View style={styles.statusItem}>
+            <Text style={styles.statusEmoji}>{'⭐'}</Text>
+            <Text style={styles.statusValue}>{xp.toLocaleString()}</Text>
+            <Text style={styles.statusLabel}>{'XP'}</Text>
           </View>
-          <View style={styles.streakDots}>
-            {[0,1,2,3,4,5,6].map(i => (
-              <View key={i} style={[styles.streakDot, i < Math.min(streak, 7) ? styles.streakDotFilled : styles.streakDotEmpty]} />
-            ))}
+          <View style={styles.statusDivider} />
+          <View style={styles.statusItem}>
+            <Text style={styles.statusValue}>{xpBadgeLabel}</Text>
+            <View style={styles.statusXpBar}>
+              <View style={[styles.statusXpFill, { width: `${Math.round(xpData.pct * 100)}%` as any }]} />
+            </View>
           </View>
         </View>
       )}
@@ -1068,20 +1072,6 @@ export default function HomeScreen() {
         <NudgesSection nudges={nudges} onDismiss={(id) => void handleDismissNudge(id)} screenWidth={dims?.width ?? 375} />
       )}
 
-      {/* XP Card */}
-      <View style={styles.xpCard}>
-        <Text style={styles.xpDecorCar}>{'🚗'}</Text>
-        <View style={styles.xpTopRow}>
-          <View style={styles.xpBadge}>
-            <Text style={styles.xpBadgeText}>{xpBadgeLabel}</Text>
-          </View>
-          <Text style={styles.xpScore}>{xp}</Text>
-        </View>
-        <View style={styles.xpBarTrack}>
-          <View style={[styles.xpBarFill, { width: `${Math.round(xpData.pct * 100)}%` as any }]} />
-        </View>
-        <Text style={styles.xpMsg}>{xpMsg}</Text>
-      </View>
 
       {/* Test Date Countdown */}
       {daysLeft !== null && daysLeft >= 0 && (
@@ -1603,27 +1593,27 @@ const styles = StyleSheet.create({
   },
 
   // ── Streak Card ──────────────────────────────────────────────────────────────
-  streakCard: {
-    backgroundColor: '#FFFBEB',
-    borderRadius: 18,
+  // ── Status Bar (merged streak + XP + level) ──────────────────────────────────
+  statusBar: {
+    backgroundColor: Colors.cardWhite,
+    borderRadius: 16,
     borderWidth: 0.5,
-    borderColor: '#F59E0B',
+    borderColor: Colors.border,
     marginHorizontal: 16,
     marginBottom: 12,
-    padding: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    flexWrap: 'wrap',
+    justifyContent: 'space-around',
   },
-  streakCardFlame: { fontSize: 36 },
-  streakCardBody: { flex: 1, minWidth: 160 },
-  streakCardCount: { fontSize: 17, fontWeight: '800', color: '#92400E', marginBottom: 2 },
-  streakCardMsg: { fontSize: 13, color: '#B45309', lineHeight: 18 },
-  streakDots: { flexDirection: 'row', gap: 4, paddingTop: 2 },
-  streakDot: { width: 8, height: 8, borderRadius: 4 },
-  streakDotFilled: { backgroundColor: '#F59E0B' },
-  streakDotEmpty: { backgroundColor: '#FDE68A' },
+  statusItem: { alignItems: 'center', flex: 1 },
+  statusEmoji: { fontSize: 18, marginBottom: 2 },
+  statusValue: { fontSize: 15, fontWeight: '800', color: Colors.textPrimary },
+  statusLabel: { fontSize: 10, color: Colors.mutedText, fontWeight: '500', marginTop: 1 },
+  statusDivider: { width: 0.5, height: 28, backgroundColor: Colors.border },
+  statusXpBar: { width: '80%', height: 3, backgroundColor: Colors.surfaceGray, borderRadius: 2, overflow: 'hidden', marginTop: 4 },
+  statusXpFill: { height: 3, backgroundColor: Colors.indigo, borderRadius: 2 },
 
   // ── Nudges ───────────────────────────────────────────────────────────────────
   nudgesSection: {
@@ -1745,42 +1735,6 @@ const styles = StyleSheet.create({
   edgeSlice: { flex: 1 },
 
   // ── XP Card ──────────────────────────────────────────────────────────────────
-  xpCard: {
-    backgroundColor: Colors.cardWhite,
-    borderRadius: 20,
-    borderWidth: 0.5,
-    borderColor: Colors.border,
-    margin: 16,
-    padding: 24,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  xpDecorCar: { position: 'absolute', top: 12, right: 16, fontSize: 40, opacity: 0.06 },
-  xpTopRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  xpBadge: {
-    backgroundColor: Colors.indigoBg,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 0.5,
-    borderColor: Colors.indigo,
-  },
-  xpBadgeText: { fontSize: 11, fontWeight: '700', color: Colors.indigo, letterSpacing: 1 },
-  xpScore:     { fontSize: 48, fontWeight: '900', color: Colors.textPrimary, lineHeight: 56 },
-  xpBarTrack: {
-    width: '100%',
-    height: 6,
-    backgroundColor: Colors.surfaceGray,
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginBottom: 10,
-  },
-  xpBarFill: { height: 6, backgroundColor: Colors.indigo, borderRadius: 3 },
-  xpMsg:     { fontSize: 12, color: Colors.mutedText, fontWeight: '500' },
 
   // ── Countdown Card ────────────────────────────────────────────────────────────
   countdownCard: {
