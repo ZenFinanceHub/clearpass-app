@@ -18,15 +18,15 @@ const TABS: TabConfig[] = [
   { name: 'home',        title: 'Home',     headerTitle: 'ClearPass', icon: 'home-outline',              iconFocused: 'home' },
   { name: 'practice',   title: 'Practice',                            icon: 'book-outline',              iconFocused: 'book' },
   { name: 'mock',        title: 'Mock Test',                           icon: 'clipboard-outline',         iconFocused: 'clipboard' },
-  { name: 'learn',       title: 'Study',                               icon: 'library-outline',           iconFocused: 'library' },
+  { name: 'hazard',      title: 'Hazard',                              icon: 'warning-outline',           iconFocused: 'warning' },
   { name: 'settings',   title: 'Settings',                            icon: 'settings-outline',          iconFocused: 'settings' },
   // Hidden from tab bar — still navigable via router.push()
-  { name: 'tutor',        title: 'AI Tutor',    icon: 'chatbubble-ellipses-outline', iconFocused: 'chatbubble-ellipses', hidden: true },
-  { name: 'highwaycode',  title: 'HC Rules',    icon: 'document-text-outline', iconFocused: 'document-text',  hidden: true },
-  { name: 'roadsigns',    title: 'Signs',       icon: 'stop-circle-outline',   iconFocused: 'stop-circle',    hidden: true },
-  { name: 'hazard',       title: 'Hazard',      icon: 'warning-outline',       iconFocused: 'warning',        hidden: true },
-  { name: 'progress',     title: 'Progress',    icon: 'stats-chart-outline',   iconFocused: 'stats-chart',    hidden: true },
-  { name: 'leaderboard',  title: 'Leaderboard', icon: 'trophy-outline',        iconFocused: 'trophy',         hidden: true },
+  { name: 'learn',        title: 'Study',       icon: 'library-outline',               iconFocused: 'library',            hidden: true },
+  { name: 'tutor',        title: 'AI Tutor',    icon: 'chatbubble-ellipses-outline',   iconFocused: 'chatbubble-ellipses', hidden: true },
+  { name: 'highwaycode',  title: 'HC Rules',    icon: 'document-text-outline',         iconFocused: 'document-text',       hidden: true },
+  { name: 'roadsigns',    title: 'Signs',       icon: 'stop-circle-outline',           iconFocused: 'stop-circle',         hidden: true },
+  { name: 'progress',     title: 'Progress',    icon: 'stats-chart-outline',           iconFocused: 'stats-chart',         hidden: true },
+  { name: 'leaderboard',  title: 'Leaderboard', icon: 'trophy-outline',                iconFocused: 'trophy',              hidden: true },
 ];
 
 export default function TabLayout() {
