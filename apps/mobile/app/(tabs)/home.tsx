@@ -38,7 +38,7 @@ import {
   scheduleTestCountdownNotifications,
 } from '@/src/notifications';
 import { buildTodaySummary } from '../studyplan';
-import { loadSRState } from '@/src/spacedRepetition';
+import { loadSRState, getDueQuestions } from '@/src/spacedRepetition';
 import { computeAndSavePassProbability, PassProbabilityResult } from '@/src/passProbability';
 import { generateNudges, saveNudges, loadNudges, dismissNudge, TutorNudge, NudgeType } from '@/src/tutorNudges';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
@@ -631,6 +631,7 @@ export default function HomeScreen() {
   const [celebQueue, setCelebQueue]   = useState<CelebrationEvent[]>([]);
   const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
   const [pendingChallenges, setPendingChallenges] = useState(0);
+  const [homeDueCount, setHomeDueCount] = useState(0);
   const [showResultBanner, setShowResultBanner]   = useState(false);
 
   // Question of the Day
@@ -659,7 +660,8 @@ export default function HomeScreen() {
       const fresh = await loadUserProgress();
       if (fresh) {
         setProgress(fresh);
-        const [srState] = await Promise.all([loadSRState()]);
+        const [srState, dueIds] = await Promise.all([loadSRState(), getDueQuestions(allQuestions.map(q => q.id), 200)]);
+        setHomeDueCount(dueIds.length);
         const prob = await computeAndSavePassProbability(fresh, srState, allQuestions);
         setPassProb(prob);
         const generated = generateNudges(fresh, srState, allQuestions);
@@ -1017,33 +1019,81 @@ export default function HomeScreen() {
         <Text style={[styles.heroProbLabel, { fontSize: theme.fontSize(11), fontFamily: theme.fontFamily }]}>
           {'Pass Probability'}
         </Text>
+        {(() => {
+          const prob = passProb ? passProb.probability : readinessPct;
+          const { label, bg } = prob >= 70
+            ? { label: 'Test Ready', bg: 'rgba(16,185,129,0.25)' }
+            : prob >= 45
+            ? { label: 'Almost There', bg: 'rgba(245,158,11,0.25)' }
+            : { label: 'Needs Work', bg: 'rgba(239,68,68,0.25)' };
+          return (
+            <View style={[styles.probPill, { backgroundColor: bg }]}>
+              <Text style={styles.probPillText}>{label}</Text>
+            </View>
+          );
+        })()}
         <View style={styles.heroBarTrack}>
           <View style={[styles.heroBarFill, { width: `${passProb ? passProb.probability : readinessPct}%` as any }]} />
         </View>
       </LinearGradient>
 
-      {/* Streak Card — shown when streak >= 2 */}
-      {!isLoading && streak >= 2 && (
-        <View style={styles.streakCard}>
-          <Text style={styles.streakCardFlame}>{'🔥'}</Text>
-          <View style={styles.streakCardBody}>
-            <Text style={styles.streakCardCount}>{streak}{'-day streak'}</Text>
-            <Text style={styles.streakCardMsg}>
-              {streak >= 30
-                ? 'Legendary! One month of daily study.'
-                : streak >= 14
-                ? "Two weeks strong — you're building a real habit!"
-                : streak >= 7
-                ? 'A full week! Consistency is your superpower.'
-                : 'Keep it up — every day makes a difference.'}
-            </Text>
+      {/* Status Bar — streak + XP + level combined */}
+      {!isLoading && (
+        <View style={styles.statusBar}>
+          {streak > 0 && (
+            <>
+              <View style={styles.statusItem}>
+                <Text style={styles.statusEmoji}>{'🔥'}</Text>
+                <Text style={styles.statusValue}>{streak}</Text>
+                <Text style={styles.statusLabel}>{'day streak'}</Text>
+              </View>
+              <View style={styles.statusDivider} />
+            </>
+          )}
+          <View style={styles.statusItem}>
+            <Text style={styles.statusEmoji}>{'⭐'}</Text>
+            <Text style={styles.statusValue}>{xp.toLocaleString()}</Text>
+            <Text style={styles.statusLabel}>{'XP'}</Text>
           </View>
-          <View style={styles.streakDots}>
-            {[0,1,2,3,4,5,6].map(i => (
-              <View key={i} style={[styles.streakDot, i < Math.min(streak, 7) ? styles.streakDotFilled : styles.streakDotEmpty]} />
-            ))}
+          <View style={styles.statusDivider} />
+          <View style={styles.statusItem}>
+            <Text style={styles.statusValue}>{xpBadgeLabel}</Text>
+            <View style={styles.statusXpBar}>
+              <View style={[styles.statusXpFill, { width: `${Math.round(xpData.pct * 100)}%` as any }]} />
+            </View>
           </View>
         </View>
+      )}
+
+      {/* Today's Focus card */}
+      {!isLoading && homeDueCount > 0 && (
+        <TouchableOpacity
+          style={styles.focusCard}
+          onPress={() => router.push('/(tabs)/practice')}
+          activeOpacity={0.85}
+        >
+          <View style={styles.focusCardLeft}>
+            <Text style={styles.focusCardLabel}>{"TODAY'S FOCUS"}</Text>
+            <Text style={styles.focusCardTitle}>{homeDueCount}{' question'}{homeDueCount === 1 ? '' : 's'}{' due'}</Text>
+            <Text style={styles.focusCardSub}>{'~'}{Math.ceil(homeDueCount * 0.5)}{' min · Tap to start'}</Text>
+          </View>
+          <Text style={styles.focusCardChevron}>{'›'}</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Urgent countdown hero — shown at top when test is within 14 days */}
+      {!isLoading && daysLeft !== null && daysLeft >= 0 && daysLeft <= 14 && (
+        <TouchableOpacity style={[styles.urgentCountdown, { borderTopColor: countdownColor }]} onPress={handleOpenModal} activeOpacity={0.9}>
+          <View style={styles.urgentCountdownLeft}>
+            <Text style={styles.urgentCountdownSub}>{'YOUR TEST'}</Text>
+            <View style={styles.urgentCountdownRow}>
+              <Text style={[styles.urgentCountdownDays, { color: countdownColor }]}>{daysLeft}</Text>
+              <Text style={styles.urgentCountdownDaysLabel}>{'days to go'}</Text>
+            </View>
+            <Text style={[styles.urgentCountdownMsg, { color: countdownColor }]}>{countdownMsg}</Text>
+          </View>
+          <Text style={styles.urgentChevron}>{'›'}</Text>
+        </TouchableOpacity>
       )}
 
       {/* Road Map Hero */}
@@ -1068,23 +1118,9 @@ export default function HomeScreen() {
         <NudgesSection nudges={nudges} onDismiss={(id) => void handleDismissNudge(id)} screenWidth={dims?.width ?? 375} />
       )}
 
-      {/* XP Card */}
-      <View style={styles.xpCard}>
-        <Text style={styles.xpDecorCar}>{'🚗'}</Text>
-        <View style={styles.xpTopRow}>
-          <View style={styles.xpBadge}>
-            <Text style={styles.xpBadgeText}>{xpBadgeLabel}</Text>
-          </View>
-          <Text style={styles.xpScore}>{xp}</Text>
-        </View>
-        <View style={styles.xpBarTrack}>
-          <View style={[styles.xpBarFill, { width: `${Math.round(xpData.pct * 100)}%` as any }]} />
-        </View>
-        <Text style={styles.xpMsg}>{xpMsg}</Text>
-      </View>
 
       {/* Test Date Countdown */}
-      {daysLeft !== null && daysLeft >= 0 && (
+      {daysLeft !== null && daysLeft > 14 && (
         <View style={styles.countdownCard}>
           <View style={styles.countdownTop}>
             <Text style={styles.countdownLabel}>YOUR TEST</Text>
@@ -1599,31 +1635,39 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.75)',
     fontWeight: '600',
     letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  probPill: {
+    alignSelf: 'flex-start',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     marginBottom: 10,
   },
+  probPillText: { fontSize: 11, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.5 },
 
   // ── Streak Card ──────────────────────────────────────────────────────────────
-  streakCard: {
-    backgroundColor: '#FFFBEB',
-    borderRadius: 18,
+  // ── Status Bar (merged streak + XP + level) ──────────────────────────────────
+  statusBar: {
+    backgroundColor: Colors.cardWhite,
+    borderRadius: 16,
     borderWidth: 0.5,
-    borderColor: '#F59E0B',
+    borderColor: Colors.border,
     marginHorizontal: 16,
     marginBottom: 12,
-    padding: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    flexWrap: 'wrap',
+    justifyContent: 'space-around',
   },
-  streakCardFlame: { fontSize: 36 },
-  streakCardBody: { flex: 1, minWidth: 160 },
-  streakCardCount: { fontSize: 17, fontWeight: '800', color: '#92400E', marginBottom: 2 },
-  streakCardMsg: { fontSize: 13, color: '#B45309', lineHeight: 18 },
-  streakDots: { flexDirection: 'row', gap: 4, paddingTop: 2 },
-  streakDot: { width: 8, height: 8, borderRadius: 4 },
-  streakDotFilled: { backgroundColor: '#F59E0B' },
-  streakDotEmpty: { backgroundColor: '#FDE68A' },
+  statusItem: { alignItems: 'center', flex: 1 },
+  statusEmoji: { fontSize: 18, marginBottom: 2 },
+  statusValue: { fontSize: 15, fontWeight: '800', color: Colors.textPrimary },
+  statusLabel: { fontSize: 10, color: Colors.mutedText, fontWeight: '500', marginTop: 1 },
+  statusDivider: { width: 0.5, height: 28, backgroundColor: Colors.border },
+  statusXpBar: { width: '80%', height: 3, backgroundColor: Colors.surfaceGray, borderRadius: 2, overflow: 'hidden', marginTop: 4 },
+  statusXpFill: { height: 3, backgroundColor: Colors.indigo, borderRadius: 2 },
 
   // ── Nudges ───────────────────────────────────────────────────────────────────
   nudgesSection: {
@@ -1745,44 +1789,49 @@ const styles = StyleSheet.create({
   edgeSlice: { flex: 1 },
 
   // ── XP Card ──────────────────────────────────────────────────────────────────
-  xpCard: {
-    backgroundColor: Colors.cardWhite,
-    borderRadius: 20,
-    borderWidth: 0.5,
-    borderColor: Colors.border,
-    margin: 16,
-    padding: 24,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  xpDecorCar: { position: 'absolute', top: 12, right: 16, fontSize: 40, opacity: 0.06 },
-  xpTopRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  xpBadge: {
-    backgroundColor: Colors.indigoBg,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 0.5,
-    borderColor: Colors.indigo,
-  },
-  xpBadgeText: { fontSize: 11, fontWeight: '700', color: Colors.indigo, letterSpacing: 1 },
-  xpScore:     { fontSize: 48, fontWeight: '900', color: Colors.textPrimary, lineHeight: 56 },
-  xpBarTrack: {
-    width: '100%',
-    height: 6,
-    backgroundColor: Colors.surfaceGray,
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginBottom: 10,
-  },
-  xpBarFill: { height: 6, backgroundColor: Colors.indigo, borderRadius: 3 },
-  xpMsg:     { fontSize: 12, color: Colors.mutedText, fontWeight: '500' },
 
   // ── Countdown Card ────────────────────────────────────────────────────────────
+  // ── Today's Focus card ───────────────────────────────────────────────────────
+  focusCard: {
+    backgroundColor: Colors.indigoBg,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.indigo,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  focusCardLeft: { flex: 1 },
+  focusCardLabel: { fontSize: 10, fontWeight: '700', color: Colors.indigo, letterSpacing: 1, marginBottom: 3 },
+  focusCardTitle: { fontSize: 18, fontWeight: '800', color: Colors.textPrimary },
+  focusCardSub: { fontSize: 12, color: Colors.mutedText, marginTop: 2 },
+  focusCardChevron: { fontSize: 24, color: Colors.indigo, marginLeft: 8 },
+
+  // ── Urgent countdown (top of screen, ≤14 days) ──────────────────────────────
+  urgentCountdown: {
+    backgroundColor: Colors.cardWhite,
+    borderRadius: 16,
+    borderWidth: 0.5,
+    borderColor: Colors.border,
+    borderTopWidth: 4,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  urgentCountdownLeft: { flex: 1 },
+  urgentCountdownSub: { fontSize: 10, fontWeight: '700', color: Colors.mutedText, letterSpacing: 1, marginBottom: 4 },
+  urgentCountdownRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  urgentCountdownDays: { fontSize: 56, fontWeight: '900', lineHeight: 64 },
+  urgentCountdownDaysLabel: { fontSize: 18, color: Colors.mutedText, fontWeight: '600' },
+  urgentCountdownMsg: { fontSize: 13, fontWeight: '600', marginTop: 4 },
+  urgentChevron: { fontSize: 24, color: Colors.mutedText, marginLeft: 8 },
+
   countdownCard: {
     backgroundColor: Colors.cardWhite,
     borderRadius: 14,

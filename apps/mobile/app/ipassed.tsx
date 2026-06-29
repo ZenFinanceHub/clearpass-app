@@ -500,7 +500,7 @@ const styles = StyleSheet.create({
   },
   reviewStars: {
     fontSize: 22,
-    color: '#F59E0B',
+    color: '#B45309',
     fontWeight: '800',
     letterSpacing: 4,
   },

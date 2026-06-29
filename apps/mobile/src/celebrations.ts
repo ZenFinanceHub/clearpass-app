@@ -48,7 +48,7 @@ export const CELEBRATION_CONFIGS: Record<CelebrationEvent, CelebrationConfig> = 
     subtitle: 'Incredible dedication — you are unstoppable!',
     emoji: '🏆',
     xpBonus: 200,
-    confettiColours: ['#F59E0B', '#FBBF24', '#FCD34D', '#F97316', '#EF4444'],
+    confettiColours: ['#EA580C', '#FB923C', '#FCD34D', '#F97316', '#EF4444'],
   },
   '100_questions': {
     event: '100_questions',
@@ -80,7 +80,7 @@ export const CELEBRATION_CONFIGS: Record<CelebrationEvent, CelebrationConfig> = 
     subtitle: '3 mocks passed — you are test ready!',
     emoji: '🎯',
     xpBonus: 250,
-    confettiColours: ['#F59E0B', '#FBBF24', '#FCD34D', '#F97316', '#EAB308'],
+    confettiColours: ['#EA580C', '#FB923C', '#FCD34D', '#F97316', '#EAB308'],
   },
   hazard_pass: {
     event: 'hazard_pass',

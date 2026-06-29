@@ -1,4 +1,5 @@
 import { useAccessibility } from './AccessibilityContext';
+import { Colors } from './constants/theme';
 export { Colors, Typography, Radii } from './constants/theme';
 
 export function useTheme() {
@@ -17,10 +18,11 @@ export function useTheme() {
     return {
       ...shared,
       backgroundColor: '#0A0A0F',
-      cardColor: '#111827',
+      cardColor: Colors.darkSurface,
       textColor: '#FFFFFF',
       subTextColor: '#9CA3AF',
       borderColor: hc ? '#FFFFFF' : '#1F2937',
+      primaryColor: Colors.indigoDark,
     };
   }
 
@@ -31,5 +33,6 @@ export function useTheme() {
     textColor: hc ? '#000000' : '#111827',
     subTextColor: hc ? '#000000' : '#6B7280',
     borderColor: hc ? '#000000' : '#E5E7EB',
+    primaryColor: Colors.indigo,
   };
 }

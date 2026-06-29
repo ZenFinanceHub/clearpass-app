@@ -1,6 +1,7 @@
 export const Colors = {
   // Brand
   indigo: '#4F46E5',
+  indigoDark: '#818CF8',   // dark mode primary — indigo-400, readable on near-black surfaces
   violet: '#7C3AED',
 
   // Brand tints (for backgrounds/badges)
@@ -10,8 +11,10 @@ export const Colors = {
   // Semantics
   emerald: '#10B981',
   emeraldBg: '#D1FAE5',
-  amber: '#F5A623',
+  amber: '#F5A623',        // caution/warning states only — low question count, expiry, time alerts
   amberBg: '#FEF3C7',
+  orange: '#EA580C',       // gamification rewards — streaks, XP, celebrations
+  orangeBg: '#FFF7ED',
   red: '#EF4444',
   redBg: '#FEE2E2',
 
@@ -24,7 +27,8 @@ export const Colors = {
   cardWhite: '#FFFFFF',
   offWhite: '#F7F8FA',
   border: '#E5E7EB',
-  surfaceGray: '#F3F4F6',
+  surfaceGray: '#F3F4F6',  // light mode card surface
+  darkSurface: '#1F2937',  // dark mode card surface — gray-800
 };
 
 export type ColorKey = keyof typeof Colors;
