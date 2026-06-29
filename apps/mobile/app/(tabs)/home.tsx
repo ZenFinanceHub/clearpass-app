@@ -38,7 +38,7 @@ import {
   scheduleTestCountdownNotifications,
 } from '@/src/notifications';
 import { buildTodaySummary } from '../studyplan';
-import { loadSRState } from '@/src/spacedRepetition';
+import { loadSRState, getDueQuestions } from '@/src/spacedRepetition';
 import { computeAndSavePassProbability, PassProbabilityResult } from '@/src/passProbability';
 import { generateNudges, saveNudges, loadNudges, dismissNudge, TutorNudge, NudgeType } from '@/src/tutorNudges';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
@@ -631,6 +631,7 @@ export default function HomeScreen() {
   const [celebQueue, setCelebQueue]   = useState<CelebrationEvent[]>([]);
   const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
   const [pendingChallenges, setPendingChallenges] = useState(0);
+  const [homeDueCount, setHomeDueCount] = useState(0);
   const [showResultBanner, setShowResultBanner]   = useState(false);
 
   // Question of the Day
@@ -659,7 +660,8 @@ export default function HomeScreen() {
       const fresh = await loadUserProgress();
       if (fresh) {
         setProgress(fresh);
-        const [srState] = await Promise.all([loadSRState()]);
+        const [srState, dueIds] = await Promise.all([loadSRState(), getDueQuestions(allQuestions.map(q => q.id), 200)]);
+        setHomeDueCount(dueIds.length);
         const prob = await computeAndSavePassProbability(fresh, srState, allQuestions);
         setPassProb(prob);
         const generated = generateNudges(fresh, srState, allQuestions);
@@ -1061,6 +1063,22 @@ export default function HomeScreen() {
             </View>
           </View>
         </View>
+      )}
+
+      {/* Today's Focus card */}
+      {!isLoading && homeDueCount > 0 && (
+        <TouchableOpacity
+          style={styles.focusCard}
+          onPress={() => router.push('/(tabs)/practice')}
+          activeOpacity={0.85}
+        >
+          <View style={styles.focusCardLeft}>
+            <Text style={styles.focusCardLabel}>{"TODAY'S FOCUS"}</Text>
+            <Text style={styles.focusCardTitle}>{homeDueCount}{' question'}{homeDueCount === 1 ? '' : 's'}{' due'}</Text>
+            <Text style={styles.focusCardSub}>{'~'}{Math.ceil(homeDueCount * 0.5)}{' min · Tap to start'}</Text>
+          </View>
+          <Text style={styles.focusCardChevron}>{'›'}</Text>
+        </TouchableOpacity>
       )}
 
       {/* Urgent countdown hero — shown at top when test is within 14 days */}
@@ -1773,6 +1791,25 @@ const styles = StyleSheet.create({
   // ── XP Card ──────────────────────────────────────────────────────────────────
 
   // ── Countdown Card ────────────────────────────────────────────────────────────
+  // ── Today's Focus card ───────────────────────────────────────────────────────
+  focusCard: {
+    backgroundColor: Colors.indigoBg,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.indigo,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  focusCardLeft: { flex: 1 },
+  focusCardLabel: { fontSize: 10, fontWeight: '700', color: Colors.indigo, letterSpacing: 1, marginBottom: 3 },
+  focusCardTitle: { fontSize: 18, fontWeight: '800', color: Colors.textPrimary },
+  focusCardSub: { fontSize: 12, color: Colors.mutedText, marginTop: 2 },
+  focusCardChevron: { fontSize: 24, color: Colors.indigo, marginLeft: 8 },
+
   // ── Urgent countdown (top of screen, ≤14 days) ──────────────────────────────
   urgentCountdown: {
     backgroundColor: Colors.cardWhite,
