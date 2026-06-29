@@ -11,8 +11,10 @@ export const Colors = {
   // Semantics
   emerald: '#10B981',
   emeraldBg: '#D1FAE5',
-  amber: '#F5A623',
+  amber: '#F5A623',        // caution/warning states only — low question count, expiry, time alerts
   amberBg: '#FEF3C7',
+  orange: '#EA580C',       // gamification rewards — streaks, XP, celebrations
+  orangeBg: '#FFF7ED',
   red: '#EF4444',
   redBg: '#FEE2E2',
 

@@ -523,7 +523,7 @@ function ResultsView({
       ) : (
         <>
           <LinearGradient
-            colors={isDraw ? ['#6B7280', '#4B5563'] : iWon ? ['#F59E0B', '#D97706'] : [Colors.indigo, Colors.violet]}
+            colors={isDraw ? ['#6B7280', '#4B5563'] : iWon ? ['#EA580C', '#C2410C'] : [Colors.indigo, Colors.violet]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.winnerBanner}
