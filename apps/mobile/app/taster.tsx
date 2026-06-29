@@ -140,7 +140,7 @@ export default function TasterScreen() {
       <Text style={styles.trialBadge}>{'✦ Free trial — no account needed'}</Text>
 
       {/* Question */}
-      <Text style={styles.questionText}>{question.question}</Text>
+      <Text style={styles.questionText}>{question.questionText}</Text>
 
       {/* Options */}
       <View style={styles.optionsGap}>

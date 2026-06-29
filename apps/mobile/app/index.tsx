@@ -101,7 +101,7 @@ export default function OnboardingScreen() {
 
         <TouchableOpacity
           style={styles.tryButton}
-          onPress={() => router.push('/taster')}
+          onPress={() => router.push('/taster' as never)}
           activeOpacity={0.85}
         >
           <Text style={styles.tryButtonText}>{'Try 5 questions — no signup needed'}</Text>
