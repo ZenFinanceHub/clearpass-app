@@ -827,7 +827,7 @@ export default function SettingsScreen() {
             </Text>
             <Text style={[styles.description, {
               fontSize: theme.fontSize(12),
-              color: testResult?.passed ? Colors.indigo : testResult ? '#F59E0B' : theme.subTextColor,
+              color: testResult?.passed ? Colors.indigo : testResult ? '#B45309' : theme.subTextColor,
             }]}>
               {testResult?.passed
                 ? 'Passed [V]' + (testResult.score ? ' - Score: ' + String(testResult.score) + '/50' : '')

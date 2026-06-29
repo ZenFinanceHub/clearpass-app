@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   inputOptional: { borderStyle: 'dashed' },
-  warnText:  { fontSize: 12, color: '#F59E0B', marginTop: -4 },
+  warnText:  { fontSize: 12, color: '#B45309', marginTop: -4 },
   errorText: { fontSize: 13, color: '#EF4444', marginTop: 2 },
   submitBtn: {
     backgroundColor: Colors.indigo,

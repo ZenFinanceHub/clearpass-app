@@ -88,7 +88,7 @@ function barColor(pct: number): string {
 }
 
 function getRank(score: number): { label: string; color: string } {
-  if (score >= 80) return { label: 'Test Ready!', color: '#F59E0B' };
+  if (score >= 80) return { label: 'Test Ready!', color: '#B45309' };
   if (score >= 60) return { label: 'Advanced', color: Colors.indigo };
   if (score >= 40) return { label: 'Intermediate', color: Colors.indigo };
   if (score >= 20) return { label: 'Improving', color: '#3B82F6' };
@@ -484,7 +484,8 @@ function CircularProgress({ pct }: { pct: number }) {
   //   borderTopColor   → 12 o'clock sector (33-67%)
   //   borderRightColor → 3 o'clock sector  (67-100%)
   const clamp = Math.min(100, Math.max(0, pct));
-  const color = clamp >= 70 ? '#10B981' : clamp >= 45 ? '#F59E0B' : '#EF4444';
+  const color     = clamp >= 70 ? '#10B981' : clamp >= 45 ? '#F59E0B' : '#EF4444';
+  const textColor = clamp >= 70 ? '#10B981' : clamp >= 45 ? '#B45309' : '#EF4444';
   const GREY  = '#E5E7EB';
   const NONE  = 'transparent';
 
@@ -511,7 +512,7 @@ function CircularProgress({ pct }: { pct: number }) {
       </View>
       {/* Text sits below the clipped arc */}
       <View style={styles.circleTextBox}>
-        <Text style={[styles.circleNum, { color }]}>{clamp}{'%'}</Text>
+        <Text style={[styles.circleNum, { color: textColor }]}>{clamp}{'%'}</Text>
         <Text style={styles.circleNumLabel}>probability</Text>
       </View>
     </View>
@@ -554,22 +555,22 @@ function PassProbabilityCard({ result }: { result: PassProbabilityResult }) {
         <BreakdownBar
           label="Mock Tests"
           value={breakdown.mockScore}
-          color={breakdown.mockScore >= 70 ? '#10B981' : breakdown.mockScore >= 45 ? '#F59E0B' : '#EF4444'}
+          color={breakdown.mockScore >= 70 ? '#10B981' : breakdown.mockScore >= 45 ? '#B45309' : '#EF4444'}
         />
         <BreakdownBar
           label="Practice Accuracy"
           value={breakdown.accuracyScore}
-          color={breakdown.accuracyScore >= 70 ? '#10B981' : breakdown.accuracyScore >= 45 ? '#F59E0B' : '#EF4444'}
+          color={breakdown.accuracyScore >= 70 ? '#10B981' : breakdown.accuracyScore >= 45 ? '#B45309' : '#EF4444'}
         />
         <BreakdownBar
           label="Topic Coverage"
           value={breakdown.coverageScore}
-          color={breakdown.coverageScore >= 70 ? '#10B981' : breakdown.coverageScore >= 45 ? '#F59E0B' : '#EF4444'}
+          color={breakdown.coverageScore >= 70 ? '#10B981' : breakdown.coverageScore >= 45 ? '#B45309' : '#EF4444'}
         />
         <BreakdownBar
           label="Study Streak"
           value={breakdown.consistencyScore}
-          color={breakdown.consistencyScore >= 70 ? '#10B981' : breakdown.consistencyScore >= 45 ? '#F59E0B' : '#EF4444'}
+          color={breakdown.consistencyScore >= 70 ? '#10B981' : breakdown.consistencyScore >= 45 ? '#B45309' : '#EF4444'}
         />
       </View>
 

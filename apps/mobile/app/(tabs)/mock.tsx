@@ -772,7 +772,7 @@ const styles = StyleSheet.create({
   timerWarn: { color: '#EF4444' },
   flagTouchable: { width: 80, alignItems: 'flex-end' },
   flagIcon: { fontSize: 18, fontWeight: '800', color: '#9CA3AF' },
-  flagIconActive: { color: '#F59E0B' },
+  flagIconActive: { color: '#B45309' },
 
   // Pause overlay
   pauseOverlay: {
@@ -817,7 +817,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F59E0B',
   },
-  flaggedPillText: { fontSize: 10, fontWeight: '800', color: '#F59E0B', letterSpacing: 1 },
+  flaggedPillText: { fontSize: 10, fontWeight: '800', color: '#B45309', letterSpacing: 1 },
   questionImage: { width: '100%', height: 160, borderRadius: 8, marginBottom: 12 },
   questionText: { fontSize: 17, fontWeight: '600', lineHeight: 26 },
 
@@ -926,7 +926,7 @@ const styles = StyleSheet.create({
   reviewQNum: { fontSize: 12, fontWeight: '800', color: Colors.indigo, width: 32 },
   reviewPreview: { flex: 1, fontSize: 13 },
   reviewIcons: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  reviewFlagIcon: { fontSize: 14, fontWeight: '700', color: '#F59E0B' },
+  reviewFlagIcon: { fontSize: 14, fontWeight: '700', color: '#B45309' },
   correctIcon: { fontSize: 14, fontWeight: '900', color: Colors.emerald },
   wrongIcon: { fontSize: 14, fontWeight: '900', color: '#EF4444' },
   reviewExpanded: { paddingHorizontal: 14, paddingBottom: 14, gap: 12, borderTopWidth: 0.5, borderTopColor: '#E5E7EB' },
