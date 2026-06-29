@@ -1050,6 +1050,21 @@ export default function HomeScreen() {
         </View>
       )}
 
+      {/* Urgent countdown hero — shown at top when test is within 14 days */}
+      {!isLoading && daysLeft !== null && daysLeft >= 0 && daysLeft <= 14 && (
+        <TouchableOpacity style={[styles.urgentCountdown, { borderTopColor: countdownColor }]} onPress={handleOpenModal} activeOpacity={0.9}>
+          <View style={styles.urgentCountdownLeft}>
+            <Text style={styles.urgentCountdownSub}>{'YOUR TEST'}</Text>
+            <View style={styles.urgentCountdownRow}>
+              <Text style={[styles.urgentCountdownDays, { color: countdownColor }]}>{daysLeft}</Text>
+              <Text style={styles.urgentCountdownDaysLabel}>{'days to go'}</Text>
+            </View>
+            <Text style={[styles.urgentCountdownMsg, { color: countdownColor }]}>{countdownMsg}</Text>
+          </View>
+          <Text style={styles.urgentChevron}>{'›'}</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Road Map Hero */}
       {isLoading ? (
         <View style={{ paddingHorizontal: 16, paddingVertical: 12, gap: 10 }}>
@@ -1074,7 +1089,7 @@ export default function HomeScreen() {
 
 
       {/* Test Date Countdown */}
-      {daysLeft !== null && daysLeft >= 0 && (
+      {daysLeft !== null && daysLeft > 14 && (
         <View style={styles.countdownCard}>
           <View style={styles.countdownTop}>
             <Text style={styles.countdownLabel}>YOUR TEST</Text>
@@ -1737,6 +1752,28 @@ const styles = StyleSheet.create({
   // ── XP Card ──────────────────────────────────────────────────────────────────
 
   // ── Countdown Card ────────────────────────────────────────────────────────────
+  // ── Urgent countdown (top of screen, ≤14 days) ──────────────────────────────
+  urgentCountdown: {
+    backgroundColor: Colors.cardWhite,
+    borderRadius: 16,
+    borderWidth: 0.5,
+    borderColor: Colors.border,
+    borderTopWidth: 4,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  urgentCountdownLeft: { flex: 1 },
+  urgentCountdownSub: { fontSize: 10, fontWeight: '700', color: Colors.mutedText, letterSpacing: 1, marginBottom: 4 },
+  urgentCountdownRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  urgentCountdownDays: { fontSize: 56, fontWeight: '900', lineHeight: 64 },
+  urgentCountdownDaysLabel: { fontSize: 18, color: Colors.mutedText, fontWeight: '600' },
+  urgentCountdownMsg: { fontSize: 13, fontWeight: '600', marginTop: 4 },
+  urgentChevron: { fontSize: 24, color: Colors.mutedText, marginLeft: 8 },
+
   countdownCard: {
     backgroundColor: Colors.cardWhite,
     borderRadius: 14,
