@@ -128,48 +128,49 @@ export default function RootLayout() {
   return (
     <AccessibilityProvider>
       <NetworkProvider>
-      <>
         {Platform.OS === 'web' && <Head><title>ClearPass</title></Head>}
-        <Stack screenOptions={{ title: 'ClearPass' }}>
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-          <Stack.Screen name="landing" options={{ headerShown: false }} />
-          <Stack.Screen name="paywall" options={{ headerShown: false }} />
-          <Stack.Screen name="payment-success" options={{ headerShown: false }} />
-          <Stack.Screen name="auth" options={{ headerShown: false }} />
-          <Stack.Screen name="auth/signup" options={{ headerShown: false }} />
-          <Stack.Screen name="auth/signin" options={{ headerShown: false }} />
-          <Stack.Screen name="auth/testdate" options={{ headerShown: false }} />
-          <Stack.Screen name="auth/forgot-password" options={{ headerShown: false }} />
-          <Stack.Screen name="auth/reset-password" options={{ headerShown: false }} />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="roadsigns" options={{ headerShown: false }} />
-          <Stack.Screen name="highwaycode" options={{ headerShown: false }} />
-          <Stack.Screen name="hazard" options={{ headerShown: false }} />
-          <Stack.Screen name="progress" options={{ headerShown: false }} />
-          <Stack.Screen name="leaderboard" options={{ headerShown: false }} />
-          <Stack.Screen name="aitutor" options={{ headerShown: false }} />
-          <Stack.Screen name="studyplan" options={{ headerShown: false }} />
-          <Stack.Screen name="testday" options={{ headerShown: false }} />
-          <Stack.Screen name="instructor" options={{ headerShown: false }} />
-          <Stack.Screen name="challenge" options={{ headerShown: false }} />
-          <Stack.Screen name="ipassed" options={{ headerShown: false }} />
-          <Stack.Screen name="i-passed" options={{ headerShown: false }} />
-          <Stack.Screen name="privacy-policy" options={{ headerShown: false }} />
-          <Stack.Screen name="terms" options={{ headerShown: false }} />
-          <Stack.Screen name="confirm-parent"  options={{ headerShown: false }} />
-          <Stack.Screen name="screenshot-mode" options={{ headerShown: false }} />
-          <Stack.Screen name="study-plan"     options={{ headerShown: false }} />
-        </Stack>
-        <StatusBar style="light" />
-        <ClearPassSupport />
-        <ClearPassSupportNative />
-        {showCachingToast && (
-          <View style={toastStyles.toast} pointerEvents="none">
-            <Text style={toastStyles.text}>{'Downloading content for offline use...'}</Text>
-          </View>
-        )}
-      </>
+        <View suppressHydrationWarning style={{ flex: 1 }}>
+          <Stack screenOptions={{ title: 'ClearPass' }}>
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+            <Stack.Screen name="landing" options={{ headerShown: false }} />
+            <Stack.Screen name="paywall" options={{ headerShown: false }} />
+            <Stack.Screen name="payment-success" options={{ headerShown: false }} />
+            <Stack.Screen name="taster" options={{ headerShown: false }} />
+            <Stack.Screen name="auth" options={{ headerShown: false }} />
+            <Stack.Screen name="auth/signup" options={{ headerShown: false }} />
+            <Stack.Screen name="auth/signin" options={{ headerShown: false }} />
+            <Stack.Screen name="auth/testdate" options={{ headerShown: false }} />
+            <Stack.Screen name="auth/forgot-password" options={{ headerShown: false }} />
+            <Stack.Screen name="auth/reset-password" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="roadsigns" options={{ headerShown: false }} />
+            <Stack.Screen name="highwaycode" options={{ headerShown: false }} />
+            <Stack.Screen name="hazard" options={{ headerShown: false }} />
+            <Stack.Screen name="progress" options={{ headerShown: false }} />
+            <Stack.Screen name="leaderboard" options={{ headerShown: false }} />
+            <Stack.Screen name="aitutor" options={{ headerShown: false }} />
+            <Stack.Screen name="studyplan" options={{ headerShown: false }} />
+            <Stack.Screen name="testday" options={{ headerShown: false }} />
+            <Stack.Screen name="instructor" options={{ headerShown: false }} />
+            <Stack.Screen name="challenge" options={{ headerShown: false }} />
+            <Stack.Screen name="ipassed" options={{ headerShown: false }} />
+            <Stack.Screen name="i-passed" options={{ headerShown: false }} />
+            <Stack.Screen name="privacy-policy" options={{ headerShown: false }} />
+            <Stack.Screen name="terms" options={{ headerShown: false }} />
+            <Stack.Screen name="confirm-parent" options={{ headerShown: false }} />
+            <Stack.Screen name="screenshot-mode" options={{ headerShown: false }} />
+            <Stack.Screen name="study-plan" options={{ headerShown: false }} />
+          </Stack>
+          <StatusBar style="light" />
+          <ClearPassSupport />
+          <ClearPassSupportNative />
+          {showCachingToast && (
+            <View style={toastStyles.toast} pointerEvents="none">
+              <Text style={toastStyles.text}>{'Downloading content for offline use...'}</Text>
+            </View>
+          )}
+        </View>
       </NetworkProvider>
     </AccessibilityProvider>
   );
