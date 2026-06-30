@@ -52,6 +52,7 @@ import {
   resetFreeQuestionsAnswered,
   isPremium,
 } from '@/src/subscription';
+import { isTrialActive } from '@/src/storage';
 import { explainAnswer } from '@clearpass/ai';
 import { TOPIC_LABELS } from '@/src/tutorNudges';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
@@ -292,7 +293,7 @@ export default function PracticeScreen() {
     if (isNewDay) await resetFreeQuestionsAnswered();
     userProgressRef.current = progress;
 
-    if (!(progress.isPro ?? false) && (progress.dailyQuestionsAnswered ?? 0) >= 10) {
+    if (!(progress.isPro ?? false) && !isTrialActive(progress) && (progress.dailyQuestionsAnswered ?? 0) >= 10) {
       setPhase('dailyLimit');
       return;
     }

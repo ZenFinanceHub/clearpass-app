@@ -15,6 +15,7 @@ import { supabase } from '@/src/supabase';
 import { getProxyUrl } from '@/src/proxyUrl';
 import { Colors } from '@/src/constants/theme';
 import { ScaleButton } from '@/src/components/ScaleButton';
+import { loadUserProgress, isTrialActive } from '@/src/storage';
 
 const FEATURES = [
   'Unlimited practice questions',
@@ -31,6 +32,7 @@ export default function PaywallScreen() {
   const [error,        setError]        = useState('');
   const [referredBy,   setReferredBy]   = useState<string | null>(null);
   const [isTestMode,   setIsTestMode]   = useState(false);
+  const [trialExpired, setTrialExpired] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem('referral_code').then(code => {
@@ -41,6 +43,12 @@ export default function PaywallScreen() {
       .then(r => r.json() as Promise<{ stripeTestMode?: boolean }>)
       .then(d => { if (d.stripeTestMode) setIsTestMode(true); })
       .catch(() => {});
+
+    loadUserProgress().then(p => {
+      if (p && p.trialStartDate && !p.isPro && !isTrialActive(p)) {
+        setTrialExpired(true);
+      }
+    }).catch(() => {});
   }, []);
 
   async function handleSubscribe() {
@@ -96,9 +104,13 @@ export default function PaywallScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerEmoji}>{'🏆'}</Text>
-        <Text style={styles.headerTitle}>{'Go Premium'}</Text>
-        <Text style={styles.headerSub}>{'Everything you need to pass first time'}</Text>
+        <Text style={styles.headerEmoji}>{trialExpired ? '⏰' : '🏆'}</Text>
+        <Text style={styles.headerTitle}>{trialExpired ? 'Your Trial Has Ended' : 'Go Premium'}</Text>
+        <Text style={styles.headerSub}>
+          {trialExpired
+            ? 'Subscribe to keep all your Pro features and progress'
+            : 'Try free for 7 days, then everything you need to pass first time'}
+        </Text>
       </View>
 
       {/* Feature list */}
@@ -113,11 +125,18 @@ export default function PaywallScreen() {
 
       {/* Pricing */}
       <View style={styles.pricingBox}>
+        {!trialExpired && (
+          <View style={styles.trialPill}>
+            <Text style={styles.trialPillText}>{'7 days free'}</Text>
+          </View>
+        )}
         <View style={styles.priceRow}>
           <Text style={styles.priceAmount}>{'£7.99'}</Text>
           <Text style={styles.pricePeriod}>{' / 3 months'}</Text>
         </View>
-        <Text style={styles.priceSub}>{"That's less than £2.67/month"}</Text>
+        <Text style={styles.priceSub}>
+          {trialExpired ? "That's less than £2.67/month" : "Free for 7 days, then just £2.67/month"}
+        </Text>
       </View>
 
       {/* TODO: replace with Google Play IAP once policy decision is made */}
@@ -148,7 +167,9 @@ export default function PaywallScreen() {
           >
             {loading
               ? <ActivityIndicator color="#FFFFFF" />
-              : <Text style={styles.ctaBtnText}>{'Start Learning Now'}</Text>
+              : <Text style={styles.ctaBtnText}>
+                  {trialExpired ? 'Subscribe Now — £7.99/3 months' : 'Start Free Trial'}
+                </Text>
             }
           </ScaleButton>
         </>
@@ -200,6 +221,15 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: 6,
   },
+  trialPill: {
+    backgroundColor: Colors.indigoBg ?? '#EEF2FF',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: Colors.indigo,
+  },
+  trialPillText: { fontSize: 12, fontWeight: '700', color: Colors.indigo },
   priceRow: { flexDirection: 'row', alignItems: 'baseline' },
   priceAmount: { fontSize: 48, fontWeight: '900', color: '#111827' },
   pricePeriod: { fontSize: 18, color: '#6B7280', fontWeight: '500' },

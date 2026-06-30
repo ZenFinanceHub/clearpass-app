@@ -130,7 +130,23 @@ export function createFreshUserProgress(): UserProgress {
     hazardPerceptionHistory: [],
     streakFreezeCount: 0,
     streakFreezeLastReplenished: '',
+    trialStartDate: new Date().toISOString(),
   };
+}
+
+const TRIAL_DAYS = 7;
+
+export function isTrialActive(progress: UserProgress): boolean {
+  if (progress.isPro) return false;
+  if (!progress.trialStartDate) return false;
+  const end = new Date(progress.trialStartDate).getTime() + TRIAL_DAYS * 86400000;
+  return Date.now() < end;
+}
+
+export function daysLeftInTrial(progress: UserProgress): number {
+  if (!progress.trialStartDate) return 0;
+  const end = new Date(progress.trialStartDate).getTime() + TRIAL_DAYS * 86400000;
+  return Math.max(0, Math.ceil((end - Date.now()) / 86400000));
 }
 
 // ─── Bookmarks ────────────────────────────────────────────────────────────────
