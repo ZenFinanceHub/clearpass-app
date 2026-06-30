@@ -17,6 +17,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "co.uk.getclearpass.app",
       "buildNumber": "10",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -75,7 +76,9 @@
           "color": "#0D9488",
           "defaultChannel": "default"
         }
-      ]
+      ],
+      "expo-apple-authentication",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

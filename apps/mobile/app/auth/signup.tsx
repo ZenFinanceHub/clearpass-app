@@ -10,9 +10,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/src/supabase';
+import { signInWithApple, signInWithGoogle } from '@/src/socialAuth';
 import { Colors } from '@/src/constants/theme';
 
 const PENDING_USERNAME_KEY = '@clearpass/pending_username';
@@ -31,6 +33,8 @@ export default function SignUpScreen() {
   const [awaitingConfirm, setAwaitingConfirm] = useState(false);
   const [resendLoading,   setResendLoading]   = useState(false);
   const [resendMessage,   setResendMessage]   = useState('');
+  const [socialLoading,   setSocialLoading]   = useState(false);
+  const [socialError,     setSocialError]     = useState('');
 
   useEffect(() => {
     if (params.ref) {
@@ -120,6 +124,33 @@ export default function SignUpScreen() {
     }
   }
 
+  async function handleAppleSignIn() {
+    setSocialLoading(true);
+    setSocialError('');
+    try {
+      const result = await signInWithApple();
+      router.replace(result.isNewUser ? '/auth/testdate' : '/(tabs)/home');
+    } catch (e: unknown) {
+      if ((e as { code?: string }).code === 'ERR_REQUEST_CANCELED') return;
+      setSocialError('Apple Sign In failed. Please try again.');
+    } finally {
+      setSocialLoading(false);
+    }
+  }
+
+  async function handleGoogleSignIn() {
+    setSocialLoading(true);
+    setSocialError('');
+    try {
+      const result = await signInWithGoogle();
+      if (result) router.replace(result.isNewUser ? '/auth/testdate' : '/(tabs)/home');
+    } catch {
+      setSocialError('Google Sign In failed. Please try again.');
+    } finally {
+      setSocialLoading(false);
+    }
+  }
+
   if (awaitingConfirm) {
     return (
       <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -162,6 +193,44 @@ export default function SignUpScreen() {
       <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <Text style={styles.logo}>{'ClearPass'}</Text>
         <Text style={styles.tagline}>{'Pass your theory test. First time.'}</Text>
+
+        {Platform.OS !== 'web' && (
+          <>
+            {socialError.length > 0 && <Text style={styles.socialErrorText}>{socialError}</Text>}
+
+            <TouchableOpacity
+              style={[styles.socialBtn, socialLoading && styles.submitBtnDisabled]}
+              onPress={() => void handleGoogleSignIn()}
+              disabled={socialLoading}
+              activeOpacity={0.85}
+            >
+              {socialLoading
+                ? <ActivityIndicator color="#111827" />
+                : (
+                    <>
+                      <Text style={styles.googleG}>{'G'}</Text>
+                      <Text style={styles.socialBtnText}>{'Continue with Google'}</Text>
+                    </>
+                  )}
+            </TouchableOpacity>
+
+            {Platform.OS === 'ios' && (
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP}
+                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                cornerRadius={14}
+                style={styles.appleBtn}
+                onPress={() => void handleAppleSignIn()}
+              />
+            )}
+
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>{'or sign up with email'}</Text>
+              <View style={styles.dividerLine} />
+            </View>
+          </>
+        )}
 
         <View style={styles.form}>
           <TextInput
@@ -229,7 +298,7 @@ const styles = StyleSheet.create({
   inner: { flexGrow: 1, paddingHorizontal: 28, paddingTop: 80, paddingBottom: 48 },
 
   logo: { fontSize: 36, fontWeight: '900', color: Colors.indigo, letterSpacing: 2, marginBottom: 6 },
-  tagline: { fontSize: 14, color: '#6B7280', marginBottom: 40 },
+  tagline: { fontSize: 14, color: '#6B7280', marginBottom: 24 },
 
   confirmTitle: { fontSize: 24, fontWeight: '800', color: '#111827', marginBottom: 12, marginTop: 16 },
   confirmBody: { fontSize: 15, color: '#6B7280', lineHeight: 22, marginBottom: 32 },
@@ -237,6 +306,29 @@ const styles = StyleSheet.create({
   resendBtn: { alignItems: 'center', paddingVertical: 12, marginTop: 8 },
   resendBtnText: { fontSize: 14, color: Colors.indigo, fontWeight: '600' },
   resendMessage: { fontSize: 13, color: '#6B7280', textAlign: 'center', marginTop: 8 },
+
+  socialErrorText: { fontSize: 13, color: '#EF4444', marginBottom: 8, textAlign: 'center' },
+
+  socialBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 14,
+    paddingVertical: 14,
+    gap: 10,
+    marginBottom: 12,
+  },
+  googleG: { fontSize: 17, fontWeight: '800', color: '#4285F4' },
+  socialBtnText: { fontSize: 15, color: '#111827', fontWeight: '600' },
+
+  appleBtn: { height: 50, width: '100%', marginBottom: 12 },
+
+  divider: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#E5E7EB' },
+  dividerText: { paddingHorizontal: 12, fontSize: 12, color: '#9CA3AF' },
 
   form: { gap: 12, marginBottom: 24 },
   input: {
