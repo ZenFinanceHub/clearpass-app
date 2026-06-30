@@ -40,3 +40,4 @@ server/.env
 # generated native folders
 /ios
 /android
+google-play-service-account.json

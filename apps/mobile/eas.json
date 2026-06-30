@@ -31,6 +31,10 @@
         "appleId": "craig@zen-finance.co.uk",
         "ascAppId": "6779180259",
         "appleTeamId": "B5Q3T2GSF8"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-play-service-account.json",
+        "track": "internal"
       }
     }
   }
