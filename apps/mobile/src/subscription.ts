@@ -4,6 +4,14 @@ import { supabase } from './supabase';
 const FREE_QUESTIONS_KEY = '@clearpass/free_questions_answered';
 export const FREE_QUESTION_LIMIT = 10;
 
+const TRIAL_DAYS = 7;
+
+function isProgressInTrial(progress: { isPro?: boolean; trialStartDate?: string } | null): boolean {
+  if (!progress?.trialStartDate || progress.isPro) return false;
+  const end = new Date(progress.trialStartDate).getTime() + TRIAL_DAYS * 86400000;
+  return Date.now() < end;
+}
+
 export async function isPremium(): Promise<boolean> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -14,8 +22,8 @@ export async function isPremium(): Promise<boolean> {
       .eq('id', user.id)
       .single();
     if (!data) return false;
-    const progress = data.progress as { isPro?: boolean } | null;
-    return progress?.isPro === true;
+    const progress = data.progress as { isPro?: boolean; trialStartDate?: string } | null;
+    return progress?.isPro === true || isProgressInTrial(progress);
   } catch {
     return false;
   }

@@ -51,6 +51,7 @@ import { supabase } from '@/src/supabase';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 import { useNetwork } from '@/src/NetworkContext';
+import { isTrialActive, daysLeftInTrial } from '@/src/storage';
 
 // ─── Road map constants ───────────────────────────────────────────────────────
 
@@ -920,6 +921,10 @@ export default function HomeScreen() {
   const xpData  = getXpLevel(xp);
   const streak  = progress?.studyStreakDays ?? 0;
   const freezeCount = (progress?.isPro ? progress.streakFreezeCount : 0) ?? 0;
+  const trialActive = progress ? isTrialActive(progress) : false;
+  const trialDaysLeft = progress ? daysLeftInTrial(progress) : 0;
+  const trialExpired = !!(progress && !progress.isPro && progress.trialStartDate && !trialActive);
+  const showTrialBanner = trialActive && trialDaysLeft <= 3;
   const tip     = DAILY_TIPS[new Date().getDay() % 3];
   const readinessPct = progress ? calculateReadiness(progress).score : 0;
 
@@ -1065,6 +1070,29 @@ export default function HomeScreen() {
             </View>
           </View>
         </View>
+      )}
+
+      {/* Trial banner */}
+      {!isLoading && (showTrialBanner || trialExpired) && (
+        <TouchableOpacity
+          style={[styles.trialBanner, trialExpired && styles.trialBannerExpired]}
+          onPress={() => router.push('/paywall')}
+          activeOpacity={0.85}
+        >
+          <View style={styles.trialBannerLeft}>
+            <Text style={styles.trialBannerTitle}>
+              {trialExpired
+                ? 'Your free trial has ended'
+                : trialDaysLeft === 1
+                  ? 'Last day of your free trial!'
+                  : `${trialDaysLeft} days left in your free trial`}
+            </Text>
+            <Text style={styles.trialBannerSub}>
+              {trialExpired ? 'Subscribe to keep all Pro features' : 'Unlock Pro to keep your progress going'}
+            </Text>
+          </View>
+          <Text style={styles.trialBannerCta}>{trialExpired ? 'Subscribe →' : 'Upgrade →'}</Text>
+        </TouchableOpacity>
       )}
 
       {/* Today's Focus card */}
@@ -1795,6 +1823,26 @@ const styles = StyleSheet.create({
 
   // ── Countdown Card ────────────────────────────────────────────────────────────
   // ── Today's Focus card ───────────────────────────────────────────────────────
+  trialBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#93C5FD',
+    padding: 14,
+    gap: 10,
+    marginBottom: 12,
+  },
+  trialBannerExpired: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#FCD34D',
+  },
+  trialBannerLeft: { flex: 1, gap: 2 },
+  trialBannerTitle: { fontSize: 13, fontWeight: '700', color: '#1E40AF' },
+  trialBannerSub: { fontSize: 11, color: '#3B82F6' },
+  trialBannerCta: { fontSize: 13, fontWeight: '700', color: '#1D4ED8', flexShrink: 0 },
+
   focusCard: {
     backgroundColor: Colors.indigoBg,
     borderRadius: 14,
