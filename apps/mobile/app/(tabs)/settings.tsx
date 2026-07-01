@@ -567,7 +567,7 @@ export default function SettingsScreen() {
           </Text>
           <Text style={[styles.subscriptionDetail, { color: isPro ? 'rgba(255,255,255,0.8)' : theme.subTextColor }]}>
             {isPro
-              ? 'Unlimited questions · AI Tutor · All mock tests'
+              ? 'Unlimited questions · Ask Pip · All mock tests'
               : '10 questions/day · Upgrade for full access'}
           </Text>
         </View>

@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Pip } from '@/src/components/Pip';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { getTutorQuestionsUsed, incrementTutorQuestionsUsed } from '@/src/storage';
 import { isPremium } from '@/src/subscription';
@@ -36,7 +37,7 @@ const SYSTEM_PROMPT =
   'Use simple language suitable for learner drivers.';
 
 const WELCOME =
-  "Hi! I'm your AI driving theory tutor 👋 Ask me anything about the Highway Code, road signs, or theory test questions.";
+  "Hi! I'm Pip 🦔 Ask me anything about the Highway Code, road signs, or theory test questions — I only use official DVSA materials.";
 
 const STARTER_PROMPTS = [
   'Explain a road sign to me',
@@ -178,7 +179,8 @@ export default function TutorScreen() {
     >
       {/* Scope banner */}
       <View style={styles.scopeBanner}>
-        <Text style={styles.scopeText}>{'Theory test tutor — DVSA content only'}</Text>
+        <Pip size={32} mood="wave" />
+        <Text style={styles.scopeText}>{'Ask Pip — DVSA content only'}</Text>
       </View>
 
       <ScrollView
@@ -191,7 +193,7 @@ export default function TutorScreen() {
           <View key={msg.id} style={[styles.bubbleRow, msg.role === 'user' ? styles.rowUser : styles.rowTutor]}>
             {msg.role === 'assistant' && (
               <View style={styles.avatar}>
-                <Text style={styles.avatarEmoji}>{'🤖'}</Text>
+                <Pip size={28} mood="happy" />
               </View>
             )}
             <View style={[styles.bubble, msg.role === 'user' ? styles.bubbleUser : styles.bubbleTutor]}>
@@ -273,10 +275,10 @@ export default function TutorScreen() {
       <Modal visible={showPaywall} transparent animationType="fade" onRequestClose={() => setShowPaywall(false)}>
         <View style={styles.paywallOverlay}>
           <View style={styles.paywallCard}>
-            <Text style={styles.paywallEmoji}>{'🤖'}</Text>
-            <Text style={styles.paywallTitle}>{"You've used your 5 free tutor questions"}</Text>
+            <Pip size={72} mood="sympathetic" />
+            <Text style={styles.paywallTitle}>{"You've used your 5 free Ask Pip questions"}</Text>
             <Text style={styles.paywallBody}>
-              {'Upgrade to Premium for unlimited AI tutor access.'}
+              {'Upgrade to Pro for unlimited sessions with Pip.'}
             </Text>
             <TouchableOpacity
               style={styles.upgradeBtn}

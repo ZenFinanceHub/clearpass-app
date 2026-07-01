@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
-  Easing,
   Modal,
   RefreshControl,
   ScrollView,
@@ -46,427 +45,14 @@ import { ScaleButton } from '@/src/components/ScaleButton';
 import { SkeletonBox } from '@/src/components/SkeletonBox';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
+import { Pip, PipMood } from '@/src/components/Pip';
+import RoadmapPath from '@/src/components/RoadmapPath';
 import { allQuestions } from '@clearpass/content';
 import { supabase } from '@/src/supabase';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 import { useNetwork } from '@/src/NetworkContext';
 import { isTrialActive, daysLeftInTrial } from '@/src/storage';
-
-// ─── Road map constants ───────────────────────────────────────────────────────
-
-const CANVAS_W  = 1600;
-const CANVAS_H  = 300;
-const ROAD_W    = 28;
-const CIRCLE_R  = 28;   // 56px diameter badges
-const CAR_SIZE  = 32;
-const DASH_LEN  = 14;
-const GAP_LEN   = 10;
-const DASH_STEP = DASH_LEN + GAP_LEN;
-
-type Point = { x: number; y: number };
-
-// x: 60 start, +220px per step; y: wide amplitude wave between 230 (low) and 100 (high)
-const POSITIONS: Point[] = [
-  { x:   60, y: 230 },  // Start
-  { x:  280, y: 100 },  // First Steps
-  { x:  500, y: 230 },  // Getting There
-  { x:  720, y: 100 },  // Hazard Aware
-  { x:  940, y: 230 },  // Mock Ready
-  { x: 1160, y: 100 },  // First Pass
-  { x: 1380, y: 230 },  // Consistent
-  { x: 1540, y: 100 },  // Test Ready
-];
-
-const MILESTONE_LABELS = [
-  'Start', 'First Steps', 'Getting There', 'Hazard Aware',
-  'Mock Ready', 'First Pass', 'Consistent', 'Test Ready',
-];
-
-const MILESTONE_EMOJIS = ['🚗', '📚', '🎯', '⚠', '📝', '✅', '🔁', '🏆'];
-
-// ─── Milestone logic ──────────────────────────────────────────────────────────
-
-function computeMilestone(p: UserProgress | null): number {
-  if (!p || p.totalQuestionsAnswered < 1) return 0;
-
-  const totalTopics = Object.keys(p.topicScores).length || 14;
-  const attempted = Object.values(p.topicScores).filter(s => s > 0).length;
-  if (attempted < Math.ceil(totalTopics * 0.5)) return 1;
-
-  if (!p.hazardPerceptionHistory.some(h => h.passed)) return 2;
-  if (p.totalQuestionsAnswered < 200) return 3;
-  if (!p.mockTestHistory.some(h => h.passed)) return 4;
-
-  const mh = p.mockTestHistory;
-  const twoConsec = mh.some((_, i) => i > 0 && mh[i].passed && mh[i - 1].passed);
-  if (!twoConsec) return 5;
-
-  const threeConsec = mh.some(
-    (_, i) =>
-      i >= 2 &&
-      mh[i].passed     && mh[i].score     >= 43 &&
-      mh[i-1].passed   && mh[i-1].score   >= 43 &&
-      mh[i-2].passed   && mh[i-2].score   >= 43,
-  );
-  return threeConsec ? 7 : 6;
-}
-
-// ─── RoadSegment ─────────────────────────────────────────────────────────────
-
-function RoadSegment({
-  from,
-  to,
-  dashPhase,
-}: {
-  from: Point;
-  to: Point;
-  dashPhase: Animated.Value;
-}) {
-  const dx  = to.x - from.x;
-  const dy  = to.y - from.y;
-  const len = Math.sqrt(dx * dx + dy * dy);
-  const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-  const cx  = (from.x + to.x) / 2;
-  const cy  = (from.y + to.y) / 2;
-  const numDashes = Math.ceil(len / DASH_STEP) + 2;
-
-  return (
-    <View
-      style={{
-        position: 'absolute',
-        left: cx - len / 2,
-        top: cy - ROAD_W / 2,
-        width: len,
-        height: ROAD_W,
-        backgroundColor: Colors.navy,
-        overflow: 'hidden',
-        transform: [{ rotate: `${angle}deg` }],
-      }}
-    >
-      {/* Centre highlight */}
-      <View
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          top: ROAD_W / 2 - 5,
-          height: 10,
-          backgroundColor: 'rgba(255,255,255,0.5)',
-        }}
-      />
-      {/* Animated amber dashes scrolling along the road */}
-      <Animated.View
-        style={{
-          position: 'absolute',
-          top: ROAD_W / 2 - 2,
-          left: -DASH_STEP,
-          flexDirection: 'row',
-          transform: [{ translateX: dashPhase }],
-        }}
-      >
-        {Array.from({ length: numDashes }, (_, i) => (
-          <View
-            key={i}
-            style={{
-              width: DASH_LEN,
-              height: 4,
-              borderRadius: 2,
-              backgroundColor: Colors.amber,
-              marginRight: GAP_LEN,
-            }}
-          />
-        ))}
-      </Animated.View>
-    </View>
-  );
-}
-
-// ─── MilestoneMarker ─────────────────────────────────────────────────────────
-
-function MilestoneMarker({
-  pos,
-  state,
-  label,
-  emoji,
-}: {
-  pos: Point;
-  state: 'complete' | 'current' | 'upcoming';
-  label: string;
-  emoji: string;
-}) {
-  const glowAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (state !== 'current') {
-      glowAnim.stopAnimation();
-      glowAnim.setValue(0);
-      return;
-    }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowAnim, { toValue: 1, duration: 1000, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
-        Animated.timing(glowAnim, { toValue: 0, duration: 1000, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [state, glowAnim]);
-
-  const isHigh = pos.y < 145;
-
-  const ringColor =
-    state === 'complete' ? Colors.emerald :
-    state === 'current'  ? Colors.indigo :
-    Colors.border;
-
-  const glowOpacity = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.15, 0.52] });
-  const glowScale   = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [1.0,  1.28] });
-
-  const youAreHereTop = isHigh ? pos.y - CIRCLE_R - 26 : pos.y - CIRCLE_R - 50;
-  const nameLabelTop  = isHigh ? pos.y + CIRCLE_R + 8  : pos.y - CIRCLE_R - 20;
-
-  return (
-    <>
-      {/* Breathing glow ring (current only) */}
-      {state === 'current' && (
-        <Animated.View
-          style={{
-            position: 'absolute',
-            left: pos.x - CIRCLE_R - 12,
-            top:  pos.y - CIRCLE_R - 12,
-            width:  (CIRCLE_R + 12) * 2,
-            height: (CIRCLE_R + 12) * 2,
-            borderRadius: CIRCLE_R + 12,
-            backgroundColor: Colors.indigo,
-            opacity: glowOpacity,
-            transform: [{ scale: glowScale }],
-          }}
-        />
-      )}
-
-      {/* Badge circle */}
-      <View
-        style={{
-          position: 'absolute',
-          left: pos.x - CIRCLE_R,
-          top:  pos.y - CIRCLE_R,
-          width:  CIRCLE_R * 2,
-          height: CIRCLE_R * 2,
-          borderRadius: CIRCLE_R,
-          backgroundColor: '#FFFFFF',
-          borderWidth: 3,
-          borderColor: ringColor,
-          alignItems: 'center',
-          justifyContent: 'center',
-          transform: state === 'current' ? [{ scale: 1.15 }] : undefined,
-          shadowColor: state === 'current' ? Colors.indigo : '#D1D5DB',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: state === 'current' ? 0.55 : 0.3,
-          shadowRadius: state === 'current' ? 10 : 4,
-          elevation: state === 'current' ? 12 : 4,
-        }}
-      >
-        <Text style={{ fontSize: 22, opacity: state === 'upcoming' ? 0.4 : 1 }}>
-          {emoji}
-        </Text>
-      </View>
-
-      {/* Sparkle — completed milestones */}
-      {state === 'complete' && (
-        <Text
-          style={{
-            position: 'absolute',
-            left: pos.x + CIRCLE_R - 10,
-            top:  pos.y - CIRCLE_R - 6,
-            fontSize: 12,
-          }}
-        >
-          {'✨'}
-        </Text>
-      )}
-
-      {/* YOU ARE HERE badge — current milestone */}
-      {state === 'current' && (
-        <View
-          style={{
-            position: 'absolute',
-            left: pos.x - 46,
-            top:  youAreHereTop,
-            width: 92,
-            alignItems: 'center',
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: Colors.indigoBg,
-              borderRadius: 6,
-              paddingHorizontal: 7,
-              paddingVertical: 3,
-              borderWidth: 1,
-              borderColor: Colors.indigo,
-            }}
-          >
-            <Text style={{ fontSize: 8, fontWeight: '800', color: Colors.indigo, letterSpacing: 0.5 }}>
-              {'YOU ARE HERE'}
-            </Text>
-          </View>
-        </View>
-      )}
-
-      {/* Milestone name */}
-      <View
-        style={{
-          position: 'absolute',
-          left: pos.x - 40,
-          top:  nameLabelTop,
-          width: 80,
-          alignItems: 'center',
-        }}
-      >
-        <View
-          style={{
-            backgroundColor: 'rgba(255,255,255,0.9)',
-            borderRadius: 6,
-            paddingHorizontal: 6,
-            paddingVertical: 2,
-          }}
-        >
-          <Text
-            numberOfLines={1}
-            style={{
-              fontSize: 13,
-              fontWeight: '700',
-              color: '#111827',
-              textAlign: 'center',
-            }}
-          >
-            {label}
-          </Text>
-        </View>
-      </View>
-    </>
-  );
-}
-
-// ─── RoadMapHero ─────────────────────────────────────────────────────────────
-
-function RoadMapHero({ progress }: { progress: UserProgress | null }) {
-  const theme            = useTheme();
-  const currentMilestone = computeMilestone(progress);
-  const driveAnim        = useRef(new Animated.Value(0)).current;
-  const bobAnim          = useRef(new Animated.Value(0)).current;
-  const dashPhaseAnim    = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    driveAnim.setValue(0);
-    const tid = setTimeout(() => {
-      Animated.timing(driveAnim, {
-        toValue: currentMilestone,
-        duration: 1500,
-        easing: Easing.inOut(Easing.cubic),
-        useNativeDriver: false,
-      }).start();
-    }, 500);
-    return () => clearTimeout(tid);
-  }, [currentMilestone, driveAnim]);
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(bobAnim, { toValue: -5, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
-        Animated.timing(bobAnim, { toValue: 0,  duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [bobAnim]);
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.timing(dashPhaseAnim, {
-        toValue: DASH_STEP,
-        duration: 600,
-        easing: Easing.linear,
-        useNativeDriver: false,
-      }),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [dashPhaseAnim]);
-
-  const inputRange = POSITIONS.map((_, i) => i);
-  const carX = driveAnim.interpolate({
-    inputRange,
-    outputRange: POSITIONS.map(p => p.x - CAR_SIZE / 2),
-    extrapolate: 'clamp',
-  });
-  const carYBase = driveAnim.interpolate({
-    inputRange,
-    outputRange: POSITIONS.map(p => p.y - CAR_SIZE / 2),
-    extrapolate: 'clamp',
-  });
-  const carY = Animated.add(carYBase, bobAnim);
-
-  const edgeColor = theme.cardColor;
-
-  return (
-    <View style={{ width: '100%', alignItems: 'center', overflow: 'hidden' }}>
-      <View style={[styles.roadContainer, { backgroundColor: theme.cardColor }]}>
-        <Text style={[styles.roadTitle, { color: theme.subTextColor }]}>{'YOUR JOURNEY'}</Text>
-
-        <View style={styles.roadCanvas}>
-          <View style={{ width: CANVAS_W, height: CANVAS_H, alignSelf: 'center' }}>
-            {POSITIONS.slice(0, -1).map((pos, i) => (
-              <RoadSegment key={i} from={pos} to={POSITIONS[i + 1]} dashPhase={dashPhaseAnim} />
-            ))}
-
-            {POSITIONS.map((pos, i) => (
-              <MilestoneMarker
-                key={i}
-                pos={pos}
-                state={
-                  i < currentMilestone  ? 'complete' :
-                  i === currentMilestone ? 'current'  :
-                  'upcoming'
-                }
-                label={MILESTONE_LABELS[i]}
-                emoji={MILESTONE_EMOJIS[i]}
-              />
-            ))}
-
-            <Animated.View
-              style={{
-                position: 'absolute',
-                left: carX,
-                top:  carY,
-                width: CAR_SIZE,
-                alignItems: 'center',
-              }}
-            >
-              <Text style={{ fontSize: CAR_SIZE - 2 }}>{'🚗'}</Text>
-              <View style={styles.carShadow} />
-            </Animated.View>
-          </View>
-
-        <View pointerEvents="none" style={styles.edgeFadeLeft}>
-          <View style={[styles.edgeSlice, { opacity: 0.92, backgroundColor: edgeColor }]} />
-          <View style={[styles.edgeSlice, { opacity: 0.62, backgroundColor: edgeColor }]} />
-          <View style={[styles.edgeSlice, { opacity: 0.30, backgroundColor: edgeColor }]} />
-          <View style={[styles.edgeSlice, { opacity: 0.10, backgroundColor: edgeColor }]} />
-        </View>
-
-        <View pointerEvents="none" style={styles.edgeFadeRight}>
-          <View style={[styles.edgeSlice, { opacity: 0.10, backgroundColor: edgeColor }]} />
-          <View style={[styles.edgeSlice, { opacity: 0.30, backgroundColor: edgeColor }]} />
-          <View style={[styles.edgeSlice, { opacity: 0.62, backgroundColor: edgeColor }]} />
-          <View style={[styles.edgeSlice, { opacity: 0.92, backgroundColor: edgeColor }]} />
-        </View>
-        </View>
-      </View>
-    </View>
-  );
-}
 
 // ─── NudgesSection ────────────────────────────────────────────────────────────
 
@@ -961,6 +547,27 @@ export default function HomeScreen() {
   const _qotdSeed  = _qotdParts[0]! * 10000 + _qotdParts[1]! * 100 + _qotdParts[2]!;
   const qotdQuestion = allQuestions[_qotdSeed % allQuestions.length]!;
 
+  const prob = passProb ? passProb.probability : readinessPct;
+  let pipMood: PipMood = 'wave';
+  if (!progress || progress.totalQuestionsAnswered < 1) {
+    pipMood = 'wave';
+  } else if (streak >= 7 || prob > 85) {
+    pipMood = 'celebrate';
+  } else if (prob < 40 && progress.totalQuestionsAnswered > 10) {
+    pipMood = 'sympathetic';
+  } else if (streak > 0) {
+    pipMood = 'happy';
+  } else {
+    pipMood = 'curious';
+  }
+
+  const pipMessage =
+    pipMood === 'wave'        ? "Welcome! Let's start your theory journey." :
+    pipMood === 'celebrate'   ? (streak >= 7 ? `${streak}-day streak — you're on fire!` : 'Looking great! Keep it up.') :
+    pipMood === 'sympathetic' ? "Don't worry — consistent practice makes it click!" :
+    pipMood === 'happy'       ? (streak > 0 ? `${streak}-day streak! Keep going.` : 'Good work! Keep going.') :
+                                "You're making progress — keep exploring!";
+
   async function handleQotdAnswer(optionIndex: number) {
     if (qotdSelected !== null) return;
     setQotdSelected(optionIndex);
@@ -991,72 +598,30 @@ export default function HomeScreen() {
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void handleRefresh(); }} tintColor={Colors.indigo} />}
     >
-      {/* Hero Header */}
-      <LinearGradient colors={[Colors.indigo, Colors.violet]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroHeader}>
-        <View style={styles.heroTopRow}>
-          <Text style={[styles.heroGreeting, { fontSize: theme.fontSize(22), fontFamily: theme.fontFamily }]}>
-            {'Hey, '}{username ? username + '!' : 'there!'}{' 👋'}
-          </Text>
-          {streak > 0 && (
-            <View style={styles.heroStreakBadge}>
-              <Text style={[styles.heroStreakText, { fontSize: theme.fontSize(12), fontFamily: theme.fontFamily }]}>
-                {'🔥 '}{streak}{' day streak'}
-              </Text>
-            </View>
-          )}
-        </View>
-        <Text style={[styles.heroSub, { fontSize: theme.fontSize(13), fontFamily: theme.fontFamily }]}>
-          {daysLeft !== null && daysLeft >= 0
-            ? `Your test is in ${daysLeft} day${daysLeft === 1 ? '' : 's'}. Keep it up!`
-            : 'Set your test date to see countdown'}
-        </Text>
-        <View style={styles.heroProbRow}>
-          <Text style={[styles.heroProbNum, { fontSize: theme.fontSize(48), fontFamily: theme.fontFamily }]}>
-            {passProb ? passProb.probability : readinessPct}{'%'}
-          </Text>
-          {passProb && (
-            <Text style={[styles.heroProbArrow, {
-              color: passProb.trend === 'up' ? '#6EE7B7' : passProb.trend === 'down' ? '#FCA5A5' : 'rgba(255,255,255,0.45)',
-            }]}>
-              {passProb.trend === 'up' ? '↑' : passProb.trend === 'down' ? '↓' : '→'}
+      {/* Pip Header Band */}
+      <View style={styles.pipHeader}>
+        <View style={styles.pipHeaderInner}>
+          <Pip size={64} mood={isLoading ? 'wave' : pipMood} />
+          <View style={styles.pipHeaderText}>
+            <Text style={styles.pipGreeting}>
+              {username ? `Hey, ${username}!` : 'Hey there!'}
             </Text>
-          )}
+            <Text style={styles.pipMessage} numberOfLines={2}>
+              {isLoading ? 'Loading your progress…' : pipMessage}
+            </Text>
+          </View>
         </View>
-        <Text style={[styles.heroProbLabel, { fontSize: theme.fontSize(11), fontFamily: theme.fontFamily }]}>
-          {'Pass Probability'}
-        </Text>
-        {(() => {
-          const prob = passProb ? passProb.probability : readinessPct;
-          const { label, bg } = prob >= 70
-            ? { label: 'Test Ready', bg: 'rgba(16,185,129,0.25)' }
-            : prob >= 45
-            ? { label: 'Almost There', bg: 'rgba(245,158,11,0.25)' }
-            : { label: 'Needs Work', bg: 'rgba(239,68,68,0.25)' };
-          return (
-            <View style={[styles.probPill, { backgroundColor: bg }]}>
-              <Text style={styles.probPillText}>{label}</Text>
-            </View>
-          );
-        })()}
-        <View style={styles.heroBarTrack}>
-          <View style={[styles.heroBarFill, { width: `${passProb ? passProb.probability : readinessPct}%` as any }]} />
-        </View>
-      </LinearGradient>
+      </View>
 
-      {/* Status Bar — streak + XP + level combined */}
+      {/* Stats Row — streak | XP | pass probability */}
       {!isLoading && (
         <View style={styles.statusBar}>
-          {streak > 0 && (
-            <>
-              <View style={styles.statusItem}>
-                <Text style={styles.statusEmoji}>{'🔥'}</Text>
-                <Text style={styles.statusValue}>{streak}</Text>
-                <Text style={styles.statusLabel}>{'day streak'}</Text>
-                {freezeCount > 0 && <Text style={styles.statusFreezeIcon}>{'❄️'}</Text>}
-              </View>
-              <View style={styles.statusDivider} />
-            </>
-          )}
+          <View style={styles.statusItem}>
+            <Text style={styles.statusEmoji}>{'🔥'}</Text>
+            <Text style={styles.statusValue}>{streak}</Text>
+            <Text style={styles.statusLabel}>{'streak'}</Text>
+          </View>
+          <View style={styles.statusDivider} />
           <View style={styles.statusItem}>
             <Text style={styles.statusEmoji}>{'⭐'}</Text>
             <Text style={styles.statusValue}>{xp.toLocaleString()}</Text>
@@ -1064,10 +629,9 @@ export default function HomeScreen() {
           </View>
           <View style={styles.statusDivider} />
           <View style={styles.statusItem}>
-            <Text style={styles.statusValue}>{xpBadgeLabel}</Text>
-            <View style={styles.statusXpBar}>
-              <View style={[styles.statusXpFill, { width: `${Math.round(xpData.pct * 100)}%` as any }]} />
-            </View>
+            <Text style={styles.statusEmoji}>{prob >= 70 ? '✅' : prob >= 45 ? '📈' : '📚'}</Text>
+            <Text style={styles.statusValue}>{prob}{'%'}</Text>
+            <Text style={styles.statusLabel}>{'pass prob'}</Text>
           </View>
         </View>
       )}
@@ -1126,13 +690,20 @@ export default function HomeScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Road Map Hero */}
+      {/* Progress Roadmap */}
       {isLoading ? (
         <View style={{ paddingHorizontal: 16, paddingVertical: 12, gap: 10 }}>
-          <SkeletonBox height={120} borderRadius={16} />
+          <SkeletonBox height={200} borderRadius={16} />
         </View>
       ) : (
-        <RoadMapHero progress={progress} />
+        <View style={styles.roadmapSection}>
+          <Text style={styles.roadmapTitle}>{'YOUR PROGRESS'}</Text>
+          <RoadmapPath
+            progress={progress}
+            pipMood={pipMood}
+            width={(dims?.width ?? 375) - 32}
+          />
+        </View>
       )}
 
       {/* Tutor Nudges */}
@@ -1315,7 +886,7 @@ export default function HomeScreen() {
           <ScaleButton style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/(tabs)/learn')} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'📊'}</Text>
             <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Progress & More</Text>
-            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>Leaderboard, AI Tutor</Text>
+            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>Leaderboard, Ask Pip</Text>
           </ScaleButton>
         </View>
 
@@ -1589,92 +1160,32 @@ const styles = StyleSheet.create({
   scroll:   { flex: 1 },
   content:  { flexGrow: 1, paddingBottom: 40 },
 
-  // Hero Header
-  heroHeader: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 20,
+  // Pip Header Band
+  pipHeader: {
+    backgroundColor: Colors.indigo,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 18,
   },
-  heroTopRow: {
+  pipHeaderInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
+    gap: 14,
   },
-  heroGreeting: {
-    fontSize: 22,
+  pipHeaderText: {
+    flex: 1,
+  },
+  pipGreeting: {
+    fontSize: 20,
     fontWeight: '800',
     color: '#FFFFFF',
-    flex: 1,
-    marginRight: 8,
+    marginBottom: 4,
   },
-  heroStreakBadge: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  heroStreakText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  heroSub: {
+  pipMessage: {
     fontSize: 13,
     color: 'rgba(255,255,255,0.85)',
-    marginBottom: 14,
     lineHeight: 18,
   },
-  heroBarTrack: {
-    height: 6,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginBottom: 6,
-  },
-  heroBarFill: {
-    height: 6,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 3,
-  },
-  heroBarLabel: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.75)',
-    fontWeight: '600',
-  },
-  heroProbRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-    marginBottom: 2,
-  },
-  heroProbNum: {
-    fontSize: 48,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    lineHeight: 52,
-  },
-  heroProbArrow: {
-    fontSize: 28,
-    fontWeight: '700',
-    lineHeight: 52,
-    paddingBottom: 2,
-  },
-  heroProbLabel: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.75)',
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  probPill: {
-    alignSelf: 'flex-start',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginBottom: 10,
-  },
-  probPillText: { fontSize: 11, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.5 },
 
   // ── Streak Card ──────────────────────────────────────────────────────────────
   // ── Status Bar (merged streak + XP + level) ──────────────────────────────────
@@ -1695,10 +1206,7 @@ const styles = StyleSheet.create({
   statusEmoji: { fontSize: 18, marginBottom: 2 },
   statusValue: { fontSize: 15, fontWeight: '800', color: Colors.textPrimary },
   statusLabel: { fontSize: 10, color: Colors.mutedText, fontWeight: '500', marginTop: 1 },
-  statusFreezeIcon: { fontSize: 11, marginTop: 1 },
   statusDivider: { width: 0.5, height: 28, backgroundColor: Colors.border },
-  statusXpBar: { width: '80%', height: 3, backgroundColor: Colors.surfaceGray, borderRadius: 2, overflow: 'hidden', marginTop: 4 },
-  statusXpFill: { height: 3, backgroundColor: Colors.indigo, borderRadius: 2 },
 
   // ── Nudges ───────────────────────────────────────────────────────────────────
   nudgesSection: {
@@ -1761,68 +1269,19 @@ const styles = StyleSheet.create({
   },
   nudgeActionText: { fontSize: 12, fontWeight: '700' },
 
-  // ── Road Map Hero ────────────────────────────────────────────────────────────
-  roadContainer: {
-    width: '100%',
-    marginHorizontal: 0,
-    paddingHorizontal: 0,
-    marginBottom: 8,
-    paddingTop: 10,
-    paddingBottom: 8,
-    borderTopWidth: 0.5,
-    borderBottomWidth: 0.5,
-    borderColor: Colors.border,
-    height: 320,
-    overflow: 'hidden',
+  // ── Roadmap Section ──────────────────────────────────────────────────────────
+  roadmapSection: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
   },
-  roadTitle: {
+  roadmapTitle: {
     fontSize: 10,
     fontWeight: '700',
+    color: Colors.mutedText,
     letterSpacing: 1,
-    paddingLeft: 16,
-    marginBottom: 4,
+    marginBottom: 8,
   },
-  roadCanvas: {
-    height: CANVAS_H,
-    position: 'relative',
-    width: '100%',
-    marginHorizontal: 0,
-    paddingHorizontal: 0,
-  },
-  roadScroll: { flex: 1, width: '100%' },
-
-  carShadow: {
-    width: 18,
-    height: 5,
-    borderRadius: 9,
-    backgroundColor: 'rgba(0,0,0,0.15)',
-    marginTop: -4,
-  },
-
-  edgeFadeLeft: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 40,
-    flexDirection: 'row',
-    zIndex: 10,
-  },
-  edgeFadeRight: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: 40,
-    flexDirection: 'row',
-    zIndex: 10,
-  },
-  edgeSlice: { flex: 1 },
-
-  // ── XP Card ──────────────────────────────────────────────────────────────────
-
-  // ── Countdown Card ────────────────────────────────────────────────────────────
-  // ── Today's Focus card ───────────────────────────────────────────────────────
   trialBanner: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -328,7 +328,7 @@ function ResitFlow() {
       </View>
 
       <TouchableOpacity style={styles.tutorBtn} onPress={() => void handleGoToTutor()} activeOpacity={0.85}>
-        <Text style={styles.tutorBtnText}>{'Go to AI Tutor'}</Text>
+        <Text style={styles.tutorBtnText}>{'Ask Pip'}</Text>
       </TouchableOpacity>
 
       <Text style={[styles.tutorHint, { color: theme.subTextColor }]}>
