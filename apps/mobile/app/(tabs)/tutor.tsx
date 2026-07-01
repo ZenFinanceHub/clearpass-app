@@ -110,8 +110,7 @@ export default function TutorScreen() {
         setIsLoading(false);
         updateMsgs([]);
         void sendText(fm);
-      } else if (!q && !fm && messagesRef.current.length === 0) {
-        updateMsgs([{ id: '0', role: 'assistant', content: WELCOME, time: nowTime() }]);
+      // no-op: empty state shown in JSX when messages.length === 0
       }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [params.questionText, params.correctAnswerText, params.userAnswerText, params.freeMessage]),
@@ -169,7 +168,8 @@ export default function TutorScreen() {
 
   const canSend = input.trim().length > 0 && !isLoading;
 
-  const showStarters = messages.length === 1 && !isLoading && !params.questionText && !params.freeMessage;
+  const showEmpty    = messages.length === 0 && !isLoading && !params.questionText && !params.freeMessage;
+  const showStarters = showEmpty;
 
   return (
     <KeyboardAvoidingView
@@ -177,10 +177,13 @@ export default function TutorScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
     >
-      {/* Scope banner */}
+      {/* Pip header */}
       <View style={styles.scopeBanner}>
-        <Pip size={32} mood="wave" />
-        <Text style={styles.scopeText}>{'Ask Pip — DVSA content only'}</Text>
+        <Pip size={40} mood="wave" />
+        <View style={styles.pipHeaderTextCol}>
+          <Text style={styles.pipHeaderTitle}>{'Ask Pip'}</Text>
+          <Text style={styles.pipHeaderSub}>{'DVSA content only'}</Text>
+        </View>
       </View>
 
       <ScrollView
@@ -211,7 +214,16 @@ export default function TutorScreen() {
           </View>
         ))}
 
-        {/* Starter prompt chips — shown only on fresh empty chat */}
+        {/* Empty state — shown when no messages yet */}
+        {showEmpty && (
+          <View style={styles.emptyState}>
+            <Pip size={80} mood="wave" />
+            <Text style={styles.emptyTitle}>{"Hi! I'm Pip 👋"}</Text>
+            <Text style={styles.emptySub}>{"Ask me anything about your theory test."}</Text>
+          </View>
+        )}
+
+        {/* Starter prompt chips */}
         {showStarters && (
           <View style={styles.starterGrid}>
             {STARTER_PROMPTS.map((prompt) => (
@@ -230,7 +242,7 @@ export default function TutorScreen() {
         {isLoading && (
           <View style={[styles.bubbleRow, styles.rowTutor]}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarEmoji}>{'🤖'}</Text>
+              <Pip size={28} mood="happy" />
             </View>
             <View style={[styles.bubble, styles.bubbleTutor, styles.bubbleTyping]}>
               <Text style={styles.typingDots}>{'.'.repeat(dotCount)}</Text>
@@ -243,7 +255,7 @@ export default function TutorScreen() {
       {isLoading && (
         <View style={styles.thinkingBar}>
           <View style={styles.thinkingBarFill} />
-          <Text style={styles.thinkingBarText}>{'AI is thinking…'}</Text>
+          <Text style={styles.thinkingBarText}>{'Pip is thinking…'}</Text>
         </View>
       )}
 
@@ -253,7 +265,7 @@ export default function TutorScreen() {
           style={[styles.textInput, { color: theme.textColor, fontFamily: theme.fontFamily, fontSize: theme.fontSize(14) }]}
           value={input}
           onChangeText={setInput}
-          placeholder="Ask anything about driving theory..."
+          placeholder="Ask Pip anything..."
           placeholderTextColor="#9CA3AF"
           multiline
           maxLength={500}
@@ -423,16 +435,23 @@ const styles = StyleSheet.create({
   dismissBtn: { paddingVertical: 8 },
   dismissText: { fontSize: 14, color: '#6B7280' },
 
-  // Scope banner
+  // Pip header banner
   scopeBanner: {
-    backgroundColor: Colors.indigoBg,
+    backgroundColor: Colors.indigo,
     paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderBottomWidth: 0.5,
-    borderBottomColor: Colors.border,
+    paddingVertical: 10,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
   },
-  scopeText: { fontSize: 12, color: Colors.indigo, fontWeight: '600' },
+  pipHeaderTextCol: { flex: 1 },
+  pipHeaderTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+  pipHeaderSub: { fontSize: 11, color: 'rgba(255,255,255,0.75)', fontWeight: '500', marginTop: 1 },
+
+  // Empty state
+  emptyState: { alignItems: 'center', paddingVertical: 32, gap: 8 },
+  emptyTitle: { fontSize: 20, fontWeight: '800', color: Colors.textPrimary },
+  emptySub: { fontSize: 14, color: Colors.mutedText, textAlign: 'center', lineHeight: 20 },
 
   // Starter prompts
   starterGrid: { gap: 8, marginTop: 8 },
