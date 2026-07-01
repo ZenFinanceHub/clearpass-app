@@ -100,7 +100,7 @@ function NudgesSection({
   const visible = nudges.slice(0, 2);
   return (
     <View style={styles.nudgesSection}>
-      <Text style={styles.nudgesLabel}>{'AI TUTOR TIPS'}</Text>
+      <Text style={styles.nudgesLabel}>{'ASK PIP'}</Text>
       <View style={{ position: 'relative' }}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.nudgesScroll}>
         {visible.map(nudge => {
@@ -886,7 +886,7 @@ export default function HomeScreen() {
           <ScaleButton style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/(tabs)/learn')} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'📊'}</Text>
             <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Progress & More</Text>
-            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>Leaderboard, Ask Pip</Text>
+            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>Stats, Leaderboard & More</Text>
           </ScaleButton>
         </View>
 
@@ -947,7 +947,7 @@ export default function HomeScreen() {
         onPress={() => router.push('/ipassed' as any)}
         activeOpacity={0.85}
       >
-        <Text style={styles.iPassedBtnText}>{'[*] I Passed my Theory Test!'}</Text>
+        <Text style={styles.iPassedBtnText}>{'🎉 I Passed my Theory Test!'}</Text>
         <Text style={styles.iPassedBtnSub}>{'Celebrate and share your story'}</Text>
       </TouchableOpacity>
 

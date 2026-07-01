@@ -175,11 +175,11 @@ export default function RoadmapPath({ progress, pipMood = 'happy', width }: Road
         style={[
           styles.glowRing,
           {
-            left:    pipPixelX - NODE_R * scaleX * 1.8,
-            top:     pipPixelY - NODE_R * scaleY * 1.8,
-            width:   NODE_R * scaleX * 3.6,
-            height:  NODE_R * scaleY * 3.6,
-            borderRadius: NODE_R * scaleX * 1.8,
+            left:    pipPixelX - NODE_R * scaleX * 1.1,
+            top:     pipPixelY - NODE_R * scaleY * 1.1,
+            width:   NODE_R * scaleX * 2.2,
+            height:  NODE_R * scaleY * 2.2,
+            borderRadius: NODE_R * scaleX * 1.1,
             opacity: glowOpacity,
             transform: [{ scale: glowScale }],
           },
