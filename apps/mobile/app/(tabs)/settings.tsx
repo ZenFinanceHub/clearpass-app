@@ -80,19 +80,19 @@ const SETTINGS: SettingConfig[] = [
     key: 'dyslexiaFont',
     label: 'Dyslexia-Friendly Font',
     description: 'Switches to OpenDyslexic font throughout the app to improve readability.',
-    icon: '[ Aa ]',
+    icon: '📖',
   },
   {
     key: 'largeText',
     label: 'Large Text',
     description: 'Increases the base font size by 20% across all screens.',
-    icon: '[ T+ ]',
+    icon: '🔤',
   },
   {
     key: 'highContrast',
     label: 'High Contrast',
     description: 'Switches to a high contrast colour scheme for improved visibility.',
-    icon: '[ HC ]',
+    icon: '👁️',
   },
   {
     key: 'textToSpeech',
@@ -622,7 +622,7 @@ export default function SettingsScreen() {
         </View>
         <View style={styles.profileBadgeRow}>
           <Text style={[styles.profileBadgeText, { color: theme.subTextColor }]}>
-            {'[*] '}{earnedBadgeCount}{' / '}{TOPIC_BADGES.length}{' topics mastered'}
+            {'🎯 '}{earnedBadgeCount}{' / '}{TOPIC_BADGES.length}{' topics mastered'}
           </Text>
         </View>
         {myReferralCode && (
