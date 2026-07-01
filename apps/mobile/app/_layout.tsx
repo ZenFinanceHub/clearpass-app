@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Linking } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { Stack, useSegments } from 'expo-router';
@@ -9,8 +9,6 @@ import { useFonts } from 'expo-font';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import NetInfo from '@react-native-community/netinfo';
-import { ClearPassSupport } from '@/src/components/support/ClearPassSupport';
-import { ClearPassSupportNative } from '@/src/components/support/ClearPassSupportNative';
 import { AccessibilityProvider } from '@/src/AccessibilityContext';
 import { NetworkProvider } from '@/src/NetworkContext';
 import { handleIncomingUrl } from '@/src/deepLinks';
@@ -162,8 +160,17 @@ export default function RootLayout() {
             <Stack.Screen name="study-plan" options={{ headerShown: false }} />
           </Stack>
           <StatusBar style="light" />
-          <ClearPassSupport />
-          <ClearPassSupportNative />
+          {/* Pip FAB — opens Ask Pip; hidden when already on tutor tab */}
+          {!(segments as string[]).includes('tutor') && (
+            <TouchableOpacity
+              style={toastStyles.pipFab}
+              onPress={() => router.push('/tutor' as any)}
+              accessibilityLabel="Ask Pip"
+              accessibilityRole="button"
+            >
+              <Text style={toastStyles.pipFabIcon}>{'🦔'}</Text>
+            </TouchableOpacity>
+          )}
           {showCachingToast && (
             <View style={toastStyles.toast} pointerEvents="none">
               <Text style={toastStyles.text}>{'Downloading content for offline use...'}</Text>
@@ -193,4 +200,22 @@ const toastStyles = StyleSheet.create({
     elevation: 6,
   },
   text: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
+  pipFab: {
+    position: 'absolute',
+    bottom: 88,
+    right: 20,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#4F46E5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+    zIndex: 999,
+  },
+  pipFabIcon: { fontSize: 24 },
 });

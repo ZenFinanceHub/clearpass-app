@@ -36,8 +36,6 @@ import {
 } from '@/src/offlineCache';
 import { getTestResult, type TestResult } from '../ipassed';
 import { isPremium } from '@/src/subscription';
-import { useSupportDismissed } from '@/src/components/support/hooks/useSupportDismissed';
-import { ClearPassSupportNative } from '@/src/components/support/ClearPassSupportNative';
 import {
   NotificationSettings,
   DEFAULT_NOTIF_SETTINGS,
@@ -181,9 +179,6 @@ export default function SettingsScreen() {
   // Test result state
   const [testResult, setTestResult] = useState<TestResult | null>(null);
 
-  // Support state
-  const { isDismissed: supportDismissed, restore: restoreSupport } = useSupportDismissed();
-  const [supportOpen, setSupportOpen] = useState(false);
   const [isPro, setIsPro] = useState(false);
   const [freezeCount, setFreezeCount] = useState(0);
 
@@ -702,17 +697,14 @@ export default function SettingsScreen() {
 
         <TouchableOpacity
           style={[styles.row, styles.rowBorder]}
-          onPress={async () => {
-            if (supportDismissed) await restoreSupport();
-            setSupportOpen(true);
-          }}
+          onPress={() => router.push('/tutor' as any)}
           activeOpacity={0.75}
           accessibilityRole="button"
-          accessibilityLabel="Get support"
+          accessibilityLabel="Ask Pip"
         >
           <View style={styles.textWrap}>
-            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'💬 Get Support'}</Text>
-            <Text style={[styles.description, { fontSize: theme.fontSize(12), color: theme.subTextColor }]}>{'Chat with our AI support assistant'}</Text>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'🦔 Ask Pip'}</Text>
+            <Text style={[styles.description, { fontSize: theme.fontSize(12), color: theme.subTextColor }]}>{'Theory questions & app support'}</Text>
           </View>
           <Text style={styles.chevron}>{'›'}</Text>
         </TouchableOpacity>
@@ -1140,13 +1132,6 @@ export default function SettingsScreen() {
       <Text style={styles.savedToastText}>{'Saved ✓'}</Text>
     </Animated.View>
 
-    {/* Support modal — standalone=false so no duplicate floating button */}
-    {supportOpen && (
-      <ClearPassSupportNative
-        standalone={false}
-        initialOpen={true}
-      />
-    )}
     </View>
   );
 }

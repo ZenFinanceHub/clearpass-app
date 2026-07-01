@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Platform, Text } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/src/constants/theme';
@@ -64,7 +64,13 @@ export default function TabLayout() {
           name={name}
           options={{
             title,
-            ...(headerTitle ? { headerTitle } : {}),
+            ...(headerTitle ? {
+              headerTitle: () => (
+                <Text style={{ fontSize: 20, fontWeight: '800', color: Colors.indigo, letterSpacing: -0.3 }}>
+                  {headerTitle}
+                </Text>
+              ),
+            } : {}),
             ...(hidden ? { tabBarButton: () => null, tabBarItemStyle: { display: 'none' as const, width: 0 } } : {}),
             tabBarIcon: ({ color, size, focused }) => (
               <Ionicons name={focused ? iconFocused : icon} size={size} color={color} />
