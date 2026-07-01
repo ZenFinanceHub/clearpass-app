@@ -760,7 +760,7 @@ function ReviewView({
                     })}
                     activeOpacity={0.85}
                   >
-                    <Text style={styles.tutorBtnText}>{'Ask AI Tutor 🤖'}</Text>
+                    <Text style={styles.tutorBtnText}>{'Ask Pip 🦔'}</Text>
                   </TouchableOpacity>
                 </View>
               )}

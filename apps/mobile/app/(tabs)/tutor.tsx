@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Pip } from '@/src/components/Pip';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { getTutorQuestionsUsed, incrementTutorQuestionsUsed } from '@/src/storage';
 import { isPremium } from '@/src/subscription';
@@ -25,24 +26,51 @@ function getProxyUrl(): string {
     : 'https://clearpass-app-production.up.railway.app';
 }
 
-const SYSTEM_PROMPT =
-  'You are a friendly UK driving theory test tutor for the ClearPass app. ' +
-  'Your ONLY source of truth is the official DVSA theory test question bank, the Highway Code, and official DVSA guidance documents. ' +
-  'Do NOT draw on general knowledge, external sources, or information not found in official DVSA materials. ' +
-  'If a question cannot be answered from DVSA materials, say so clearly rather than guessing. ' +
-  'Help learner drivers understand theory test questions and Highway Code rules. ' +
-  'Keep explanations clear, concise and encouraging. ' +
-  'When explaining wrong answers, always explain WHY the correct answer is right and WHY the wrong answer is wrong. ' +
-  'Use simple language suitable for learner drivers.';
+const SYSTEM_PROMPT = `
+You are Pip, the ClearPass assistant. ClearPass is a UK driving theory test preparation
+app that uses officially licensed DVSA content.
+
+## THEORY TUTORING
+For theory test questions, Highway Code, road signs, hazard perception:
+- Your ONLY source of truth is the official DVSA theory test question bank, the Highway
+  Code, and official DVSA guidance documents.
+- Do NOT draw on general knowledge or external sources for theory answers.
+- When explaining wrong answers, always explain WHY the correct answer is right and WHY
+  the wrong answer is wrong.
+- If a question cannot be answered from DVSA materials, say so clearly rather than guessing.
+
+## APP SUPPORT
+For questions about ClearPass itself, answer helpfully using the following knowledge:
+- Mock tests: timed, full-length, exam conditions. Practice modes include standard,
+  battle mode, weak-spot drilling, and speed round.
+- Road Signs: all 88 official UK road signs using DVSA-licensed imagery, organised by
+  category and fully searchable.
+- Hazard Perception: official DVSA clips are coming soon under the signed licence agreement.
+- Platform: iOS (TestFlight + App Store), Android (submitted to Google Play), Web (clearpass-app.vercel.app).
+- Known issue: 7 road signs still render as SVG diagrams awaiting official photo assets
+  (school crossing patrol, elderly pedestrians, horse riders, camera ahead, risk of ice,
+  risk of grounding, tunnel). A full audit corrected 25 of 33 wrong mappings in June 2026.
+- Subscriptions: pricing shown in-app on the paywall screen.
+
+If the user mentions a billing problem, a charge they don't recognise, wanting a refund,
+or an account they cannot access, respond helpfully and end your reply with [ESCALATE] on
+its own line — this flags it to the ClearPass team for follow-up within 24 hours.
+
+## TONE
+- Encouraging and supportive — users are learner drivers who may be anxious.
+- Keep responses concise and practical.
+- Use plain English — avoid jargon.
+`.trim();
 
 const WELCOME =
-  "Hi! I'm your AI driving theory tutor 👋 Ask me anything about the Highway Code, road signs, or theory test questions.";
+  "Hi! I'm Pip 🦔 Ask me anything about the Highway Code, road signs, or theory test questions — I only use official DVSA materials.";
 
 const STARTER_PROMPTS = [
-  'Explain a road sign to me',
-  'Help me with stopping distances',
-  'Quiz me on hazard perception',
-  'What are the most common theory test mistakes?',
+  'How does hazard perception work?',
+  'When does the app launch on Android?',
+  'I have a billing question',
+  'Explain a wrong answer',
+  'A road sign image looks wrong',
 ];
 
 type Msg = { id: string; role: 'user' | 'assistant'; content: string; time: string };
@@ -109,8 +137,7 @@ export default function TutorScreen() {
         setIsLoading(false);
         updateMsgs([]);
         void sendText(fm);
-      } else if (!q && !fm && messagesRef.current.length === 0) {
-        updateMsgs([{ id: '0', role: 'assistant', content: WELCOME, time: nowTime() }]);
+      // no-op: empty state shown in JSX when messages.length === 0
       }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [params.questionText, params.correctAnswerText, params.userAnswerText, params.freeMessage]),
@@ -139,7 +166,7 @@ export default function TutorScreen() {
 
     const url = `${getProxyUrl()}/api/explain`;
     const body = {
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
       messages: apiMessages,
@@ -168,7 +195,8 @@ export default function TutorScreen() {
 
   const canSend = input.trim().length > 0 && !isLoading;
 
-  const showStarters = messages.length === 1 && !isLoading && !params.questionText && !params.freeMessage;
+  const showEmpty    = messages.length === 0 && !isLoading && !params.questionText && !params.freeMessage;
+  const showStarters = showEmpty;
 
   return (
     <KeyboardAvoidingView
@@ -176,9 +204,13 @@ export default function TutorScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
     >
-      {/* Scope banner */}
+      {/* Pip header */}
       <View style={styles.scopeBanner}>
-        <Text style={styles.scopeText}>{'Theory test tutor — DVSA content only'}</Text>
+        <Pip size={40} mood="wave" />
+        <View style={styles.pipHeaderTextCol}>
+          <Text style={styles.pipHeaderTitle}>{'Ask Pip'}</Text>
+          <Text style={styles.pipHeaderSub}>{'DVSA content only'}</Text>
+        </View>
       </View>
 
       <ScrollView
@@ -191,7 +223,7 @@ export default function TutorScreen() {
           <View key={msg.id} style={[styles.bubbleRow, msg.role === 'user' ? styles.rowUser : styles.rowTutor]}>
             {msg.role === 'assistant' && (
               <View style={styles.avatar}>
-                <Text style={styles.avatarEmoji}>{'🤖'}</Text>
+                <Pip size={28} mood="happy" />
               </View>
             )}
             <View style={[styles.bubble, msg.role === 'user' ? styles.bubbleUser : styles.bubbleTutor]}>
@@ -209,7 +241,16 @@ export default function TutorScreen() {
           </View>
         ))}
 
-        {/* Starter prompt chips — shown only on fresh empty chat */}
+        {/* Empty state — shown when no messages yet */}
+        {showEmpty && (
+          <View style={styles.emptyState}>
+            <Pip size={80} mood="wave" />
+            <Text style={styles.emptyTitle}>{"Hi! I'm Pip 👋"}</Text>
+            <Text style={styles.emptySub}>{"Ask me anything about your theory test."}</Text>
+          </View>
+        )}
+
+        {/* Starter prompt chips */}
         {showStarters && (
           <View style={styles.starterGrid}>
             {STARTER_PROMPTS.map((prompt) => (
@@ -228,7 +269,7 @@ export default function TutorScreen() {
         {isLoading && (
           <View style={[styles.bubbleRow, styles.rowTutor]}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarEmoji}>{'🤖'}</Text>
+              <Pip size={28} mood="happy" />
             </View>
             <View style={[styles.bubble, styles.bubbleTutor, styles.bubbleTyping]}>
               <Text style={styles.typingDots}>{'.'.repeat(dotCount)}</Text>
@@ -241,7 +282,7 @@ export default function TutorScreen() {
       {isLoading && (
         <View style={styles.thinkingBar}>
           <View style={styles.thinkingBarFill} />
-          <Text style={styles.thinkingBarText}>{'AI is thinking…'}</Text>
+          <Text style={styles.thinkingBarText}>{'Pip is thinking…'}</Text>
         </View>
       )}
 
@@ -251,7 +292,7 @@ export default function TutorScreen() {
           style={[styles.textInput, { color: theme.textColor, fontFamily: theme.fontFamily, fontSize: theme.fontSize(14) }]}
           value={input}
           onChangeText={setInput}
-          placeholder="Ask anything about driving theory..."
+          placeholder="Ask Pip anything..."
           placeholderTextColor="#9CA3AF"
           multiline
           maxLength={500}
@@ -273,10 +314,10 @@ export default function TutorScreen() {
       <Modal visible={showPaywall} transparent animationType="fade" onRequestClose={() => setShowPaywall(false)}>
         <View style={styles.paywallOverlay}>
           <View style={styles.paywallCard}>
-            <Text style={styles.paywallEmoji}>{'🤖'}</Text>
-            <Text style={styles.paywallTitle}>{"You've used your 5 free tutor questions"}</Text>
+            <Pip size={72} mood="sympathetic" />
+            <Text style={styles.paywallTitle}>{"You've used your 5 free Ask Pip questions"}</Text>
             <Text style={styles.paywallBody}>
-              {'Upgrade to Premium for unlimited AI tutor access.'}
+              {'Upgrade to Pro for unlimited sessions with Pip.'}
             </Text>
             <TouchableOpacity
               style={styles.upgradeBtn}
@@ -421,16 +462,23 @@ const styles = StyleSheet.create({
   dismissBtn: { paddingVertical: 8 },
   dismissText: { fontSize: 14, color: '#6B7280' },
 
-  // Scope banner
+  // Pip header banner
   scopeBanner: {
-    backgroundColor: Colors.indigoBg,
+    backgroundColor: Colors.indigo,
     paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderBottomWidth: 0.5,
-    borderBottomColor: Colors.border,
+    paddingVertical: 10,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
   },
-  scopeText: { fontSize: 12, color: Colors.indigo, fontWeight: '600' },
+  pipHeaderTextCol: { flex: 1 },
+  pipHeaderTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+  pipHeaderSub: { fontSize: 11, color: 'rgba(255,255,255,0.75)', fontWeight: '500', marginTop: 1 },
+
+  // Empty state
+  emptyState: { alignItems: 'center', paddingVertical: 32, gap: 8 },
+  emptyTitle: { fontSize: 20, fontWeight: '800', color: Colors.textPrimary },
+  emptySub: { fontSize: 14, color: Colors.mutedText, textAlign: 'center', lineHeight: 20 },
 
   // Starter prompts
   starterGrid: { gap: 8, marginTop: 8 },

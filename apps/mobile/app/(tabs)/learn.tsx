@@ -18,7 +18,7 @@ const CARDS: StudyCard[] = [
   { route: '/hazard',                          emoji: '⚠️',  title: 'Hazard Perception',  subtitle: 'Spot developing hazards' },
   { route: '/progress',                        emoji: '📊', title: 'Progress',            subtitle: 'Track your learning' },
   { route: '/leaderboard',                     emoji: '🏆', title: 'Leaderboard',         subtitle: 'See how you rank' },
-  { route: '/aitutor',                         emoji: '🤖', title: 'AI Tutor',            subtitle: 'Get instant help' },
+  { route: '/aitutor',                         emoji: '🦔', title: 'Ask Pip',             subtitle: 'Get instant help' },
   { route: '/(tabs)/practice?mode=bookmarked', emoji: '🔖', title: 'Bookmarked',          subtitle: 'Your saved questions' },
 ];
 

@@ -37,7 +37,7 @@ const TESTIMONIALS = [
 ];
 
 const FEATURES = [
-  { icon: '🤖', title: 'AI Tutor', desc: 'Ask anything. Get clear explanations from real conversational AI.' },
+  { icon: '🦔', title: 'Ask Pip', desc: 'Ask anything. Get clear explanations from real conversational AI.' },
   { icon: '📊', title: 'Pass Probability', desc: 'Live prediction of your pass chance, updated after every session.' },
   { icon: '📝', title: 'Full Mock Tests', desc: '50 questions, 57 minutes, full DVSA format.' },
   { icon: '📅', title: 'Smart Study Plan', desc: 'AI builds a personalised day-by-day plan around your test date.' },

@@ -36,8 +36,6 @@ import {
 } from '@/src/offlineCache';
 import { getTestResult, type TestResult } from '../ipassed';
 import { isPremium } from '@/src/subscription';
-import { useSupportDismissed } from '@/src/components/support/hooks/useSupportDismissed';
-import { ClearPassSupportNative } from '@/src/components/support/ClearPassSupportNative';
 import {
   NotificationSettings,
   DEFAULT_NOTIF_SETTINGS,
@@ -82,19 +80,19 @@ const SETTINGS: SettingConfig[] = [
     key: 'dyslexiaFont',
     label: 'Dyslexia-Friendly Font',
     description: 'Switches to OpenDyslexic font throughout the app to improve readability.',
-    icon: '[ Aa ]',
+    icon: '📖',
   },
   {
     key: 'largeText',
     label: 'Large Text',
     description: 'Increases the base font size by 20% across all screens.',
-    icon: '[ T+ ]',
+    icon: '🔤',
   },
   {
     key: 'highContrast',
     label: 'High Contrast',
     description: 'Switches to a high contrast colour scheme for improved visibility.',
-    icon: '[ HC ]',
+    icon: '👁️',
   },
   {
     key: 'textToSpeech',
@@ -181,9 +179,6 @@ export default function SettingsScreen() {
   // Test result state
   const [testResult, setTestResult] = useState<TestResult | null>(null);
 
-  // Support state
-  const { isDismissed: supportDismissed, restore: restoreSupport } = useSupportDismissed();
-  const [supportOpen, setSupportOpen] = useState(false);
   const [isPro, setIsPro] = useState(false);
   const [freezeCount, setFreezeCount] = useState(0);
 
@@ -567,7 +562,7 @@ export default function SettingsScreen() {
           </Text>
           <Text style={[styles.subscriptionDetail, { color: isPro ? 'rgba(255,255,255,0.8)' : theme.subTextColor }]}>
             {isPro
-              ? 'Unlimited questions · AI Tutor · All mock tests'
+              ? 'Unlimited questions · Ask Pip · All mock tests'
               : '10 questions/day · Upgrade for full access'}
           </Text>
         </View>
@@ -627,7 +622,7 @@ export default function SettingsScreen() {
         </View>
         <View style={styles.profileBadgeRow}>
           <Text style={[styles.profileBadgeText, { color: theme.subTextColor }]}>
-            {'[*] '}{earnedBadgeCount}{' / '}{TOPIC_BADGES.length}{' topics mastered'}
+            {'🎯 '}{earnedBadgeCount}{' / '}{TOPIC_BADGES.length}{' topics mastered'}
           </Text>
         </View>
         {myReferralCode && (
@@ -702,17 +697,14 @@ export default function SettingsScreen() {
 
         <TouchableOpacity
           style={[styles.row, styles.rowBorder]}
-          onPress={async () => {
-            if (supportDismissed) await restoreSupport();
-            setSupportOpen(true);
-          }}
+          onPress={() => router.push('/tutor' as any)}
           activeOpacity={0.75}
           accessibilityRole="button"
-          accessibilityLabel="Get support"
+          accessibilityLabel="Ask Pip"
         >
           <View style={styles.textWrap}>
-            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'💬 Get Support'}</Text>
-            <Text style={[styles.description, { fontSize: theme.fontSize(12), color: theme.subTextColor }]}>{'Chat with our AI support assistant'}</Text>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'🦔 Ask Pip'}</Text>
+            <Text style={[styles.description, { fontSize: theme.fontSize(12), color: theme.subTextColor }]}>{'Theory questions & app support'}</Text>
           </View>
           <Text style={styles.chevron}>{'›'}</Text>
         </TouchableOpacity>
@@ -979,6 +971,12 @@ export default function SettingsScreen() {
           </View>
           <Text style={styles.chevron}>{'>'}</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => router.push('/legal' as any)} activeOpacity={0.75}>
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Legal & Licences'}</Text>
+          </View>
+          <Text style={styles.chevron}>{'>'}</Text>
+        </TouchableOpacity>
         <View style={styles.row}>
           <View style={styles.textWrap}>
             <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'App Version'}</Text>
@@ -1140,13 +1138,6 @@ export default function SettingsScreen() {
       <Text style={styles.savedToastText}>{'Saved ✓'}</Text>
     </Animated.View>
 
-    {/* Support modal — standalone=false so no duplicate floating button */}
-    {supportOpen && (
-      <ClearPassSupportNative
-        standalone={false}
-        initialOpen={true}
-      />
-    )}
     </View>
   );
 }

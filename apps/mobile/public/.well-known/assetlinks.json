@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "co.uk.getclearpass.app",
+      "sha256_cert_fingerprints": ["4A:07:0E:8F:73:A9:62:6B:5F:99:B7:5C:D8:70:75:71:3A:55:8D:1F:5E:88:F1:25:D1:C1:10:DC:99:DA:0F:0F"]
+    }
+  }
+]

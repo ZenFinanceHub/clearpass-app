@@ -1199,7 +1199,7 @@ export default function PracticeScreen() {
           })}
           activeOpacity={0.85}
         >
-          <Text style={styles.tutorButtonText}>{'Ask AI Tutor 🤖'}</Text>
+          <Text style={styles.tutorButtonText}>{'Ask Pip 🦔'}</Text>
         </TouchableOpacity>
       )}
 

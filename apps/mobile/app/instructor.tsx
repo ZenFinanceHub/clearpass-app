@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Modal,
   ScrollView,
@@ -223,11 +224,9 @@ function LearnerCard({ data, onPress }: { data: LearnerEntry; onPress: () => voi
 function LearnerDetailView({
   data,
   onBack,
-  onEmailSummary,
 }: {
   data: LearnerEntry;
   onBack: () => void;
-  onEmailSummary: () => void;
 }) {
   const theme    = useTheme();
   const { rel, progress, username } = data;
@@ -243,13 +242,6 @@ function LearnerDetailView({
   const recentMocks = [...mocks].sort((a, b) => new Date(b.takenAt).getTime() - new Date(a.takenAt).getTime()).slice(0, 8);
   const topics    = Object.values(TopicCategory);
   const today     = new Date();
-
-  function handleSendEncouragement() {
-    Alert.alert(
-      'Encouragement sent! 💪',
-      `${name} will receive a motivational notification. (Push notifications to other devices require the full backend integration — coming soon.)`,
-    );
-  }
 
   return (
     <ScrollView
@@ -361,13 +353,9 @@ function LearnerDetailView({
       )}
 
       {/* Actions */}
-      <TouchableOpacity style={styles.encourageBtn} onPress={handleSendEncouragement} activeOpacity={0.85}>
-        <Text style={styles.encourageBtnText}>{'Send Encouragement'}</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.emailSummaryBtn} onPress={onEmailSummary} activeOpacity={0.85}>
-        <Text style={styles.emailSummaryBtnText}>{'Email Summary'}</Text>
-      </TouchableOpacity>
+      <Text style={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center', marginTop: 4 }}>
+        {'Coming in full release'}
+      </Text>
 
       {/* Lesson Notes */}
       {rel.learner_id && (
@@ -668,78 +656,6 @@ function AddLearnerModal({
   );
 }
 
-// ─── EmailSummaryModal ────────────────────────────────────────────────────────
-
-function EmailSummaryModal({
-  visible,
-  data,
-  onClose,
-}: {
-  visible: boolean;
-  data: LearnerEntry | null;
-  onClose: () => void;
-}) {
-  const theme = useTheme();
-  if (!data) return null;
-  const name     = data.username ?? data.rel.learner_name ?? 'Learner';
-  const readiness = data.progress?.readinessScore ?? 0;
-  const streak    = data.progress?.studyStreakDays ?? 0;
-  const totalQ    = data.progress?.totalQuestionsAnswered ?? 0;
-  const best      = data.progress ? bestMock(data.progress.mockTestHistory) : 0;
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalCard, { backgroundColor: theme.cardColor }]}>
-          <Text style={[styles.modalTitle, { color: theme.textColor }]}>{'Weekly Summary Preview'}</Text>
-          <Text style={[styles.summaryMeta, { color: theme.subTextColor }]}>
-            {'This is what the email would contain:'}
-          </Text>
-
-          <View style={styles.summaryBody}>
-            <Text style={[styles.summaryLearnerName, { color: theme.textColor }]}>{name}</Text>
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryKey, { color: theme.subTextColor }]}>{'Pass probability'}</Text>
-              <Text style={[styles.summaryVal, { color: probColor(readiness) }]}>{readiness}{'%'}</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryKey, { color: theme.subTextColor }]}>{'Study streak'}</Text>
-              <Text style={[styles.summaryVal, { color: theme.textColor }]}>{streak}{' days'}</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryKey, { color: theme.subTextColor }]}>{'Questions answered'}</Text>
-              <Text style={[styles.summaryVal, { color: theme.textColor }]}>{totalQ}</Text>
-            </View>
-            {best > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryKey, { color: theme.subTextColor }]}>{'Best mock score'}</Text>
-                <Text style={[styles.summaryVal, { color: theme.textColor }]}>{best}{'/50'}</Text>
-              </View>
-            )}
-            <View style={[styles.summaryEncourage, { backgroundColor: '#F0FDFA' }]}>
-              <Text style={styles.summaryEncourageText}>
-                {`Keep it up, ${name.split(' ')[0]}! You're making great progress on your theory test prep. Consistent daily practice is the key to success. You've got this! 💪`}
-              </Text>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={styles.sendSummaryBtn}
-            onPress={() => Alert.alert('Coming soon', 'Email reports will be available in the full release.')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.sendSummaryBtnText}>{'Send Summary'}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.modalCancelBtn} onPress={onClose} activeOpacity={0.85}>
-            <Text style={styles.modalCancelText}>{'Close'}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 // ─── ReferralSection ─────────────────────────────────────────────────────────
 
 function ReferralSection({
@@ -886,8 +802,6 @@ function InstructorDashboard({
   const theme = useTheme();
   const [selectedLearner, setSelectedLearner] = useState<LearnerEntry | null>(null);
   const [showAdd, setShowAdd]                 = useState(false);
-  const [showSummary, setShowSummary]         = useState(false);
-  const [summaryTarget, setSummaryTarget]     = useState<LearnerEntry | null>(null);
 
   async function handleCopyLink() {
     if (!referralCode) return;
@@ -912,21 +826,10 @@ function InstructorDashboard({
 
   if (selectedLearner) {
     return (
-      <>
-        <LearnerDetailView
-          data={selectedLearner}
-          onBack={() => setSelectedLearner(null)}
-          onEmailSummary={() => {
-            setSummaryTarget(selectedLearner);
-            setShowSummary(true);
-          }}
-        />
-        <EmailSummaryModal
-          visible={showSummary}
-          data={summaryTarget}
-          onClose={() => setShowSummary(false)}
-        />
-      </>
+      <LearnerDetailView
+        data={selectedLearner}
+        onBack={() => setSelectedLearner(null)}
+      />
     );
   }
 
@@ -1241,7 +1144,7 @@ export default function InstructorScreen() {
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setLoading(false); return; }
+      if (!user) { router.replace('/auth/signin'); return; }
 
       setInstructorEmail(user.email ?? '');
 
@@ -1352,7 +1255,11 @@ export default function InstructorScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      {mode === 'instructor' ? (
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.indigo} />
+        </View>
+      ) : mode === 'instructor' ? (
         <InstructorDashboard
           learners={learners}
           instructorCode={instructorCode}
@@ -1378,6 +1285,7 @@ export default function InstructorScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   // Header
   header: {

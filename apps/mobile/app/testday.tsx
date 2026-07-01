@@ -500,7 +500,7 @@ function LastMinuteTab() {
                   onPress={() => router.push('/(tabs)/tutor')}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.askTutorBtnText}>{'Ask AI Tutor about this'}</Text>
+                  <Text style={styles.askTutorBtnText}>{'Ask Pip'}</Text>
                 </TouchableOpacity>
               </View>
             )}
