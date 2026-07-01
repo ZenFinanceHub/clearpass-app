@@ -202,7 +202,7 @@ const toastStyles = StyleSheet.create({
   text: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
   pipFab: {
     position: 'absolute',
-    bottom: 88,
+    bottom: 96,
     right: 20,
     width: 52,
     height: 52,
