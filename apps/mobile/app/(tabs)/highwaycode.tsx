@@ -345,6 +345,10 @@ export default function HighwayCodeScreen() {
           ))}
         </View>
       )}
+
+      <Text style={[styles.oglNotice, { color: theme.subTextColor }]}>
+        {'Contains public sector information licensed under the Open Government Licence v3.0.\n© Crown copyright. Source: DVSA Highway Code.'}
+      </Text>
     </ScrollView>
     </View>
   );
@@ -353,6 +357,7 @@ export default function HighwayCodeScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { padding: 16, paddingBottom: 48 },
+  oglNotice: { fontSize: 11, lineHeight: 16, textAlign: 'center', marginTop: 24, marginBottom: 4 },
 
   screenTitle: { fontSize: 26, fontWeight: '800', marginBottom: 4 },
   screenSub: { fontSize: 14, marginBottom: 16, lineHeight: 20 },

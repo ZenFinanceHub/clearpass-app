@@ -971,6 +971,12 @@ export default function SettingsScreen() {
           </View>
           <Text style={styles.chevron}>{'>'}</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => router.push('/legal' as any)} activeOpacity={0.75}>
+          <View style={styles.textWrap}>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Legal & Licences'}</Text>
+          </View>
+          <Text style={styles.chevron}>{'>'}</Text>
+        </TouchableOpacity>
         <View style={styles.row}>
           <View style={styles.textWrap}>
             <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'App Version'}</Text>

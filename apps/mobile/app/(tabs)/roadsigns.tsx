@@ -1592,6 +1592,10 @@ export default function RoadSignsScreen() {
           </TouchableOpacity>
         ))}
       </View>
+
+      <Text style={[styles.oglNotice, { color: theme.subTextColor }]}>
+        {'Road sign images © Crown copyright. Licensed under the Open Government Licence v3.0.\nSource: DVSA Traffic Signs Regulations and General Directions.'}
+      </Text>
     </ScrollView>
     </View>
   );
@@ -1602,6 +1606,7 @@ export default function RoadSignsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { padding: 16, paddingBottom: 48 },
+  oglNotice: { fontSize: 11, lineHeight: 16, textAlign: 'center', marginTop: 24, marginBottom: 4 },
 
   backBtn: { marginBottom: 16 },
   backBtnText: { fontSize: 14, fontWeight: '600' },
