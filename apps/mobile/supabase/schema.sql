@@ -67,6 +67,72 @@ CREATE TABLE IF NOT EXISTS hazard_clips (
 ALTER TABLE hazard_clips ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Anyone can read active clips" ON hazard_clips FOR SELECT USING (is_active = true);
 
+-- Instructor / Learner relationships
+CREATE TABLE IF NOT EXISTS instructor_relationships (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  instructor_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  learner_id    UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  learner_email TEXT,
+  learner_name  TEXT,
+  status        TEXT DEFAULT 'accepted' CHECK (status IN ('pending', 'accepted', 'rejected')),
+  invite_code   TEXT,
+  created_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE instructor_relationships ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Participants can view own relationships" ON instructor_relationships;
+DROP POLICY IF EXISTS "Participants can insert relationships" ON instructor_relationships;
+DROP POLICY IF EXISTS "Participants can delete own relationships" ON instructor_relationships;
+CREATE POLICY "Participants can view own relationships" ON instructor_relationships
+  FOR SELECT USING (auth.uid() = instructor_id OR auth.uid() = learner_id);
+CREATE POLICY "Participants can insert relationships" ON instructor_relationships
+  FOR INSERT WITH CHECK (auth.uid() = instructor_id OR auth.uid() = learner_id);
+CREATE POLICY "Participants can delete own relationships" ON instructor_relationships
+  FOR DELETE USING (auth.uid() = instructor_id OR auth.uid() = learner_id);
+
+-- Instructor lesson notes
+CREATE TABLE IF NOT EXISTS instructor_lesson_notes (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  instructor_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  learner_id    UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  note          TEXT NOT NULL,
+  lesson_date   DATE,
+  created_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE instructor_lesson_notes ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Instructors can view own notes" ON instructor_lesson_notes;
+DROP POLICY IF EXISTS "Instructors can insert own notes" ON instructor_lesson_notes;
+CREATE POLICY "Instructors can view own notes" ON instructor_lesson_notes
+  FOR SELECT USING (auth.uid() = instructor_id);
+CREATE POLICY "Instructors can insert own notes" ON instructor_lesson_notes
+  FOR INSERT WITH CHECK (auth.uid() = instructor_id);
+
+-- Instructor referral earnings (written server-side only)
+CREATE TABLE IF NOT EXISTS instructor_earnings (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  instructor_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  learner_id    UUID REFERENCES auth.users(id),
+  amount        DECIMAL(10,2),
+  status        TEXT DEFAULT 'pending',
+  created_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE instructor_earnings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Instructors can view own earnings" ON instructor_earnings;
+CREATE POLICY "Instructors can view own earnings" ON instructor_earnings
+  FOR SELECT USING (auth.uid() = instructor_id);
+
+-- Add instructor / referral columns to profiles
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS instructor_code TEXT UNIQUE;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS referral_code   TEXT UNIQUE;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS expo_push_token TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS referred_by     TEXT;
+-- (existing profile RLS policies already cover these columns)
+
 -- Per-user hazard perception attempt log
 CREATE TABLE IF NOT EXISTS hazard_attempts (
   id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
