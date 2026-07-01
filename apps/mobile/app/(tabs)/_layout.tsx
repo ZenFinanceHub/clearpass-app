@@ -65,7 +65,7 @@ export default function TabLayout() {
           options={{
             title,
             ...(headerTitle ? { headerTitle } : {}),
-            ...(hidden ? { tabBarButton: () => null } : {}),
+            ...(hidden ? { tabBarButton: () => null, tabBarItemStyle: { display: 'none' as const, width: 0 } } : {}),
             tabBarIcon: ({ color, size, focused }) => (
               <Ionicons name={focused ? iconFocused : icon} size={size} color={color} />
             ),

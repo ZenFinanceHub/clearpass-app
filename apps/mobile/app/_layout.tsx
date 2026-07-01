@@ -155,7 +155,6 @@ export default function RootLayout() {
             <Stack.Screen name="instructor" options={{ headerShown: false }} />
             <Stack.Screen name="challenge" options={{ headerShown: false }} />
             <Stack.Screen name="ipassed" options={{ headerShown: false }} />
-            <Stack.Screen name="i-passed" options={{ headerShown: false }} />
             <Stack.Screen name="privacy-policy" options={{ headerShown: false }} />
             <Stack.Screen name="terms" options={{ headerShown: false }} />
             <Stack.Screen name="confirm-parent" options={{ headerShown: false }} />
