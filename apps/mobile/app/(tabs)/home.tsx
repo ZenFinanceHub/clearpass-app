@@ -829,7 +829,7 @@ export default function HomeScreen() {
             end={{ x: 1, y: 1 }}
             style={styles.resultBannerGradient}
           >
-            <Text style={styles.resultBannerTitle}>{'[*] How did your test go?'}</Text>
+            <Text style={styles.resultBannerTitle}>{'🎉 How did your test go?'}</Text>
             <View style={styles.resultBannerBtns}>
               <TouchableOpacity
                 style={styles.resultBannerPassBtn}
