@@ -598,7 +598,7 @@ export default function HomeScreen() {
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void handleRefresh(); }} tintColor={Colors.indigo} />}
     >
-      {/* Pip Header Band */}
+      {/* 1. Pip Header Band */}
       <View style={styles.pipHeader}>
         <View style={styles.pipHeaderInner}>
           <Pip size={64} mood={isLoading ? 'wave' : pipMood} />
@@ -613,7 +613,7 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Stats Row — streak | XP | pass probability */}
+      {/* 2. Stats Row — streak | XP | pass probability */}
       {!isLoading && (
         <View style={styles.statusBar}>
           <View style={styles.statusItem}>
@@ -659,7 +659,7 @@ export default function HomeScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Today's Focus card */}
+      {/* Today's Focus — spaced repetition due questions */}
       {!isLoading && homeDueCount > 0 && (
         <TouchableOpacity
           style={styles.focusCard}
@@ -675,22 +675,7 @@ export default function HomeScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Urgent countdown hero — shown at top when test is within 14 days */}
-      {!isLoading && daysLeft !== null && daysLeft >= 0 && daysLeft <= 14 && (
-        <TouchableOpacity style={[styles.urgentCountdown, { borderTopColor: countdownColor }]} onPress={handleOpenModal} activeOpacity={0.9}>
-          <View style={styles.urgentCountdownLeft}>
-            <Text style={styles.urgentCountdownSub}>{'YOUR TEST'}</Text>
-            <View style={styles.urgentCountdownRow}>
-              <Text style={[styles.urgentCountdownDays, { color: countdownColor }]}>{daysLeft}</Text>
-              <Text style={styles.urgentCountdownDaysLabel}>{'days to go'}</Text>
-            </View>
-            <Text style={[styles.urgentCountdownMsg, { color: countdownColor }]}>{countdownMsg}</Text>
-          </View>
-          <Text style={styles.urgentChevron}>{'›'}</Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Progress Roadmap */}
+      {/* 3. Roadmap — fixed 280px height */}
       {isLoading ? (
         <View style={{ paddingHorizontal: 16, paddingVertical: 12, gap: 10 }}>
           <SkeletonBox height={200} borderRadius={16} />
@@ -702,155 +687,12 @@ export default function HomeScreen() {
             progress={progress}
             pipMood={pipMood}
             width={(dims?.width ?? 375) - 32}
+            height={280}
           />
         </View>
       )}
 
-      {/* Tutor Nudges */}
-      {isLoading ? (
-        <View style={{ paddingHorizontal: 16, paddingVertical: 8, gap: 8 }}>
-          <SkeletonBox width={80} height={10} borderRadius={4} />
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <SkeletonBox width={240} height={90} borderRadius={14} />
-            <SkeletonBox width={240} height={90} borderRadius={14} />
-          </View>
-        </View>
-      ) : (
-        <NudgesSection nudges={nudges} onDismiss={(id) => void handleDismissNudge(id)} screenWidth={dims?.width ?? 375} />
-      )}
-
-
-      {/* Test Date Countdown */}
-      {daysLeft !== null && daysLeft > 14 && (
-        <View style={styles.countdownCard}>
-          <View style={styles.countdownTop}>
-            <Text style={styles.countdownLabel}>YOUR TEST</Text>
-            <TouchableOpacity onPress={handleOpenModal}>
-              <Text style={styles.countdownChange}>Change date</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.countdownBody}>
-            <Text style={styles.countdownDays}>{daysLeft}</Text>
-            <Text style={styles.countdownDaysLabel}>days to go</Text>
-          </View>
-          <Text style={[styles.countdownMsg, { color: countdownColor }]}>{countdownMsg}</Text>
-        </View>
-      )}
-
-      {/* Test date nudge — shown when no date is set and user has started practising */}
-      {!testDate && (progress?.totalQuestionsAnswered ?? 0) >= 5 && (
-        <TouchableOpacity style={styles.testDateNudge} onPress={handleOpenModal} activeOpacity={0.85}>
-          <Text style={styles.testDateNudgeEmoji}>{'📅'}</Text>
-          <View style={styles.testDateNudgeBody}>
-            <Text style={styles.testDateNudgeTitle}>{'Set your test date'}</Text>
-            <Text style={styles.testDateNudgeSub}>{'Get a personalised countdown and study plan tailored to when you want to pass.'}</Text>
-          </View>
-          <Text style={styles.testDateNudgeChevron}>{'›'}</Text>
-        </TouchableOpacity>
-      )}
-      {/* Fallback: subtle link when user hasn't started yet */}
-      {!testDate && (progress?.totalQuestionsAnswered ?? 0) < 5 && (
-        <TouchableOpacity style={styles.setDateRow} onPress={handleOpenModal}>
-          <Text style={styles.setDateText}>Set your test date</Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Schedule Mock Test Card — requires internet */}
-      {!isOffline && <View style={[styles.scheduleMockCard, { backgroundColor: theme.cardColor, borderColor: theme.borderColor }]}>
-        <View style={styles.scheduleMockHeader}>
-          <View>
-            <Text style={styles.scheduleMockLabel}>{'SCHEDULE MOCK TEST'}</Text>
-            <Text style={[styles.scheduleMockSub, { color: theme.subTextColor }]}>
-              {'Get a reminder 30 min before it starts'}
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={styles.scheduleMockAddBtn}
-            onPress={() => setShowScheduleModal(true)}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.scheduleMockAddText}>{'+ Schedule'}</Text>
-          </TouchableOpacity>
-        </View>
-        {scheduledTests.length > 0 && (
-          <View style={styles.scheduledList}>
-            {scheduledTests.slice(0, 3).map(test => (
-              <View key={test.id} style={[styles.scheduledItem, { borderTopColor: theme.borderColor }]}>
-                <View style={styles.scheduledItemLeft}>
-                  <Text style={[styles.scheduledItemLabel, { color: theme.textColor }]}>{test.label}</Text>
-                  <Text style={[styles.scheduledItemTime, { color: theme.subTextColor }]}>
-                    {formatTestDateTime(test.dateTimeIso)}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => void handleCancelTest(test)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.scheduledItemCancel}>{'x'}</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-        )}
-      </View>}
-
-      {/* Test Day Banner */}
-      {daysLeft !== null && daysLeft >= 0 && daysLeft <= 1 && (
-        <TouchableOpacity
-          style={styles.testDayBanner}
-          onPress={() => router.push('/testday' as any)}
-          activeOpacity={0.85}
-        >
-          <LinearGradient
-            colors={[Colors.indigo, Colors.violet]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.testDayGradient}
-          >
-            <Text style={styles.testDayEmoji}>{daysLeft === 0 ? '🎯' : '📅'}</Text>
-            <View style={styles.testDayTextBlock}>
-              <Text style={styles.testDayTitle}>
-                {daysLeft === 0 ? 'Test Day Mode' : 'Test Tomorrow!'}
-              </Text>
-              <Text style={styles.testDaySub}>{'Tap to prepare'}</Text>
-            </View>
-            <Text style={styles.testDayChevron}>{'›'}</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      )}
-
-      {/* Test Result Banner */}
-      {showResultBanner && (
-        <View style={styles.resultBannerWrap}>
-          <LinearGradient
-            colors={[Colors.indigo, Colors.violet]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.resultBannerGradient}
-          >
-            <Text style={styles.resultBannerTitle}>{'🎉 How did your test go?'}</Text>
-            <View style={styles.resultBannerBtns}>
-              <TouchableOpacity
-                style={styles.resultBannerPassBtn}
-                onPress={() => router.push('/ipassed?flow=passed' as any)}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.resultBannerPassText}>{'I Passed!'}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.resultBannerResitBtn}
-                onPress={() => router.push('/ipassed?flow=resit' as any)}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.resultBannerResitText}>{'I need to resit'}</Text>
-              </TouchableOpacity>
-            </View>
-          </LinearGradient>
-        </View>
-      )}
-
-      {/* Action Grid */}
+      {/* 4. Quick Actions Grid (2×3) */}
       <View style={styles.actionGrid}>
         <View style={styles.actionCards}>
           <ScaleButton style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/(tabs)/practice')} activeOpacity={0.8}>
@@ -889,95 +731,128 @@ export default function HomeScreen() {
             <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>Stats, Leaderboard & More</Text>
           </ScaleButton>
         </View>
-
-        <View style={styles.actionRow}>
-          <TouchableOpacity
-            style={[styles.actionCard, styles.challengeCard]}
-            onPress={() => router.push('/challenge' as any)}
-            activeOpacity={0.8}
-          >
-            <View style={styles.challengeCardInner}>
-              <View style={styles.challengeCardLeft}>
-                <Text style={styles.actionEmoji}>{'⚔'}</Text>
-                <View>
-                  <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>
-                    {'Challenge'}
-                  </Text>
-                  <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>
-                    {'Beat a friend'}
-                  </Text>
-                </View>
-              </View>
-              {pendingChallenges > 0 && (
-                <View style={styles.challengeBadge}>
-                  <Text style={styles.challengeBadgeText}>{pendingChallenges}</Text>
-                </View>
-              )}
-            </View>
-          </TouchableOpacity>
-        </View>
       </View>
 
-      {/* Today's Task from study plan */}
-      {studyPlan && studyPlan.todayTask.type !== 'rest' && (
+      {/* 5. Test Countdown section */}
+
+      {/* Test Day Banner — shown day-of or eve */}
+      {daysLeft !== null && daysLeft >= 0 && daysLeft <= 1 && (
         <TouchableOpacity
-          style={[styles.todayTaskCard, { backgroundColor: theme.cardColor, borderColor: theme.borderColor }]}
-          onPress={() => router.push('/study-plan' as any)}
+          style={styles.testDayBanner}
+          onPress={() => router.push('/testday' as any)}
           activeOpacity={0.85}
         >
-          <View style={styles.todayTaskLeft}>
-            <Text style={styles.todayTaskLabel}>{'TODAY\'S TASK'}</Text>
-            <Text style={[styles.todayTaskTitle, { color: theme.textColor }]}>
-              {studyPlan.todayTask.type === 'questions' ? 'Practice Questions'
-                : studyPlan.todayTask.type === 'mock' ? 'Full Mock Test'
-                : studyPlan.todayTask.type === 'hazard' ? 'Hazard Perception'
-                : studyPlan.todayTask.type}
-            </Text>
-            <Text style={[styles.todayTaskSub, { color: theme.subTextColor }]}>
-              {studyPlan.todayTask.durationMins}{' min -- '}{studyPlan.daysLeft}{' days to go'}
-            </Text>
-          </View>
-          <Text style={styles.todayTaskChevron}>{'>'}</Text>
+          <LinearGradient
+            colors={[Colors.indigo, Colors.violet]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.testDayGradient}
+          >
+            <Text style={styles.testDayEmoji}>{daysLeft === 0 ? '🎯' : '📅'}</Text>
+            <View style={styles.testDayTextBlock}>
+              <Text style={styles.testDayTitle}>
+                {daysLeft === 0 ? 'Test Day Mode' : 'Test Tomorrow!'}
+              </Text>
+              <Text style={styles.testDaySub}>{'Tap to prepare'}</Text>
+            </View>
+            <Text style={styles.testDayChevron}>{'›'}</Text>
+          </LinearGradient>
         </TouchableOpacity>
       )}
 
-      {/* I Passed button */}
-      <TouchableOpacity
-        style={styles.iPassedBtn}
-        onPress={() => router.push('/ipassed' as any)}
-        activeOpacity={0.85}
-      >
-        <Text style={styles.iPassedBtnText}>{'🎉 I Passed my Theory Test!'}</Text>
-        <Text style={styles.iPassedBtnSub}>{'Celebrate and share your story'}</Text>
-      </TouchableOpacity>
+      {/* Urgent countdown — 2–14 days to go */}
+      {!isLoading && daysLeft !== null && daysLeft > 1 && daysLeft <= 14 && (
+        <TouchableOpacity style={[styles.urgentCountdown, { borderTopColor: countdownColor }]} onPress={handleOpenModal} activeOpacity={0.9}>
+          <View style={styles.urgentCountdownLeft}>
+            <Text style={styles.urgentCountdownSub}>{'YOUR TEST'}</Text>
+            <View style={styles.urgentCountdownRow}>
+              <Text style={[styles.urgentCountdownDays, { color: countdownColor }]}>{daysLeft}</Text>
+              <Text style={styles.urgentCountdownDaysLabel}>{'days to go'}</Text>
+            </View>
+            <Text style={[styles.urgentCountdownMsg, { color: countdownColor }]}>{countdownMsg}</Text>
+          </View>
+          <Text style={styles.urgentChevron}>{'›'}</Text>
+        </TouchableOpacity>
+      )}
 
-      {/* Study Plan Card */}
-      <TouchableOpacity
-        style={styles.studyPlanCard}
-        onPress={() => router.push('/studyplan' as any)}
-        activeOpacity={0.8}
-      >
-        <View style={styles.studyPlanLeft}>
-          <Text style={styles.studyPlanEmoji}>{'📅'}</Text>
-          <View style={styles.studyPlanTextBlock}>
-            <Text style={styles.studyPlanLabel}>STUDY PLAN</Text>
-            {aiStudyPlan ? (
-              <Text style={[styles.studyPlanSummary, { fontSize: theme.fontSize(13), fontFamily: theme.fontFamily }]}>
-                {buildTodaySummary(aiStudyPlan) || 'View your plan'}
-              </Text>
-            ) : (
-              <Text style={[styles.studyPlanSummary, { fontSize: theme.fontSize(13), fontFamily: theme.fontFamily }]}>
-                {'Create a personalised study plan'}
-              </Text>
-            )}
+      {/* Normal countdown — >14 days */}
+      {daysLeft !== null && daysLeft > 14 && (
+        <View style={styles.countdownCard}>
+          <View style={styles.countdownTop}>
+            <Text style={styles.countdownLabel}>YOUR TEST</Text>
+            <TouchableOpacity onPress={handleOpenModal}>
+              <Text style={styles.countdownChange}>Change date</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.countdownBody}>
+            <Text style={styles.countdownDays}>{daysLeft}</Text>
+            <Text style={styles.countdownDaysLabel}>days to go</Text>
+          </View>
+          <Text style={[styles.countdownMsg, { color: countdownColor }]}>{countdownMsg}</Text>
+        </View>
+      )}
+
+      {/* Test Result Banner */}
+      {showResultBanner && (
+        <View style={styles.resultBannerWrap}>
+          <LinearGradient
+            colors={[Colors.indigo, Colors.violet]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.resultBannerGradient}
+          >
+            <Text style={styles.resultBannerTitle}>{'🎉 How did your test go?'}</Text>
+            <View style={styles.resultBannerBtns}>
+              <TouchableOpacity
+                style={styles.resultBannerPassBtn}
+                onPress={() => router.push('/ipassed?flow=passed' as any)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.resultBannerPassText}>{'I Passed!'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.resultBannerResitBtn}
+                onPress={() => router.push('/ipassed?flow=resit' as any)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.resultBannerResitText}>{'I need to resit'}</Text>
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+        </View>
+      )}
+
+      {/* Test date nudge — shown when no date set and user has started */}
+      {!testDate && (progress?.totalQuestionsAnswered ?? 0) >= 5 && (
+        <TouchableOpacity style={styles.testDateNudge} onPress={handleOpenModal} activeOpacity={0.85}>
+          <Text style={styles.testDateNudgeEmoji}>{'📅'}</Text>
+          <View style={styles.testDateNudgeBody}>
+            <Text style={styles.testDateNudgeTitle}>{'Set your test date'}</Text>
+            <Text style={styles.testDateNudgeSub}>{'Get a personalised countdown and study plan tailored to when you want to pass.'}</Text>
+          </View>
+          <Text style={styles.testDateNudgeChevron}>{'›'}</Text>
+        </TouchableOpacity>
+      )}
+      {!testDate && (progress?.totalQuestionsAnswered ?? 0) < 5 && (
+        <TouchableOpacity style={styles.setDateRow} onPress={handleOpenModal}>
+          <Text style={styles.setDateText}>Set your test date</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* ASK PIP nudges */}
+      {isLoading ? (
+        <View style={{ paddingHorizontal: 16, paddingVertical: 8, gap: 8 }}>
+          <SkeletonBox width={80} height={10} borderRadius={4} />
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <SkeletonBox width={240} height={90} borderRadius={14} />
+            <SkeletonBox width={240} height={90} borderRadius={14} />
           </View>
         </View>
-        <View style={styles.studyPlanChevron}>
-          <Text style={styles.studyPlanChevronText}>{'›'}</Text>
-        </View>
-      </TouchableOpacity>
+      ) : (
+        <NudgesSection nudges={nudges} onDismiss={(id) => void handleDismissNudge(id)} screenWidth={dims?.width ?? 375} />
+      )}
 
-      {/* Daily Challenge Card */}
+      {/* 6. Daily Challenge */}
       {dc && (
         <View style={[styles.dcCard, dc.completed && styles.dcCardComplete]}>
           <View style={styles.dcTopRow}>
@@ -1001,7 +876,26 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Question of the Day */}
+      {/* 7. Challenge slim banner */}
+      <TouchableOpacity
+        style={styles.challengeBanner}
+        onPress={() => router.push('/challenge' as any)}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.actionEmoji}>{'⚔'}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Challenge</Text>
+          <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>Beat a friend</Text>
+        </View>
+        {pendingChallenges > 0 && (
+          <View style={styles.challengeBadge}>
+            <Text style={styles.challengeBadgeText}>{pendingChallenges}</Text>
+          </View>
+        )}
+        <Text style={{ fontSize: 20, color: Colors.mutedText, marginLeft: 4 }}>{'›'}</Text>
+      </TouchableOpacity>
+
+      {/* 8. Question of the Day */}
       <TouchableOpacity
         style={styles.qotdCard}
         onPress={() => { if (qotdSelected === null) setQotdExpanded((e) => !e); }}
@@ -1054,7 +948,7 @@ export default function HomeScreen() {
         )}
       </TouchableOpacity>
 
-      {/* Tip Card */}
+      {/* 9. Did You Know? */}
       <View style={styles.tipCard}>
         <Text style={styles.tipTitle}>DID YOU KNOW?</Text>
         <Text style={[styles.tipBody, { fontSize: theme.fontSize(13), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(20), color: theme.subTextColor }]}>
@@ -1062,62 +956,15 @@ export default function HomeScreen() {
         </Text>
       </View>
 
-      {/* Schedule Mock Test Modal */}
-      <Modal visible={showScheduleModal} transparent animationType="fade" onRequestClose={() => setShowScheduleModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: theme.cardColor }]}>
-            <Text style={[styles.modalTitle, { color: theme.textColor }]}>Schedule Mock Test</Text>
-            <Text style={[styles.modalSub, { color: theme.subTextColor }]}>Date (DD/MM/YYYY)</Text>
-            <TextInput
-              style={[styles.dateInput, { color: theme.textColor }]}
-              value={scheduleDate}
-              onChangeText={setScheduleDate}
-              placeholder="DD/MM/YYYY"
-              placeholderTextColor="#9CA3AF"
-              keyboardType="numbers-and-punctuation"
-              maxLength={10}
-            />
-            <Text style={[styles.modalSub, { color: theme.subTextColor }]}>Time</Text>
-            <View style={styles.scheduleTimeRow}>
-              <View style={styles.scheduleTimeUnit}>
-                <TouchableOpacity style={styles.scheduleArrow} onPress={() => setScheduleHour(h => (h + 1) % 24)} activeOpacity={0.7}>
-                  <Text style={styles.scheduleArrowText}>{'▲'}</Text>
-                </TouchableOpacity>
-                <Text style={[styles.scheduleTimeValue, { color: theme.textColor }]}>{String(scheduleHour).padStart(2, '0')}</Text>
-                <TouchableOpacity style={styles.scheduleArrow} onPress={() => setScheduleHour(h => (h + 23) % 24)} activeOpacity={0.7}>
-                  <Text style={styles.scheduleArrowText}>{'▼'}</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={[styles.scheduleTimeSep, { color: theme.textColor }]}>{':'}</Text>
-              <View style={styles.scheduleTimeUnit}>
-                <TouchableOpacity style={styles.scheduleArrow} onPress={() => setScheduleMinute(m => (m + 5) % 60)} activeOpacity={0.7}>
-                  <Text style={styles.scheduleArrowText}>{'▲'}</Text>
-                </TouchableOpacity>
-                <Text style={[styles.scheduleTimeValue, { color: theme.textColor }]}>{String(scheduleMinute).padStart(2, '0')}</Text>
-                <TouchableOpacity style={styles.scheduleArrow} onPress={() => setScheduleMinute(m => (m + 55) % 60)} activeOpacity={0.7}>
-                  <Text style={styles.scheduleArrowText}>{'▼'}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            <Text style={[styles.modalSub, { color: theme.subTextColor }]}>Label (optional)</Text>
-            <TextInput
-              style={[styles.dateInput, { color: theme.textColor, letterSpacing: 0 }]}
-              value={scheduleLabel}
-              onChangeText={setScheduleLabel}
-              placeholder="Mock Test"
-              placeholderTextColor="#9CA3AF"
-              maxLength={40}
-            />
-            {scheduleError.length > 0 && <Text style={styles.dateError}>{scheduleError}</Text>}
-            <TouchableOpacity style={styles.modalSave} onPress={() => void handleScheduleTest()} activeOpacity={0.85}>
-              <Text style={styles.modalSaveText}>Schedule</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.modalCancel} onPress={() => { setShowScheduleModal(false); setScheduleError(''); }} activeOpacity={0.85}>
-              <Text style={styles.modalCancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      {/* 10. I Passed button — bottom of scroll */}
+      <TouchableOpacity
+        style={styles.iPassedBtn}
+        onPress={() => router.push('/ipassed' as any)}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.iPassedBtnText}>{'🎉 I Passed my Theory Test!'}</Text>
+        <Text style={styles.iPassedBtnSub}>{'Celebrate and share your story'}</Text>
+      </TouchableOpacity>
 
       {/* Test Date Modal */}
       <Modal visible={showDateModal} transparent animationType="fade" onRequestClose={() => setShowDateModal(false)}>
@@ -1234,11 +1081,16 @@ const styles = StyleSheet.create({
   },
   nudgeCard: {
     backgroundColor: Colors.cardWhite,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 0.5,
     borderColor: Colors.border,
     borderLeftWidth: 3,
     padding: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   nudgeHeader: {
     flexDirection: 'row',
@@ -1291,6 +1143,7 @@ const styles = StyleSheet.create({
     borderColor: '#93C5FD',
     padding: 14,
     gap: 10,
+    marginHorizontal: 16,
     marginBottom: 12,
   },
   trialBannerExpired: {
@@ -1333,6 +1186,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   urgentCountdownLeft: { flex: 1 },
   urgentCountdownSub: { fontSize: 10, fontWeight: '700', color: Colors.mutedText, letterSpacing: 1, marginBottom: 4 },
@@ -1344,7 +1202,7 @@ const styles = StyleSheet.create({
 
   countdownCard: {
     backgroundColor: Colors.cardWhite,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 0.5,
     borderColor: Colors.border,
     borderTopWidth: 3,
@@ -1352,6 +1210,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 4,
     padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   countdownTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   countdownLabel:    { fontSize: 11, fontWeight: '700', color: Colors.amber, letterSpacing: 1 },
@@ -1443,6 +1306,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
   },
+  challengeBanner: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: Colors.cardWhite,
+    borderRadius: 16,
+    borderWidth: 0.5,
+    borderColor: Colors.border,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.indigo,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
   actionCard: {
     borderRadius: 14,
     padding: 14,
@@ -1520,6 +1402,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 3,
     borderTopColor: Colors.indigo,
     padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   dcCardComplete: { opacity: 0.6 },
   dcTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
@@ -1559,6 +1446,11 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: Colors.violet,
     padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   tipTitle: { fontSize: 11, fontWeight: '700', color: Colors.violet, letterSpacing: 1, marginBottom: 6 },
   tipBody:  { fontSize: 13, lineHeight: 20 },
@@ -1574,6 +1466,11 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: Colors.indigo,
     padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   qotdHeader: {
     flexDirection: 'row',

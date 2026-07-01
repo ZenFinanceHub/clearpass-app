@@ -46,11 +46,12 @@ interface RoadmapPathProps {
   progress: UserProgress | null;
   pipMood?: PipMood;
   width: number;
+  height?: number;
 }
 
-export default function RoadmapPath({ progress, pipMood = 'happy', width }: RoadmapPathProps) {
+export default function RoadmapPath({ progress, pipMood = 'happy', width, height: heightProp }: RoadmapPathProps) {
   const current    = computeProgress(progress);
-  const height     = Math.round(width * VBOX_H / VBOX_W);
+  const height     = heightProp ?? Math.round(width * VBOX_H / VBOX_W);
   const scaleX     = width  / VBOX_W;
   const scaleY     = height / VBOX_H;
 
