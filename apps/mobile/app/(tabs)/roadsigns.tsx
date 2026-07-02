@@ -189,17 +189,21 @@ function WarnSymbol({ id }: { id: string }) {
     case 'school-crossing':
       return (
         <G>
-          <Circle cx="40" cy="40" r="5" fill={f} />
-          <Line x1="40" y1="45" x2="40" y2="60" stroke={f} strokeWidth="4.5" strokeLinecap="round" />
-          <Path d="M32 53 L40 50 L48 53" stroke={f} strokeWidth="3.5" fill="none" strokeLinecap="round" />
-          <Line x1="40" y1="60" x2="35" y2="73" stroke={f} strokeWidth="4" strokeLinecap="round" />
-          <Line x1="40" y1="60" x2="45" y2="73" stroke={f} strokeWidth="4" strokeLinecap="round" />
-          <Circle cx="60" cy="43" r="4" fill={f} />
-          <Line x1="60" y1="47" x2="60" y2="59" stroke={f} strokeWidth="3.5" strokeLinecap="round" />
-          <Path d="M53 53 L60 51 L67 53" stroke={f} strokeWidth="3" fill="none" strokeLinecap="round" />
-          <Line x1="60" y1="59" x2="56" y2="70" stroke={f} strokeWidth="3" strokeLinecap="round" />
-          <Line x1="60" y1="59" x2="64" y2="70" stroke={f} strokeWidth="3" strokeLinecap="round" />
-          <Line x1="40" y1="45" x2="60" y2="47" stroke={f} strokeWidth="3" strokeLinecap="round" />
+          {/* Patrol person — head, body, left arm down, right arm raised holding lollipop */}
+          <Circle cx="37" cy="44" r="4.5" fill={f} />
+          <Line x1="37" y1="49" x2="37" y2="62" stroke={f} strokeWidth="4" strokeLinecap="round" />
+          <Line x1="37" y1="54" x2="29" y2="59" stroke={f} strokeWidth="3.5" strokeLinecap="round" />
+          <Line x1="37" y1="54" x2="46" y2="46" stroke={f} strokeWidth="3.5" strokeLinecap="round" />
+          <Line x1="46" y1="46" x2="50" y2="34" stroke={f} strokeWidth="3" strokeLinecap="round" />
+          <Circle cx="50" cy="30" r="7" stroke={f} strokeWidth="3" fill="none" />
+          <Line x1="37" y1="62" x2="32" y2="74" stroke={f} strokeWidth="3.5" strokeLinecap="round" />
+          <Line x1="37" y1="62" x2="42" y2="74" stroke={f} strokeWidth="3.5" strokeLinecap="round" />
+          {/* Child — smaller figure beside the patrol person */}
+          <Circle cx="59" cy="48" r="4" fill={f} />
+          <Line x1="59" y1="52" x2="59" y2="63" stroke={f} strokeWidth="3.5" strokeLinecap="round" />
+          <Path d="M52 57 L59 54 L66 57" stroke={f} strokeWidth="3" fill="none" strokeLinecap="round" />
+          <Line x1="59" y1="63" x2="55" y2="74" stroke={f} strokeWidth="3" strokeLinecap="round" />
+          <Line x1="59" y1="63" x2="63" y2="74" stroke={f} strokeWidth="3" strokeLinecap="round" />
         </G>
       );
     case 'children':
@@ -231,14 +235,21 @@ function WarnSymbol({ id }: { id: string }) {
     case 'horse-riders':
       return (
         <G>
-          <Ellipse cx="49" cy="60" rx="17" ry="9" fill={f} />
-          <Path d="M66 55 Q74 49 72 41 Q70 37 64 39 Q60 41 61 47 L64 55" fill={f} />
-          <Line x1="36" y1="68" x2="33" y2="77" stroke={f} strokeWidth="4" strokeLinecap="round" />
-          <Line x1="43" y1="69" x2="41" y2="78" stroke={f} strokeWidth="4" strokeLinecap="round" />
-          <Line x1="56" y1="69" x2="54" y2="78" stroke={f} strokeWidth="4" strokeLinecap="round" />
-          <Line x1="62" y1="68" x2="65" y2="77" stroke={f} strokeWidth="4" strokeLinecap="round" />
-          <Ellipse cx="51" cy="49" rx="6" ry="8" fill={f} />
-          <Circle cx="51" cy="40" r="5" fill={f} />
+          {/* Horse body */}
+          <Ellipse cx="46" cy="62" rx="18" ry="10" fill={f} />
+          {/* Horse neck and head */}
+          <Path d="M57 54 Q63 46 62 38 L57 41 Q57 48 56 54" fill={f} />
+          <Ellipse cx="61" cy="36" rx="5" ry="7" fill={f} />
+          {/* Horse tail (left side) */}
+          <Path d="M28 61 Q22 55 23 64 Q24 72 30 70" fill={f} />
+          {/* Four legs */}
+          <Line x1="35" y1="70" x2="33" y2="80" stroke={f} strokeWidth="4" strokeLinecap="round" />
+          <Line x1="42" y1="71" x2="40" y2="81" stroke={f} strokeWidth="4" strokeLinecap="round" />
+          <Line x1="52" y1="71" x2="51" y2="81" stroke={f} strokeWidth="4" strokeLinecap="round" />
+          <Line x1="58" y1="70" x2="60" y2="80" stroke={f} strokeWidth="4" strokeLinecap="round" />
+          {/* Rider body and head */}
+          <Ellipse cx="48" cy="52" rx="7" ry="9" fill={f} />
+          <Circle cx="48" cy="42" r="5" fill={f} />
         </G>
       );
     case 'wild-animals':

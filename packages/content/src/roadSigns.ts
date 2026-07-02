@@ -663,7 +663,7 @@ export const roadSigns: RoadSign[] = [
     displayText: 'X',
     meaning: 'No vehicles of any kind may use this road. This is a pedestrianised area or road closed to all traffic.',
     whatToDo: 'Do not enter with any vehicle. Unless you have a specific exemption (e.g. loading at specified times), find an alternative route.',
-    commonMistake: 'Assuming motorcycles or bicycles may enter because the sign shows a car. "No vehicles" means all vehicles.',
+    commonMistake: 'Thinking you can ride a bicycle through. The exception is pushing only — riding is not permitted. The plain red ring means no vehicles at all: cars, motorcycles, and ridden bicycles must not enter.',
     relatedRuleNumber: 160,
   },
   {

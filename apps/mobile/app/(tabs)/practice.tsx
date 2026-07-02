@@ -90,6 +90,11 @@ const TOPIC_EMOJI: Record<TopicCategory, string> = {
   [TopicCategory.VehicleLoading]: '📦',
 };
 
+function questionNeedsImage(q: Question): boolean {
+  const hay = (q.questionText + ' ' + q.options.join(' ')).toLowerCase();
+  return /this lorry|this picture|this sign|this vehicle|this car|this road|\(arrowed [abcd]\)|shown (in|here)|in this (image|photo|picture)/.test(hay);
+}
+
 type Phase = 'start' | 'loading' | 'quiz' | 'results' | 'battle' | 'battleResults' | 'dailyLimit' | 'speedRound' | 'speedRoundResults' | 'weakSpot' | 'weakSpotResults';
 
 type SessionResult = {
@@ -1058,9 +1063,13 @@ export default function PracticeScreen() {
             <Text style={styles.speakerBtnText}>{'[ >> ]'}</Text>
           </TouchableOpacity>
         )}
-        {question.imageUrl && (
+        {question.imageUrl ? (
           <Image source={{ uri: question.imageUrl }} style={styles.questionImage} resizeMode="contain" />
-        )}
+        ) : questionNeedsImage(question) ? (
+          <View style={styles.imageMissing}>
+            <Text style={styles.imageMissingText}>📷  Image coming soon</Text>
+          </View>
+        ) : null}
         <Text
           style={[styles.questionText, { fontSize: theme.fontSize(17), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(26), color: theme.textColor }]}
           onPress={settings.textToSpeech ? () => { Speech.stop(); Speech.speak(question.questionText, { language: 'en-GB' }); } : undefined}
@@ -1631,9 +1640,13 @@ function BattleView({
       </View>
 
       <View style={styles.questionCard}>
-        {question.imageUrl && (
+        {question.imageUrl ? (
           <Image source={{ uri: question.imageUrl }} style={styles.questionImage} resizeMode="contain" />
-        )}
+        ) : questionNeedsImage(question) ? (
+          <View style={styles.imageMissing}>
+            <Text style={styles.imageMissingText}>📷  Image coming soon</Text>
+          </View>
+        ) : null}
         <Text style={[styles.questionText, { fontSize: theme.fontSize(17), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(26), color: theme.textColor }]}>{question.questionText}</Text>
       </View>
 
@@ -1829,9 +1842,13 @@ function WeakSpotView({
       </View>
 
       <View style={[styles.questionCard, { backgroundColor: theme.cardColor }]}>
-        {question.imageUrl && (
+        {question.imageUrl ? (
           <Image source={{ uri: question.imageUrl }} style={styles.questionImage} resizeMode="contain" />
-        )}
+        ) : questionNeedsImage(question) ? (
+          <View style={styles.imageMissing}>
+            <Text style={styles.imageMissingText}>📷  Image coming soon</Text>
+          </View>
+        ) : null}
         <Text style={[styles.questionText, { fontSize: theme.fontSize(17), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(26), color: theme.textColor }]}>
           {question.questionText}
         </Text>
@@ -1990,9 +2007,13 @@ function SpeedRoundView({
       </View>
 
       <View style={styles.questionCard}>
-        {question.imageUrl && (
+        {question.imageUrl ? (
           <Image source={{ uri: question.imageUrl }} style={styles.questionImage} resizeMode="contain" />
-        )}
+        ) : questionNeedsImage(question) ? (
+          <View style={styles.imageMissing}>
+            <Text style={styles.imageMissingText}>📷  Image coming soon</Text>
+          </View>
+        ) : null}
         <Text style={[styles.questionText, { fontSize: theme.fontSize(17), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(26), color: theme.textColor }]}>
           {question.questionText}
         </Text>
@@ -2228,6 +2249,8 @@ const styles = StyleSheet.create({
   },
   topicBadgeEmoji: { fontSize: 16 },
   questionImage: { width: '100%', height: 160, borderRadius: 8, marginBottom: 12 },
+  imageMissing: { width: '100%', height: 72, borderRadius: 8, marginBottom: 12, backgroundColor: Colors.surfaceGray, borderWidth: 1, borderColor: Colors.border, justifyContent: 'center', alignItems: 'center' },
+  imageMissingText: { fontSize: 13, color: Colors.subtleText },
   questionText: { fontSize: 17, fontWeight: '600', lineHeight: 26 },
 
   // Options
