@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Linking } from 'react-native';
@@ -22,11 +23,30 @@ import {
   syncWhenOnline,
 } from '@/src/offlineCache';
 
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  tracesSampleRate: 0.2,
+  environment: __DEV__ ? 'development' : 'production',
+});
+
 configureNotificationHandler();
 
 const ONBOARDING_KEY = '@clearpass/hasSeenOnboarding';
 
-export default function RootLayout() {
+function SentryFallback() {
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+      <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 8 }}>
+        {'Something went wrong'}
+      </Text>
+      <Text style={{ fontSize: 14, color: '#6B7280', textAlign: 'center' }}>
+        {'Please close and reopen the app.'}
+      </Text>
+    </View>
+  );
+}
+
+function RootLayout() {
   useFonts({
     'OpenDyslexic-Regular': require('../assets/fonts/OpenDyslexic-Regular.otf'),
     'OpenDyslexic-Bold': require('../assets/fonts/OpenDyslexic-Bold.otf'),
@@ -124,7 +144,8 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <AccessibilityProvider>
+    <Sentry.ErrorBoundary fallback={<SentryFallback />}>
+      <AccessibilityProvider>
       <NetworkProvider>
         {Platform.OS === 'web' && <Head><title>ClearPass</title></Head>}
         <View suppressHydrationWarning style={{ flex: 1 }}>
@@ -178,7 +199,8 @@ export default function RootLayout() {
           )}
         </View>
       </NetworkProvider>
-    </AccessibilityProvider>
+      </AccessibilityProvider>
+    </Sentry.ErrorBoundary>
   );
 }
 
@@ -219,3 +241,5 @@ const toastStyles = StyleSheet.create({
   },
   pipFabIcon: { fontSize: 24 },
 });
+
+export default Sentry.wrap(RootLayout);
