@@ -83,7 +83,13 @@
       ],
       "expo-apple-authentication",
       "expo-web-browser",
-      "@sentry/react-native"
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "zen-finance-hub",
+          "project": "clearpass"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
