@@ -35,7 +35,7 @@ const ONBOARDING_KEY = '@clearpass/hasSeenOnboarding';
 
 function SentryFallback() {
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: '#FFFFFF' }}>
       <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 8 }}>
         {'Something went wrong'}
       </Text>
