@@ -51,6 +51,7 @@ import {
   showWebAlert,
   showPermissionDeniedAlert,
 } from '@/src/notifications';
+import * as Sentry from '@sentry/react-native';
 
 // ─── Accessibility config ─────────────────────────────────────────────────────
 
@@ -988,6 +989,16 @@ export default function SettingsScreen() {
       <TouchableOpacity style={styles.signOutBtn} onPress={() => void handleSignOut()} activeOpacity={0.85}>
         <Text style={styles.signOutBtnText}>{'Sign Out'}</Text>
       </TouchableOpacity>
+
+      {__DEV__ && (
+        <TouchableOpacity
+          style={styles.signOutBtn}
+          onPress={() => Sentry.captureException(new Error('Test error from ClearPass'))}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.signOutBtnText, { color: '#F59E0B' }]}>{'Test Sentry (dev only)'}</Text>
+        </TouchableOpacity>
+      )}
 
       {/* ── Edit Profile Modal ───────────────────────────────────────────────── */}
       <Modal
