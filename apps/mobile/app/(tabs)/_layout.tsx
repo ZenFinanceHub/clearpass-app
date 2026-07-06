@@ -1,7 +1,8 @@
-import { Platform, Text } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/src/constants/theme';
+import { Pip } from '@/src/components/Pip';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -9,6 +10,7 @@ type TabConfig = {
   name: string;
   title: string;
   headerTitle?: string;
+  headerPip?: boolean;
   icon: IoniconName;
   iconFocused: IoniconName;
   hidden?: boolean;
@@ -19,7 +21,7 @@ const TABS: TabConfig[] = [
   { name: 'practice',   title: 'Practice',                            icon: 'book-outline',              iconFocused: 'book' },
   { name: 'mock',        title: 'Mock Test',                           icon: 'clipboard-outline',         iconFocused: 'clipboard' },
   { name: 'hazard',      title: 'Hazard',                              icon: 'warning-outline',           iconFocused: 'warning' },
-  { name: 'settings',   title: 'Settings',                            icon: 'settings-outline',          iconFocused: 'settings' },
+  { name: 'settings',   title: 'Settings',    headerTitle: 'Settings', headerPip: true, icon: 'settings-outline',          iconFocused: 'settings' },
   // Hidden from tab bar — still navigable via router.push()
   { name: 'learn',        title: 'Study',       icon: 'library-outline',               iconFocused: 'library',            hidden: true },
   { name: 'tutor',        title: 'Ask Pip',     icon: 'chatbubble-ellipses-outline',   iconFocused: 'chatbubble-ellipses', hidden: true },
@@ -58,7 +60,7 @@ export default function TabLayout() {
         },
       }}
     >
-      {TABS.map(({ name, title, headerTitle, icon, iconFocused, hidden }) => (
+      {TABS.map(({ name, title, headerTitle, headerPip, icon, iconFocused, hidden }) => (
         <Tabs.Screen
           key={name}
           name={name}
@@ -66,9 +68,12 @@ export default function TabLayout() {
             title,
             ...(headerTitle ? {
               headerTitle: () => (
-                <Text style={{ fontSize: 20, fontWeight: '800', color: Colors.indigo, letterSpacing: -0.3 }}>
-                  {headerTitle}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  {headerPip && <Pip size={22} mood="happy" />}
+                  <Text style={{ fontSize: 20, fontWeight: '800', color: Colors.indigo, letterSpacing: -0.3 }}>
+                    {headerTitle}
+                  </Text>
+                </View>
               ),
             } : {}),
             ...(hidden ? { tabBarButton: () => null, tabBarItemStyle: { display: 'none' as const, width: 0 } } : {}),

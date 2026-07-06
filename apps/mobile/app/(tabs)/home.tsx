@@ -41,6 +41,8 @@ import { loadSRState, getDueQuestions } from '@/src/spacedRepetition';
 import { computeAndSavePassProbability, PassProbabilityResult } from '@/src/passProbability';
 import { generateNudges, saveNudges, loadNudges, dismissNudge, TutorNudge, NudgeType } from '@/src/tutorNudges';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
+import { checkStreakToast } from '@/src/streakToasts';
+import { StreakToast } from '@/src/components/StreakToast';
 import { ScaleButton } from '@/src/components/ScaleButton';
 import { SkeletonBox } from '@/src/components/SkeletonBox';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
@@ -217,6 +219,7 @@ export default function HomeScreen() {
   const [nudges, setNudges]           = useState<TutorNudge[]>([]);
   const [celebQueue, setCelebQueue]   = useState<CelebrationEvent[]>([]);
   const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
+  const [streakToastDays, setStreakToastDays] = useState<number | null>(null);
   const [pendingChallenges, setPendingChallenges] = useState(0);
   const [homeDueCount, setHomeDueCount] = useState(0);
   const [showResultBanner, setShowResultBanner]   = useState(false);
@@ -317,6 +320,10 @@ export default function HomeScreen() {
               setActiveCelebration(celebEvents[0]);
               setCelebQueue(celebEvents.slice(1));
             }
+          } catch {}
+          try {
+            const toastDays = await checkStreakToast(fresh.studyStreakDays);
+            if (toastDays !== null) setStreakToastDays(toastDays);
           } catch {}
         }
 
@@ -999,6 +1006,9 @@ export default function HomeScreen() {
     </ScrollView>
     {activeCelebration && (
       <CelebrationModal event={activeCelebration} onDismiss={handleCelebDismiss} />
+    )}
+    {streakToastDays !== null && (
+      <StreakToast days={streakToastDays} onHide={() => setStreakToastDays(null)} />
     )}
   </>
   );

@@ -9,10 +9,11 @@ import {
 import { router } from 'expo-router';
 import { setOnboardingComplete, savePendingTestDate } from '@/src/storage';
 import { Colors } from '@/src/constants/theme';
+import { Pip, PipMood } from '@/src/components/Pip';
 
 type Slide = {
   key: string;
-  emoji: string;
+  mood: PipMood;
   title: string;
   subtitle: string;
   isDateSlide?: boolean;
@@ -21,25 +22,25 @@ type Slide = {
 const SLIDES: Slide[] = [
   {
     key: 'welcome',
-    emoji: '👋',
+    mood: 'wave',
     title: 'Welcome to ClearPass',
     subtitle: 'Pass your theory test. First time.',
   },
   {
     key: 'practice',
-    emoji: '🎯',
+    mood: 'teaching',
     title: 'Practice smarter',
     subtitle: '700+ questions, adaptive to your weak spots. The more you use it, the more it personalises to you.',
   },
   {
     key: 'progress',
-    emoji: '📈',
+    mood: 'streak',
     title: 'Track your progress',
     subtitle: 'Mock tests, pass probability, topic badges and streaks. Know exactly when you are ready.',
   },
   {
     key: 'date',
-    emoji: '📅',
+    mood: 'curious',
     title: 'Set your test date',
     subtitle: 'When is your theory test? We will build a personalised study plan.',
     isDateSlide: true,
@@ -87,7 +88,7 @@ export default function OnboardingScreen() {
     <View style={styles.container}>
       {/* Current slide */}
       <View style={styles.slide}>
-        <Text style={styles.emoji}>{slide.emoji}</Text>
+        <Pip size={110} mood={slide.mood} />
         <Text style={styles.title}>{slide.title}</Text>
         <Text style={styles.subtitle}>{slide.subtitle}</Text>
 
@@ -148,7 +149,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
     gap: 20,
   },
-  emoji:    { fontSize: 80 },
   title:    { fontSize: 30, fontWeight: '900', color: '#111827', textAlign: 'center', letterSpacing: 0.5 },
   subtitle: { fontSize: 16, color: '#6B7280', textAlign: 'center', lineHeight: 24 },
 

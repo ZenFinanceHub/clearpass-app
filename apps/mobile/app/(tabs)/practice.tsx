@@ -56,6 +56,7 @@ import { isTrialActive } from '@/src/storage';
 import { explainAnswer } from '@clearpass/ai';
 import { TOPIC_LABELS } from '@/src/tutorNudges';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
+import { Pip } from '@/src/components/Pip';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { ShareCardModal } from '@/src/components/ShareableCard';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
@@ -95,7 +96,7 @@ function questionNeedsImage(q: Question): boolean {
   return /this lorry|this picture|this sign|this vehicle|this car|this road|\(arrowed [abcd]\)|shown (in|here)|in this (image|photo|picture)/.test(hay);
 }
 
-type Phase = 'start' | 'loading' | 'quiz' | 'results' | 'battle' | 'battleResults' | 'dailyLimit' | 'speedRound' | 'speedRoundResults' | 'weakSpot' | 'weakSpotResults';
+type Phase = 'start' | 'loading' | 'quiz' | 'results' | 'battle' | 'battleResults' | 'dailyLimit' | 'noBookmarks' | 'speedRound' | 'speedRoundResults' | 'weakSpot' | 'weakSpotResults';
 
 type SessionResult = {
   question: Question;
@@ -311,7 +312,8 @@ export default function PracticeScreen() {
         .filter((q): q is Question => q !== undefined);
       sessionQuestions = all.sort(() => Math.random() - 0.5).slice(0, SESSION_SIZE);
       if (sessionQuestions.length === 0) {
-        sessionQuestions = await selectPracticeQuestions(allQuestions, SESSION_SIZE);
+        setPhase('noBookmarks');
+        return;
       }
     } else if (mode === 'review') {
       const dueIds = await getDueQuestions(allQuestions.map(q => q.id), SESSION_SIZE);
@@ -911,6 +913,21 @@ export default function PracticeScreen() {
         onUpgrade={() => void handleProUpgrade()}
         onBack={() => setPhase('start')}
       />
+    );
+  }
+
+  if (phase === 'noBookmarks') {
+    return (
+      <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}>
+        <Pip size={90} mood="happy" />
+        <Text style={styles.limitTitle}>No bookmarks yet</Text>
+        <Text style={styles.limitBody}>
+          {'Tap the 🔖 icon on any question to save it here for quick review later.'}
+        </Text>
+        <TouchableOpacity style={styles.limitBackBtn} onPress={() => setPhase('start')} activeOpacity={0.75}>
+          <Text style={styles.limitBackText}>Back</Text>
+        </TouchableOpacity>
+      </View>
     );
   }
 

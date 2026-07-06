@@ -19,6 +19,7 @@ import type { Question } from '@clearpass/core';
 import { allQuestions } from '@clearpass/content';
 import { supabase } from '@/src/supabase';
 import { createFreshUserProgress, loadUserProgress, saveUserProgress } from '@/src/storage';
+import { Pip } from '@/src/components/Pip';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 
@@ -528,7 +529,7 @@ function ResultsView({
             end={{ x: 1, y: 0 }}
             style={styles.winnerBanner}
           >
-            <Text style={styles.winnerEmoji}>{isDraw ? '🤝' : iWon ? '🏆' : '🎯'}</Text>
+            <Pip size={56} mood={isDraw ? 'happy' : iWon ? 'streak' : 'sympathetic'} />
             <Text style={styles.winnerText}>
               {isDraw ? "It's a Draw!" : iWon ? 'You Win!' : `${opponentName} Wins!`}
             </Text>
@@ -1283,7 +1284,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  winnerEmoji: { fontSize: 36 },
   winnerText:  { fontSize: 26, fontWeight: '900', color: '#FFFFFF', flex: 1 },
 
   scoreCompare: {

@@ -21,6 +21,7 @@ import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebration
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { ShareCardModal } from '@/src/components/ShareableCard';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
+import { Pip } from '@/src/components/Pip';
 
 type Phase = 'info' | 'pre-clip' | 'player' | 'clip-result' | 'solution' | 'results';
 
@@ -403,9 +404,10 @@ export default function HazardScreen() {
         </Text>
         <Text style={[styles.heading, { fontSize: theme.fontSize(26), fontFamily: theme.fontFamily, color: theme.textColor }]}>{clip.title}</Text>
         <Text style={[styles.bodyText, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, color: theme.subTextColor }]}>{clip.description}</Text>
-        <View style={styles.reminderBox}>
-          <Text style={styles.reminderText}>
-            {'Tap anywhere on screen as soon as you spot a developing hazard.'}
+        <View style={[styles.reminderBox, { flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
+          <Pip size={44} mood="teaching" />
+          <Text style={[styles.reminderText, { flex: 1 }]}>
+            {'Spot each developing hazard early — score up to 5 points based on how quickly you react. Click too early, too late, or spam the screen and you’ll score 0. You need 44/75 to pass.'}
           </Text>
         </View>
         <TouchableOpacity

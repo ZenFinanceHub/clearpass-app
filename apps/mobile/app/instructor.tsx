@@ -23,6 +23,7 @@ import {
 } from '@clearpass/core';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
+import { Pip } from '@/src/components/Pip';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -671,10 +672,15 @@ function ReferralSection({
   const link = `getclearpass.co.uk?ref=${referralCode}`;
   return (
     <View style={[styles.refSection, { backgroundColor: theme.cardColor }]}>
-      <Text style={[styles.refSectionTitle, { color: theme.textColor }]}>{'Share Your Referral Link'}</Text>
-      <Text style={[styles.refSectionSub, { color: theme.subTextColor }]}>
-        {'Earn £2.50 for every pupil who subscribes to Premium'}
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+        <Pip size={40} mood="teaching" />
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.refSectionTitle, { color: theme.textColor }]}>{'Share Your Referral Link'}</Text>
+          <Text style={[styles.refSectionSub, { color: theme.subTextColor }]}>
+            {'Earn £2.50 for every pupil who subscribes to Premium'}
+          </Text>
+        </View>
+      </View>
       <View style={styles.refLinkBox}>
         <Text style={styles.refLinkText}>{link}</Text>
       </View>
@@ -836,7 +842,7 @@ function InstructorDashboard({
   if (learners.length === 0) {
     return (
       <ScrollView contentContainerStyle={styles.emptyState}>
-        <Text style={styles.emptyEmoji}>{'👨‍🏫'}</Text>
+        <Pip size={72} mood="happy" />
         <Text style={[styles.emptyTitle, { color: theme.textColor }]}>{'No learners yet'}</Text>
         <Text style={[styles.emptySub, { color: theme.subTextColor }]}>
           {'Share your instructor code with a learner to get started.'}
@@ -1039,7 +1045,7 @@ function LearnerModeView({
 
       {instructors.length === 0 ? (
         <View style={[styles.instructorEmpty, { backgroundColor: theme.cardColor }]}>
-          <Text style={styles.instructorEmptyEmoji}>{'👁️'}</Text>
+          <Pip size={64} mood="curious" />
           <Text style={[styles.instructorEmptyTitle, { color: theme.textColor }]}>
             {'No one is monitoring you yet'}
           </Text>

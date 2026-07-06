@@ -13,6 +13,7 @@ import { supabase } from '@/src/supabase';
 import { loadUserProgress, syncProgressToCloud } from '@/src/storage';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
+import { Pip } from '@/src/components/Pip';
 
 type LeaderboardEntry = {
   username: string;
@@ -144,7 +145,7 @@ export default function LeaderboardScreen() {
 
         {topTen.length === 0 && (
           <View style={styles.emptyList}>
-            <Text style={styles.emptyListEmoji}>{'🏆'}</Text>
+            <Pip size={72} mood="celebrate" />
             <Text style={styles.emptyListTitle}>{'No one here yet'}</Text>
             <Text style={styles.emptyListSub}>{'Be the first on the board — answer questions to earn XP and claim the top spot.'}</Text>
             <TouchableOpacity style={styles.emptyListBtn} onPress={() => router.push('/(tabs)/practice')} activeOpacity={0.85}>
@@ -229,7 +230,6 @@ const styles = StyleSheet.create({
   streakText: { fontSize: 11, fontWeight: '700', color: '#D97706' },
 
   emptyList: { paddingVertical: 40, paddingHorizontal: 24, alignItems: 'center', gap: 8 },
-  emptyListEmoji: { fontSize: 52, marginBottom: 4 },
   emptyListTitle: { fontSize: 18, fontWeight: '800', color: '#111827' },
   emptyListSub: { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 22 },
   emptyListBtn: {

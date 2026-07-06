@@ -16,6 +16,7 @@ import { getProxyUrl } from '@/src/proxyUrl';
 import { Colors } from '@/src/constants/theme';
 import { ScaleButton } from '@/src/components/ScaleButton';
 import { loadUserProgress, isTrialActive } from '@/src/storage';
+import { Pip } from '@/src/components/Pip';
 
 const FEATURES = [
   'Unlimited practice questions',
@@ -104,7 +105,7 @@ export default function PaywallScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerEmoji}>{trialExpired ? '⏰' : '🏆'}</Text>
+        <Pip size={84} mood={trialExpired ? 'sympathetic' : 'celebrate'} />
         <Text style={styles.headerTitle}>{trialExpired ? 'Your Trial Has Ended' : 'Go Premium'}</Text>
         <Text style={styles.headerSub}>
           {trialExpired
@@ -193,7 +194,6 @@ const styles = StyleSheet.create({
   },
 
   header: { alignItems: 'center', gap: 10 },
-  headerEmoji: { fontSize: 64 },
   headerTitle: { fontSize: 32, fontWeight: '900', color: '#111827', textAlign: 'center' },
   headerSub: { fontSize: 15, color: '#6B7280', textAlign: 'center', lineHeight: 22 },
 

@@ -18,6 +18,7 @@ import {
 } from '@clearpass/content';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { Colors } from '@/src/constants/theme';
+import { Pip } from '@/src/components/Pip';
 
 type ViewMode = 'list' | 'chapter' | 'rule';
 
@@ -329,6 +330,7 @@ export default function HighwayCodeScreen() {
                     {chapter.ruleRange}
                   </Text>
                 </View>
+                <Pip size={28} mood="happy" />
                 <Text style={[styles.chapterCardChevron, { color: theme.subTextColor }]}>{'>'}</Text>
               </View>
               <View style={styles.chapterKeyPoints}>
