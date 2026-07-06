@@ -993,7 +993,11 @@ export default function SettingsScreen() {
       {__DEV__ && (
         <TouchableOpacity
           style={styles.signOutBtn}
-          onPress={() => Sentry.captureException(new Error('Test error from ClearPass'))}
+          onPress={() => {
+            console.log('Sentry test button tapped');
+            Sentry.captureException(new Error('Test error from ClearPass'));
+            console.log('Sentry.captureException fired');
+          }}
           activeOpacity={0.85}
         >
           <Text style={[styles.signOutBtnText, { color: '#F59E0B' }]}>{'Test Sentry (dev only)'}</Text>
