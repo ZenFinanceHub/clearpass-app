@@ -551,7 +551,9 @@ export default function HomeScreen() {
   let pipMood: PipMood = 'wave';
   if (!progress || progress.totalQuestionsAnswered < 1) {
     pipMood = 'wave';
-  } else if (streak >= 7 || prob > 85) {
+  } else if (streak >= 7) {
+    pipMood = 'streak';
+  } else if (prob > 85) {
     pipMood = 'celebrate';
   } else if (prob < 40 && progress.totalQuestionsAnswered > 10) {
     pipMood = 'sympathetic';
@@ -563,7 +565,8 @@ export default function HomeScreen() {
 
   const pipMessage =
     pipMood === 'wave'        ? "Welcome! Let's start your theory journey." :
-    pipMood === 'celebrate'   ? (streak >= 7 ? `${streak}-day streak — you're on fire!` : 'Looking great! Keep it up.') :
+    pipMood === 'streak'      ? `${streak}-day streak — you're on fire!` :
+    pipMood === 'celebrate'   ? 'Looking great! Keep it up.' :
     pipMood === 'sympathetic' ? "Don't worry — consistent practice makes it click!" :
     pipMood === 'happy'       ? (streak > 0 ? `${streak}-day streak! Keep going.` : 'Good work! Keep going.') :
                                 "You're making progress — keep exploring!";
@@ -601,7 +604,7 @@ export default function HomeScreen() {
       {/* 1. Pip Header Band */}
       <View style={styles.pipHeader}>
         <View style={styles.pipHeaderInner}>
-          <Pip size={64} mood={isLoading ? 'wave' : pipMood} />
+          <Pip size={64} mood={isLoading ? 'sleepy' : pipMood} />
           <View style={styles.pipHeaderText}>
             <Text style={styles.pipGreeting}>
               {username ? `Hey, ${username}!` : 'Hey there!'}

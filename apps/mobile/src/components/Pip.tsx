@@ -1,12 +1,33 @@
 import React from 'react';
+import { Image, ImageSourcePropType } from 'react-native';
 import Svg, { Circle, Ellipse, G, Path, Polygon } from 'react-native-svg';
 
-export type PipMood = 'happy' | 'celebrate' | 'sympathetic' | 'curious' | 'wave';
+export type PipMood =
+  | 'happy'
+  | 'celebrate'
+  | 'sympathetic'
+  | 'curious'
+  | 'wave'
+  | 'teaching'
+  | 'streak'
+  | 'sleepy';
 
 interface PipProps {
   size?: number;
   mood?: PipMood;
 }
+
+// Moods without an entry here fall back to the hand-drawn SVG below.
+const PIP_IMAGES: Partial<Record<PipMood, ImageSourcePropType>> = {
+  happy:       require('../../assets/pip/pip-neutral.png'),
+  wave:        require('../../assets/pip/pip-neutral.png'),
+  celebrate:   require('../../assets/pip/pip-celebrating.png'),
+  sympathetic: require('../../assets/pip/pip-encouraging.png'),
+  curious:     require('../../assets/pip/pip-thinking.png'),
+  teaching:    require('../../assets/pip/pip-teaching.png'),
+  streak:      require('../../assets/pip/pip-streak.png'),
+  sleepy:      require('../../assets/pip/pip-sleepy.png'),
+};
 
 const SPINE_DARK = '#312E81';
 const SPINE_TIP  = '#F59E0B';
@@ -21,6 +42,11 @@ const MOUTH_COL  = '#374151';
 export function Pip({ size = 100, mood = 'happy' }: PipProps) {
   // viewBox is 100 × 120; height is proportionally taller than width
   const h = Math.round(size * 1.2);
+
+  const imageSource = PIP_IMAGES[mood];
+  if (imageSource) {
+    return <Image source={imageSource} style={{ width: size, height: h }} resizeMode="contain" />;
+  }
 
   function renderEye(cx: number, cy: number) {
     if (mood === 'celebrate') {

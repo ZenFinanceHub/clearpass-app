@@ -223,7 +223,7 @@ export default function TutorScreen() {
           <View key={msg.id} style={[styles.bubbleRow, msg.role === 'user' ? styles.rowUser : styles.rowTutor]}>
             {msg.role === 'assistant' && (
               <View style={styles.avatar}>
-                <Pip size={28} mood="happy" />
+                <Pip size={28} mood="teaching" />
               </View>
             )}
             <View style={[styles.bubble, msg.role === 'user' ? styles.bubbleUser : styles.bubbleTutor]}>
@@ -269,7 +269,7 @@ export default function TutorScreen() {
         {isLoading && (
           <View style={[styles.bubbleRow, styles.rowTutor]}>
             <View style={styles.avatar}>
-              <Pip size={28} mood="happy" />
+              <Pip size={28} mood="teaching" />
             </View>
             <View style={[styles.bubble, styles.bubbleTutor, styles.bubbleTyping]}>
               <Text style={styles.typingDots}>{'.'.repeat(dotCount)}</Text>
