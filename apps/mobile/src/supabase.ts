@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 const SUPABASE_URL = 'https://secavejbaapapvvqbwed.supabase.co';
 const SUPABASE_ANON_KEY =
@@ -22,3 +22,17 @@ const options: any =
       };
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, options);
+
+// JS timers are throttled/suspended while the app is backgrounded on native, so the
+// autoRefreshToken timer can't be relied on to fire on schedule. Drive it from AppState
+// instead, per Supabase's React Native guidance, so the token is refreshed proactively
+// on foreground rather than left to fail on-demand mid-navigation.
+if (Platform.OS !== 'web') {
+  AppState.addEventListener('change', (state) => {
+    if (state === 'active') {
+      void supabase.auth.startAutoRefresh();
+    } else {
+      void supabase.auth.stopAutoRefresh();
+    }
+  });
+}
