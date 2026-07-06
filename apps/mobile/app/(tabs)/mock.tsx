@@ -912,7 +912,7 @@ const styles = StyleSheet.create({
   modeCardBadge: { backgroundColor: Colors.indigoBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 },
   modeCardBadgeQuick: { backgroundColor: Colors.orangeBg },
   modeCardBadgeText: { fontSize: 12, fontWeight: '600', color: Colors.indigo },
-  modeCardStats: { flexDirection: 'row', gap: 12 },
+  modeCardStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   modeStat: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   modeStatEmoji: { fontSize: 16 },
   modeStatText: { fontSize: 13, fontWeight: '500' },

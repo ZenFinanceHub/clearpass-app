@@ -1726,6 +1726,8 @@ function BattleResultsScreen({
   const bannerColor = excellent ? Colors.emerald : good ? Colors.amber : Colors.red;
   const label = excellent ? 'EXCELLENT!' : good ? 'GOOD FIGHT!' : 'KEEP TRAINING!';
   const theme = useTheme();
+  let maxPossibleScore = 0;
+  for (let i = 1; i <= totalQuestions; i++) maxPossibleScore += Math.min(i, 5);
 
   return (
     <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
@@ -1744,7 +1746,7 @@ function BattleResultsScreen({
         <Text style={styles.resultEmoji}>{'⚔'}</Text>
         <Text style={[styles.resultLabel, { color: bannerColor }]}>{label}</Text>
         <Text style={styles.battleResultScore}>{score}</Text>
-        <Text style={styles.scorePct}>{'/ ' + totalQuestions + ' max'}</Text>
+        <Text style={styles.scorePct}>{'/ ' + maxPossibleScore + ' max'}</Text>
         {xpEarned > 0 && (
           <Text style={styles.xpNotif}>{'+'}{xpEarned}{' XP earned!'}</Text>
         )}
