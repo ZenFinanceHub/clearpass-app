@@ -33,6 +33,10 @@ configureNotificationHandler();
 
 const ONBOARDING_KEY = '@clearpass/hasSeenOnboarding';
 
+// Legal/contact pages must stay reachable without an account — the App Store
+// listing links directly to these, and they're legally required to be public.
+const PUBLIC_ROUTES = new Set(['privacy-policy', 'terms', 'legal', 'contact']);
+
 function SentryFallback() {
   return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: '#FFFFFF' }}>
@@ -91,8 +95,11 @@ function RootLayout() {
         }
         return;
       }
-      const seen = await AsyncStorage.getItem(ONBOARDING_KEY);
       navigated.current = true;
+      if (PUBLIC_ROUTES.has(segments[0] ?? '')) {
+        return;
+      }
+      const seen = await AsyncStorage.getItem(ONBOARDING_KEY);
       if (seen) {
         router.replace('/auth/signin');
       } else {
@@ -176,6 +183,8 @@ function RootLayout() {
             <Stack.Screen name="ipassed" options={{ headerShown: false }} />
             <Stack.Screen name="privacy-policy" options={{ headerShown: false }} />
             <Stack.Screen name="terms" options={{ headerShown: false }} />
+            <Stack.Screen name="legal" options={{ headerShown: false }} />
+            <Stack.Screen name="contact" options={{ headerShown: false }} />
             <Stack.Screen name="confirm-parent" options={{ headerShown: false }} />
             <Stack.Screen name="screenshot-mode" options={{ headerShown: false }} />
             <Stack.Screen name="study-plan" options={{ headerShown: false }} />
