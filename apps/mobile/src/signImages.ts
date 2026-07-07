@@ -31,6 +31,12 @@ const SIGN_IMAGES: Record<string, any> = {
   'wild-animals':         require('../assets/signs/551.jpg'),
   'farm-animals':         require('../assets/signs/548.jpg'),
   'falling-rocks':        require('../assets/signs/559.jpg'),
+  'horse-riders':         require('../assets/signs/550.1.jpg'),
+  'elderly-people':       require('../assets/signs/544.2.jpg'),
+  'risk-of-grounding':    require('../assets/signs/583.jpg'),
+  'risk-of-ice':          require('../assets/signs/554.2.jpg'),
+  'tunnel':               require('../assets/signs/529.1.jpg'),
+  'school-crossing':      require('../assets/signs/545.jpg'),
 
   // ── Level crossing signs ──────────────────────────────────────────────────
   'level-crossing-barriers':    require('../assets/signs/level-crossing-signs-jpg/770.jpg'),
@@ -62,7 +68,7 @@ const SIGN_IMAGES: Record<string, any> = {
   'no-u-turns':           require('../assets/signs/regulatory-signs-jpg/614.jpg'),
   'no-entry':             require('../assets/signs/regulatory-signs-jpg/616.jpg'),
   'no-vehicles':          require('../assets/signs/regulatory-signs-jpg/617.jpg'),
-  'no-cycling':           require('../assets/signs/regulatory-signs-jpg/622.4.jpg'),
+  'no-cycling':           require('../assets/signs/bus-and-cycle-signs-jpg/951.jpg'),
   'no-motor-vehicles':    require('../assets/signs/regulatory-signs-jpg/619.jpg'),
   'no-overtaking':        require('../assets/signs/regulatory-signs-jpg/632.jpg'),
   'min-speed-30':         require('../assets/signs/regulatory-signs-jpg/651.jpg'),
@@ -77,8 +83,8 @@ const SIGN_IMAGES: Record<string, any> = {
   // ── Information signs ────────────────────────────────────────────────────
   'parking-place':        require('../assets/signs/information-signs-jpg/801.jpg'),
   'one-way-traffic':      require('../assets/signs/information-signs-jpg/810.jpg'),
-  'hospital':             require('../assets/signs/information-signs-jpg/2711.jpg'),
-  'lane-closed-overhead': require('../assets/signs/information-signs-jpg/872.1.jpg'),
+  'hospital':             require('../assets/signs/information-signs-jpg/827.1.jpg'),
+  'camera-ahead':         require('../assets/signs/speed-limit-signs-jpg/878.jpg'),
 
   // ── Motorway signs ───────────────────────────────────────────────────────
   'motorway-start':       require('../assets/signs/motorway-signs-jpg/2901.jpg'),
@@ -95,7 +101,7 @@ const SIGN_IMAGES: Record<string, any> = {
   'tourist-attraction':      require('../assets/signs/direction-and-tourist-signs-jpg/2201.jpg'),
 
   // ── On-street parking / red route signs ──────────────────────────────────
-  'red-route':            require('../assets/signs/on-street-parking-jpg/663.jpg'),
+  'red-route':            require('../assets/signs/on-street-parking-jpg/CW701.jpg'),
 
   // ── Road works signs ─────────────────────────────────────────────────────
   'road-works-ahead':       require('../assets/signs/road-works-and-temporary-jpg/7001.jpg'),

@@ -760,13 +760,6 @@ function RectSignSymbol({ id }: { id: string }) {
           <Line x1="36" y1="62" x2="94" y2="62" stroke={W} strokeWidth="3" strokeLinecap="round" />
         </G>
       );
-    case 'lane-closed-overhead':
-      return (
-        <G>
-          <Path d="M22,10 L108,64" stroke={RD} strokeWidth="12" strokeLinecap="round" />
-          <Path d="M108,10 L22,64" stroke={RD} strokeWidth="12" strokeLinecap="round" />
-        </G>
-      );
     case 'parking-place':
       return (
         <SvgText x="65" y="62" fontSize="58" fontWeight="bold" fill={W} textAnchor="middle">P</SvgText>
