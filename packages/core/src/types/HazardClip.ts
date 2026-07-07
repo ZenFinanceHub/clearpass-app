@@ -26,6 +26,8 @@ export interface HazardClipResult {
   clicks: number[];
   score: number;
   maxScore: number;
+  /** Taps that landed inside a scoring window and so actually counted toward the score. */
+  countedTaps: number;
 }
 
 export interface HazardSessionResult {

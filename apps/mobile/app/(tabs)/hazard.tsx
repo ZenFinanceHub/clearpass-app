@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -22,6 +23,7 @@ import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { ShareCardModal } from '@/src/components/ShareableCard';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { Pip } from '@/src/components/Pip';
+import { PaywallPrompt } from '@/src/components/PaywallPrompt';
 
 type Phase = 'info' | 'pre-clip' | 'player' | 'clip-result' | 'solution' | 'results';
 
@@ -108,6 +110,7 @@ export default function HazardScreen() {
   const flashAnim = useRef(new Animated.Value(0)).current;
   const webViewRef = useRef<any>(null);
   const pendingHomeRef = useRef(false);
+  const lastTapAtRef = useRef<number>(0);
   const theme = useTheme();
 
   const [celebQueue, setCelebQueue] = useState<CelebrationEvent[]>([]);
@@ -121,6 +124,8 @@ export default function HazardScreen() {
   const [solutionVideoUrl, setSolutionVideoUrl] = useState<string | null>(null);
   const [singleClipMode, setSingleClipMode] = useState(false);
   const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [warningAcked, setWarningAcked] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -142,7 +147,25 @@ export default function HazardScreen() {
 
   const clip = activeClips[clipIndex] ?? hazardClips[0];
 
+  // Once every hazard's scoring window has closed, the rest of the clip (including any
+  // solution/reveal footage baked into the same file) must not accept taps at all.
+  const scoringWindowClosed =
+    clip.hazards.length > 0 &&
+    currentTime > Math.max(...clip.hazards.map((h: HazardWindow) => h.endSec));
+
   function handleVideoTap() {
+    if (scoringWindowClosed) return;
+
+    // A single physical tap should only ever add one entry. If this handler is
+    // invoked twice for the same gesture (duplicate native dispatch), the second
+    // call arrives within a handful of milliseconds — well under the time a real
+    // finger-lift-and-repress takes (mobile double-tap recognition windows are
+    // ~300ms+). Collapse anything under that into a single registered tap.
+    const now = Date.now();
+    const gapMs = now - lastTapAtRef.current;
+    if (gapMs < 150) return;
+    lastTapAtRef.current = now;
+
     setClicks((prev) => [...prev, currentTime]);
     flashAnim.setValue(0.5);
     Animated.timing(flashAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
@@ -168,6 +191,7 @@ export default function HazardScreen() {
       setCurrentTime(0);
       setMuted(true);
       setSolutionVideoUrl(null);
+      setWarningAcked(false);
       setPhase('pre-clip');
     } else {
       setPhase('results');
@@ -249,6 +273,7 @@ export default function HazardScreen() {
       setCurrentTime(0);
       setClipResults([]);
       setMuted(true);
+      setWarningAcked(false);
       setPhase('pre-clip');
     } else {
       setPhase('info');
@@ -262,7 +287,7 @@ export default function HazardScreen() {
 
   async function handleStartSingleClip(meta: HazardClipMeta) {
     const premium = await isPremium();
-    if (!premium) { router.push('/paywall'); return; }
+    if (!premium) { setShowPaywall(true); return; }
     const url = await getVideoUrl(meta.storage_path);
     const built = buildHazardClip(meta, url ?? '');
     setActiveClips([built]);
@@ -273,12 +298,13 @@ export default function HazardScreen() {
     setClipResults([]);
     setMuted(true);
     setSolutionVideoUrl(null);
+    setWarningAcked(false);
     setPhase('pre-clip');
   }
 
   async function handleStartPractice() {
     const premium = await isPremium();
-    if (!premium) { router.push('/paywall'); return; }
+    if (!premium) { setShowPaywall(true); return; }
 
     if (supabaseClips.length > 0) {
       const built = await Promise.all(
@@ -294,6 +320,7 @@ export default function HazardScreen() {
     setCurrentTime(0);
     setClipResults([]);
     setMuted(true);
+    setWarningAcked(false);
     setPhase('pre-clip');
   }
 
@@ -387,6 +414,15 @@ export default function HazardScreen() {
             })}
           </View>
         </ScrollView>
+
+        <Modal visible={showPaywall} transparent animationType="fade" onRequestClose={() => setShowPaywall(false)}>
+          <View style={styles.paywallOverlay}>
+            <PaywallPrompt
+              onUpgrade={() => { setShowPaywall(false); router.push('/paywall'); }}
+              onDismiss={() => setShowPaywall(false)}
+            />
+          </View>
+        </Modal>
       </View>
     );
   }
@@ -411,7 +447,18 @@ export default function HazardScreen() {
           </Text>
         </View>
         <TouchableOpacity
-          style={styles.primaryBtn}
+          style={styles.ackRow}
+          onPress={() => setWarningAcked((v) => !v)}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.ackBox, warningAcked && styles.ackBoxChecked]}>
+            {warningAcked && <Text style={styles.ackCheck}>{'✓'}</Text>}
+          </View>
+          <Text style={styles.ackText}>{'I understand — I will only tap when I spot a hazard'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.primaryBtn, !warningAcked && styles.primaryBtnDisabled]}
+          disabled={!warningAcked}
           onPress={() => {
             setClicks([]);
             setCurrentTime(0);
@@ -467,10 +514,12 @@ export default function HazardScreen() {
         <View style={styles.videoWrap}>
           {videoContent}
 
-          {/* Tap overlay */}
+          {/* Tap overlay — disabled outright once scoring windows have closed, so
+              taps during any reveal footage register nothing at all. */}
           <TouchableOpacity
             style={[StyleSheet.absoluteFillObject, { zIndex: 10 }]}
             activeOpacity={1}
+            disabled={scoringWindowClosed}
             onPress={handleVideoTap}
           />
 
@@ -489,23 +538,23 @@ export default function HazardScreen() {
             <Text style={styles.muteBtnText}>{muted ? '[ mute ]' : '[ sound ]'}</Text>
           </TouchableOpacity>
 
-          {/* HUD */}
+          {/* HUD — deliberately shows no tap count or score-shaped number here.
+              The clip position isn't tap-reactive; nothing in this bar changes
+              in response to a tap, so it can't be used to infer scoring. */}
           <View style={styles.hud} pointerEvents="none">
             <Text style={styles.hudText}>
               {clipIndex + 1}
               {'/'}
-              {hazardClips.length}
-            </Text>
-            <Text style={styles.hudText}>
-              {clicks.length}
-              {' taps'}
+              {activeClips.length > 0 ? activeClips.length : hazardClips.length}
             </Text>
             <Text style={styles.hudText}>{formatTime(currentTime)}</Text>
           </View>
         </View>
 
         <View style={styles.tapHintBar}>
-          <Text style={styles.tapHintText}>{'Tap anywhere to mark a hazard'}</Text>
+          <Text style={styles.tapHintText}>
+            {scoringWindowClosed ? 'Scoring closed for this clip' : 'Tap anywhere to mark a hazard'}
+          </Text>
         </View>
       </View>
     );
@@ -553,7 +602,7 @@ export default function HazardScreen() {
         </View>
 
         <Text style={[styles.bodyText, { color: theme.subTextColor }]}>
-          {result.clicks.length}
+          {result.countedTaps}
           {' tap(s) recorded'}
         </Text>
 
@@ -718,6 +767,14 @@ const styles = StyleSheet.create({
   scrollContent: { alignItems: 'center', padding: 24, gap: 16, paddingBottom: 40 },
   centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 },
 
+  paywallOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+
   heading: { fontSize: 26, fontWeight: '800', textAlign: 'center' },
   sub: { fontSize: 14, textAlign: 'center' },
   bodyText: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
@@ -769,6 +826,27 @@ const styles = StyleSheet.create({
     maxWidth: 360,
   },
   primaryBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  primaryBtnDisabled: { opacity: 0.4 },
+
+  ackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    width: '100%' as any,
+    maxWidth: 360,
+  },
+  ackBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: Colors.indigo,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ackBoxChecked: { backgroundColor: Colors.indigo },
+  ackCheck: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
+  ackText: { fontSize: 13, color: '#374151', flex: 1 },
 
   reminderBox: {
     backgroundColor: '#FFFBEB',

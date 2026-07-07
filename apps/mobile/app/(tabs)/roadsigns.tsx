@@ -1598,7 +1598,7 @@ export default function RoadSignsScreen() {
       </View>
 
       <Text style={[styles.oglNotice, { color: theme.subTextColor }]}>
-        {'Road sign images © Crown copyright. Licensed under the Open Government Licence v3.0.\nSource: DVSA Traffic Signs Regulations and General Directions.'}
+        {'Road sign images © Crown copyright. Licensed under the Open Government Licence v3.0.\nSource: Traffic Signs Regulations and General Directions, Department for Transport.'}
       </Text>
     </ScrollView>
     </View>

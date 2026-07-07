@@ -349,7 +349,7 @@ export default function HighwayCodeScreen() {
       )}
 
       <Text style={[styles.oglNotice, { color: theme.subTextColor }]}>
-        {'Contains public sector information licensed under the Open Government Licence v3.0.\n© Crown copyright. Source: DVSA Highway Code.'}
+        {'Contains public sector information licensed under the Open Government Licence v3.0.\n© Crown copyright. Source: the Highway Code, Department for Transport.'}
       </Text>
     </ScrollView>
     </View>

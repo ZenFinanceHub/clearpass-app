@@ -5,7 +5,7 @@ import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 
 const OGL_URL = 'https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/';
-const LICENCE_REF = '639UJ6EF';
+const DVSA_PERMISSION_REF = '639UJ6EF';
 
 export default function LegalScreen() {
   const theme = useTheme();
@@ -26,20 +26,16 @@ export default function LegalScreen() {
         <Text style={[styles.brandSub, { color: theme.textColor }]}>{'Legal & Licences'}</Text>
       </View>
 
-      <Section title="Open Government Licence" theme={theme}>
-        {'ClearPass uses content derived from Crown copyright material published by the Driver and Vehicle Standards Agency (DVSA), reproduced under the Open Government Licence v3.0.\n\nLicence reference: '}{LICENCE_REF}
+      <Section title="DVSA Question Bank" theme={theme}>
+        {'The Driver and Vehicle Standards Agency (DVSA) has given permission for the reproduction of Crown copyright material. DVSA does not accept responsibility for the accuracy of the reproduction.\n\nThis product includes the Driver and Vehicle Standards Agency (DVSA) revision question bank.\n\nPermission reference: '}{DVSA_PERMISSION_REF}
       </Section>
 
-      <Section title="Highway Code" theme={theme}>
-        {'Contains public sector information licensed under the Open Government Licence v3.0.\n© Crown copyright. Source: DVSA Highway Code.'}
+      <Section title="Highway Code & Traffic Signs" theme={theme}>
+        {'Contains public sector information licensed under the Open Government Licence v3.0.\n\n© Crown copyright. Source: the Highway Code and Know Your Traffic Signs, Department for Transport.'}
       </Section>
 
-      <Section title="Road Signs" theme={theme}>
-        {'Road sign images © Crown copyright. Licensed under the Open Government Licence v3.0.\nSource: DVSA Traffic Signs Regulations and General Directions 2002 (as amended).'}
-      </Section>
-
-      <Section title="What the licence permits" theme={theme}>
-        {'The Open Government Licence allows you to copy, publish, distribute, transmit, adapt and exploit the information commercially or non-commercially, as long as you acknowledge the source.\n\nClearPass has made adaptations to the original material for the purpose of theory test preparation. These adaptations are owned by ZenFinanceHub and are not Crown copyright.'}
+      <Section title="What each licence permits" theme={theme}>
+        {'The Open Government Licence above covers the Highway Code and road sign content only. It allows copying, publishing, distributing, transmitting, adapting and exploiting that information commercially or non-commercially, as long as the source is acknowledged.\n\nThe DVSA question bank is reproduced under separate written permission from DVSA, not the Open Government Licence.\n\nClearPass has made original adaptations to this material — explanations, examples and formatting written for theory test preparation. These adaptations are owned by ZenFinanceHub.'}
       </Section>
 
       <Section title="Licence text" theme={theme}>
@@ -55,7 +51,7 @@ export default function LegalScreen() {
       </TouchableOpacity>
 
       <Section title="Other content" theme={theme}>
-        {'All practice questions, explanations, app design, and original written content in ClearPass are © ZenFinanceHub. All rights reserved.'}
+        {'ClearPass’s own explanations, app design, gamification and other original written content are © ZenFinanceHub. All rights reserved. This does not extend to the DVSA question bank text or Highway Code / road sign content described above, which remain Crown copyright.'}
       </Section>
 
       <View style={styles.footer}>
