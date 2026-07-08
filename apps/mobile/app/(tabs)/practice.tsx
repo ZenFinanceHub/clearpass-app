@@ -14,9 +14,13 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/src/supabase';
 import {
   Achievement,
+  applyCorrectAnswerToChallenge,
+  DailyChallenge,
+  didChallengeJustComplete,
   TopicCategory,
   Question,
   QuestionState,
+  questionCountsTowardChallenge,
   UserProgress,
   XP_REWARDS,
   awardXp,
@@ -46,17 +50,13 @@ import {
 import { submitSessionStats, getComparativeStats, type ComparativeStats } from '@/src/analytics';
 import { playCorrect, playWrong } from '@/src/sounds';
 import { cancelStreakProtectionNotification } from '@/src/notifications';
-import {
-  FREE_QUESTION_LIMIT,
-  incrementFreeQuestionsAnswered,
-  resetFreeQuestionsAnswered,
-  isPremium,
-} from '@/src/subscription';
+import { FREE_QUESTION_LIMIT, isPremium } from '@/src/subscription';
 import { isTrialActive } from '@/src/storage';
 import { explainAnswer } from '@clearpass/ai';
 import { TOPIC_LABELS } from '@/src/tutorNudges';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
 import { Pip } from '@/src/components/Pip';
+import { PaywallPrompt } from '@/src/components/PaywallPrompt';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { ShareCardModal } from '@/src/components/ShareableCard';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
@@ -94,6 +94,34 @@ const TOPIC_EMOJI: Record<TopicCategory, string> = {
 function questionNeedsImage(q: Question): boolean {
   const hay = (q.questionText + ' ' + q.options.join(' ')).toLowerCase();
   return /this lorry|this picture|this sign|this vehicle|this car|this road|\(arrowed [abcd]\)|shown (in|here)|in this (image|photo|picture)/.test(hay);
+}
+
+function DailyChallengeQuestionBadge({
+  dailyChallenge,
+  topicCategory,
+  justCompleted,
+}: {
+  dailyChallenge: DailyChallenge | null;
+  topicCategory: TopicCategory;
+  justCompleted: boolean;
+}) {
+  if (justCompleted && dailyChallenge) {
+    return (
+      <View style={styles.challengeBadgeComplete}>
+        <Text style={styles.challengeBadgeCompleteText}>
+          {'🎉 Daily Challenge complete! +'}{dailyChallenge.xpReward}{' XP'}
+        </Text>
+      </View>
+    );
+  }
+  if (!questionCountsTowardChallenge(dailyChallenge, topicCategory)) return null;
+  return (
+    <View style={styles.challengeBadge}>
+      <Text style={styles.challengeBadgeText}>
+        {"Counts toward today's challenge ("}{dailyChallenge!.currentCount}{'/'}{dailyChallenge!.targetCount}{')'}
+      </Text>
+    </View>
+  );
 }
 
 type Phase = 'start' | 'loading' | 'quiz' | 'results' | 'battle' | 'battleResults' | 'dailyLimit' | 'noBookmarks' | 'speedRound' | 'speedRoundResults' | 'weakSpot' | 'weakSpotResults';
@@ -164,6 +192,9 @@ export default function PracticeScreen() {
   const [celebQueue, setCelebQueue] = useState<CelebrationEvent[]>([]);
   const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
 
+  const [dailyChallengeDisplay, setDailyChallengeDisplay] = useState<DailyChallenge | null>(null);
+  const [challengeJustCompletedFlash, setChallengeJustCompletedFlash] = useState(false);
+
   const { settings } = useAccessibility();
   const theme = useTheme();
 
@@ -173,6 +204,7 @@ export default function PracticeScreen() {
   const questionStatesRef = useRef<Record<string, QuestionState>>({});
   const userProgressRef = useRef<UserProgress | null>(null);
   const resultsRef = useRef<SessionResult[]>([]);
+  const dailyCountRef = useRef(0);
 
   const battleQsRef = useRef<Question[]>([]);
   const battleWeakTopicsRef = useRef<TopicCategory[]>([]);
@@ -205,6 +237,11 @@ export default function PracticeScreen() {
   useEffect(() => {
     optionScales.forEach(s => s.setValue(1));
   }, [currentIndex]);
+
+  // Clear the daily-challenge-complete flash once the next question loads
+  useEffect(() => {
+    setChallengeJustCompletedFlash(false);
+  }, [currentIndex, battleDisplay.idx]);
 
   // Bounce the correct answer card when revealed
   useEffect(() => {
@@ -296,10 +333,12 @@ export default function PracticeScreen() {
     const base = loaded ?? createFreshUserProgress();
     const isNewDay = base.lastStudied.split('T')[0] !== today;
     const progress = isNewDay ? { ...base, dailyQuestionsAnswered: 0 } : base;
-    if (isNewDay) await resetFreeQuestionsAnswered();
     userProgressRef.current = progress;
+    dailyCountRef.current = progress.dailyQuestionsAnswered ?? 0;
+    setDailyChallengeDisplay(progress.dailyChallenge ?? null);
+    setChallengeJustCompletedFlash(false);
 
-    if (!(progress.isPro ?? false) && !isTrialActive(progress) && (progress.dailyQuestionsAnswered ?? 0) >= 10) {
+    if (!(progress.isPro ?? false) && !isTrialActive(progress) && dailyCountRef.current >= FREE_QUESTION_LIMIT) {
       setPhase('dailyLimit');
       return;
     }
@@ -344,6 +383,8 @@ export default function PracticeScreen() {
   async function startBattle() {
     const progress = (await loadUserProgress()) ?? createFreshUserProgress();
     userProgressRef.current = progress;
+    setDailyChallengeDisplay(progress.dailyChallenge ?? null);
+    setChallengeJustCompletedFlash(false);
 
     const weakTopics = Object.values(TopicCategory)
       .sort((a, b) => (progress.topicScores[a] ?? 0) - (progress.topicScores[b] ?? 0))
@@ -384,6 +425,7 @@ export default function PracticeScreen() {
     if (!q) return;
 
     const isCorrect = optionIndex === q.correctIndex;
+    applyDailyChallengeProgress(q, isCorrect);
     const newCombo = isCorrect ? battleComboRef.current + 1 : 0;
     const multiplier = Math.min(Math.max(newCombo, 1), 5);
     const gained = isCorrect ? multiplier : 0;
@@ -650,6 +692,28 @@ export default function PracticeScreen() {
     setPhase('start');
   }
 
+  function applyDailyChallengeProgress(question: Question, correct: boolean) {
+    if (!correct) return;
+    const progress = userProgressRef.current;
+    if (!progress) return;
+    const dc = progress.dailyChallenge;
+    const today = new Date().toISOString().split('T')[0];
+    if (!dc || dc.date !== today) return;
+
+    const updatedDc = applyCorrectAnswerToChallenge(dc, question.topicCategory);
+    if (updatedDc === dc) return;
+
+    const justCompleted = didChallengeJustComplete(dc, updatedDc);
+    let updatedProgress: UserProgress = { ...progress, dailyChallenge: updatedDc };
+    if (justCompleted) {
+      updatedProgress = awardXp(updatedProgress, XP_REWARDS.DAILY_CHALLENGE);
+    }
+    userProgressRef.current = updatedProgress;
+    setDailyChallengeDisplay(updatedDc);
+    if (justCompleted) setChallengeJustCompletedFlash(true);
+    void saveUserProgress(updatedProgress);
+  }
+
   const handleAnswer = useCallback(
     async (optionIndex: number) => {
       if (selectedIndex !== null) return;
@@ -657,6 +721,7 @@ export default function PracticeScreen() {
 
       const question = questions[currentIndex];
       const correct = optionIndex === question.correctIndex;
+      applyDailyChallengeProgress(question, correct);
 
       const existing =
         questionStatesRef.current[question.id] ?? initQuestionState(question.id);
@@ -715,11 +780,12 @@ export default function PracticeScreen() {
     srRecordedRef.current = false;
     setShowSRButtons(false);
 
-    const count = await incrementFreeQuestionsAnswered();
-    if (count >= FREE_QUESTION_LIMIT) {
+    dailyCountRef.current += 1;
+    if (dailyCountRef.current >= FREE_QUESTION_LIMIT) {
       const premium = await isPremium();
       if (!premium) {
-        router.push('/paywall');
+        await finaliseSession();
+        setPhase('dailyLimit');
         return;
       }
     }
@@ -807,11 +873,6 @@ export default function PracticeScreen() {
 
       if (dc.challengeType === 'anyQuestions') {
         newCount = Math.min(newCount + correctCount, dc.targetCount);
-      } else if (dc.challengeType === 'topic' && dc.topicCategory) {
-        const topicCorrect = results.filter(
-          (r) => r.correct && r.question.topicCategory === dc.topicCategory,
-        ).length;
-        newCount = Math.min(newCount + topicCorrect, dc.targetCount);
       } else if (dc.challengeType === 'practiceScore') {
         if (correctCount >= dc.targetCount) newCount = dc.targetCount;
       } else if (dc.challengeType === 'timeMinutes') {
@@ -909,10 +970,13 @@ export default function PracticeScreen() {
 
   if (phase === 'dailyLimit') {
     return (
-      <DailyLimitView
-        onUpgrade={() => void handleProUpgrade()}
-        onBack={() => setPhase('start')}
-      />
+      <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}>
+        <PaywallPrompt
+          onUpgrade={() => void handleProUpgrade()}
+          onDismiss={() => setPhase('start')}
+          dismissLabel="Back"
+        />
+      </View>
     );
   }
 
@@ -964,6 +1028,8 @@ export default function PracticeScreen() {
         combo={battleDisplay.combo}
         score={battleDisplay.score}
         weakTopics={battleWeakTopicsRef.current}
+        dailyChallenge={dailyChallengeDisplay}
+        challengeJustCompleted={challengeJustCompletedFlash}
         onAnswer={handleBattleAnswer}
         onExit={exitBattle}
       />
@@ -1095,6 +1161,12 @@ export default function PracticeScreen() {
           {question.questionText}
         </Text>
       </View>
+
+      <DailyChallengeQuestionBadge
+        dailyChallenge={dailyChallengeDisplay}
+        topicCategory={question.topicCategory}
+        justCompleted={challengeJustCompletedFlash}
+      />
 
       <View style={styles.optionList}>
         {question.options.map((option, idx) => {
@@ -1604,6 +1676,8 @@ function BattleView({
   combo,
   score,
   weakTopics,
+  dailyChallenge,
+  challengeJustCompleted,
   onAnswer,
   onExit,
 }: {
@@ -1614,6 +1688,8 @@ function BattleView({
   combo: number;
   score: number;
   weakTopics: TopicCategory[];
+  dailyChallenge: DailyChallenge | null;
+  challengeJustCompleted: boolean;
   onAnswer: (idx: number) => void;
   onExit: () => void;
 }) {
@@ -1666,6 +1742,12 @@ function BattleView({
         ) : null}
         <Text style={[styles.questionText, { fontSize: theme.fontSize(17), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(26), color: theme.textColor }]}>{question.questionText}</Text>
       </View>
+
+      <DailyChallengeQuestionBadge
+        dailyChallenge={dailyChallenge}
+        topicCategory={question.topicCategory}
+        justCompleted={challengeJustCompleted}
+      />
 
       <View style={styles.optionList}>
         {question.options.map((option, idx) => {
@@ -2168,27 +2250,6 @@ function SpeedRoundResultsView({
   );
 }
 
-function DailyLimitView({ onUpgrade, onBack }: { onUpgrade: () => void; onBack: () => void }) {
-  const theme = useTheme();
-  return (
-    <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}>
-      <View style={styles.limitCard}>
-        <Text style={styles.limitTitle}>Daily limit reached</Text>
-        <Text style={styles.limitBody}>
-          {'You have used your 10 free questions today.'}
-        </Text>
-        <TouchableOpacity style={styles.limitUpgradeBtn} onPress={onUpgrade} activeOpacity={0.85}>
-          <Text style={styles.limitUpgradeBtnText}>Upgrade to Pro - £4.99</Text>
-        </TouchableOpacity>
-        <Text style={styles.limitNote}>Come back tomorrow for more free questions</Text>
-        <TouchableOpacity style={styles.limitBackBtn} onPress={onBack} activeOpacity={0.75}>
-          <Text style={styles.limitBackText}>Back</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { padding: 16, paddingBottom: 48 },
@@ -2271,6 +2332,24 @@ const styles = StyleSheet.create({
   imageMissing: { width: '100%', height: 72, borderRadius: 8, marginBottom: 12, backgroundColor: Colors.surfaceGray, borderWidth: 1, borderColor: Colors.border, justifyContent: 'center', alignItems: 'center' },
   imageMissingText: { fontSize: 13, color: Colors.subtleText },
   questionText: { fontSize: 17, fontWeight: '600', lineHeight: 26 },
+  challengeBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginBottom: 12,
+    backgroundColor: Colors.indigoBg,
+  },
+  challengeBadgeText: { fontSize: 12, fontWeight: '600', color: Colors.indigo },
+  challengeBadgeComplete: {
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginBottom: 12,
+    backgroundColor: Colors.emeraldBg,
+  },
+  challengeBadgeCompleteText: { fontSize: 12, fontWeight: '700', color: Colors.emerald },
 
   // Options
   optionList: { gap: 10, marginBottom: 14 },
@@ -2605,34 +2684,9 @@ const styles = StyleSheet.create({
   },
   bookmarkBtnText: { fontSize: 20 },
 
-  // Daily limit gate
-  limitCard: {
-    backgroundColor: Colors.cardWhite,
-    borderRadius: 20,
-    padding: 28,
-    marginHorizontal: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderTopWidth: 3,
-    borderTopColor: Colors.amber,
-    alignItems: 'center',
-    gap: 12,
-    maxWidth: 400,
-    width: '100%',
-  },
+  // Daily limit gate (noBookmarks empty state)
   limitTitle: { fontSize: 22, fontWeight: '800', color: Colors.amber, textAlign: 'center' },
   limitBody: { fontSize: 15, color: Colors.mutedText, textAlign: 'center', lineHeight: 22 },
-  limitUpgradeBtn: {
-    backgroundColor: Colors.indigo,
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    marginTop: 4,
-    alignSelf: 'stretch',
-    alignItems: 'center',
-  },
-  limitUpgradeBtnText: { color: Colors.cardWhite, fontSize: 15, fontWeight: '700' },
-  limitNote: { fontSize: 13, color: Colors.mutedText, textAlign: 'center' },
   limitBackBtn: { paddingVertical: 8 },
   limitBackText: { color: Colors.mutedText, fontSize: 14, fontWeight: '600' },
 

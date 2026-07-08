@@ -70,3 +70,29 @@ export function generateDailyChallenge(date: Date): DailyChallenge {
 export function isDailyChallengeComplete(challenge: DailyChallenge): boolean {
   return challenge.completed || challenge.currentCount >= challenge.targetCount;
 }
+
+export function questionCountsTowardChallenge(
+  dc: DailyChallenge | null | undefined,
+  topicCategory: string,
+): boolean {
+  if (!dc) return false;
+  if (isDailyChallengeComplete(dc)) return false;
+  if (dc.challengeType !== 'topic') return false;
+  return dc.topicCategory === topicCategory;
+}
+
+export function applyCorrectAnswerToChallenge(
+  dc: DailyChallenge,
+  topicCategory: string,
+): DailyChallenge {
+  if (!questionCountsTowardChallenge(dc, topicCategory)) return dc;
+  const newCount = Math.min(dc.currentCount + 1, dc.targetCount);
+  return { ...dc, currentCount: newCount, completed: newCount >= dc.targetCount };
+}
+
+export function didChallengeJustComplete(
+  before: DailyChallenge,
+  after: DailyChallenge,
+): boolean {
+  return !isDailyChallengeComplete(before) && isDailyChallengeComplete(after);
+}
