@@ -3,4 +3,5 @@ node_modules
 .expo 
 dist 
 .turbo
-.claude/ 
+.claude/
+.superpowers/
