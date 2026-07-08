@@ -18,7 +18,7 @@ import { isPremium } from '@/src/subscription';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 
-const FREE_LIMIT = 5;
+const FREE_LIMIT = 2;
 
 function getProxyUrl(): string {
   return __DEV__
@@ -45,7 +45,7 @@ For questions about ClearPass itself, answer helpfully using the following knowl
   battle mode, weak-spot drilling, and speed round.
 - Road Signs: all 88 official UK road signs using DVSA-licensed imagery, organised by
   category and fully searchable.
-- Hazard Perception: official DVSA clips are coming soon under the signed licence agreement.
+- Hazard Perception: official DVSA clips, licensed under the signed agreement, are now live in the app.
 - Platform: iOS (TestFlight + App Store), Android (submitted to Google Play), Web (clearpass-app.vercel.app).
 - Known issue: 7 road signs still render as SVG diagrams awaiting official photo assets
   (school crossing patrol, elderly pedestrians, horse riders, camera ahead, risk of ice,
