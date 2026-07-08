@@ -162,6 +162,7 @@ Google review typically takes 1-3 business days for a new app.
 - [ ] Set up Crashlytics or Sentry for error monitoring
 - [ ] Monitor Play Console reviews and ratings
 - [ ] Set up the weekly cron job for parent emails (cron-job.org or Vercel Cron calling `/api/send-weekly-parent-emails`)
+- [ ] Apply the instructor free-Pro schema block (`instructor_since` column + `instructor_pro_quarters` table) to Supabase via the SQL Editor — see `apps/mobile/supabase/schema.sql`
 - [ ] Set up the daily instructor Pro review cron (cron-job.org, `POST /api/cron/instructor-pro-review`, `x-cron-secret` header, e.g. 02:00 Europe/London)
 - [ ] Verify Stripe webhook is receiving events in production
 - [ ] Set `RESEND_FROM_EMAIL` to verified domain once Resend DNS is confirmed

@@ -7,8 +7,6 @@ const {
   getQuarterNumberForDate,
   getQuarterBounds,
   getMonthIndexInQuarter,
-  isLastDayOfMonth,
-  isWarningDay,
   daysUntilMonthEnd,
   toUTCDate,
   resolveQualification,
@@ -777,30 +775,58 @@ app.post('/api/cron/expire-pro', async (req, res) => {
 // ─── POST /api/instructor/activate ───────────────────────────────────────────
 // Idempotent: stamps instructor_since and grants the unconditional first free
 // quarter of Pro exactly once. Safe to call every time a user opens the
-// Instructor screen — no-ops if instructor_since is already set. Guards the
-// stamp with .is('instructor_since', null) so concurrent calls can't double-grant.
+// Instructor screen — no-ops if the quarter-1 row already exists. Requires a
+// valid session token matching userId (mirrors /api/delete-account).
 
 app.post('/api/instructor/activate', async (req, res) => {
-  const { userId } = req.body;
-  if (!userId) return res.status(400).json({ error: 'Missing userId' });
+  const { userId, userToken } = req.body;
+  if (!userId || !userToken) return res.status(400).json({ error: 'Missing userId or userToken' });
 
   try {
     const supabaseAdmin = getSupabaseAdmin();
+
+    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(userToken);
+    if (authErr || !user || user.id !== userId) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
     const now = new Date();
 
-    const { data: stamped, error: stampErr } = await supabaseAdmin
+    // Atomic claim on instructor_since — only one concurrent caller ever wins this race.
+    // Whoever wins or loses, we read back the authoritative value afterward, so this step
+    // alone is not the idempotency gate (the quarter-1 row check below is).
+    const { data: claimed } = await supabaseAdmin
       .from('profiles')
       .update({ instructor_since: now.toISOString() })
       .eq('id', userId)
       .is('instructor_since', null)
-      .select('id');
-    if (stampErr) throw stampErr;
+      .select('instructor_since');
 
-    if (!stamped || stamped.length === 0) {
+    let instructorSince = claimed && claimed.length > 0 ? claimed[0].instructor_since : null;
+    if (!instructorSince) {
+      const { data: profile } = await supabaseAdmin
+        .from('profiles').select('instructor_since').eq('id', userId).single();
+      instructorSince = profile?.instructor_since;
+    }
+    if (!instructorSince) {
+      return res.status(500).json({ error: 'Failed to establish instructor_since' });
+    }
+
+    // Self-healing gate: check the quarter-1 row itself, not the instructor_since stamp.
+    // This makes the endpoint safe to call repeatedly even if a prior call crashed between
+    // the stamp above and the grant below — a retry will finish the job instead of no-oping.
+    const { data: existingQuarter } = await supabaseAdmin
+      .from('instructor_pro_quarters')
+      .select('id')
+      .eq('instructor_id', userId)
+      .eq('quarter_number', 1)
+      .maybeSingle();
+
+    if (existingQuarter) {
       return res.json({ activated: false, reason: 'already_active' });
     }
 
-    const anchor = getQuarterAnchor(now.toISOString());
+    const anchor = getQuarterAnchor(instructorSince);
     const { quarterStart, quarterEnd } = getQuarterBounds(anchor, 1);
 
     const { data: existingProgress } = await supabaseAdmin
@@ -829,7 +855,16 @@ app.post('/api/instructor/activate', async (req, res) => {
         qualify_reason: 'first_quarter',
         free_pro_active: true,
       });
-    if (quarterErr) throw quarterErr;
+    if (quarterErr) {
+      // A concurrent request may have inserted the row between our check and this insert —
+      // the UNIQUE(instructor_id, quarter_number) constraint catches that race at the DB
+      // level (Postgres 23505), so treat it as a graceful already-active, not a failure.
+      // This mirrors the existing 23505-handling pattern in the /api/waitlist endpoint.
+      if (quarterErr.code === '23505') {
+        return res.json({ activated: false, reason: 'already_active' });
+      }
+      throw quarterErr;
+    }
 
     console.log('[instructor/activate] activated instructor', userId);
     res.json({ activated: true });
@@ -860,9 +895,19 @@ app.post('/api/cron/instructor-pro-review', async (req, res) => {
       .not('instructor_since', 'is', null);
     if (instructorsErr) throw instructorsErr;
 
-    const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-    if (authErr) throw authErr;
-    const emailById = Object.fromEntries((authData.users || []).map(u => [u.id, u.email]));
+    const emailById = {};
+    {
+      let page = 1;
+      const perPage = 1000;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+        if (authErr) throw authErr;
+        for (const u of authData.users || []) emailById[u.id] = u.email;
+        if (!authData.users || authData.users.length < perPage) break;
+        page++;
+      }
+    }
 
     let processed = 0;
     let skippedPaid = 0;
@@ -933,7 +978,7 @@ app.post('/api/cron/instructor-pro-review', async (req, res) => {
         const updates = { [monthConversionsField]: monthConversions, active_referred_pro_count: peakActiveCount };
         const instructorName = instructor.username || 'there';
 
-        if (isWarningDay(today)) {
+        if (today.getUTCDate() >= 20) {
           const warningField = `month${monthIndex + 1}_warning_sent_at`;
           if (!quarterRow[warningField]) {
             if (quarterNumber === 1) {
@@ -960,7 +1005,7 @@ app.post('/api/cron/instructor-pro-review', async (req, res) => {
           }
         }
 
-        if (isLastDayOfMonth(today)) {
+        if (today.getTime() >= monthBounds.end.getTime()) {
           const updateField = `month${monthIndex + 1}_update_sent_at`;
           if (!quarterRow[updateField]) {
             const isQuarterEnd = monthIndex === 2;
