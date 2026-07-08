@@ -2,6 +2,23 @@ require('dotenv').config({ path: __dirname + '/.env' });
 
 const express = require('express');
 const cors = require('cors');
+const {
+  getQuarterAnchor,
+  getQuarterNumberForDate,
+  getQuarterBounds,
+  getMonthIndexInQuarter,
+  isLastDayOfMonth,
+  isWarningDay,
+  daysUntilMonthEnd,
+  toUTCDate,
+  resolveQualification,
+  getMonthStatus,
+  computeMonthConversions,
+  computeActiveReferredProCount,
+  buildQuarter1UpdateEmailHtml,
+  buildMonthEndEmailHtml,
+  buildWarningEmailHtml,
+} = require('./lib/instructorProReview');
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? require('stripe')(process.env.STRIPE_SECRET_KEY)
@@ -90,7 +107,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
         .eq('id', userId)
         .single();
 
-      const updatedProgress = { ...(existing?.progress || {}), isPro: true };
+      const updatedProgress = { ...(existing?.progress || {}), isPro: true, proSource: 'stripe' };
 
       const { error } = await supabaseAdmin
         .from('user_progress')
@@ -754,6 +771,252 @@ app.post('/api/cron/expire-pro', async (req, res) => {
   } catch (err) {
     console.error('[expire-pro] error:', err);
     res.status(500).json({ error: 'Expire pro failed', detail: String(err) });
+  }
+});
+
+// ─── POST /api/instructor/activate ───────────────────────────────────────────
+// Idempotent: stamps instructor_since and grants the unconditional first free
+// quarter of Pro exactly once. Safe to call every time a user opens the
+// Instructor screen — no-ops if instructor_since is already set. Guards the
+// stamp with .is('instructor_since', null) so concurrent calls can't double-grant.
+
+app.post('/api/instructor/activate', async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: 'Missing userId' });
+
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+    const now = new Date();
+
+    const { data: stamped, error: stampErr } = await supabaseAdmin
+      .from('profiles')
+      .update({ instructor_since: now.toISOString() })
+      .eq('id', userId)
+      .is('instructor_since', null)
+      .select('id');
+    if (stampErr) throw stampErr;
+
+    if (!stamped || stamped.length === 0) {
+      return res.json({ activated: false, reason: 'already_active' });
+    }
+
+    const anchor = getQuarterAnchor(now.toISOString());
+    const { quarterStart, quarterEnd } = getQuarterBounds(anchor, 1);
+
+    const { data: existingProgress } = await supabaseAdmin
+      .from('user_progress')
+      .select('progress')
+      .eq('id', userId)
+      .single();
+
+    const currentProgress = existingProgress?.progress || {};
+    if (currentProgress.proSource !== 'stripe') {
+      const updatedProgress = { ...currentProgress, isPro: true, proSource: 'instructor_referral_free' };
+      const { error: proErr } = await supabaseAdmin
+        .from('user_progress')
+        .upsert({ id: userId, progress: updatedProgress, updated_at: now.toISOString() });
+      if (proErr) throw proErr;
+    }
+
+    const { error: quarterErr } = await supabaseAdmin
+      .from('instructor_pro_quarters')
+      .insert({
+        instructor_id: userId,
+        quarter_number: 1,
+        quarter_start: quarterStart.toISOString().slice(0, 10),
+        quarter_end: quarterEnd.toISOString().slice(0, 10),
+        qualifies: true,
+        qualify_reason: 'first_quarter',
+        free_pro_active: true,
+      });
+    if (quarterErr) throw quarterErr;
+
+    console.log('[instructor/activate] activated instructor', userId);
+    res.json({ activated: true });
+  } catch (err) {
+    console.error('[instructor/activate] error:', err);
+    res.status(500).json({ error: 'Activation failed', detail: String(err) });
+  }
+});
+
+// ── Cron: instructor free-Pro quarterly review ───────────────────────────────
+// POST /api/cron/instructor-pro-review
+// Daily job: creates new quarter rows as they start (carrying forward the
+// previous quarter's free_pro_active state), sends the day-20 warning and
+// end-of-month update emails, and resolves pass/fail at the end of each
+// quarter (quarter_number >= 2). Skips any instructor whose current
+// proSource is 'stripe', re-checked fresh on every run.
+// Schedule: daily at 02:00 Europe/London (after expire-pro).
+
+app.post('/api/cron/instructor-pro-review', async (req, res) => {
+  if (!requireCronAuth(req, res)) return;
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+    const today = toUTCDate(new Date());
+
+    const { data: instructors, error: instructorsErr } = await supabaseAdmin
+      .from('profiles')
+      .select('id, username, instructor_since')
+      .not('instructor_since', 'is', null);
+    if (instructorsErr) throw instructorsErr;
+
+    const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+    if (authErr) throw authErr;
+    const emailById = Object.fromEntries((authData.users || []).map(u => [u.id, u.email]));
+
+    let processed = 0;
+    let skippedPaid = 0;
+
+    for (const instructor of instructors || []) {
+      try {
+        const { data: progressRow } = await supabaseAdmin
+          .from('user_progress')
+          .select('progress')
+          .eq('id', instructor.id)
+          .single();
+        const progress = progressRow?.progress || {};
+
+        if (progress.proSource === 'stripe') {
+          skippedPaid++;
+          continue;
+        }
+
+        const email = emailById[instructor.id];
+        if (!email) continue;
+
+        const anchor = getQuarterAnchor(instructor.instructor_since);
+        const quarterNumber = getQuarterNumberForDate(anchor, today);
+        const monthIndex = getMonthIndexInQuarter(anchor, today);
+        const { quarterStart, quarterEnd, months } = getQuarterBounds(anchor, quarterNumber);
+
+        let { data: quarterRow } = await supabaseAdmin
+          .from('instructor_pro_quarters')
+          .select('*')
+          .eq('instructor_id', instructor.id)
+          .eq('quarter_number', quarterNumber)
+          .maybeSingle();
+
+        if (!quarterRow) {
+          if (quarterNumber === 1) continue; // created by /api/instructor/activate
+
+          const { data: prevQuarter } = await supabaseAdmin
+            .from('instructor_pro_quarters')
+            .select('free_pro_active')
+            .eq('instructor_id', instructor.id)
+            .eq('quarter_number', quarterNumber - 1)
+            .maybeSingle();
+          const carriedFreeProActive = prevQuarter?.free_pro_active ?? true;
+
+          const { data: inserted, error: insertErr } = await supabaseAdmin
+            .from('instructor_pro_quarters')
+            .insert({
+              instructor_id: instructor.id,
+              quarter_number: quarterNumber,
+              quarter_start: quarterStart.toISOString().slice(0, 10),
+              quarter_end: quarterEnd.toISOString().slice(0, 10),
+              free_pro_active: carriedFreeProActive,
+            })
+            .select('*')
+            .single();
+          if (insertErr) throw insertErr;
+          quarterRow = inserted;
+        }
+
+        const monthBounds = months[monthIndex];
+        const monthConversions = await computeMonthConversions(
+          supabaseAdmin, instructor.id, monthBounds.start, monthBounds.end
+        );
+        const activeCount = await computeActiveReferredProCount(supabaseAdmin, instructor.id);
+        const peakActiveCount = Math.max(quarterRow.active_referred_pro_count || 0, activeCount);
+
+        const monthConversionsField = `month${monthIndex + 1}_conversions`;
+        const updates = { [monthConversionsField]: monthConversions, active_referred_pro_count: peakActiveCount };
+        const instructorName = instructor.username || 'there';
+
+        if (isWarningDay(today)) {
+          const warningField = `month${monthIndex + 1}_warning_sent_at`;
+          if (!quarterRow[warningField]) {
+            if (quarterNumber === 1) {
+              await sendEmail({
+                to: email,
+                subject: 'Your ClearPass referral activity',
+                html: buildQuarter1UpdateEmailHtml({ instructorName, conversions: monthConversions, activeCount: peakActiveCount }),
+              });
+              updates[warningField] = new Date().toISOString();
+            } else if (monthConversions < 2 && peakActiveCount < 10) {
+              await sendEmail({
+                to: email,
+                subject: 'Your free ClearPass Pro is at risk this month',
+                html: buildWarningEmailHtml({
+                  instructorName,
+                  conversions: monthConversions,
+                  activeCount: peakActiveCount,
+                  daysRemaining: daysUntilMonthEnd(today),
+                  conversionsNeeded: 2 - monthConversions,
+                }),
+              });
+              updates[warningField] = new Date().toISOString();
+            }
+          }
+        }
+
+        if (isLastDayOfMonth(today)) {
+          const updateField = `month${monthIndex + 1}_update_sent_at`;
+          if (!quarterRow[updateField]) {
+            const isQuarterEnd = monthIndex === 2;
+            const status = getMonthStatus({ monthConversions, peakActiveCount });
+            let resolvedQualifies = quarterRow.qualifies;
+
+            if (isQuarterEnd && quarterNumber >= 2) {
+              const finalConversions = [
+                monthIndex === 0 ? monthConversions : (quarterRow.month1_conversions || 0),
+                monthIndex === 1 ? monthConversions : (quarterRow.month2_conversions || 0),
+                monthIndex === 2 ? monthConversions : (quarterRow.month3_conversions || 0),
+              ];
+              const resolution = resolveQualification({ monthConversions: finalConversions, peakActiveCount });
+              resolvedQualifies = resolution.qualifies;
+              updates.qualifies = resolution.qualifies;
+              updates.qualify_reason = resolution.qualifyReason;
+              updates.free_pro_active = resolution.qualifies;
+
+              if (progress.isPro !== resolution.qualifies) {
+                const newProgress = { ...progress, isPro: resolution.qualifies, proSource: 'instructor_referral_free' };
+                await supabaseAdmin
+                  .from('user_progress')
+                  .upsert({ id: instructor.id, progress: newProgress, updated_at: new Date().toISOString() });
+              }
+            }
+
+            await sendEmail({
+              to: email,
+              subject: quarterNumber === 1 ? 'Your ClearPass referral activity' : 'Your monthly ClearPass Pro referral update',
+              html: quarterNumber === 1
+                ? buildQuarter1UpdateEmailHtml({ instructorName, conversions: monthConversions, activeCount: peakActiveCount })
+                : buildMonthEndEmailHtml({
+                    instructorName,
+                    conversions: monthConversions,
+                    activeCount: peakActiveCount,
+                    status,
+                    quarterResolved: isQuarterEnd,
+                    qualifies: resolvedQualifies,
+                  }),
+            });
+            updates[updateField] = new Date().toISOString();
+          }
+        }
+
+        await supabaseAdmin.from('instructor_pro_quarters').update(updates).eq('id', quarterRow.id);
+        processed++;
+      } catch (e) {
+        console.error(`[instructor-pro-review] failed for ${instructor.id}:`, e.message);
+      }
+    }
+
+    console.log(`[instructor-pro-review] processed ${processed}, skipped ${skippedPaid} paid instructors`);
+    res.json({ processed, skippedPaid });
+  } catch (err) {
+    console.error('[instructor-pro-review] error:', err);
+    res.status(500).json({ error: 'Instructor Pro review failed', detail: String(err) });
   }
 });
 
