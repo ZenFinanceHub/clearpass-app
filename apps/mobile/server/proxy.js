@@ -1005,7 +1005,7 @@ app.post('/api/cron/instructor-pro-review', async (req, res) => {
           }
         }
 
-        if (today.getTime() >= monthBounds.end.getTime()) {
+        if (today.getTime() >= monthBounds.end.getTime() - 86400000) {
           const updateField = `month${monthIndex + 1}_update_sent_at`;
           if (!quarterRow[updateField]) {
             const isQuarterEnd = monthIndex === 2;
