@@ -1168,6 +1168,13 @@ export default function InstructorScreen() {
       }
       setInstructorCode(code);
 
+      // Idempotent — no-ops server-side if this instructor is already activated.
+      fetch(`${PROXY_URL}/api/instructor/activate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      }).catch(() => {});
+
       const uname = (profile as { username?: string } | null)?.username ?? '';
       setInstructorUsername(uname);
 
