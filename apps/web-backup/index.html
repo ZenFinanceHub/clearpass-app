@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClearPass — Pass Your Theory Test First Time</title>
+  <meta name="description" content="The UK's smartest driving theory test revision app. AI tutor, personalised study plan, and the only app built for dyslexic learners. Start free today.">
+  <meta property="og:title" content="ClearPass — Pass Your Theory Test First Time">
+  <meta property="og:description" content="The UK's smartest driving theory test app. AI tutor, personalised plan, and the only app built for dyslexic learners.">
+  <meta property="og:image" content="https://getclearpass.co.uk/og-image.png">
+  <meta property="og:url" content="https://getclearpass.co.uk">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ClearPass — Pass Your Theory Test First Time">
+  <meta name="twitter:description" content="The UK's smartest revision app. AI tutor, personalised study plan, built for every learner.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; font-size: 16px; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #F7F8FA;
+      color: #111827;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    :root {
+      --teal: #0D9488;
+      --teal-l: #14B8A6;
+      --teal-d: #0A7A70;
+      --indigo: #6366F1;
+      --indigo-l: #818CF8;
+      --bg: #F7F8FA;
+      --cream: #FAF7F0;
+      --white: #FFFFFF;
+      --dark: #111827;
+      --mid: #374151;
+      --soft: #6B7280;
+      --muted: #9CA3AF;
+      --border: #E5E7EB;
+      --border-l: #F3F4F6;
+      --max: 1100px;
+      --radius: 16px;
+    }
+    a { color: inherit; text-decoration: none; }
+    img { max-width: 100%; display: block; }
+
+    .container { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+    .section { padding: 96px 0; }
+    .section-label {
+      display: inline-block; font-size: 12px; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase; color: var(--teal); margin-bottom: 14px;
+    }
+    .section-title {
+      font-size: clamp(28px, 4vw, 44px); font-weight: 900;
+      color: var(--dark); line-height: 1.12; letter-spacing: -0.5px; margin-bottom: 16px;
+    }
+    .section-sub { font-size: 17px; color: var(--soft); line-height: 1.75; max-width: 560px; }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      border: none; cursor: pointer; font-family: inherit; font-weight: 700;
+      border-radius: 12px; transition: all 0.2s ease; text-decoration: none; line-height: 1;
+    }
+    .btn-primary { background: var(--teal); color: #fff; padding: 15px 28px; font-size: 15px; }
+    .btn-primary:hover { background: var(--teal-d); transform: translateY(-2px); box-shadow: 0 10px 28px rgba(13,148,136,0.3); }
+    .btn-outline { background: transparent; color: var(--dark); padding: 15px 28px; font-size: 15px; border: 1.5px solid var(--border); }
+    .btn-outline:hover { border-color: var(--teal); color: var(--teal); transform: translateY(-2px); }
+    .btn-white { background: #fff; color: var(--teal); padding: 18px 40px; font-size: 17px; font-weight: 800; border-radius: 14px; box-shadow: 0 4px 20px rgba(0,0,0,0.12); }
+    .btn-white:hover { transform: translateY(-3px); box-shadow: 0 12px 40px rgba(0,0,0,0.2); }
+
+    /* Animations */
+    .fade-up { opacity: 0; transform: translateY(28px); transition: opacity 0.65s ease, transform 0.65s ease; }
+    .fade-up.visible { opacity: 1; transform: translateY(0); }
+    .delay-1 { transition-delay: 0.1s; }
+    .delay-2 { transition-delay: 0.2s; }
+    .delay-3 { transition-delay: 0.3s; }
+    .delay-4 { transition-delay: 0.4s; }
+    .delay-5 { transition-delay: 0.5s; }
+
+    /* ── NAVBAR ────────────────────────────────────────────────── */
+    .navbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(247,248,250,0.9);
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(229,231,235,0.8);
+      height: 68px; display: flex; align-items: center;
+      transition: box-shadow 0.3s;
+    }
+    .navbar .container { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+    .nav-logo { font-size: 21px; font-weight: 900; color: var(--teal); letter-spacing: -0.5px; }
+    .nav-center { display: flex; align-items: center; gap: 4px; }
+    .nav-link { font-size: 14px; font-weight: 600; color: var(--soft); padding: 8px 14px; border-radius: 8px; transition: color 0.2s; }
+    .nav-link:hover { color: var(--dark); }
+    .nav-right { display: flex; align-items: center; gap: 8px; }
+    .nav-signin { font-size: 14px; font-weight: 600; color: var(--mid); padding: 8px 16px; border-radius: 8px; transition: color 0.2s; }
+    .nav-signin:hover { color: var(--dark); }
+    .nav-cta { background: var(--teal); color: #fff; font-size: 14px; font-weight: 700; padding: 9px 20px; border-radius: 10px; transition: all 0.2s; }
+    .nav-cta:hover { background: var(--teal-d); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(13,148,136,0.25); }
+    .hamburger { display: none; flex-direction: column; gap: 5px; cursor: pointer; padding: 8px; background: none; border: none; }
+    .hamburger span { display: block; width: 22px; height: 2px; background: var(--dark); border-radius: 2px; transition: all 0.3s; }
+    .mobile-menu {
+      display: none; position: fixed; inset: 68px 0 0 0; background: #fff;
+      z-index: 99; padding: 20px 16px; flex-direction: column; gap: 8px;
+      border-top: 1px solid var(--border); overflow-y: auto;
+    }
+    .mobile-menu.open { display: flex; }
+    .mobile-menu a { font-size: 16px; font-weight: 600; color: var(--dark); padding: 14px 16px; border-radius: 12px; transition: background 0.15s; text-align: center; }
+    .mobile-menu a:hover { background: var(--border-l); }
+    .mobile-cta { background: var(--teal) !important; color: #fff !important; margin-top: 8px; }
+    .mobile-cta:hover { background: var(--teal-d) !important; }
+
+    /* ── HERO ──────────────────────────────────────────────────── */
+    .hero {
+      padding-top: 120px; padding-bottom: 80px; min-height: 100vh;
+      display: flex; align-items: center;
+      background: linear-gradient(145deg, #F7F8FA 0%, #F0FDF9 45%, #EEF2FF 100%);
+      position: relative; overflow: hidden;
+    }
+    .hero::before {
+      content: ''; position: absolute; top: -200px; right: -150px;
+      width: 700px; height: 700px;
+      background: radial-gradient(circle, rgba(13,148,136,0.09) 0%, transparent 65%);
+      pointer-events: none;
+    }
+    .hero::after {
+      content: ''; position: absolute; bottom: -80px; left: -100px;
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 65%);
+      pointer-events: none;
+    }
+    .hero .container { display: flex; align-items: center; gap: 72px; position: relative; z-index: 1; }
+    .hero-content { flex: 1; max-width: 580px; }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px; background: #fff;
+      border: 1px solid var(--border); border-radius: 100px;
+      padding: 6px 14px; margin-bottom: 28px; font-size: 13px; font-weight: 600; color: var(--mid);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+    }
+    .hero-badge-pill { background: var(--teal); color: #fff; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 100px; letter-spacing: 0.05em; text-transform: uppercase; }
+    .hero h1 {
+      font-size: clamp(38px, 5.5vw, 66px); font-weight: 900; color: var(--dark);
+      line-height: 1.08; letter-spacing: -2px; margin-bottom: 22px;
+    }
+    .gradient-text {
+      background: linear-gradient(135deg, var(--teal) 0%, var(--indigo) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .hero-sub { font-size: 18px; color: var(--soft); line-height: 1.75; margin-bottom: 36px; max-width: 500px; }
+    .hero-btns { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+    .hero-micro { font-size: 13px; color: var(--muted); margin-bottom: 36px; }
+    .hero-social {
+      display: inline-flex; align-items: center; gap: 12px;
+      padding: 14px 20px; background: #fff; border-radius: 14px;
+      border: 1px solid var(--border); box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+    }
+    .hero-stars { font-size: 15px; letter-spacing: 1px; }
+    .hero-social-text { font-size: 13px; color: var(--mid); font-weight: 500; }
+
+    /* Phone mockup */
+    .hero-visual { flex: 0 0 auto; display: flex; justify-content: center; }
+    .phone-wrap { position: relative; }
+    .phone-glow {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 340px; height: 500px; pointer-events: none;
+      background: radial-gradient(ellipse, rgba(13,148,136,0.18) 0%, rgba(99,102,241,0.12) 50%, transparent 70%);
+      filter: blur(32px); z-index: 0;
+    }
+    .phone-frame {
+      position: relative; z-index: 1; width: 274px; height: 556px;
+      background: #1C1C1E; border-radius: 48px; padding: 14px;
+      box-shadow: 0 70px 140px rgba(0,0,0,0.45), 0 24px 48px rgba(0,0,0,0.18), inset 0 0 0 1px rgba(255,255,255,0.12);
+    }
+    .phone-notch {
+      position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+      width: 88px; height: 24px; background: #1C1C1E; border-radius: 0 0 18px 18px; z-index: 5;
+    }
+    .phone-screen { width: 100%; height: 100%; background: var(--bg); border-radius: 36px; overflow: hidden; }
+    .app-topbar {
+      background: #fff; padding: 36px 16px 12px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border-l);
+    }
+    .app-logo-txt { font-size: 15px; font-weight: 900; color: var(--teal); }
+    .app-streak { display: flex; align-items: center; gap: 4px; background: #FFF7ED; border-radius: 8px; padding: 4px 8px; font-size: 11px; font-weight: 800; color: #EA580C; }
+    .app-body { padding: 12px 12px; display: flex; flex-direction: column; gap: 10px; }
+    .app-card { background: #fff; border-radius: 14px; padding: 14px; border: 1px solid var(--border-l); }
+    .app-card-label { font-size: 9px; font-weight: 700; color: var(--teal); margin-bottom: 8px; letter-spacing: 0.06em; text-transform: uppercase; }
+    .app-bar-bg { height: 8px; background: var(--border-l); border-radius: 4px; overflow: hidden; margin-bottom: 6px; }
+    .app-bar-fill { height: 100%; width: 68%; background: linear-gradient(90deg, var(--teal), var(--indigo)); border-radius: 4px; }
+    .app-bar-lbl { font-size: 9px; color: var(--soft); font-weight: 500; }
+    .app-q-text { font-size: 11px; font-weight: 700; color: var(--dark); line-height: 1.5; margin-bottom: 10px; }
+    .app-option { border-radius: 8px; padding: 7px 10px; font-size: 10px; font-weight: 600; margin-bottom: 5px; border: 1px solid var(--border); color: var(--mid); }
+    .app-option.correct { background: #F0FDF4; border-color: #86EFAC; color: #15803D; }
+    .app-option.wrong { background: #FEF2F2; border-color: #FCA5A5; color: #B91C1C; }
+    .app-ai-row {
+      display: flex; align-items: center; gap: 8px;
+      background: linear-gradient(135deg, #F0FDF9, #EEF2FF);
+      border-radius: 12px; padding: 10px 12px; border: 1px solid rgba(13,148,136,0.12);
+    }
+    .app-ai-dot {
+      width: 22px; height: 22px; background: linear-gradient(135deg, var(--teal), var(--indigo));
+      border-radius: 50%; flex-shrink: 0; display: flex; align-items: center;
+      justify-content: center; font-size: 9px; color: #fff; font-weight: 800; letter-spacing: -0.5px;
+    }
+    .app-ai-lines { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+    .app-ai-line { height: 6px; background: rgba(13,148,136,0.18); border-radius: 3px; }
+    .app-ai-line-s { width: 55%; }
+
+    /* ── STATS BAR ─────────────────────────────────────────────── */
+    .stats-bar { background: var(--teal); padding: 0; }
+    .stats-bar .container { display: flex; align-items: stretch; justify-content: center; flex-wrap: wrap; }
+    .stat-item { flex: 1; min-width: 220px; text-align: center; padding: 32px 28px; }
+    .stat-item + .stat-item { border-left: 1px solid rgba(255,255,255,0.18); }
+    .stat-val { font-size: 20px; font-weight: 900; color: #fff; line-height: 1.3; margin-bottom: 4px; }
+    .stat-lbl { font-size: 13px; color: rgba(255,255,255,0.78); font-weight: 500; line-height: 1.5; }
+
+    /* ── FEATURES ──────────────────────────────────────────────── */
+    .features { background: #fff; }
+    .features-header { text-align: center; margin-bottom: 64px; }
+    .features-header .section-sub { margin: 0 auto; }
+    .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .feature-card {
+      background: var(--bg); border: 1.5px solid var(--border);
+      border-radius: 20px; padding: 28px 26px; transition: all 0.25s ease; cursor: default;
+    }
+    .feature-card:hover { transform: translateY(-5px); box-shadow: 0 20px 48px rgba(0,0,0,0.08); border-color: var(--teal); background: #fff; }
+    .feature-icon { font-size: 34px; margin-bottom: 18px; display: block; line-height: 1; }
+    .feature-title { font-size: 17px; font-weight: 800; color: var(--dark); margin-bottom: 9px; }
+    .feature-desc { font-size: 14px; color: var(--soft); line-height: 1.7; }
+
+    /* ── ACCESSIBILITY ─────────────────────────────────────────── */
+    .accessibility { background: var(--cream); }
+    .accessibility .container { display: flex; align-items: center; gap: 80px; }
+    .access-content { flex: 1; }
+    .access-badge {
+      display: inline-flex; align-items: center; gap: 8px; background: #fff;
+      border: 1px solid #DDD3C0; border-radius: 100px; padding: 6px 14px;
+      font-size: 13px; font-weight: 700; color: var(--mid); margin-bottom: 20px;
+    }
+    .access-list { list-style: none; margin: 28px 0 36px; display: flex; flex-direction: column; gap: 14px; }
+    .access-list li { display: flex; align-items: center; gap: 12px; font-size: 15px; color: var(--mid); font-weight: 500; }
+    .access-tick {
+      width: 24px; height: 24px; min-width: 24px; background: var(--teal); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 12px; font-weight: 800;
+    }
+    .access-quote {
+      flex: 0 0 360px; background: #fff; border-radius: 24px; padding: 36px 32px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.07); border: 1px solid #E5D9C8; position: relative;
+    }
+    .access-quote::before {
+      content: '\201C'; position: absolute; top: -18px; left: 28px;
+      font-size: 96px; color: var(--teal); font-family: Georgia, serif; line-height: 1; opacity: 0.25;
+    }
+    .access-quote-text { font-size: 16px; color: var(--mid); line-height: 1.75; font-style: italic; margin-bottom: 24px; }
+    .access-quote-author { font-size: 13px; font-weight: 700; color: var(--soft); }
+
+    /* ── HOW IT WORKS ──────────────────────────────────────────── */
+    .how { background: var(--bg); }
+    .how-header { text-align: center; margin-bottom: 72px; }
+    .how-header .section-sub { margin: 0 auto; }
+    .steps { display: flex; align-items: flex-start; gap: 0; position: relative; }
+    .steps::before {
+      content: ''; position: absolute; top: 31px; left: calc(16.67% + 32px); right: calc(16.67% + 32px);
+      height: 2px; background: linear-gradient(90deg, var(--teal), var(--indigo));
+      pointer-events: none;
+    }
+    .step { flex: 1; text-align: center; padding: 0 28px; }
+    .step-num {
+      width: 64px; height: 64px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--teal) 0%, var(--indigo) 100%);
+      color: #fff; font-size: 22px; font-weight: 900;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 22px; box-shadow: 0 10px 28px rgba(13,148,136,0.28); position: relative; z-index: 1;
+    }
+    .step-title { font-size: 17px; font-weight: 800; color: var(--dark); margin-bottom: 10px; line-height: 1.35; }
+    .step-desc { font-size: 14px; color: var(--soft); line-height: 1.7; }
+
+    /* ── PRICING ───────────────────────────────────────────────── */
+    .pricing { background: #fff; }
+    .pricing-header { text-align: center; margin-bottom: 60px; }
+    .pricing-header .section-sub { margin: 0 auto; }
+    .pricing-grid { display: flex; gap: 24px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+    .price-card {
+      flex: 1; min-width: 290px; max-width: 420px;
+      background: var(--bg); border: 1.5px solid var(--border); border-radius: 28px; padding: 38px 36px;
+    }
+    .price-card-pro {
+      background: #fff; border-color: var(--teal); position: relative; overflow: hidden;
+      box-shadow: 0 0 0 4px rgba(13,148,136,0.09), 0 24px 64px rgba(13,148,136,0.14);
+    }
+    .price-card-pro::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+      background: linear-gradient(90deg, var(--teal), var(--indigo));
+    }
+    .price-badge {
+      display: inline-flex; align-items: center; background: linear-gradient(135deg, var(--teal), var(--indigo));
+      color: #fff; font-size: 11px; font-weight: 800; letter-spacing: 0.06em;
+      text-transform: uppercase; padding: 5px 14px; border-radius: 100px; margin-bottom: 22px;
+    }
+    .price-name { font-size: 20px; font-weight: 800; color: var(--dark); margin-bottom: 6px; }
+    .price-free-tag { font-size: 14px; color: var(--soft); font-weight: 500; margin-bottom: 24px; }
+    .price-main { display: flex; align-items: baseline; gap: 6px; margin-bottom: 0; }
+    .price-amount { font-size: 54px; font-weight: 900; color: var(--dark); line-height: 1; letter-spacing: -2px; }
+    .price-period { font-size: 15px; color: var(--soft); font-weight: 600; }
+    .price-note { font-size: 13px; color: var(--teal); font-weight: 700; margin-top: 8px; margin-bottom: 28px; }
+    .price-divider { height: 1px; background: var(--border); margin: 24px 0; }
+    .price-features { list-style: none; display: flex; flex-direction: column; gap: 13px; margin-bottom: 32px; }
+    .price-features li { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; color: var(--mid); font-weight: 500; line-height: 1.5; }
+    .price-check { color: var(--teal); font-weight: 800; font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+    .price-cta {
+      display: block; width: 100%; text-align: center; padding: 17px;
+      border-radius: 14px; font-size: 16px; font-weight: 700; font-family: inherit; transition: all 0.2s; cursor: pointer;
+    }
+    .price-cta-free { background: transparent; border: 1.5px solid var(--border); color: var(--mid); }
+    .price-cta-free:hover { border-color: var(--dark); color: var(--dark); }
+    .price-cta-pro { background: var(--teal); color: #fff; border: none; }
+    .price-cta-pro:hover { background: var(--teal-d); transform: translateY(-2px); box-shadow: 0 10px 28px rgba(13,148,136,0.3); }
+    .price-small { font-size: 12px; color: var(--muted); text-align: center; margin-top: 16px; line-height: 1.6; }
+
+    /* ── STORIES ───────────────────────────────────────────────── */
+    .stories { background: var(--bg); }
+    .stories-header { text-align: center; margin-bottom: 16px; }
+    .stories-counter { text-align: center; margin-bottom: 60px; }
+    .stories-num {
+      font-size: clamp(48px, 7vw, 80px); font-weight: 900; line-height: 1;
+      background: linear-gradient(135deg, var(--teal) 0%, var(--indigo) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .stories-num-lbl { font-size: 16px; color: var(--soft); font-weight: 500; margin-top: 8px; }
+    .testimonials { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .testimonial-card {
+      background: #fff; border: 1px solid var(--border); border-radius: 22px; padding: 30px;
+      transition: all 0.25s; position: relative;
+    }
+    .testimonial-card:hover { transform: translateY(-4px); box-shadow: 0 16px 48px rgba(0,0,0,0.08); }
+    .testimonial-card::after {
+      content: '\201C'; position: absolute; top: 20px; right: 24px;
+      font-size: 72px; color: var(--border); font-family: Georgia, serif; line-height: 1; pointer-events: none;
+    }
+    .testimonial-stars { font-size: 14px; margin-bottom: 14px; letter-spacing: 2px; }
+    .testimonial-text { font-size: 15px; color: var(--mid); line-height: 1.75; margin-bottom: 22px; }
+    .testimonial-author { display: flex; align-items: center; gap: 12px; }
+    .testimonial-avatar {
+      width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center;
+      justify-content: center; font-size: 15px; font-weight: 700; color: #fff; flex-shrink: 0;
+    }
+    .testimonial-name { font-size: 13px; font-weight: 800; color: var(--dark); }
+    .testimonial-loc { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+    /* ── INSTRUCTORS ───────────────────────────────────────────── */
+    .instructors { background: #fff; }
+    .instructors .container { display: flex; align-items: center; gap: 80px; }
+    .instructors-content { flex: 1; }
+    .instructors-list { list-style: none; margin: 24px 0 36px; display: flex; flex-direction: column; gap: 13px; }
+    .instructors-list li { display: flex; align-items: center; gap: 12px; font-size: 15px; color: var(--mid); font-weight: 500; }
+    .inst-icon { font-size: 20px; }
+    .instructors-actions { display: flex; flex-direction: column; gap: 14px; }
+    .instructors-link { font-size: 15px; color: var(--teal); font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: gap 0.2s; }
+    .instructors-link:hover { gap: 8px; }
+    .instructors-card {
+      flex: 0 0 400px; background: linear-gradient(145deg, #F0FDF9 0%, #EEF2FF 100%);
+      border: 1px solid var(--border); border-radius: 28px; padding: 36px 32px;
+    }
+    .instructors-card-title { font-size: 20px; font-weight: 900; color: var(--dark); margin-bottom: 6px; }
+    .instructors-card-sub { font-size: 14px; color: var(--soft); margin-bottom: 28px; }
+    .inst-stat { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-bottom: 1px solid rgba(0,0,0,0.05); }
+    .inst-stat:last-child { border-bottom: none; }
+    .inst-stat-icon {
+      width: 44px; height: 44px; background: #fff; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center; font-size: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07); flex-shrink: 0;
+    }
+    .inst-stat-text { font-size: 14px; color: var(--mid); font-weight: 600; }
+
+    /* ── INSTRUCTOR EARNINGS ──────────────────────────────────── */
+    .inst-earn-box { background: #F0FDF9; border: 1px solid #99F6E4; border-radius: 14px; padding: 18px 20px; margin: 4px 0 8px; display: flex; flex-direction: column; gap: 6px; }
+    .inst-earn-headline { font-size: 15px; color: var(--dark); line-height: 1.5; }
+    .inst-earn-sub { font-size: 14px; color: var(--soft); line-height: 1.5; }
+    .inst-calc { background: var(--bg); border-radius: 12px; padding: 16px 18px; margin-top: 8px; border: 1px solid var(--border); }
+    .inst-calc-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+    .inst-calc-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .inst-calc-input { width: 72px; padding: 8px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 16px; font-weight: 700; font-family: inherit; color: var(--dark); background: #fff; text-align: center; }
+    .inst-calc-input:focus { outline: none; border-color: var(--teal); }
+    .inst-calc-unit { font-size: 14px; color: var(--soft); font-weight: 500; }
+    .inst-calc-result { font-size: 15px; color: var(--mid); }
+    .inst-calc-result strong { color: var(--teal); font-size: 20px; }
+
+    /* ── FINAL CTA ─────────────────────────────────────────────── */
+    .final-cta {
+      background: linear-gradient(135deg, var(--teal) 0%, #0F766E 30%, var(--indigo) 100%);
+      padding: 108px 0; text-align: center; position: relative; overflow: hidden;
+    }
+    .final-cta::before {
+      content: ''; position: absolute; top: -200px; right: -100px;
+      width: 500px; height: 500px; background: rgba(255,255,255,0.05); border-radius: 50%;
+    }
+    .final-cta .container { position: relative; z-index: 1; }
+    .final-cta h2 {
+      font-size: clamp(32px, 5vw, 56px); font-weight: 900; color: #fff;
+      margin-bottom: 16px; letter-spacing: -1.5px; line-height: 1.1;
+    }
+    .final-cta p { font-size: 18px; color: rgba(255,255,255,0.82); margin-bottom: 44px; max-width: 520px; margin-left: auto; margin-right: auto; line-height: 1.7; }
+    .final-cta-url { display: block; font-size: 14px; color: rgba(255,255,255,0.55); margin-top: 24px; font-weight: 500; }
+
+    /* ── FOOTER ────────────────────────────────────────────────── */
+    footer { background: var(--dark); padding: 72px 0 44px; }
+    .footer-top { display: flex; gap: 48px; flex-wrap: wrap; margin-bottom: 56px; }
+    .footer-brand { flex: 1.5; min-width: 220px; }
+    .footer-logo { font-size: 22px; font-weight: 900; color: #fff; margin-bottom: 12px; }
+    .footer-tagline { font-size: 14px; color: #6B7280; line-height: 1.65; max-width: 260px; margin-bottom: 24px; }
+    .store-badges { display: flex; gap: 10px; flex-wrap: wrap; }
+    .store-badge {
+      background: #1F2937; border: 1px solid #374151; border-radius: 12px;
+      padding: 10px 16px; display: flex; align-items: center; gap: 10px; opacity: 0.65;
+      transition: opacity 0.2s;
+    }
+    .store-badge:hover { opacity: 0.85; }
+    .store-icon { font-size: 20px; }
+    .store-text { display: flex; flex-direction: column; }
+    .store-small { font-size: 9px; color: #9CA3AF; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
+    .store-name { font-size: 13px; color: #fff; font-weight: 700; }
+    .store-soon { font-size: 9px; color: var(--teal-l); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 1px; }
+    .footer-col { min-width: 140px; }
+    .footer-col-title { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #9CA3AF; margin-bottom: 18px; }
+    .footer-col a { display: block; font-size: 14px; color: #6B7280; margin-bottom: 11px; transition: color 0.2s; }
+    .footer-col a:hover { color: #fff; }
+    .footer-bottom {
+      border-top: 1px solid #1F2937; padding-top: 32px;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+    }
+    .footer-copy { font-size: 13px; color: #4B5563; }
+    .footer-uk { font-size: 13px; color: #4B5563; }
+
+    /* ── RESPONSIVE ────────────────────────────────────────────── */
+    @media (max-width: 960px) {
+      .hero .container { flex-direction: column; text-align: center; gap: 56px; }
+      .hero-content { max-width: 100%; }
+      .hero-sub { margin: 0 auto 36px; }
+      .hero-btns { justify-content: center; }
+      .hero-badge { margin: 0 auto 28px; }
+      .hero-social { margin: 0 auto; }
+      .hero-micro { text-align: center; }
+      .feature-grid { grid-template-columns: repeat(2, 1fr); }
+      .accessibility .container, .instructors .container { flex-direction: column; gap: 48px; }
+      .access-quote, .instructors-card { flex: none; width: 100%; max-width: 100%; }
+      .steps::before { display: none; }
+      .steps { flex-direction: column; align-items: center; gap: 36px; }
+      .step { max-width: 360px; }
+      .testimonials { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 640px) {
+      .section { padding: 72px 0; }
+      .hero { padding-top: 100px; min-height: auto; padding-bottom: 60px; }
+      .feature-grid { grid-template-columns: 1fr; }
+      .testimonials { grid-template-columns: 1fr; }
+      .pricing-grid { flex-direction: column; align-items: stretch; }
+      .price-card { max-width: 100%; }
+      .nav-center, .nav-right .nav-signin { display: none; }
+      .hamburger { display: flex; }
+      .stat-item + .stat-item { border-left: none; border-top: 1px solid rgba(255,255,255,0.15); }
+      .phone-frame { width: 236px; height: 478px; border-radius: 40px; }
+      .footer-top { flex-direction: column; gap: 36px; }
+      .footer-bottom { flex-direction: column; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <nav class="navbar" id="navbar">
+    <div class="container">
+      <a href="#" class="nav-logo">ClearPass</a>
+      <div class="nav-center">
+        <a href="#features" class="nav-link">Features</a>
+        <a href="#pricing" class="nav-link">Pricing</a>
+        <a href="#stories" class="nav-link">Stories</a>
+        <a href="#instructors" class="nav-link">Instructors</a>
+      </div>
+      <div class="nav-right">
+        <a href="https://clearpass-app.vercel.app" class="nav-signin">Sign In</a>
+        <a href="https://clearpass-app.vercel.app" class="nav-cta">Start Free</a>
+      </div>
+      <button class="hamburger" onclick="toggleMenu()" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- MOBILE MENU -->
+  <div class="mobile-menu" id="mobile-menu">
+    <a href="#features" onclick="closeMenu()">Features</a>
+    <a href="#pricing" onclick="closeMenu()">Pricing</a>
+    <a href="#stories" onclick="closeMenu()">Stories</a>
+    <a href="#instructors" onclick="closeMenu()">Instructors</a>
+    <a href="https://clearpass-app.vercel.app" onclick="closeMenu()">Sign In</a>
+    <a href="https://clearpass-app.vercel.app" class="mobile-cta">Start Free Today &#8594;</a>
+  </div>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-content fade-up">
+        <div class="hero-badge">
+          <span class="hero-badge-pill">New</span>
+          AI Study Plans now live
+        </div>
+        <h1>Pass Your Theory Test<br><span class="gradient-text">First Time</span></h1>
+        <p class="hero-sub">The UK&#8217;s smartest revision app. AI tutor, personalised study plan, and the only app built for dyslexic learners.</p>
+        <div class="hero-btns">
+          <a href="https://clearpass-app.vercel.app" class="btn btn-primary" style="border-radius:12px;padding:15px 28px;font-size:15px;">Start Free &#8594;</a>
+          <a href="#how" class="btn btn-outline" style="border-radius:12px;padding:15px 28px;font-size:15px;">See How It Works</a>
+        </div>
+        <p class="hero-micro">No credit card needed &middot; Free to start &middot; Cancel anytime</p>
+        <div class="hero-social">
+          <span class="hero-stars">&#11088;&#11088;&#11088;&#11088;&#11088;</span>
+          <span class="hero-social-text">Trusted by learner drivers across the UK</span>
+        </div>
+      </div>
+      <div class="hero-visual fade-up delay-2">
+        <div class="phone-wrap">
+          <div class="phone-glow"></div>
+          <div class="phone-frame">
+            <div class="phone-notch"></div>
+            <div class="phone-screen">
+              <div class="app-topbar">
+                <span class="app-logo-txt">ClearPass</span>
+                <div class="app-streak">&#128293; 7 day streak</div>
+              </div>
+              <div class="app-body">
+                <div class="app-card">
+                  <div class="app-card-label">Pass Probability</div>
+                  <div class="app-bar-bg"><div class="app-bar-fill"></div></div>
+                  <div class="app-bar-lbl">68% &#8594; Keep going, you&#39;re close!</div>
+                </div>
+                <div class="app-card">
+                  <div class="app-card-label">Question 12 of 50</div>
+                  <div class="app-q-text">What is the national speed limit on a single carriageway road?</div>
+                  <div class="app-option correct">&#10003; 60 mph</div>
+                  <div class="app-option">70 mph</div>
+                  <div class="app-option wrong">&#10007; 50 mph</div>
+                </div>
+                <div class="app-ai-row">
+                  <div class="app-ai-dot">AI</div>
+                  <div class="app-ai-lines">
+                    <div class="app-ai-line"></div>
+                    <div class="app-ai-line app-ai-line-s"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATS BAR -->
+  <div class="stats-bar">
+    <div class="container">
+      <div class="stat-item">
+        <div class="stat-val" id="stat-passes">Join thousands of learners</div>
+        <div class="stat-lbl">who have passed with ClearPass</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val">54% of learners fail first time</div>
+        <div class="stat-lbl">Don&#8217;t be one of them</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val">2.8 million</div>
+        <div class="stat-lbl">theory tests taken in the UK every year</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FEATURES -->
+  <section class="section features" id="features">
+    <div class="container">
+      <div class="features-header">
+        <div><span class="section-label">Features</span></div>
+        <h2 class="section-title fade-up">Everything you need to pass first time</h2>
+        <p class="section-sub fade-up delay-1">Every tool you need, powered by AI, designed around the real DVSA test format.</p>
+      </div>
+      <div class="feature-grid">
+        <div class="feature-card fade-up">
+          <span class="feature-icon">&#129302;</span>
+          <h3 class="feature-title">AI Tutor</h3>
+          <p class="feature-desc">Ask anything. Get clear explanations. The only theory test app with real conversational AI that explains every answer.</p>
+        </div>
+        <div class="feature-card fade-up delay-1">
+          <span class="feature-icon">&#128506;</span>
+          <h3 class="feature-title">Road to Test Ready</h3>
+          <p class="feature-desc">Watch your progress on an animated journey from learner to test ready. See exactly where you stand every day.</p>
+        </div>
+        <div class="feature-card fade-up delay-2">
+          <span class="feature-icon">&#128202;</span>
+          <h3 class="feature-title">Pass Probability</h3>
+          <p class="feature-desc">Live prediction of your pass chance, updated after every session. Know when you&#8217;re truly ready to book.</p>
+        </div>
+        <div class="feature-card fade-up delay-3">
+          <span class="feature-icon">&#128197;</span>
+          <h3 class="feature-title">Smart Study Plan</h3>
+          <p class="feature-desc">AI generates a personalised day-by-day revision plan based on your test date and current weak areas.</p>
+        </div>
+        <div class="feature-card fade-up delay-4">
+          <span class="feature-icon">&#128221;</span>
+          <h3 class="feature-title">Full Mock Tests</h3>
+          <p class="feature-desc">50 questions, 57 minutes, full DVSA format. Know you&#8217;re ready before test day &#8212; not after.</p>
+        </div>
+        <div class="feature-card fade-up delay-5">
+          <span class="feature-icon">&#9888;</span>
+          <h3 class="feature-title">Hazard Perception</h3>
+          <p class="feature-desc">Real official DVSA hazard perception clips, scored just like the actual test. Practice until the hazards become second nature.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACCESSIBILITY -->
+  <section class="section accessibility">
+    <div class="container">
+      <div class="access-content fade-up">
+        <div class="access-badge">&#9855; Accessibility First</div>
+        <span class="section-label">Built for every learner</span>
+        <h2 class="section-title">1 in 10 people have dyslexia.<br>We take that seriously.</h2>
+        <p class="section-sub">We&#8217;re the only theory test app designed from the ground up with dyslexic learners in mind. Every feature has been built with accessibility at its core.</p>
+        <ul class="access-list">
+          <li><div class="access-tick">&#10003;</div> OpenDyslexic font toggle</li>
+          <li><div class="access-tick">&#10003;</div> Text-to-speech reads every question aloud</li>
+          <li><div class="access-tick">&#10003;</div> Cream background reduces visual stress</li>
+          <li><div class="access-tick">&#10003;</div> High contrast mode</li>
+          <li><div class="access-tick">&#10003;</div> Increased word and letter spacing</li>
+        </ul>
+        <a href="https://clearpass-app.vercel.app" class="btn btn-primary">Try accessibility features &#8594;</a>
+      </div>
+      <div class="access-quote fade-up delay-2">
+        <p class="access-quote-text">&#8220;Finally an app I can actually use. The dyslexia mode is a game changer. I&#8217;ve tried every theory test app out there and nothing comes close to this.&#8221;</p>
+        <span class="access-quote-author">&#8212; Beta tester, October 2024</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="section how" id="how">
+    <div class="container">
+      <div class="how-header">
+        <div><span class="section-label">Get started</span></div>
+        <h2 class="section-title fade-up">Get test ready in 3 steps</h2>
+        <p class="section-sub fade-up delay-1">From signup to pass day &#8212; ClearPass handles everything in between.</p>
+      </div>
+      <div class="steps">
+        <div class="step fade-up">
+          <div class="step-num">1</div>
+          <h3 class="step-title">Create your free account and set your test date</h3>
+          <p class="step-desc">Sign up in under 30 seconds. Tell us when your test is. We&#8217;ll build your personalised plan instantly.</p>
+        </div>
+        <div class="step fade-up delay-1">
+          <div class="step-num">2</div>
+          <h3 class="step-title">Follow your AI-generated study plan</h3>
+          <p class="step-desc">Your plan adapts as you learn, always focusing your time where it will have the biggest impact.</p>
+        </div>
+        <div class="step fade-up delay-2">
+          <div class="step-num">3</div>
+          <h3 class="step-title">Pass first time</h3>
+          <p class="step-desc">When your pass probability hits 85%+ you&#8217;re ready. Book your test with confidence.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section class="section pricing" id="pricing">
+    <div class="container">
+      <div class="pricing-header">
+        <div><span class="section-label">Pricing</span></div>
+        <h2 class="section-title fade-up">Simple, honest pricing</h2>
+        <p class="section-sub fade-up delay-1">No subscriptions. No tricks. Start free, upgrade when you&#8217;re ready.</p>
+      </div>
+      <div class="pricing-grid">
+        <div class="price-card fade-up">
+          <h3 class="price-name">Free</h3>
+          <p class="price-free-tag">Free forever</p>
+          <div class="price-main">
+            <span class="price-amount">&#163;0</span>
+          </div>
+          <div class="price-divider"></div>
+          <ul class="price-features">
+            <li><span class="price-check">&#10003;</span> 10 questions per day</li>
+            <li><span class="price-check">&#10003;</span> Highway Code reference</li>
+            <li><span class="price-check">&#10003;</span> Road signs guide</li>
+            <li><span class="price-check">&#10003;</span> 2 AI tutor questions per day</li>
+          </ul>
+          <a href="https://clearpass-app.vercel.app" class="price-cta price-cta-free">Get started free</a>
+        </div>
+        <div class="price-card price-card-pro fade-up delay-1">
+          <div class="price-badge">Most Popular</div>
+          <h3 class="price-name">Premium</h3>
+          <div class="price-main">
+            <span class="price-amount">&#163;7.99</span>
+            <span class="price-period">/ 3 months</span>
+          </div>
+          <p class="price-note">Less than &#163;2.67/month</p>
+          <div class="price-divider"></div>
+          <ul class="price-features">
+            <li><span class="price-check">&#10003;</span> Everything in Free</li>
+            <li><span class="price-check">&#10003;</span> Unlimited practice questions</li>
+            <li><span class="price-check">&#10003;</span> Full mock tests (50 questions, timed)</li>
+            <li><span class="price-check">&#10003;</span> Hazard perception videos</li>
+            <li><span class="price-check">&#10003;</span> Unlimited AI tutor</li>
+            <li><span class="price-check">&#10003;</span> Personalised AI study plan</li>
+            <li><span class="price-check">&#10003;</span> Offline mode</li>
+          </ul>
+          <a href="https://clearpass-app.vercel.app/paywall" class="price-cta price-cta-pro">Start Learning Now</a>
+          <p class="price-small">The theory test costs &#163;23. Failing costs another &#163;23. At &#163;7.99, ClearPass pays for itself.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PASS STORIES -->
+  <section class="section stories" id="stories">
+    <div class="container">
+      <div class="stories-header">
+        <span class="section-label">Pass stories</span>
+        <h2 class="section-title fade-up">Real learners. Real passes.</h2>
+      </div>
+      <div class="stories-counter fade-up delay-1">
+        <div class="stories-num" id="stories-count">&#8212;</div>
+        <div class="stories-num-lbl" id="stories-count-lbl">learners have passed using ClearPass</div>
+      </div>
+      <div class="testimonials">
+        <div class="testimonial-card fade-up">
+          <div class="testimonial-stars">&#11088;&#11088;&#11088;&#11088;&#11088;</div>
+          <p class="testimonial-text">&#8220;I failed twice before finding ClearPass. Passed with 47/50 on my third attempt. The AI tutor made everything click.&#8221;</p>
+          <div class="testimonial-author">
+            <div class="testimonial-avatar" style="background:linear-gradient(135deg,#F472B6,#818CF8);">S</div>
+            <div>
+              <div class="testimonial-name">Sarah</div>
+              <div class="testimonial-loc">Manchester</div>
+            </div>
+          </div>
+        </div>
+        <div class="testimonial-card fade-up delay-1">
+          <div class="testimonial-stars">&#11088;&#11088;&#11088;&#11088;&#11088;</div>
+          <p class="testimonial-text">&#8220;The AI tutor explained everything I got wrong in plain English. No more staring at a textbook. Worth every penny.&#8221;</p>
+          <div class="testimonial-author">
+            <div class="testimonial-avatar" style="background:linear-gradient(135deg,#34D399,#0D9488);">J</div>
+            <div>
+              <div class="testimonial-name">James</div>
+              <div class="testimonial-loc">London</div>
+            </div>
+          </div>
+        </div>
+        <div class="testimonial-card fade-up delay-2">
+          <div class="testimonial-stars">&#11088;&#11088;&#11088;&#11088;&#11088;</div>
+          <p class="testimonial-text">&#8220;I have dyslexia and this is the first revision app I&#8217;ve actually been able to use. The font toggle and read-aloud are amazing.&#8221;</p>
+          <div class="testimonial-author">
+            <div class="testimonial-avatar" style="background:linear-gradient(135deg,#FBBF24,#F97316);">P</div>
+            <div>
+              <div class="testimonial-name">Priya</div>
+              <div class="testimonial-loc">Birmingham</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOR INSTRUCTORS -->
+  <section class="section instructors" id="instructors">
+    <div class="container">
+      <div class="instructors-content fade-up">
+        <span class="section-label">For driving instructors</span>
+        <h2 class="section-title">Monitor your pupils&#8217;<br>progress in real time</h2>
+        <p class="section-sub">Help your pupils arrive at lessons more prepared. The ClearPass Instructor Dashboard gives you everything you need to coach smarter.</p>
+        <ul class="instructors-list">
+          <li><span class="inst-icon">&#128202;</span> Pass probability per pupil</li>
+          <li><span class="inst-icon">&#127919;</span> Weak topic detection</li>
+          <li><span class="inst-icon">&#128221;</span> Mock test history and scores</li>
+          <li><span class="inst-icon">&#128293;</span> Daily streak tracking</li>
+        </ul>
+        <div class="inst-earn-box">
+          <p class="inst-earn-headline"><strong style="color:var(--teal);">Earn &#163;2.50 for every pupil who subscribes</strong></p>
+          <p class="inst-earn-sub">Share your unique referral link with pupils</p>
+          <p class="inst-earn-sub">Instructors with 20 active pupils earn <strong>&#163;50+ per month</strong></p>
+        </div>
+        <div class="instructors-actions">
+          <a href="#instructors" class="instructors-link">Learn more about the Instructor Dashboard &#8594;</a>
+          <a href="https://clearpass-app.vercel.app" class="btn btn-primary" style="align-self:flex-start;">Get free instructor access &#8594;</a>
+        </div>
+      </div>
+      <div class="instructors-card fade-up delay-2">
+        <h3 class="instructors-card-title">Instructor Dashboard</h3>
+        <p class="instructors-card-sub">See every pupil at a glance</p>
+        <div class="inst-stat">
+          <div class="inst-stat-icon">&#128101;</div>
+          <div class="inst-stat-text">12 active pupils this week</div>
+        </div>
+        <div class="inst-stat">
+          <div class="inst-stat-icon">&#128200;</div>
+          <div class="inst-stat-text">Avg. pass probability: 72%</div>
+        </div>
+        <div class="inst-stat">
+          <div class="inst-stat-icon">&#9888;</div>
+          <div class="inst-stat-text">3 pupils need help with road signs</div>
+        </div>
+        <div class="inst-stat">
+          <div class="inst-stat-icon">&#127942;</div>
+          <div class="inst-stat-text">2 pupils ready to book their test</div>
+        </div>
+        <div class="inst-calc">
+          <p class="inst-calc-label">Earnings calculator</p>
+          <div class="inst-calc-row">
+            <input id="calc-pupils" class="inst-calc-input" type="number" min="1" max="100" value="10" oninput="updateCalc()">
+            <span class="inst-calc-unit">pupils</span>
+          </div>
+          <p class="inst-calc-result">= <strong id="calc-result">&#163;25.00</strong> / month</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section class="final-cta">
+    <div class="container fade-up">
+      <h2>Ready to pass first time?</h2>
+      <p>Join learner drivers across the UK who are revising smarter with ClearPass</p>
+      <a href="https://clearpass-app.vercel.app" class="btn btn-white">Start Free Today &#8594;</a>
+      <a href="https://clearpass-app.vercel.app" class="final-cta-url">clearpass-app.vercel.app</a>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <div class="footer-logo">ClearPass</div>
+          <p class="footer-tagline">Pass your UK theory test first time. Built for every learner driver.</p>
+          <div class="store-badges">
+            <div class="store-badge">
+              <span class="store-icon">&#63743;</span>
+              <div class="store-text">
+                <span class="store-small">Download on the</span>
+                <span class="store-name">App Store</span>
+                <span class="store-soon">Coming Soon</span>
+              </div>
+            </div>
+            <div class="store-badge">
+              <span class="store-icon">&#9654;</span>
+              <div class="store-text">
+                <span class="store-small">Get it on</span>
+                <span class="store-name">Google Play</span>
+                <span class="store-soon">Coming Soon</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Product</div>
+          <a href="#features">Features</a>
+          <a href="#pricing">Pricing</a>
+          <a href="#how">How it works</a>
+          <a href="#stories">Pass stories</a>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Company</div>
+          <a href="#">About</a>
+          <a href="#">Blog</a>
+          <a href="https://clearpass-app.vercel.app/contact">Contact</a>
+          <a href="#instructors">Instructors</a>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Legal</div>
+          <a href="https://clearpass-app.vercel.app/privacy-policy">Privacy Policy</a>
+          <a href="https://clearpass-app.vercel.app/terms">Terms of Service</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span class="footer-copy">&#169; 2026 ClearPass. Not affiliated with DVSA.</span>
+        <span class="footer-uk">Built in the UK for UK learner drivers &#127468;&#127463;</span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Hamburger menu
+    function toggleMenu() {
+      document.getElementById('mobile-menu').classList.toggle('open');
+    }
+    function closeMenu() {
+      document.getElementById('mobile-menu').classList.remove('open');
+    }
+
+    // Scroll animations via Intersection Observer
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('visible');
+          observer.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.08, rootMargin: '0px 0px -32px 0px' });
+    document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+
+    // Navbar shadow on scroll
+    window.addEventListener('scroll', () => {
+      document.getElementById('navbar').style.boxShadow =
+        window.scrollY > 10 ? '0 2px 24px rgba(0,0,0,0.07)' : 'none';
+    }, { passive: true });
+
+    // Live stats fetch
+    (async function loadStats() {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 5000);
+        const res = await fetch('https://clearpass-app-production.up.railway.app/api/stats', { signal: controller.signal });
+        clearTimeout(timer);
+        const data = await res.json();
+        if (data.totalPasses && data.totalPasses > 0) {
+          const n = Number(data.totalPasses).toLocaleString('en-GB');
+          document.getElementById('stat-passes').textContent = n + ' learners have passed';
+          document.getElementById('stories-count').textContent = n;
+        } else {
+          document.getElementById('stat-passes').textContent = 'Join thousands of learners';
+          document.getElementById('stories-count').textContent = 'Thousands';
+          document.getElementById('stories-count-lbl').textContent = 'of learners are revising with ClearPass right now';
+        }
+      } catch {
+        document.getElementById('stat-passes').textContent = 'Join thousands of learners';
+        document.getElementById('stories-count').textContent = 'Thousands';
+        document.getElementById('stories-count-lbl').textContent = 'of learners are revising with ClearPass right now';
+      }
+    })();
+
+    // Earnings calculator
+    function updateCalc() {
+      const pupils = Math.max(0, parseInt(document.getElementById('calc-pupils').value) || 0);
+      const monthly = (pupils * 2.50).toFixed(2);
+      document.getElementById('calc-result').textContent = '£' + monthly;
+    }
+
+    // Close mobile menu on outside click
+    document.addEventListener('click', (e) => {
+      const menu = document.getElementById('mobile-menu');
+      if (menu.classList.contains('open') && !menu.contains(e.target) && !e.target.closest('.hamburger')) {
+        menu.classList.remove('open');
+      }
+    });
+  </script>
+</body>
+</html>

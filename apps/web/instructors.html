@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClearPass for Instructors — Track Every Pupil, Free Pro Access</title>
+  <meta name="description" content="See every pupil's pass probability and weak topics in one dashboard. Get free ClearPass Pro access and earn from every pupil you refer.">
+  <meta property="og:title" content="ClearPass for Instructors">
+  <meta property="og:description" content="See every pupil's progress in one dashboard. Free Pro access for instructors, plus referral earnings.">
+  <meta property="og:image" content="https://getclearpass.co.uk/og-image.png">
+  <meta property="og:url" content="https://getclearpass.co.uk/instructors">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <nav class="navbar" id="navbar">
+    <div class="container">
+      <a href="/" class="nav-logo"><img src="assets/pip/pip-neutral.png" alt="">ClearPass</a>
+      <div class="nav-center">
+        <a href="/#features" class="nav-link">Features</a>
+        <a href="/#pricing" class="nav-link">Pricing</a>
+        <a href="/#stories" class="nav-link">Stories</a>
+        <a href="/instructors" class="nav-link active">Instructors</a>
+      </div>
+      <div class="nav-right">
+        <a href="https://clearpass-app.vercel.app" class="nav-signin">Sign In</a>
+        <a href="https://clearpass-app.vercel.app" class="nav-cta">Start Free</a>
+      </div>
+      <button class="hamburger" onclick="toggleMenu()" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- MOBILE MENU -->
+  <div class="mobile-menu" id="mobile-menu">
+    <a href="/#features" onclick="closeMenu()">Features</a>
+    <a href="/#pricing" onclick="closeMenu()">Pricing</a>
+    <a href="/#stories" onclick="closeMenu()">Stories</a>
+    <a href="/instructors" onclick="closeMenu()">Instructors</a>
+    <a href="https://clearpass-app.vercel.app" onclick="closeMenu()">Sign In</a>
+    <a href="https://clearpass-app.vercel.app" class="mobile-cta">Start Free Today &#8594;</a>
+  </div>
+
+  <!-- HERO -->
+  <section class="inst-hero">
+    <div class="container">
+      <div class="inst-hero-content fade-up">
+        <span class="section-label">For driving instructors</span>
+        <h1>See every pupil&#8217;s progress. Help them pass first time.</h1>
+        <p class="inst-hero-sub">ClearPass gives you a live dashboard for every pupil using the app &#8212; their pass probability, weak topics, and streaks &#8212; so you know exactly what to cover in your next lesson.</p>
+        <div class="hero-btns">
+          <a href="https://clearpass-app.vercel.app" class="btn btn-primary">Get Free Instructor Access &#8594;</a>
+          <a href="#dashboard" class="btn btn-outline">See the Dashboard</a>
+        </div>
+      </div>
+      <div class="inst-hero-visual fade-up delay-2">
+        <img src="assets/pip/pip-teaching.png" alt="Pip the hedgehog, ready to help you coach">
+      </div>
+    </div>
+  </section>
+
+  <!-- DASHBOARD VALUE -->
+  <section class="section features" id="dashboard">
+    <div class="container">
+      <div class="features-header">
+        <span class="section-label">Your dashboard</span>
+        <h2 class="section-title fade-up">Know exactly where every pupil stands</h2>
+        <p class="section-sub fade-up delay-1">No more guessing who&#8217;s ready and who needs another session on road signs.</p>
+      </div>
+      <div class="inst-dash-grid">
+        <div class="inst-dash-card fade-up">
+          <div class="inst-dash-icon">&#128202;</div>
+          <h3 class="inst-dash-title">Pass probability per pupil</h3>
+          <p class="inst-dash-desc">A live, updating score for every pupil, so you know who&#8217;s genuinely test-ready.</p>
+        </div>
+        <div class="inst-dash-card fade-up delay-1">
+          <div class="inst-dash-icon">&#127919;</div>
+          <h3 class="inst-dash-title">Weak topic detection</h3>
+          <p class="inst-dash-desc">See exactly which topics each pupil is struggling with, before it costs them in the real test.</p>
+        </div>
+        <div class="inst-dash-card fade-up delay-2">
+          <div class="inst-dash-icon">&#128221;</div>
+          <h3 class="inst-dash-title">Mock test history</h3>
+          <p class="inst-dash-desc">Full scores and history for every mock test a pupil has taken, at a glance.</p>
+        </div>
+        <div class="inst-dash-card fade-up delay-3">
+          <div class="inst-dash-icon">&#128293;</div>
+          <h3 class="inst-dash-title">Streak tracking</h3>
+          <p class="inst-dash-desc">See who&#8217;s revising consistently between lessons &#8212; and who&#8217;s gone quiet.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FREE PRO ACCESS -->
+  <section class="section inst-access">
+    <div class="container">
+      <div class="features-header">
+        <span class="section-label">Free for instructors</span>
+        <h2 class="section-title fade-up">Get full ClearPass Pro access, on us</h2>
+        <p class="section-sub fade-up delay-1">You&#8217;re helping your pupils prepare &#8212; we think you should have the full toolkit too.</p>
+      </div>
+      <div class="inst-access-grid">
+        <div class="inst-access-card highlight fade-up">
+          <div class="inst-access-num">1</div>
+          <h3 class="inst-access-title">Your first 3 months are free</h3>
+          <p class="inst-access-desc">Sign up as an instructor and get <strong>unconditional</strong> full Pro access for your first quarter &#8212; no strings attached.</p>
+        </div>
+        <div class="inst-access-card fade-up delay-1">
+          <div class="inst-access-num">2</div>
+          <h3 class="inst-access-title">Keep it by supporting a couple of pupils a month</h3>
+          <p class="inst-access-desc">After that, your access stays free as long as you help just <strong>2 new pupils go Pro each month</strong> &#8212; or have <strong>10 active Pro pupils</strong> using ClearPass overall.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- EARNINGS -->
+  <section class="section inst-earn">
+    <div class="container">
+      <div class="inst-earn-content fade-up">
+        <span class="section-label">Referral earnings</span>
+        <h2 class="section-title">Earn from every pupil you bring on board</h2>
+        <p class="section-sub">Share your unique referral link with pupils. When they go Pro, you earn a share of what they pay &#8212; paid out monthly, on top of your free access.</p>
+      </div>
+      <div class="inst-earn-calc fade-up delay-1">
+        <p class="inst-earn-calc-label">Earnings calculator</p>
+        <div class="inst-earn-calc-row">
+          <input id="calc-pupils" class="inst-earn-calc-input" type="number" min="1" max="200" value="10" oninput="updateCalc()">
+          <span class="inst-earn-calc-unit">Pro pupils referred</span>
+        </div>
+        <div class="inst-earn-calc-result">
+          Estimated monthly earnings
+          <strong id="calc-result">&#8776; &#163;24.00</strong>
+        </div>
+        <p class="inst-earn-calc-note">Based on roughly 30% of pupil subscription revenue. Actual earnings depend on when pupils renew.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="section inst-faq">
+    <div class="container">
+      <div class="features-header">
+        <span class="section-label">Common questions</span>
+        <h2 class="section-title fade-up">Instructor FAQ</h2>
+      </div>
+      <div class="inst-faq-list">
+        <div class="inst-faq-item fade-up">
+          <p class="inst-faq-q">How do I get set up?</p>
+          <p class="inst-faq-a">Sign up for a free account, then request instructor access from your profile. We&#8217;ll get you set up with your dashboard and referral link.</p>
+        </div>
+        <div class="inst-faq-item fade-up delay-1">
+          <p class="inst-faq-q">Do my pupils need to be Pro for me to see their progress?</p>
+          <p class="inst-faq-a">No &#8212; you can see basic progress for any pupil connected to your dashboard, whether they&#8217;re on the free plan or Pro.</p>
+        </div>
+        <div class="inst-faq-item fade-up delay-2">
+          <p class="inst-faq-q">What happens after my first 3 months?</p>
+          <p class="inst-faq-a">Your Pro access stays free as long as you&#8217;re actively helping pupils &#8212; either 2 new Pro conversions a month, or 10 active Pro pupils overall. We&#8217;ll let you know well in advance if that&#8217;s at risk.</p>
+        </div>
+        <div class="inst-faq-item fade-up delay-3">
+          <p class="inst-faq-q">How and when do I get paid?</p>
+          <p class="inst-faq-a">Referral earnings are calculated monthly based on your pupils&#8217; active Pro subscriptions and paid out directly.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section class="final-cta">
+    <div class="container fade-up">
+      <h2>Ready to coach smarter?</h2>
+      <p>Get your dashboard, free Pro access, and start earning from every pupil you help pass.</p>
+      <a href="https://clearpass-app.vercel.app" class="btn btn-white">Get Free Instructor Access &#8594;</a>
+      <a href="https://clearpass-app.vercel.app" class="final-cta-url">clearpass-app.vercel.app</a>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <div class="footer-logo"><img src="assets/pip/pip-neutral.png" alt="">ClearPass</div>
+          <p class="footer-tagline">Pass your UK theory test first time. Built for every learner driver.</p>
+          <div class="store-badges">
+            <div class="store-badge">
+              <span class="store-icon">&#63743;</span>
+              <div class="store-text">
+                <span class="store-small">Download on the</span>
+                <span class="store-name">App Store</span>
+                <span class="store-soon">Coming Soon</span>
+              </div>
+            </div>
+            <div class="store-badge">
+              <span class="store-icon">&#9654;</span>
+              <div class="store-text">
+                <span class="store-small">Get it on</span>
+                <span class="store-name">Google Play</span>
+                <span class="store-soon">Coming Soon</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Product</div>
+          <a href="/#features">Features</a>
+          <a href="/#pricing">Pricing</a>
+          <a href="/#how">How it works</a>
+          <a href="/#stories">Pass stories</a>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Company</div>
+          <a href="/">About</a>
+          <a href="/">Blog</a>
+          <a href="https://clearpass-app.vercel.app/contact">Contact</a>
+          <a href="/instructors">Instructors</a>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Legal</div>
+          <a href="https://clearpass-app.vercel.app/privacy-policy">Privacy Policy</a>
+          <a href="https://clearpass-app.vercel.app/terms">Terms of Service</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span class="footer-copy">&#169; 2026 ClearPass. Not affiliated with DVSA.</span>
+        <span class="footer-pip" title="Pip's taking a nap"><img src="assets/pip/pip-sleepy.png" alt="Pip asleep">Built in the UK for UK learner drivers &#127468;&#127463;</span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    function toggleMenu() { document.getElementById('mobile-menu').classList.toggle('open'); }
+    function closeMenu() { document.getElementById('mobile-menu').classList.remove('open'); }
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); }
+      });
+    }, { threshold: 0.08, rootMargin: '0px 0px -32px 0px' });
+    document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+
+    window.addEventListener('scroll', () => {
+      document.getElementById('navbar').style.boxShadow =
+        window.scrollY > 10 ? '0 2px 24px rgba(0,0,0,0.07)' : 'none';
+    }, { passive: true });
+
+    function updateCalc() {
+      const pupils = Math.max(0, parseInt(document.getElementById('calc-pupils').value) || 0);
+      const monthly = (pupils * 7.99 / 3 * 0.30).toFixed(2);
+      document.getElementById('calc-result').textContent = '\u2248 \u00A3' + monthly;
+    }
+
+    document.addEventListener('click', (e) => {
+      const menu = document.getElementById('mobile-menu');
+      if (menu.classList.contains('open') && !menu.contains(e.target) && !e.target.closest('.hamburger')) {
+        menu.classList.remove('open');
+      }
+    });
+  </script>
+</body>
+</html>
