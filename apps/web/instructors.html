@@ -138,7 +138,7 @@
         </div>
         <div class="inst-earn-calc-result">
           Estimated monthly earnings
-          <strong id="calc-result">&#8776; &#163;24.00</strong>
+          <strong id="calc-result">&#8776; &#163;7.99</strong>
         </div>
         <p class="inst-earn-calc-note">Based on roughly 30% of pupil subscription revenue. Actual earnings depend on when pupils renew.</p>
       </div>
@@ -257,6 +257,7 @@
       const monthly = (pupils * 7.99 / 3 * 0.30).toFixed(2);
       document.getElementById('calc-result').textContent = '\u2248 \u00A3' + monthly;
     }
+    updateCalc(); // Ensure displayed value always matches the formula, even before user interaction
 
     document.addEventListener('click', (e) => {
       const menu = document.getElementById('mobile-menu');
