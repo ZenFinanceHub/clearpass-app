@@ -51,6 +51,7 @@ function makeDemoProgress(): UserProgress {
     testDate,
     battleModeHistory: [],
     isPro: true,
+    proExpiresAt: new Date(Date.now() + 45 * 86400000).toISOString(),
     dailyQuestionsAnswered: 0,
     hazardPerceptionHistory: [],
   };
@@ -79,7 +80,6 @@ const KEYS_TO_CLEAR = [
   '@clearpass/pending_username',
   '@clearpass/sync_pending',
   '@clearpass/wrong_counts',
-  '@clearpass/free_questions_answered',
   '@clearpass/test_result',
   '@clearpass/has_submitted_result',
 ];

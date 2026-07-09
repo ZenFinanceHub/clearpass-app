@@ -126,6 +126,7 @@ export function createFreshUserProgress(): UserProgress {
     testDate: null,
     battleModeHistory: [],
     isPro: false,
+    proExpiresAt: null,
     dailyQuestionsAnswered: 0,
     hazardPerceptionHistory: [],
     streakFreezeCount: 0,

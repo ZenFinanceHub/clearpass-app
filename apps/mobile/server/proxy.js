@@ -2,6 +2,7 @@ require('dotenv').config({ path: __dirname + '/.env' });
 
 const express = require('express');
 const cors = require('cors');
+const { computeProExpiresAt } = require('./lib/proExpiry');
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? require('stripe')(process.env.STRIPE_SECRET_KEY)
@@ -90,7 +91,11 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
         .eq('id', userId)
         .single();
 
-      const updatedProgress = { ...(existing?.progress || {}), isPro: true };
+      const updatedProgress = {
+        ...(existing?.progress || {}),
+        isPro: true,
+        proExpiresAt: computeProExpiresAt(),
+      };
 
       const { error } = await supabaseAdmin
         .from('user_progress')

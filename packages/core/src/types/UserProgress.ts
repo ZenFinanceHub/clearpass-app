@@ -17,6 +17,7 @@ export interface UserProgress {
   testDate: string | null;
   battleModeHistory: { date: string; score: number; topicsUsed: string[] }[];
   isPro: boolean;
+  proExpiresAt: string | null;
   dailyQuestionsAnswered: number;
   hazardPerceptionHistory: HazardSessionResult[];
   streakFreezeCount?: number;
