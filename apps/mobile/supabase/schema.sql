@@ -147,3 +147,38 @@ CREATE TABLE IF NOT EXISTS hazard_attempts (
 ALTER TABLE hazard_attempts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can insert own attempts" ON hazard_attempts FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can read own attempts" ON hazard_attempts FOR SELECT USING (auth.uid() = user_id);
+
+-- Instructor free-Pro conditional access system
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS instructor_since TIMESTAMPTZ;
+
+CREATE TABLE IF NOT EXISTS instructor_pro_quarters (
+  id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  instructor_id             UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  quarter_number            INT NOT NULL,
+  quarter_start             DATE NOT NULL,
+  quarter_end               DATE NOT NULL,
+  month1_conversions        INT NOT NULL DEFAULT 0,
+  month2_conversions        INT NOT NULL DEFAULT 0,
+  month3_conversions        INT NOT NULL DEFAULT 0,
+  active_referred_pro_count INT NOT NULL DEFAULT 0,
+  qualifies                 BOOLEAN,
+  qualify_reason            TEXT CHECK (qualify_reason IN ('first_quarter','monthly_pace','ten_plus_standing','failed')),
+  free_pro_active           BOOLEAN NOT NULL DEFAULT true,
+  month1_update_sent_at     TIMESTAMPTZ,
+  month2_update_sent_at     TIMESTAMPTZ,
+  month3_update_sent_at     TIMESTAMPTZ,
+  month1_warning_sent_at    TIMESTAMPTZ,
+  month2_warning_sent_at    TIMESTAMPTZ,
+  month3_warning_sent_at    TIMESTAMPTZ,
+  created_at                TIMESTAMPTZ DEFAULT NOW(),
+  updated_at                TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (instructor_id, quarter_number)
+);
+
+ALTER TABLE instructor_pro_quarters ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Instructors can view own quarter status" ON instructor_pro_quarters;
+CREATE POLICY "Instructors can view own quarter status" ON instructor_pro_quarters
+  FOR SELECT USING (auth.uid() = instructor_id);
+-- No insert/update/delete policy: writes only via service role
+-- (cron + /api/instructor/activate), matching instructor_earnings' pattern.

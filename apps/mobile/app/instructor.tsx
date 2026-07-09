@@ -1168,6 +1168,17 @@ export default function InstructorScreen() {
       }
       setInstructorCode(code);
 
+      // Idempotent and self-healing — safe to call every load. Server verifies the
+      // session token matches userId before granting anything.
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!session?.access_token) return;
+        fetch(`${PROXY_URL}/api/instructor/activate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id, userToken: session.access_token }),
+        }).catch(() => {});
+      }).catch(() => {});
+
       const uname = (profile as { username?: string } | null)?.username ?? '';
       setInstructorUsername(uname);
 
