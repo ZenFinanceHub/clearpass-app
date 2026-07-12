@@ -7,6 +7,7 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { setOnboardingComplete, savePendingTestDate } from '@/src/storage';
 import { Colors } from '@/src/constants/theme';
 import { Pip, PipMood } from '@/src/components/Pip';
@@ -70,6 +71,7 @@ export default function OnboardingScreen() {
   const [dateError, setDateError]     = useState('');
   const isLast = activeIndex === SLIDES.length - 1;
   const slide  = SLIDES[activeIndex];
+  const insets = useSafeAreaInsets();
 
   function handleNext() {
     if (isLast) {
@@ -118,7 +120,7 @@ export default function OnboardingScreen() {
       </View>
 
       {/* Footer */}
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: 48 + insets.bottom }]}>
         <TouchableOpacity style={styles.nextBtn} onPress={handleNext} activeOpacity={0.85}>
           <Text style={styles.nextBtnText}>
             {isLast ? (dateInput.trim() ? "Let's Go" : "Let's Go") : 'Next'}
@@ -187,7 +189,6 @@ const styles = StyleSheet.create({
 
   footer: {
     paddingHorizontal: 24,
-    paddingBottom: 48,
     gap: 12,
   },
   nextBtn: {

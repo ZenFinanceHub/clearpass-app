@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Achievement,
   MockTestResult,
@@ -113,6 +114,7 @@ type ResultData = { correct: number; timeTaken: number; byTopic: ByTopic; xpEarn
 
 export default function MockScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [phase, setPhase] = useState<Phase>('start');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -448,7 +450,7 @@ export default function MockScreen() {
       {/* Grid overview modal */}
       <Modal visible={showGrid} transparent animationType="slide" onRequestClose={() => setShowGrid(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
+          <View style={[styles.modalBox, { paddingBottom: 20 + insets.bottom }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{'Question Overview'}</Text>
               <TouchableOpacity onPress={() => setShowGrid(false)} activeOpacity={0.7}>

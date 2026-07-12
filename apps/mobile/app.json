@@ -32,7 +32,7 @@
         "backgroundColor": "#4F46E5"
       },
       "package": "co.uk.getclearpass.app",
-      "versionCode": 4,
+      "versionCode": 5,
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "intentFilters": [

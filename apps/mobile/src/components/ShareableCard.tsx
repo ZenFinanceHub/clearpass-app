@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/src/constants/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -152,6 +153,7 @@ export function ShareCardModal({
 }) {
   const cardRef = useRef<View>(null);
   const [busy, setBusy] = useState(false);
+  const insets = useSafeAreaInsets();
 
   async function capture(): Promise<string | null> {
     if (Platform.OS === 'web') return null;
@@ -217,7 +219,7 @@ export function ShareCardModal({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={ms.overlay}>
-        <View style={ms.sheet}>
+        <View style={[ms.sheet, { paddingBottom: 40 + insets.bottom }]}>
           <View style={ms.handle} />
           <Text style={ms.sheetTitle}>{'Your Result Card'}</Text>
 
@@ -369,7 +371,6 @@ const ms = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    paddingBottom: 40,
     alignItems: 'center',
     gap: 16,
     minHeight: 500,

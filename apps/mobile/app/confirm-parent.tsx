@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/src/constants/theme';
 
 const PROXY_URL = 'https://clearpass-app-production.up.railway.app';
@@ -9,6 +10,7 @@ export default function ConfirmParentScreen() {
   const { token } = useLocalSearchParams<{ token?: string }>();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (!token) {
@@ -66,7 +68,7 @@ export default function ConfirmParentScreen() {
         </>
       )}
 
-      <Text style={styles.footer}>{'ClearPass -- UK Theory Test Preparation'}</Text>
+      <Text style={[styles.footer, { bottom: 32 + insets.bottom }]}>{'ClearPass -- UK Theory Test Preparation'}</Text>
     </View>
   );
 }
@@ -105,5 +107,5 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   ctaText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
-  footer: { position: 'absolute', bottom: 32, fontSize: 12, color: '#6B7280' },
+  footer: { position: 'absolute', fontSize: 12, color: '#6B7280' },
 });

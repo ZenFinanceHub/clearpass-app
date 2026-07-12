@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pip } from '@/src/components/Pip';
 import { supabase } from '@/src/supabase';
 
@@ -15,6 +16,7 @@ const FEATURES = [
 
 export default function OnboardingScreen() {
   const [checking, setChecking] = useState(true);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     let resolved = false;
@@ -90,7 +92,7 @@ export default function OnboardingScreen() {
         </View>
       </View>
 
-      <View style={styles.actions}>
+      <View style={[styles.actions, { paddingBottom: 48 + insets.bottom }]}>
         <TouchableOpacity
           style={styles.primaryButton}
           onPress={() => void handleGetStarted()}
@@ -176,7 +178,6 @@ const styles = StyleSheet.create({
   actions: {
     gap: 16,
     alignItems: 'stretch',
-    paddingBottom: 48,
   },
   primaryButton: {
     backgroundColor: '#7B5EA7',

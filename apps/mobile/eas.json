@@ -9,6 +9,10 @@
     },
     "preview": {
       "distribution": "internal",
+      "channel": "preview",
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      },
       "android": {
         "buildType": "apk"
       },

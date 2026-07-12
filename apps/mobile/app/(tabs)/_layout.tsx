@@ -38,10 +38,12 @@ export default function TabLayout() {
         tabBarActiveTintColor: Colors.indigo,
         tabBarInactiveTintColor: Colors.mutedText,
         tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
+        // No explicit height/paddingBottom here — @react-navigation/bottom-tabs
+        // only auto-adds the bottom safe-area inset (for Android gesture/3-button
+        // nav) when both are left unset. Setting either overrides its own inset
+        // calculation and the bar renders under the system nav bar on Android.
         tabBarStyle: {
-          height: 60,
           paddingTop: 6,
-          paddingBottom: 8,
           borderTopWidth: 0.5,
           borderTopColor: Colors.border,
           backgroundColor: Colors.cardWhite,

@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TopicCategory, awardXp } from '@clearpass/core';
 import { getProxyUrl } from '@/src/proxyUrl';
 import type { Question } from '@clearpass/core';
@@ -635,6 +636,7 @@ function LobbyView({
   onViewResults: (c: ChallengeRecord) => void;
 }) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [showStartModal, setShowStartModal] = useState(false);
   const [showCodeModal,  setShowCodeModal]  = useState(false);
@@ -845,7 +847,7 @@ function LobbyView({
       {/* Start Challenge Modal */}
       <Modal visible={showStartModal} transparent animationType="slide" onRequestClose={() => setShowStartModal(false)}>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: theme.cardColor }]}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.cardColor, paddingBottom: 24 + insets.bottom }]}>
             <View style={styles.dragHandle} />
             <Text style={[styles.modalTitle, { color: theme.textColor }]}>
               {startStep === 1 ? 'Choose a Topic' : 'Invite a Friend'}
@@ -939,7 +941,7 @@ function LobbyView({
       {/* Enter Code Modal */}
       <Modal visible={showCodeModal} transparent animationType="slide" onRequestClose={() => setShowCodeModal(false)}>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: theme.cardColor }]}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.cardColor, paddingBottom: 24 + insets.bottom }]}>
             <View style={styles.dragHandle} />
             <Text style={[styles.modalTitle, { color: theme.textColor }]}>{'Enter Challenge Code'}</Text>
             <Text style={[styles.modalSub, { color: theme.subTextColor }]}>

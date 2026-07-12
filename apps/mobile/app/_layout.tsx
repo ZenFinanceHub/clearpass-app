@@ -10,6 +10,7 @@ import { useFonts } from 'expo-font';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import NetInfo from '@react-native-community/netinfo';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AccessibilityProvider } from '@/src/AccessibilityContext';
 import { NetworkProvider } from '@/src/NetworkContext';
 import { handleIncomingUrl } from '@/src/deepLinks';
@@ -59,6 +60,7 @@ function RootLayout() {
   const navigated = useRef(false);
   const [showCachingToast, setShowCachingToast] = useState(false);
   const segments = useSegments();
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (navigated.current) return;
@@ -119,6 +121,8 @@ function RootLayout() {
         router.push({ pathname: '/confirm-parent', params: { token: link.token } } as any);
       } else if (link.type === 'referral') {
         router.push({ pathname: '/auth/signup', params: { ref: link.code } } as any);
+      } else if (link.type === 'referralCapture') {
+        void AsyncStorage.setItem('referral_code', link.code);
       }
     }
 
@@ -193,7 +197,7 @@ function RootLayout() {
           {/* Pip FAB — opens Ask Pip; hidden when already on tutor tab */}
           {!(segments as string[]).includes('tutor') && (
             <TouchableOpacity
-              style={toastStyles.pipFab}
+              style={[toastStyles.pipFab, { bottom: 96 + insets.bottom }]}
               onPress={() => router.push('/tutor' as any)}
               accessibilityLabel="Ask Pip"
               accessibilityRole="button"
@@ -202,7 +206,7 @@ function RootLayout() {
             </TouchableOpacity>
           )}
           {showCachingToast && (
-            <View style={toastStyles.toast} pointerEvents="none">
+            <View style={[toastStyles.toast, { bottom: 96 + insets.bottom }]} pointerEvents="none">
               <Text style={toastStyles.text}>{'Downloading content for offline use...'}</Text>
             </View>
           )}
@@ -216,7 +220,6 @@ function RootLayout() {
 const toastStyles = StyleSheet.create({
   toast: {
     position: 'absolute',
-    bottom: 96,
     left: 20,
     right: 20,
     backgroundColor: '#111827',
@@ -233,7 +236,6 @@ const toastStyles = StyleSheet.create({
   text: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
   pipFab: {
     position: 'absolute',
-    bottom: 96,
     right: 20,
     width: 52,
     height: 52,
@@ -251,4 +253,12 @@ const toastStyles = StyleSheet.create({
   pipFabIcon: { fontSize: 24 },
 });
 
-export default Sentry.wrap(RootLayout);
+function RootLayoutWithSafeArea() {
+  return (
+    <SafeAreaProvider>
+      <RootLayout />
+    </SafeAreaProvider>
+  );
+}
+
+export default Sentry.wrap(RootLayoutWithSafeArea);
