@@ -228,7 +228,7 @@ export default function MockScreen() {
     const timeTaken = activeLimitRef.current - Math.max(0, timeRemainingRef.current);
     const { correct, byTopic } = scoreTest(qs, ans);
     for (let i = 0; i < qs.length; i++) {
-      void recordWeakSpotResult(qs[i].id, ans[i] === qs[i].correctIndex);
+      await recordWeakSpotResult(qs[i].id, ans[i] === qs[i].correctIndex);
     }
     const passed = correct >= activePassMarkRef.current;
 
