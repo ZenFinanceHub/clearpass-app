@@ -695,6 +695,7 @@ export default function HomeScreen() {
           <Text style={styles.roadmapTitle}>{'YOUR PROGRESS'}</Text>
           <RoadmapPath
             progress={progress}
+            passProbability={prob}
             pipMood={pipMood}
             width={(dims?.width ?? 375) - 32}
             height={280}

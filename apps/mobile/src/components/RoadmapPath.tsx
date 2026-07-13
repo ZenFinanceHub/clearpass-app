@@ -33,6 +33,8 @@ const ROAD_PATH =
   `C ${52 + LABEL_MARGIN} 72 ${100 + LABEL_MARGIN} 52 ${100 + LABEL_MARGIN} 28`;
 
 // ─── Milestone progress from UserProgress ────────────────────────────────────
+// Drives the node badges (complete/current/upcoming) and the road highlight —
+// NOT Pip's position, which tracks pass probability instead (see below).
 
 function computeProgress(p: UserProgress | null): number {
   if (!p || p.totalQuestionsAnswered < 1) return 0;
@@ -47,16 +49,51 @@ function computeProgress(p: UserProgress | null): number {
   return 4;
 }
 
+// ─── Pip's position from pass probability ────────────────────────────────────
+// Pip walks continuously along the same cubic-bezier segments used for
+// ROAD_PATH, so 0% sits exactly at the Start node and 100% at Test Ready.
+
+function cubicBezierPoint(
+  p0: { x: number; y: number },
+  c1: { x: number; y: number },
+  c2: { x: number; y: number },
+  p1: { x: number; y: number },
+  t: number,
+): { x: number; y: number } {
+  const mt = 1 - t;
+  return {
+    x: mt * mt * mt * p0.x + 3 * mt * mt * t * c1.x + 3 * mt * t * t * c2.x + t * t * t * p1.x,
+    y: mt * mt * mt * p0.y + 3 * mt * mt * t * c1.y + 3 * mt * t * t * c2.y + t * t * t * p1.y,
+  };
+}
+
+const ROAD_CURVES = [
+  { p0: NODES[0], c1: { x: 100 + LABEL_MARGIN, y: 252 }, c2: { x: 52 + LABEL_MARGIN, y: 238 }, p1: NODES[1] },
+  { p0: NODES[1], c1: { x:  52 + LABEL_MARGIN, y: 192 }, c2: { x: 148 + LABEL_MARGIN, y: 172 }, p1: NODES[2] },
+  { p0: NODES[2], c1: { x: 148 + LABEL_MARGIN, y: 132 }, c2: { x:  52 + LABEL_MARGIN, y: 115 }, p1: NODES[3] },
+  { p0: NODES[3], c1: { x:  52 + LABEL_MARGIN, y:  72 }, c2: { x: 100 + LABEL_MARGIN, y:  52 }, p1: NODES[4] },
+] as const;
+
+function pointAtPassProbability(pct: number): { x: number; y: number } {
+  const clamped  = Math.max(0, Math.min(100, pct));
+  const scaled   = (clamped / 100) * ROAD_CURVES.length;
+  const segIndex = Math.min(ROAD_CURVES.length - 1, Math.floor(scaled));
+  const t        = scaled - segIndex;
+  const seg      = ROAD_CURVES[segIndex]!;
+  return cubicBezierPoint(seg.p0, seg.c1, seg.c2, seg.p1, t);
+}
+
 // ─── RoadmapPath ─────────────────────────────────────────────────────────────
 
 interface RoadmapPathProps {
   progress: UserProgress | null;
+  passProbability: number;
   pipMood?: PipMood;
   width: number;
   height?: number;
 }
 
-export default function RoadmapPath({ progress, pipMood = 'happy', width, height: heightProp }: RoadmapPathProps) {
+export default function RoadmapPath({ progress, passProbability, pipMood = 'happy', width, height: heightProp }: RoadmapPathProps) {
   const current    = computeProgress(progress);
   const height     = heightProp ?? Math.round(width * VBOX_H / VBOX_W);
   const scaleX     = width  / VBOX_W;
@@ -78,9 +115,9 @@ export default function RoadmapPath({ progress, pipMood = 'happy', width, height
   const glowOpacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.55] });
   const glowScale   = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1.0, 1.35] });
 
-  const currentNode = NODES[current]!;
-  const pipPixelX   = currentNode.x * scaleX;
-  const pipPixelY   = currentNode.y * scaleY;
+  const pipPoint    = pointAtPassProbability(passProbability);
+  const pipPixelX   = pipPoint.x * scaleX;
+  const pipPixelY   = pipPoint.y * scaleY;
   const pipSize     = 28;
 
   return (
