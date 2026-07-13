@@ -13,6 +13,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
+import PasswordInput from '@/src/components/PasswordInput';
 
 const PENDING_USERNAME_KEY = '@clearpass/pending_username';
 
@@ -160,13 +161,12 @@ export default function AuthScreen() {
               autoCapitalize="none"
               autoComplete="email"
             />
-            <TextInput
+            <PasswordInput
               style={styles.input}
               value={siPassword}
               onChangeText={setSiPassword}
               placeholder="Password"
               placeholderTextColor="#374151"
-              secureTextEntry
               autoComplete="password"
             />
             {error.length > 0 && <Text style={styles.errorText}>{error}</Text>}
@@ -204,22 +204,20 @@ export default function AuthScreen() {
               autoCapitalize="none"
               autoComplete="email"
             />
-            <TextInput
+            <PasswordInput
               style={styles.input}
               value={suPassword}
               onChangeText={setSuPassword}
               placeholder="Password"
               placeholderTextColor="#374151"
-              secureTextEntry
               autoComplete="new-password"
             />
-            <TextInput
+            <PasswordInput
               style={styles.input}
               value={suConfirm}
               onChangeText={setSuConfirm}
               placeholder="Confirm Password"
               placeholderTextColor="#374151"
-              secureTextEntry
               autoComplete="new-password"
             />
             {error.length > 0 && <Text style={styles.errorText}>{error}</Text>}

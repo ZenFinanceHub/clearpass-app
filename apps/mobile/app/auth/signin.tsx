@@ -15,6 +15,7 @@ import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
 import { signInWithApple, signInWithGoogle } from '@/src/socialAuth';
 import { Colors } from '@/src/constants/theme';
+import PasswordInput from '@/src/components/PasswordInput';
 
 export default function SignInScreen() {
   const [email, setEmail]                       = useState('');
@@ -114,13 +115,12 @@ export default function SignInScreen() {
             autoComplete="email"
             testID="email-input"
           />
-          <TextInput
+          <PasswordInput
             style={styles.input}
             value={password}
             onChangeText={setPassword}
             placeholder="Password"
             placeholderTextColor="#9CA3AF"
-            secureTextEntry
             autoComplete="password"
             testID="password-input"
           />

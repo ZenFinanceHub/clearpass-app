@@ -13,6 +13,7 @@ import {
 import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
 import { Colors } from '@/src/constants/theme';
+import PasswordInput from '@/src/components/PasswordInput';
 
 export default function ResetPasswordScreen() {
   const [password, setPassword]     = useState('');
@@ -74,22 +75,20 @@ export default function ResetPasswordScreen() {
         <Text style={styles.subtitle}>{'Choose a strong password for your account'}</Text>
 
         <View style={styles.form}>
-          <TextInput
+          <PasswordInput
             style={styles.input}
             value={password}
             onChangeText={(t) => { setPassword(t); setError(''); }}
             placeholder="New password"
             placeholderTextColor="#9CA3AF"
-            secureTextEntry
             autoComplete="new-password"
           />
-          <TextInput
+          <PasswordInput
             style={styles.input}
             value={confirm}
             onChangeText={(t) => { setConfirm(t); setError(''); }}
             placeholder="Confirm new password"
             placeholderTextColor="#9CA3AF"
-            secureTextEntry
             autoComplete="new-password"
           />
 

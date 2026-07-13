@@ -16,6 +16,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/src/supabase';
 import { signInWithApple, signInWithGoogle } from '@/src/socialAuth';
 import { Colors } from '@/src/constants/theme';
+import PasswordInput from '@/src/components/PasswordInput';
 
 const PENDING_USERNAME_KEY = '@clearpass/pending_username';
 const REFERRAL_CODE_KEY    = 'referral_code';
@@ -252,13 +253,12 @@ export default function SignUpScreen() {
             autoCapitalize="none"
             autoComplete="email"
           />
-          <TextInput
+          <PasswordInput
             style={styles.input}
             value={password}
             onChangeText={setPassword}
             placeholder="Password (6+ characters)"
             placeholderTextColor="#9CA3AF"
-            secureTextEntry
             autoComplete="new-password"
           />
           <TextInput
