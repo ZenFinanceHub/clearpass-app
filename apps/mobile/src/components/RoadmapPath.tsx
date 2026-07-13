@@ -7,23 +7,30 @@ import { Colors } from '@/src/constants/theme';
 
 // ─── Viewbox & geometry ──────────────────────────────────────────────────────
 
-const VBOX_W = 200;
+// Extra horizontal margin (beyond the 200-wide road layout) so side labels
+// like "HAZARD" have room to render without clipping against the SVG edge.
+const LABEL_MARGIN = 14;
+const VBOX_W = 200 + LABEL_MARGIN * 2;
 const VBOX_H = 300;
 const ROAD_W = 18;
 const NODE_R = 18;
+const CENTER_X = VBOX_W / 2;
 
 // Five milestones in viewbox coordinates (x, y) — bottom to top
 const NODES = [
-  { x: 100, y: 275, label: 'Start',            emoji: '🚗', short: 'START' },
-  { x:  52, y: 215, label: 'Road Signs',        emoji: '🚦', short: 'SIGNS' },
-  { x: 148, y: 155, label: 'Rules of the Road', emoji: '📋', short: 'RULES' },
-  { x:  52, y:  95, label: 'Hazard Aware',      emoji: '⚠️', short: 'HAZARD' },
-  { x: 100, y:  28, label: 'Test Ready',        emoji: '🏆', short: 'READY' },
+  { x: 100 + LABEL_MARGIN, y: 275, label: 'Start',            emoji: '🚗', short: 'START' },
+  { x:  52 + LABEL_MARGIN, y: 215, label: 'Road Signs',        emoji: '🚦', short: 'SIGNS' },
+  { x: 148 + LABEL_MARGIN, y: 155, label: 'Rules of the Road', emoji: '📋', short: 'RULES' },
+  { x:  52 + LABEL_MARGIN, y:  95, label: 'Hazard Aware',      emoji: '⚠️', short: 'HAZARD' },
+  { x: 100 + LABEL_MARGIN, y:  28, label: 'Test Ready',        emoji: '🏆', short: 'READY' },
 ] as const;
 
 // Smooth cubic-bezier road path connecting the 5 nodes
 const ROAD_PATH =
-  'M 100 275 C 100 252 52 238 52 215 C 52 192 148 172 148 155 C 148 132 52 115 52 95 C 52 72 100 52 100 28';
+  `M ${100 + LABEL_MARGIN} 275 C ${100 + LABEL_MARGIN} 252 ${52 + LABEL_MARGIN} 238 ${52 + LABEL_MARGIN} 215 ` +
+  `C ${52 + LABEL_MARGIN} 192 ${148 + LABEL_MARGIN} 172 ${148 + LABEL_MARGIN} 155 ` +
+  `C ${148 + LABEL_MARGIN} 132 ${52 + LABEL_MARGIN} 115 ${52 + LABEL_MARGIN} 95 ` +
+  `C ${52 + LABEL_MARGIN} 72 ${100 + LABEL_MARGIN} 52 ${100 + LABEL_MARGIN} 28`;
 
 // ─── Milestone progress from UserProgress ────────────────────────────────────
 
@@ -154,11 +161,11 @@ export default function RoadmapPath({ progress, pipMood = 'happy', width, height
               >
                 {state === 'complete' ? '✓' : node.emoji}
               </SvgText>
-              {/* Label */}
+              {/* Label — always offset to a side so it never sits on top of the icon */}
               <SvgText
-                x={node.x > 100 ? node.x + NODE_R + 4 : node.x < 100 ? node.x - NODE_R - 4 : node.x}
+                x={node.x >= CENTER_X ? node.x + NODE_R + 4 : node.x - NODE_R - 4}
                 y={node.y + 4}
-                textAnchor={node.x > 100 ? 'start' : node.x < 100 ? 'end' : 'middle'}
+                textAnchor={node.x >= CENTER_X ? 'start' : 'end'}
                 fontSize={7.5}
                 fontWeight="700"
                 fill={state === 'current' ? Colors.indigo : state === 'complete' ? Colors.indigo : Colors.mutedText}

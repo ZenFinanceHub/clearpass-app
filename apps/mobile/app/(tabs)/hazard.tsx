@@ -27,6 +27,20 @@ import { PaywallPrompt } from '@/src/components/PaywallPrompt';
 
 type Phase = 'info' | 'pre-clip' | 'player' | 'clip-result' | 'solution' | 'results';
 
+/** Fisher-Yates shuffle, then swap the first slot away from `excludeId` if it landed there. */
+function shuffleClipsAvoidingRepeat<T extends { id: string }>(clips: T[], excludeId: string | null): T[] {
+  if (clips.length <= 1) return clips;
+  const shuffled = [...clips];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  if (excludeId && shuffled[0]?.id === excludeId) {
+    [shuffled[0], shuffled[1]] = [shuffled[1], shuffled[0]];
+  }
+  return shuffled;
+}
+
 function makeVideoHtml(url: string): string {
   return `<!DOCTYPE html>
 <html>
@@ -111,6 +125,7 @@ export default function HazardScreen() {
   const webViewRef = useRef<any>(null);
   const pendingHomeRef = useRef(false);
   const lastTapAtRef = useRef<number>(0);
+  const lastExitedClipIdRef = useRef<string | null>(null);
   const theme = useTheme();
 
   const [celebQueue, setCelebQueue] = useState<CelebrationEvent[]>([]);
@@ -313,7 +328,7 @@ export default function HazardScreen() {
           return buildHazardClip(sc, url ?? '');
         }),
       );
-      setActiveClips(built);
+      setActiveClips(shuffleClipsAvoidingRepeat(built, lastExitedClipIdRef.current));
     }
     setClipIndex(0);
     setClicks([]);
@@ -322,6 +337,18 @@ export default function HazardScreen() {
     setMuted(true);
     setWarningAcked(false);
     setPhase('pre-clip');
+  }
+
+  /** Bail out of the current clip without recording a result or affecting stats/progress. */
+  function handleExitClip() {
+    lastExitedClipIdRef.current = clip?.id ?? null;
+    setSingleClipMode(false);
+    setClicks([]);
+    setCurrentTime(0);
+    setMuted(true);
+    setSolutionVideoUrl(null);
+    setWarningAcked(false);
+    setPhase('info');
   }
 
   // ── INFO ─────────────────────────────────────────────────────────────────
@@ -432,6 +459,9 @@ export default function HazardScreen() {
   if (phase === 'pre-clip') {
     return (
       <View style={[styles.bg, styles.centerFill, { backgroundColor: theme.backgroundColor }]}>
+        <TouchableOpacity style={styles.exitBtn} onPress={handleExitClip} activeOpacity={0.85}>
+          <Text style={styles.exitBtnText}>{'← Exit'}</Text>
+        </TouchableOpacity>
         <Text style={styles.clipCounter}>
           {'Clip '}
           {clipIndex + 1}
@@ -532,6 +562,11 @@ export default function HazardScreen() {
             ]}
             pointerEvents="none"
           />
+
+          {/* Exit */}
+          <TouchableOpacity style={styles.exitBtnPlayer} onPress={handleExitClip} activeOpacity={0.85}>
+            <Text style={styles.exitBtnPlayerText}>{'← Exit'}</Text>
+          </TouchableOpacity>
 
           {/* Mute toggle */}
           <TouchableOpacity style={styles.muteBtn} onPress={handleMuteToggle}>
@@ -848,6 +883,20 @@ const styles = StyleSheet.create({
   ackCheck: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
   ackText: { fontSize: 13, color: '#374151', flex: 1 },
 
+  exitBtn: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    zIndex: 5,
+    backgroundColor: Colors.cardWhite,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  exitBtnText: { fontSize: 12, fontWeight: '600', color: Colors.mutedText },
+
   reminderBox: {
     backgroundColor: '#FFFBEB',
     borderRadius: 12,
@@ -874,6 +923,17 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   muteBtnText: { fontSize: 11, fontWeight: '700', color: '#FFFFFF' },
+  exitBtnPlayer: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    zIndex: 12,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  exitBtnPlayerText: { fontSize: 11, fontWeight: '700', color: '#FFFFFF' },
   hud: {
     position: 'absolute',
     bottom: 16,
