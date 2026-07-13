@@ -1,7 +1,11 @@
 export type DeepLink =
-  | { type: 'referral';      code: string }
-  | { type: 'confirmParent'; token: string }
+  | { type: 'referral';        code: string }
+  | { type: 'referralCapture'; code: string }
+  | { type: 'confirmParent';   token: string }
   | { type: 'unknown' };
+
+// Hosts that legitimately carry a root-level ?ref= (marketing site + app web build)
+const REFERRAL_HOSTS = new Set(['clearpass.app', 'getclearpass.co.uk', 'clearpass-app.vercel.app']);
 
 export function handleIncomingUrl(url: string): DeepLink {
   try {
@@ -24,6 +28,11 @@ export function handleIncomingUrl(url: string): DeepLink {
     if (path === 'referral') {
       const code = parsed.searchParams.get('code');
       if (code) return { type: 'referral', code: code.toUpperCase() };
+    }
+
+    if ((path === '' || path === 'start') && REFERRAL_HOSTS.has(parsed.hostname)) {
+      const ref = parsed.searchParams.get('ref');
+      if (ref) return { type: 'referralCapture', code: ref.toUpperCase() };
     }
 
     return { type: 'unknown' };

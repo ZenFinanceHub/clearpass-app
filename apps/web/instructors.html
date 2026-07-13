@@ -237,6 +237,34 @@
   </footer>
 
   <script>
+    // Referral tracking: capture ?ref= from the URL and propagate it to every
+    // CTA link that sends visitors into the app, so instructor referrals attribute.
+    (function initReferralTracking() {
+      const refFromUrl = new URLSearchParams(window.location.search).get('ref');
+      if (refFromUrl) {
+        try { sessionStorage.setItem('clearpass_ref', refFromUrl); } catch (e) {}
+      }
+      let ref = refFromUrl;
+      if (!ref) {
+        try { ref = sessionStorage.getItem('clearpass_ref'); } catch (e) {}
+      }
+      if (ref) {
+        document.querySelectorAll('a[href^="https://clearpass-app.vercel.app"]').forEach((link) => {
+          const url = new URL(link.href);
+          const isBareRoot = url.pathname === '/' || url.pathname === '';
+          const isSignIn = link.textContent.trim() === 'Sign In';
+          if (isBareRoot && !isSignIn) {
+            const startUrl = new URL('https://getclearpass.co.uk/start');
+            startUrl.searchParams.set('ref', ref);
+            link.href = startUrl.toString();
+          } else {
+            url.searchParams.set('ref', ref);
+            link.href = url.toString();
+          }
+        });
+      }
+    })();
+
     function toggleMenu() { document.getElementById('mobile-menu').classList.toggle('open'); }
     function closeMenu() { document.getElementById('mobile-menu').classList.remove('open'); }
 

@@ -1,0 +1,13 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["B5Q3T2GSF8.co.uk.getclearpass.app"],
+        "components": [
+          { "/": "/start" }
+        ]
+      }
+    ]
+  }
+}
