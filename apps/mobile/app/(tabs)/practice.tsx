@@ -531,6 +531,7 @@ export default function PracticeScreen() {
     const q = speedQsRef.current[speedIdxRef.current];
     if (!q) return;
     const correct = optionIndex === q.correctIndex;
+    void recordWeakSpotResult(q.id, correct);
     void recordAnswer(q.id, correct, false);
 
     if (settings.soundEffects) {
