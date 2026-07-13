@@ -24,6 +24,7 @@ import { allQuestions, questionsByTopic } from '@clearpass/content';
 import {
   createFreshUserProgress,
   loadUserProgress,
+  recordWeakSpotResult,
   saveUserProgress,
 } from '@/src/storage';
 import { isPremium } from '@/src/subscription';
@@ -226,6 +227,9 @@ export default function MockScreen() {
     const ans = answersRef.current;
     const timeTaken = activeLimitRef.current - Math.max(0, timeRemainingRef.current);
     const { correct, byTopic } = scoreTest(qs, ans);
+    for (let i = 0; i < qs.length; i++) {
+      void recordWeakSpotResult(qs[i].id, ans[i] === qs[i].correctIndex);
+    }
     const passed = correct >= activePassMarkRef.current;
 
     const topicBreakdown = Object.values(TopicCategory).reduce((acc, cat) => {
