@@ -426,6 +426,7 @@ export default function PracticeScreen() {
 
     const isCorrect = optionIndex === q.correctIndex;
     applyDailyChallengeProgress(q, isCorrect);
+    void recordAnswer(q.id, isCorrect, false);
     const newCombo = isCorrect ? battleComboRef.current + 1 : 0;
     const multiplier = Math.min(Math.max(newCombo, 1), 5);
     const gained = isCorrect ? multiplier : 0;
@@ -468,6 +469,7 @@ export default function PracticeScreen() {
     const xpEarned = score >= 10 ? XP_REWARDS.BATTLE_MODE_WIN : 0;
 
     let progress = userProgressRef.current ?? createFreshUserProgress();
+    progress = updateStudyStreak(progress);
 
     if (xpEarned > 0) {
       progress = awardXp(progress, xpEarned);
@@ -528,6 +530,7 @@ export default function PracticeScreen() {
     const q = speedQsRef.current[speedIdxRef.current];
     if (!q) return;
     const correct = optionIndex === q.correctIndex;
+    void recordAnswer(q.id, correct, false);
 
     if (settings.soundEffects) {
       if (correct) playCorrect(); else playWrong();
@@ -566,7 +569,8 @@ export default function PracticeScreen() {
     if (allCompleted && timeUsed < 60) xp += 10;
 
     const progress = (await loadUserProgress()) ?? createFreshUserProgress();
-    const updated = awardXp(progress, xp);
+    const streaked = updateStudyStreak(progress);
+    const updated = awardXp(streaked, xp);
     await saveUserProgress(updated);
     await syncProgressToCloud(updated);
 
