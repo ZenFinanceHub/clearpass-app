@@ -426,6 +426,7 @@ export default function PracticeScreen() {
 
     const isCorrect = optionIndex === q.correctIndex;
     applyDailyChallengeProgress(q, isCorrect);
+    void recordWeakSpotResult(q.id, isCorrect);
     void recordAnswer(q.id, isCorrect, false);
     const newCombo = isCorrect ? battleComboRef.current + 1 : 0;
     const multiplier = Math.min(Math.max(newCombo, 1), 5);
