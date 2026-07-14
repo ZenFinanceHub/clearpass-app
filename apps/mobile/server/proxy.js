@@ -315,40 +315,98 @@ app.post('/api/instructor/connect/onboarding-link', async (req, res) => {
   }
 });
 
-// ── Instructor payout request ─────────────────────────────────────────────────
+// ── Instructor Stripe Connect payout requests ──────────────────────────────────
 
-app.post('/api/payout-request', async (req, res) => {
-  const { instructorName, instructorEmail, amount, conversions } = req.body;
-  if (!instructorName || !instructorEmail || amount === undefined) {
-    return res.status(400).json({ error: 'Missing required fields' });
+app.post('/api/instructor/payout-request', async (req, res) => {
+  if (!stripe) {
+    return res.status(500).json({ error: 'stripe_not_configured' });
   }
+  const auth = await verifyInstructorAuth(req, res);
+  if (!auth) return;
+  const { userId, supabaseAdmin } = auth;
+
   try {
-    const nodemailer = require('nodemailer');
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: false,
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    });
-    await transporter.sendMail({
-      from: process.env.SMTP_USER,
-      to: 'craig@zen-finance.co.uk',
-      subject: `Payout Request - ${instructorName}`,
-      text: [
-        'ClearPass Instructor Payout Request',
-        '',
-        `Instructor: ${instructorName}`,
-        `Email: ${instructorEmail}`,
-        `Amount owed: £${Number(amount).toFixed(2)}`,
-        `Conversions: ${conversions}`,
-        '',
-        'Please process this payout at your earliest convenience.',
-      ].join('\n'),
-    });
-    res.json({ success: true });
+    const { data: connectRow } = await supabaseAdmin
+      .from('instructor_connect_accounts')
+      .select('stripe_account_id, payouts_enabled')
+      .eq('instructor_id', userId)
+      .maybeSingle();
+
+    if (!connectRow?.stripe_account_id || !connectRow.payouts_enabled) {
+      return res.status(409).json({ error: 'not_onboarded' });
+    }
+
+    // Atomically claim every pending earning row for this instructor by
+    // flipping it to 'processing' in one update — the returned rows are the
+    // exact set we're paying out, so a concurrent referral webhook inserting
+    // a new earning mid-request can't be double-counted or dropped.
+    const { data: claimed, error: claimError } = await supabaseAdmin
+      .from('instructor_earnings')
+      .update({ status: 'processing' })
+      .eq('instructor_id', userId)
+      .eq('status', 'pending')
+      .select('id, amount');
+
+    if (claimError) throw claimError;
+
+    const amount = (claimed || []).reduce((sum, e) => sum + Number(e.amount), 0);
+
+    if (amount < 10) {
+      if (claimed && claimed.length > 0) {
+        await supabaseAdmin
+          .from('instructor_earnings')
+          .update({ status: 'pending' })
+          .in('id', claimed.map(e => e.id));
+      }
+      return res.status(400).json({ error: 'below_minimum' });
+    }
+
+    const { data: payout, error: payoutError } = await supabaseAdmin
+      .from('payouts')
+      .insert({ instructor_id: userId, amount, status: 'processing' })
+      .select('id')
+      .single();
+    if (payoutError) throw payoutError;
+
+    const earningIds = claimed.map(e => e.id);
+    await supabaseAdmin.from('instructor_earnings').update({ payout_id: payout.id }).in('id', earningIds);
+
+    try {
+      const transfer = await stripe.transfers.create({
+        amount: Math.round(amount * 100),
+        currency: 'gbp',
+        destination: connectRow.stripe_account_id,
+        metadata: { payout_id: payout.id, instructor_id: userId },
+      });
+
+      await supabaseAdmin
+        .from('payouts')
+        .update({ status: 'paid', stripe_transfer_id: transfer.id, updated_at: new Date().toISOString() })
+        .eq('id', payout.id);
+      await supabaseAdmin.from('instructor_earnings').update({ status: 'paid' }).eq('payout_id', payout.id);
+
+      res.json({ success: true, amount });
+    } catch (transferErr) {
+      console.error('[payout-request] transfer failed:', transferErr);
+      await supabaseAdmin
+        .from('payouts')
+        .update({
+          status: 'failed',
+          failure_reason: String(transferErr.message || transferErr),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', payout.id);
+      // Release the claimed earnings back to pending so the instructor can retry.
+      await supabaseAdmin
+        .from('instructor_earnings')
+        .update({ status: 'pending', payout_id: null })
+        .eq('payout_id', payout.id);
+
+      res.status(502).json({ error: 'transfer_failed', detail: String(transferErr.message || transferErr) });
+    }
   } catch (err) {
     console.error('[payout-request] error:', err);
-    res.status(500).json({ error: 'Failed to send payout request email' });
+    res.status(500).json({ error: 'payout_failed', detail: String(err.message || err) });
   }
 });
 
