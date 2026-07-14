@@ -15,6 +15,7 @@ const PORT = 3001;
 // Required env vars:
 //   SUPABASE_URL, SUPABASE_SERVICE_KEY
 //   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID
+//   STRIPE_CONNECT_WEBHOOK_SECRET  — separate signing secret for the Connect webhook (Connected-account events, not the platform webhook)
 //   ANTHROPIC_API_KEY
 //   RESEND_API_KEY
 //   CRON_SECRET  — shared secret for /api/cron/* endpoints (set in Railway dashboard)
