@@ -147,3 +147,52 @@ CREATE TABLE IF NOT EXISTS hazard_attempts (
 ALTER TABLE hazard_attempts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can insert own attempts" ON hazard_attempts FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can read own attempts" ON hazard_attempts FOR SELECT USING (auth.uid() = user_id);
+
+-- Stripe Connect: instructor payout accounts
+-- Kept in a separate table (not extra columns on `profiles`) because
+-- `profiles` has a permissive `USING (true)` SELECT policy so learners can
+-- look up an instructor by instructor_code — Stripe account id/status must
+-- not ride along on that broad read.
+CREATE TABLE IF NOT EXISTS instructor_connect_accounts (
+  instructor_id      UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+  stripe_account_id  TEXT UNIQUE,
+  status             TEXT NOT NULL DEFAULT 'not_started' CHECK (status IN ('not_started', 'pending', 'onboarded', 'restricted')),
+  payouts_enabled    BOOLEAN NOT NULL DEFAULT false,
+  details_submitted  BOOLEAN NOT NULL DEFAULT false,
+  created_at         TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at         TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE instructor_connect_accounts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Instructors can view own connect account" ON instructor_connect_accounts;
+CREATE POLICY "Instructors can view own connect account" ON instructor_connect_accounts
+  FOR SELECT USING (auth.uid() = instructor_id);
+-- No INSERT/UPDATE policy: written server-side only, via the service role key
+-- (same convention as instructor_earnings above).
+
+-- Stripe Connect: payout batches (one row per "Request Payout" transfer attempt)
+CREATE TABLE IF NOT EXISTS payouts (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  instructor_id       UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  amount              DECIMAL(10,2) NOT NULL,
+  status              TEXT NOT NULL DEFAULT 'processing' CHECK (status IN ('processing', 'paid', 'failed')),
+  stripe_transfer_id  TEXT,
+  failure_reason      TEXT,
+  created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE payouts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Instructors can view own payouts" ON payouts;
+CREATE POLICY "Instructors can view own payouts" ON payouts
+  FOR SELECT USING (auth.uid() = instructor_id);
+-- No INSERT/UPDATE policy: written server-side only, via the service role key.
+
+-- Link each earning to the payout batch that paid it out, and constrain the
+-- status values that were previously unconstrained free text (every existing
+-- row is 'pending' today, so this CHECK is safe to add retroactively).
+ALTER TABLE instructor_earnings ADD COLUMN IF NOT EXISTS payout_id UUID REFERENCES payouts(id) ON DELETE SET NULL;
+ALTER TABLE instructor_earnings DROP CONSTRAINT IF EXISTS instructor_earnings_status_check;
+ALTER TABLE instructor_earnings ADD CONSTRAINT instructor_earnings_status_check CHECK (status IN ('pending', 'processing', 'paid'));
