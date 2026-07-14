@@ -178,7 +178,7 @@ app.post('/api/stripe/connect-webhook', express.raw({ type: 'application/json' }
     try {
       const supabaseAdmin = getSupabaseAdmin();
       const status = deriveConnectStatus(account);
-      await supabaseAdmin
+      const { error } = await supabaseAdmin
         .from('instructor_connect_accounts')
         .update({
           status,
@@ -187,7 +187,11 @@ app.post('/api/stripe/connect-webhook', express.raw({ type: 'application/json' }
           updated_at: new Date().toISOString(),
         })
         .eq('stripe_account_id', account.id);
-      console.log(`[connect-webhook] account ${account.id} -> ${status}`);
+      if (error) {
+        console.error(`[connect-webhook] Failed to update account ${account.id}: ${error.message}`);
+      } else {
+        console.log(`[connect-webhook] account ${account.id} -> ${status}`);
+      }
     } catch (e) {
       console.error('[connect-webhook] Supabase update error:', e);
     }
