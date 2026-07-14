@@ -326,11 +326,13 @@ app.post('/api/instructor/payout-request', async (req, res) => {
   const { userId, supabaseAdmin } = auth;
 
   try {
-    const { data: connectRow } = await supabaseAdmin
+    const { data: connectRow, error: connectError } = await supabaseAdmin
       .from('instructor_connect_accounts')
       .select('stripe_account_id, payouts_enabled')
       .eq('instructor_id', userId)
       .maybeSingle();
+
+    if (connectError) throw connectError;
 
     if (!connectRow?.stripe_account_id || !connectRow.payouts_enabled) {
       return res.status(409).json({ error: 'not_onboarded' });
@@ -350,14 +352,22 @@ app.post('/api/instructor/payout-request', async (req, res) => {
     if (claimError) throw claimError;
 
     const amount = (claimed || []).reduce((sum, e) => sum + Number(e.amount), 0);
+    const claimedIds = (claimed || []).map(e => e.id);
 
-    if (amount < 10) {
-      if (claimed && claimed.length > 0) {
+    // Revert helper: releases the claimed earnings back to pending. Used by
+    // every failure branch below the claim, so a partial failure can never
+    // leave earnings stuck in 'processing' with no way to retry.
+    async function revertClaim() {
+      if (claimedIds.length > 0) {
         await supabaseAdmin
           .from('instructor_earnings')
-          .update({ status: 'pending' })
-          .in('id', claimed.map(e => e.id));
+          .update({ status: 'pending', payout_id: null })
+          .in('id', claimedIds);
       }
+    }
+
+    if (amount < 10) {
+      await revertClaim();
       return res.status(400).json({ error: 'below_minimum' });
     }
 
@@ -366,10 +376,28 @@ app.post('/api/instructor/payout-request', async (req, res) => {
       .insert({ instructor_id: userId, amount, status: 'processing' })
       .select('id')
       .single();
-    if (payoutError) throw payoutError;
+    if (payoutError) {
+      await revertClaim();
+      throw payoutError;
+    }
 
-    const earningIds = claimed.map(e => e.id);
-    await supabaseAdmin.from('instructor_earnings').update({ payout_id: payout.id }).in('id', earningIds);
+    const { error: stampError } = await supabaseAdmin
+      .from('instructor_earnings')
+      .update({ payout_id: payout.id })
+      .in('id', claimedIds);
+
+    if (stampError) {
+      await revertClaim();
+      await supabaseAdmin
+        .from('payouts')
+        .update({
+          status: 'failed',
+          failure_reason: String(stampError.message || stampError),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', payout.id);
+      throw stampError;
+    }
 
     try {
       const transfer = await stripe.transfers.create({
@@ -379,11 +407,27 @@ app.post('/api/instructor/payout-request', async (req, res) => {
         metadata: { payout_id: payout.id, instructor_id: userId },
       });
 
-      await supabaseAdmin
+      const { error: paidPayoutError } = await supabaseAdmin
         .from('payouts')
         .update({ status: 'paid', stripe_transfer_id: transfer.id, updated_at: new Date().toISOString() })
         .eq('id', payout.id);
-      await supabaseAdmin.from('instructor_earnings').update({ status: 'paid' }).eq('payout_id', payout.id);
+      if (paidPayoutError) {
+        console.error(
+          '[payout-request] failed to mark payout paid after successful transfer:',
+          paidPayoutError, 'payout_id:', payout.id, 'stripe_transfer_id:', transfer.id,
+        );
+      }
+
+      const { error: paidEarningsError } = await supabaseAdmin
+        .from('instructor_earnings')
+        .update({ status: 'paid' })
+        .eq('payout_id', payout.id);
+      if (paidEarningsError) {
+        console.error(
+          '[payout-request] failed to mark earnings paid after successful transfer:',
+          paidEarningsError, 'payout_id:', payout.id,
+        );
+      }
 
       res.json({ success: true, amount });
     } catch (transferErr) {
