@@ -358,11 +358,23 @@ app.post('/api/instructor/payout-request', async (req, res) => {
     // every failure branch below the claim, so a partial failure can never
     // leave earnings stuck in 'processing' with no way to retry.
     async function revertClaim() {
-      if (claimedIds.length > 0) {
-        await supabaseAdmin
-          .from('instructor_earnings')
-          .update({ status: 'pending', payout_id: null })
-          .in('id', claimedIds);
+      if (claimedIds.length === 0) return;
+      const { error: revertError } = await supabaseAdmin
+        .from('instructor_earnings')
+        .update({ status: 'pending', payout_id: null })
+        .in('id', claimedIds);
+      if (revertError) {
+        console.error('[payout-request] failed to revert claimed earnings to pending:', revertError, 'earning_ids:', claimedIds);
+      }
+    }
+
+    async function markPayoutFailed(payoutId, reason) {
+      const { error: failError } = await supabaseAdmin
+        .from('payouts')
+        .update({ status: 'failed', failure_reason: reason, updated_at: new Date().toISOString() })
+        .eq('id', payoutId);
+      if (failError) {
+        console.error('[payout-request] failed to mark payout failed:', failError, 'payout_id:', payoutId);
       }
     }
 
@@ -388,14 +400,7 @@ app.post('/api/instructor/payout-request', async (req, res) => {
 
     if (stampError) {
       await revertClaim();
-      await supabaseAdmin
-        .from('payouts')
-        .update({
-          status: 'failed',
-          failure_reason: String(stampError.message || stampError),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', payout.id);
+      await markPayoutFailed(payout.id, String(stampError.message || stampError));
       throw stampError;
     }
 
@@ -432,19 +437,9 @@ app.post('/api/instructor/payout-request', async (req, res) => {
       res.json({ success: true, amount });
     } catch (transferErr) {
       console.error('[payout-request] transfer failed:', transferErr);
-      await supabaseAdmin
-        .from('payouts')
-        .update({
-          status: 'failed',
-          failure_reason: String(transferErr.message || transferErr),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', payout.id);
+      await markPayoutFailed(payout.id, String(transferErr.message || transferErr));
       // Release the claimed earnings back to pending so the instructor can retry.
-      await supabaseAdmin
-        .from('instructor_earnings')
-        .update({ status: 'pending', payout_id: null })
-        .eq('payout_id', payout.id);
+      await revertClaim();
 
       res.status(502).json({ error: 'transfer_failed', detail: String(transferErr.message || transferErr) });
     }
