@@ -223,11 +223,16 @@ app.post('/api/instructor/connect/onboarding-link', async (req, res) => {
   const { userId, email, supabaseAdmin } = auth;
 
   try {
-    const { data: connectRow } = await supabaseAdmin
+    const { data: connectRow, error: selectError } = await supabaseAdmin
       .from('instructor_connect_accounts')
       .select('stripe_account_id')
       .eq('instructor_id', userId)
       .maybeSingle();
+
+    if (selectError) {
+      console.error('[connect/onboarding-link] select error:', selectError);
+      return res.status(500).json({ error: 'onboarding_link_failed', detail: String(selectError.message || selectError) });
+    }
 
     let accountId = connectRow?.stripe_account_id ?? null;
 
@@ -240,11 +245,16 @@ app.post('/api/instructor/connect/onboarding-link', async (req, res) => {
         capabilities: { transfers: { requested: true } },
       });
       accountId = account.id;
-      await supabaseAdmin.from('instructor_connect_accounts').upsert({
+      const { error: upsertError } = await supabaseAdmin.from('instructor_connect_accounts').upsert({
         instructor_id: userId,
         stripe_account_id: accountId,
         status: 'not_started',
       });
+
+      if (upsertError) {
+        console.error('[connect/onboarding-link] upsert error:', upsertError);
+        return res.status(500).json({ error: 'onboarding_link_failed', detail: String(upsertError.message || upsertError) });
+      }
     }
 
     const accountLink = await stripe.accountLinks.create({
