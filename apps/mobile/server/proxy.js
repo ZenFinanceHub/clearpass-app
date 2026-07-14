@@ -3,6 +3,7 @@ require('dotenv').config({ path: __dirname + '/.env' });
 const express = require('express');
 const cors = require('cors');
 const { computeProExpiresAt } = require('./lib/proExpiry');
+const { deriveConnectStatus } = require('./lib/connectStatus');
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? require('stripe')(process.env.STRIPE_SECRET_KEY)
@@ -150,6 +151,45 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
       }
     } catch (e) {
       console.error('[webhook] Supabase error:', e);
+    }
+  }
+
+  res.json({ received: true });
+});
+
+app.post('/api/stripe/connect-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  const webhookSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
+
+  if (!stripe || !webhookSecret) {
+    return res.status(500).json({ error: 'Stripe Connect webhook not configured' });
+  }
+
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+  } catch (err) {
+    console.error('[connect-webhook] signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  if (event.type === 'account.updated') {
+    const account = event.data.object;
+    try {
+      const supabaseAdmin = getSupabaseAdmin();
+      const status = deriveConnectStatus(account);
+      await supabaseAdmin
+        .from('instructor_connect_accounts')
+        .update({
+          status,
+          payouts_enabled: !!account.payouts_enabled,
+          details_submitted: !!account.details_submitted,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('stripe_account_id', account.id);
+      console.log(`[connect-webhook] account ${account.id} -> ${status}`);
+    } catch (e) {
+      console.error('[connect-webhook] Supabase update error:', e);
     }
   }
 
