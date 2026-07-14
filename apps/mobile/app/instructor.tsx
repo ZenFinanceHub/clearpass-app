@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  AppState,
+  Linking,
   Modal,
   ScrollView,
   Share,
@@ -61,6 +63,22 @@ type EarningEntry = {
   learner_id: string;
   amount: number;
   status: string;
+  created_at: string;
+};
+
+type ConnectStatus = 'not_started' | 'pending' | 'onboarded' | 'restricted';
+
+type ConnectAccountRow = {
+  stripe_account_id: string | null;
+  status: ConnectStatus;
+  payouts_enabled: boolean;
+};
+
+type PayoutEntry = {
+  id: string;
+  amount: number;
+  status: 'processing' | 'paid' | 'failed';
+  failure_reason: string | null;
   created_at: string;
 };
 
@@ -1140,19 +1158,25 @@ export default function InstructorScreen() {
   const [instructorCode,     setInstructorCode]     = useState<string | null>(null);
   const [referralCode,       setReferralCode]       = useState<string | null>(null);
   const [earnings,           setEarnings]           = useState<EarningEntry[]>([]);
-  const [instructorEmail,    setInstructorEmail]    = useState('');
-  const [instructorUsername, setInstructorUsername] = useState('');
+  const [connectStatus,      setConnectStatus]      = useState<ConnectAccountRow | null>(null);
+  const [payouts,            setPayouts]            = useState<PayoutEntry[]>([]);
   const [loading,            setLoading]            = useState(true);
 
   useEffect(() => { void loadData(); }, [mode]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') void loadData();
+    });
+    return () => sub.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function loadData() {
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.replace('/auth/signin'); return; }
-
-      setInstructorEmail(user.email ?? '');
 
       // Ensure instructor code and referral code exist
       const { data: profile } = await supabase
@@ -1169,7 +1193,6 @@ export default function InstructorScreen() {
       setInstructorCode(code);
 
       const uname = (profile as { username?: string } | null)?.username ?? '';
-      setInstructorUsername(uname);
 
       let refCode = (profile as { referral_code?: string } | null)?.referral_code ?? null;
       if (!refCode && uname) {
@@ -1185,6 +1208,21 @@ export default function InstructorScreen() {
         .eq('instructor_id', user.id)
         .order('created_at', { ascending: false });
       setEarnings((earningsData as EarningEntry[] | null) ?? []);
+
+      // Load Stripe Connect status and payout history
+      const { data: connectRow } = await supabase
+        .from('instructor_connect_accounts')
+        .select('stripe_account_id, status, payouts_enabled')
+        .eq('instructor_id', user.id)
+        .maybeSingle();
+      setConnectStatus((connectRow as ConnectAccountRow | null) ?? null);
+
+      const { data: payoutRows } = await supabase
+        .from('payouts')
+        .select('*')
+        .eq('instructor_id', user.id)
+        .order('created_at', { ascending: false });
+      setPayouts((payoutRows as PayoutEntry[] | null) ?? []);
 
       if (mode === 'instructor') {
         const { data: rels } = await supabase
