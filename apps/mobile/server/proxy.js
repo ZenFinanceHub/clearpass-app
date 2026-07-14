@@ -45,6 +45,22 @@ function getSupabaseAdmin() {
   return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 }
 
+async function verifyInstructorAuth(req, res) {
+  const authHeader = req.headers['authorization'] || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) {
+    res.status(401).json({ error: 'unauthorized' });
+    return null;
+  }
+  const supabaseAdmin = getSupabaseAdmin();
+  const { data, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !data?.user) {
+    res.status(401).json({ error: 'unauthorized' });
+    return null;
+  }
+  return { userId: data.user.id, email: data.user.email ?? null, supabaseAdmin };
+}
+
 function requireCronAuth(req, res) {
   const secret = process.env.CRON_SECRET;
   if (!secret || req.headers['x-cron-secret'] !== secret) {
@@ -193,6 +209,55 @@ app.post('/api/create-checkout-session', async (req, res) => {
   } catch (err) {
     console.error('Stripe checkout error:', err);
     res.status(500).json({ error: 'Failed to create checkout session', detail: String(err) });
+  }
+});
+
+// ── Instructor Stripe Connect onboarding ───────────────────────────────────────
+
+app.post('/api/instructor/connect/onboarding-link', async (req, res) => {
+  if (!stripe) {
+    return res.status(500).json({ error: 'stripe_not_configured' });
+  }
+  const auth = await verifyInstructorAuth(req, res);
+  if (!auth) return;
+  const { userId, email, supabaseAdmin } = auth;
+
+  try {
+    const { data: connectRow } = await supabaseAdmin
+      .from('instructor_connect_accounts')
+      .select('stripe_account_id')
+      .eq('instructor_id', userId)
+      .maybeSingle();
+
+    let accountId = connectRow?.stripe_account_id ?? null;
+
+    if (!accountId) {
+      const account = await stripe.accounts.create({
+        type: 'express',
+        country: 'GB',
+        email: email ?? undefined,
+        business_type: 'individual',
+        capabilities: { transfers: { requested: true } },
+      });
+      accountId = account.id;
+      await supabaseAdmin.from('instructor_connect_accounts').upsert({
+        instructor_id: userId,
+        stripe_account_id: accountId,
+        status: 'not_started',
+      });
+    }
+
+    const accountLink = await stripe.accountLinks.create({
+      account: accountId,
+      refresh_url: 'clearpass://instructor?stripe=refresh',
+      return_url: 'clearpass://instructor?stripe=return',
+      type: 'account_onboarding',
+    });
+
+    res.json({ url: accountLink.url });
+  } catch (err) {
+    console.error('[connect/onboarding-link] error:', err);
+    res.status(500).json({ error: 'onboarding_link_failed', detail: String(err.message || err) });
   }
 });
 
