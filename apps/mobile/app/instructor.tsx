@@ -783,6 +783,9 @@ function EarningsSection({
         onRefresh();
       } else if (data.error === 'below_minimum') {
         Alert.alert('Not enough yet', 'Minimum payout is £10 — keep referring to unlock your payout!');
+      } else if (data.error === 'transfer_ambiguous') {
+        Alert.alert('Payout unconfirmed', data.detail || 'We could not confirm this payout. Please contact support before trying again.');
+        onRefresh();
       } else {
         Alert.alert('Payout failed', data.detail || 'Please try again in a moment.');
       }

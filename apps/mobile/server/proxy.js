@@ -72,6 +72,20 @@ function requireCronAuth(req, res) {
   return true;
 }
 
+// Stripe error types where the API response itself confirms no transfer was
+// created, so it's safe to release the claimed earnings for a retry.
+// Anything NOT in this set (network/connection errors, Stripe-side API
+// errors, or an unrecognized error type) is treated as ambiguous — the
+// transfer may have actually succeeded even though we didn't get a
+// confirmed response, so those earnings are deliberately NOT reverted to
+// avoid creating a second real transfer for the same money.
+const SAFE_TO_RETRY_STRIPE_ERROR_TYPES = new Set([
+  'StripeInvalidRequestError',
+  'StripeRateLimitError',
+  'StripeAuthenticationError',
+  'StripePermissionError',
+]);
+
 // ── Webhook (must be before express.json() to receive raw body) ───────────────
 
 app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
@@ -411,6 +425,8 @@ app.post('/api/instructor/payout-request', async (req, res) => {
         currency: 'gbp',
         destination: connectRow.stripe_account_id,
         metadata: { payout_id: payout.id, instructor_id: userId },
+      }, {
+        idempotencyKey: `payout-transfer-${payout.id}`,
       });
 
       const { error: paidPayoutError } = await supabaseAdmin
@@ -439,10 +455,26 @@ app.post('/api/instructor/payout-request', async (req, res) => {
     } catch (transferErr) {
       console.error('[payout-request] transfer failed:', transferErr);
       await markPayoutFailed(payout.id, String(transferErr.message || transferErr));
-      // Release the claimed earnings back to pending so the instructor can retry.
-      await revertClaim();
 
-      res.status(502).json({ error: 'transfer_failed', detail: String(transferErr.message || transferErr) });
+      if (SAFE_TO_RETRY_STRIPE_ERROR_TYPES.has(transferErr.type)) {
+        // Stripe's response confirms no transfer was created for this
+        // attempt — safe to release these earnings for another payout request.
+        await revertClaim();
+        res.status(502).json({ error: 'transfer_failed', detail: String(transferErr.message || transferErr) });
+      } else {
+        // Ambiguous outcome (network/connection error, Stripe-side API
+        // error, or an unrecognized error type) — Stripe may have actually
+        // processed the transfer even though we didn't get a confirmed
+        // response. Do NOT release these earnings for automatic retry,
+        // which could create a second real transfer for the same money.
+        // They stay at 'processing', still linked via payout_id to this
+        // now-'failed' payout row, for manual reconciliation against the
+        // Stripe Dashboard before deciding whether to retry or write off.
+        res.status(502).json({
+          error: 'transfer_ambiguous',
+          detail: 'We could not confirm whether this payout succeeded. Please contact support before retrying.',
+        });
+      }
     }
   } catch (err) {
     console.error('[payout-request] error:', err);
