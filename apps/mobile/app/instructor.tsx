@@ -170,6 +170,15 @@ function generateReferralCode(username: string): string {
   return prefix + digits;
 }
 
+function payoutButtonLabel(pending: number, connectStatus: ConnectAccountRow | null, requesting: boolean): string {
+  if (pending < 10) return 'Request Payout';
+  if (requesting) return connectStatus?.status === 'onboarded' && connectStatus.payouts_enabled ? 'Sending...' : 'Opening Stripe...';
+  if (!connectStatus || connectStatus.status === 'not_started') return 'Set Up Payouts';
+  if (connectStatus.status === 'pending') return 'Finish Stripe Setup';
+  if (connectStatus.status === 'restricted') return 'Update Stripe Details';
+  return 'Request Payout';
+}
+
 const PROXY_URL = __DEV__
   ? 'http://localhost:3001'
   : 'https://clearpass-app-production.up.railway.app';
@@ -718,12 +727,12 @@ function ReferralSection({
 
 function EarningsSection({
   earnings,
-  instructorName,
-  instructorEmail,
+  connectStatus,
+  onRefresh,
 }: {
   earnings: EarningEntry[];
-  instructorName: string;
-  instructorEmail: string;
+  connectStatus: ConnectAccountRow | null;
+  onRefresh: () => void;
 }) {
   const theme = useTheme();
   const [requesting, setRequesting] = useState(false);
@@ -738,18 +747,47 @@ function EarningsSection({
     }
     setRequesting(true);
     try {
-      const res = await fetch(`${PROXY_URL}/api/payout-request`, {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        Alert.alert('Error', 'Please sign in again.');
+        return;
+      }
+
+      const isOnboarded = connectStatus?.status === 'onboarded' && connectStatus.payouts_enabled;
+
+      if (!isOnboarded) {
+        const res = await fetch(`${PROXY_URL}/api/instructor/connect/onboarding-link`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (res.ok && data.url) {
+          await Linking.openURL(data.url);
+        } else {
+          Alert.alert('Error', 'Could not start Stripe setup. Please try again.');
+        }
+        return;
+      }
+
+      const res = await fetch(`${PROXY_URL}/api/instructor/payout-request`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ instructorName, instructorEmail, amount: pending, conversions: earnings.length }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       });
+      const data = await res.json();
       if (res.ok) {
-        Alert.alert('Request sent!', `Your payout request for £${pending.toFixed(2)} has been submitted.`);
+        Alert.alert('Payout sent!', `£${Number(data.amount).toFixed(2)} is on its way to your bank account.`);
+        onRefresh();
+      } else if (data.error === 'not_onboarded') {
+        Alert.alert('Setup incomplete', 'Please finish setting up your Stripe account to receive payouts.');
+        onRefresh();
+      } else if (data.error === 'below_minimum') {
+        Alert.alert('Not enough yet', 'Minimum payout is £10 — keep referring to unlock your payout!');
       } else {
-        Alert.alert('Error', 'Could not send payout request. Please try again.');
+        Alert.alert('Payout failed', data.detail || 'Please try again in a moment.');
       }
     } catch {
-      Alert.alert('Error', 'Could not send payout request. Please try again.');
+      Alert.alert('Error', 'Could not process payout. Please try again.');
     } finally {
       setRequesting(false);
     }
@@ -793,11 +831,58 @@ function EarningsSection({
         activeOpacity={0.85}
         disabled={requesting}
       >
-        <Text style={styles.payoutBtnText}>{requesting ? 'Sending...' : 'Request Payout'}</Text>
+        <Text style={styles.payoutBtnText}>{payoutButtonLabel(pending, connectStatus, requesting)}</Text>
       </TouchableOpacity>
       {pending < 10 && (
         <Text style={[styles.payoutMinText, { color: theme.subTextColor }]}>{'Minimum payout is £10'}</Text>
       )}
+      {pending >= 10 && connectStatus?.status === 'restricted' && (
+        <Text style={[styles.payoutMinText, { color: theme.subTextColor }]}>
+          {'Stripe needs more information before you can be paid — tap above to update your details.'}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+// ─── PayoutHistorySection ─────────────────────────────────────────────────────
+
+function PayoutHistorySection({ payouts }: { payouts: PayoutEntry[] }) {
+  const theme = useTheme();
+  if (payouts.length === 0) return null;
+
+  const statusLabel: Record<PayoutEntry['status'], string> = {
+    processing: 'Processing',
+    paid: 'Paid',
+    failed: 'Failed',
+  };
+  const statusColor: Record<PayoutEntry['status'], string> = {
+    processing: '#F59E0B',
+    paid: '#22C55E',
+    failed: '#EF4444',
+  };
+
+  return (
+    <View style={[styles.earningsSection, { backgroundColor: theme.cardColor }]}>
+      <Text style={[styles.earningsSectionTitle, { color: theme.textColor }]}>{'Payout History'}</Text>
+      {payouts.map(p => (
+        <View key={p.id} style={styles.earningRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.earningDate, { color: theme.textColor }]}>{formatDate(p.created_at)}</Text>
+            {p.status === 'failed' && p.failure_reason && (
+              <Text style={[styles.payoutFailureText, { color: theme.subTextColor }]} numberOfLines={2}>
+                {p.failure_reason}
+              </Text>
+            )}
+          </View>
+          <View style={styles.payoutHistoryRight}>
+            <Text style={styles.earningAmount}>{`£${Number(p.amount).toFixed(2)}`}</Text>
+            <View style={[styles.payoutStatusBadge, { borderColor: statusColor[p.status] }]}>
+              <Text style={[styles.payoutStatusText, { color: statusColor[p.status] }]}>{statusLabel[p.status]}</Text>
+            </View>
+          </View>
+        </View>
+      ))}
     </View>
   );
 }
@@ -809,8 +894,8 @@ function InstructorDashboard({
   instructorCode,
   referralCode,
   earnings,
-  instructorEmail,
-  instructorUsername,
+  connectStatus,
+  payouts,
   loading,
   onRefresh,
 }: {
@@ -818,8 +903,8 @@ function InstructorDashboard({
   instructorCode: string | null;
   referralCode: string | null;
   earnings: EarningEntry[];
-  instructorEmail: string;
-  instructorUsername: string;
+  connectStatus: ConnectAccountRow | null;
+  payouts: PayoutEntry[];
   loading: boolean;
   onRefresh: () => void;
 }) {
@@ -885,11 +970,8 @@ function InstructorDashboard({
             onShare={() => void handleShareLink()}
           />
         )}
-        <EarningsSection
-          earnings={earnings}
-          instructorName={instructorUsername}
-          instructorEmail={instructorEmail}
-        />
+        <EarningsSection earnings={earnings} connectStatus={connectStatus} onRefresh={onRefresh} />
+        <PayoutHistorySection payouts={payouts} />
         <AddLearnerModal
           visible={showAdd}
           instructorCode={instructorCode}
@@ -928,11 +1010,8 @@ function InstructorDashboard({
           onShare={() => void handleShareLink()}
         />
       )}
-      <EarningsSection
-        earnings={earnings}
-        instructorName={instructorUsername}
-        instructorEmail={instructorEmail}
-      />
+      <EarningsSection earnings={earnings} connectStatus={connectStatus} onRefresh={onRefresh} />
+      <PayoutHistorySection payouts={payouts} />
 
       <AddLearnerModal
         visible={showAdd}
@@ -1309,8 +1388,8 @@ export default function InstructorScreen() {
           instructorCode={instructorCode}
           referralCode={referralCode}
           earnings={earnings}
-          instructorEmail={instructorEmail}
-          instructorUsername={instructorUsername}
+          connectStatus={connectStatus}
+          payouts={payouts}
           loading={loading}
           onRefresh={() => void loadData()}
         />
@@ -1757,6 +1836,15 @@ const styles = StyleSheet.create({
   },
   payoutBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
   payoutMinText: { fontSize: 12, textAlign: 'center' },
+  payoutHistoryRight:  { alignItems: 'flex-end', gap: 4 },
+  payoutStatusBadge: {
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  payoutStatusText:  { fontSize: 11, fontWeight: '700' },
+  payoutFailureText: { fontSize: 11, marginTop: 2, maxWidth: 200 },
 
   // Email summary modal
   summaryMeta: { fontSize: 13 },
