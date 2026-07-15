@@ -41,17 +41,21 @@ export default function TabLayout() {
   }, []);
 
   async function guardInstructorAccounts() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('account_type')
-        .eq('id', user.id)
-        .maybeSingle();
-      if ((profile as { account_type?: string } | null)?.account_type === 'instructor') {
-        router.replace('/instructor');
-        return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('account_type')
+          .eq('id', user.id)
+          .maybeSingle();
+        if ((profile as { account_type?: string } | null)?.account_type === 'instructor') {
+          router.replace('/instructor');
+          return;
+        }
       }
+    } catch {
+      // Network/Supabase error: fail open, same as "not an instructor".
     }
     setChecked(true);
   }
