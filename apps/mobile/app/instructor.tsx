@@ -14,7 +14,7 @@ import {
   View,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
 import { createFreshUserProgress } from '@/src/storage';
 import {
@@ -26,6 +26,7 @@ import {
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 import { Pip } from '@/src/components/Pip';
+import { generateInstructorCode, generateReferralCode } from '@/src/accountCodes';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1018,20 +1019,17 @@ function InstructorDashboard({
 // ─── InstructorScreen ─────────────────────────────────────────────────────────
 
 export default function InstructorScreen() {
-  const params  = useLocalSearchParams<{ mode?: string }>();
-  const mode    = params.mode === 'learner' ? 'learner' : 'instructor';
-  const theme   = useTheme();
+  const theme = useTheme();
 
-  const [learners,           setLearners]           = useState<LearnerEntry[]>([]);
-  const [instructors,        setInstructors]        = useState<Relationship[]>([]);
-  const [instructorCode,     setInstructorCode]     = useState<string | null>(null);
-  const [referralCode,       setReferralCode]       = useState<string | null>(null);
-  const [earnings,           setEarnings]           = useState<EarningEntry[]>([]);
-  const [connectStatus,      setConnectStatus]      = useState<ConnectAccountRow | null>(null);
-  const [payouts,            setPayouts]            = useState<PayoutEntry[]>([]);
-  const [loading,            setLoading]            = useState(true);
+  const [learners,       setLearners]       = useState<LearnerEntry[]>([]);
+  const [instructorCode, setInstructorCode] = useState<string | null>(null);
+  const [referralCode,   setReferralCode]   = useState<string | null>(null);
+  const [earnings,       setEarnings]       = useState<EarningEntry[]>([]);
+  const [connectStatus,  setConnectStatus]  = useState<ConnectAccountRow | null>(null);
+  const [payouts,        setPayouts]        = useState<PayoutEntry[]>([]);
+  const [loading,        setLoading]        = useState(true);
 
-  useEffect(() => { void loadData(); }, [mode]);
+  useEffect(() => { void loadData(); }, []);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', state => {
@@ -1047,21 +1045,24 @@ export default function InstructorScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.replace('/auth/signin'); return; }
 
-      // Ensure instructor code and referral code exist
       const { data: profile } = await supabase
         .from('profiles')
         .select('id, instructor_code, referral_code, username')
         .eq('id', user.id)
         .single();
 
+      const uname = (profile as { username?: string } | null)?.username ?? '';
+
       let code = (profile as { instructor_code?: string } | null)?.instructor_code ?? null;
       if (!code) {
-        code = generateCode();
+        // Defensive fallback only — accounts created after this plan ships
+        // get their instructor_code from choose-account-type.tsx at signup.
+        // This covers pre-split accounts backfilled in Task 2 that somehow
+        // lack one.
+        code = generateInstructorCode();
         await supabase.from('profiles').upsert({ id: user.id, instructor_code: code });
       }
       setInstructorCode(code);
-
-      const uname = (profile as { username?: string } | null)?.username ?? '';
 
       let refCode = (profile as { referral_code?: string } | null)?.referral_code ?? null;
       if (!refCode && uname) {
@@ -1070,7 +1071,6 @@ export default function InstructorScreen() {
       }
       setReferralCode(refCode);
 
-      // Load earnings
       const { data: earningsData } = await supabase
         .from('instructor_earnings')
         .select('*')
@@ -1078,7 +1078,6 @@ export default function InstructorScreen() {
         .order('created_at', { ascending: false });
       setEarnings((earningsData as EarningEntry[] | null) ?? []);
 
-      // Load Stripe Connect status and payout history
       const { data: connectRow } = await supabase
         .from('instructor_connect_accounts')
         .select('stripe_account_id, status, payouts_enabled')
@@ -1093,60 +1092,51 @@ export default function InstructorScreen() {
         .order('created_at', { ascending: false });
       setPayouts((payoutRows as PayoutEntry[] | null) ?? []);
 
-      if (mode === 'instructor') {
-        const { data: rels } = await supabase
-          .from('instructor_relationships')
-          .select('*')
-          .eq('instructor_id', user.id)
-          .neq('status', 'rejected');
+      const { data: rels } = await supabase
+        .from('instructor_relationships')
+        .select('*')
+        .eq('instructor_id', user.id)
+        .neq('status', 'rejected');
 
-        const accepted = (rels as Relationship[] | null)?.filter(r => r.status === 'accepted' && r.learner_id) ?? [];
+      const accepted = (rels as Relationship[] | null)?.filter(r => r.status === 'accepted' && r.learner_id) ?? [];
 
-        if (accepted.length > 0) {
-          const learnerIds = accepted.map(r => r.learner_id!);
+      if (accepted.length > 0) {
+        const learnerIds = accepted.map(r => r.learner_id!);
 
-          const [{ data: progressRows }, { data: profileRows }] = await Promise.all([
-            supabase.from('user_progress').select('id, progress').in('id', learnerIds),
-            supabase.from('profiles').select('id, username').in('id', learnerIds),
-          ]);
+        const [{ data: progressRows }, { data: profileRows }] = await Promise.all([
+          supabase.from('user_progress').select('id, progress').in('id', learnerIds),
+          supabase.from('profiles').select('id, username').in('id', learnerIds),
+        ]);
 
-          let lastNoteDates: Map<string, string> = new Map();
-          try {
-            const { data: notesData } = await supabase
-              .from('instructor_lesson_notes')
-              .select('learner_id, created_at')
-              .eq('instructor_id', user.id)
-              .order('created_at', { ascending: false });
-            for (const n of (notesData as { learner_id: string; created_at: string }[] | null) ?? []) {
-              if (n.learner_id && !lastNoteDates.has(n.learner_id)) {
-                lastNoteDates.set(n.learner_id, n.created_at);
-              }
+        let lastNoteDates: Map<string, string> = new Map();
+        try {
+          const { data: notesData } = await supabase
+            .from('instructor_lesson_notes')
+            .select('learner_id, created_at')
+            .eq('instructor_id', user.id)
+            .order('created_at', { ascending: false });
+          for (const n of (notesData as { learner_id: string; created_at: string }[] | null) ?? []) {
+            if (n.learner_id && !lastNoteDates.has(n.learner_id)) {
+              lastNoteDates.set(n.learner_id, n.created_at);
             }
-          } catch {}
+          }
+        } catch {}
 
-          const entries: LearnerEntry[] = accepted.map(rel => {
-            const pd  = (progressRows as { id: string; progress: unknown }[] | null)?.find(p => p.id === rel.learner_id);
-            const pf  = (profileRows  as { id: string; username: string }[] | null)?.find(p => p.id === rel.learner_id);
-            const raw = pd?.progress as Partial<UserProgress> | undefined;
-            const progress = raw ? ({ ...createFreshUserProgress(), ...raw } as UserProgress) : null;
-            return {
-              rel,
-              progress,
-              username: pf?.username ?? null,
-              lastNoteDate: rel.learner_id ? (lastNoteDates.get(rel.learner_id) ?? null) : null,
-            };
-          });
-          setLearners(entries);
-        } else {
-          setLearners([]);
-        }
-      } else if (mode === 'learner') {
-        const { data: rels } = await supabase
-          .from('instructor_relationships')
-          .select('*')
-          .eq('learner_id', user.id)
-          .neq('status', 'rejected');
-        setInstructors((rels as Relationship[] | null) ?? []);
+        const entries: LearnerEntry[] = accepted.map(rel => {
+          const pd  = (progressRows as { id: string; progress: unknown }[] | null)?.find(p => p.id === rel.learner_id);
+          const pf  = (profileRows  as { id: string; username: string }[] | null)?.find(p => p.id === rel.learner_id);
+          const raw = pd?.progress as Partial<UserProgress> | undefined;
+          const progress = raw ? ({ ...createFreshUserProgress(), ...raw } as UserProgress) : null;
+          return {
+            rel,
+            progress,
+            username: pf?.username ?? null,
+            lastNoteDate: rel.learner_id ? (lastNoteDates.get(rel.learner_id) ?? null) : null,
+          };
+        });
+        setLearners(entries);
+      } else {
+        setLearners([]);
       }
     } catch {
       // Table likely doesn't exist yet — show empty state
@@ -1155,24 +1145,26 @@ export default function InstructorScreen() {
     }
   }
 
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    router.replace('/auth/signin');
+  }
+
   return (
     <View style={[styles.screen, { backgroundColor: theme.backgroundColor }]}>
-      {/* Header */}
       <View style={[styles.header, { backgroundColor: theme.cardColor, borderBottomColor: theme.borderColor }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerBack} activeOpacity={0.7}>
-          <Text style={[styles.headerBackArrow, { color: theme.textColor }]}>{'←'}</Text>
+        <View style={styles.headerBack} />
+        <Text style={[styles.headerTitle, { color: theme.textColor }]}>{'Instructor Dashboard'}</Text>
+        <TouchableOpacity onPress={() => void handleSignOut()} style={styles.headerSignOut} activeOpacity={0.7}>
+          <Text style={styles.headerSignOutText}>{'Sign Out'}</Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.textColor }]}>
-          {mode === 'instructor' ? 'Instructor Dashboard' : 'Linked Instructors'}
-        </Text>
-        <View style={styles.headerSpacer} />
       </View>
 
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.indigo} />
         </View>
-      ) : mode === 'instructor' ? (
+      ) : (
         <InstructorDashboard
           learners={learners}
           instructorCode={instructorCode}
@@ -1180,12 +1172,6 @@ export default function InstructorScreen() {
           earnings={earnings}
           connectStatus={connectStatus}
           payouts={payouts}
-          loading={loading}
-          onRefresh={() => void loadData()}
-        />
-      ) : (
-        <LearnerModeView
-          instructors={instructors}
           loading={loading}
           onRefresh={() => void loadData()}
         />
@@ -1213,6 +1199,8 @@ const styles = StyleSheet.create({
   headerBackArrow: { fontSize: 22, fontWeight: '600', lineHeight: 26 },
   headerTitle:     { flex: 1, fontSize: 18, fontWeight: '800', textAlign: 'center' },
   headerSpacer:    { width: 34 },
+  headerSignOut:      { paddingHorizontal: 8, paddingVertical: 4 },
+  headerSignOutText:  { color: '#EF4444', fontSize: 14, fontWeight: '700' },
 
   // Shared layout
   center:      { flex: 1, alignItems: 'center', justifyContent: 'center' },
