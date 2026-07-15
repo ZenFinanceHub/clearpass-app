@@ -3,6 +3,7 @@ require('dotenv').config({ path: __dirname + '/.env' });
 const express = require('express');
 const cors = require('cors');
 const { computeProExpiresAt } = require('./lib/proExpiry');
+const { deriveConnectStatus } = require('./lib/connectStatus');
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? require('stripe')(process.env.STRIPE_SECRET_KEY)
@@ -14,6 +15,7 @@ const PORT = 3001;
 // Required env vars:
 //   SUPABASE_URL, SUPABASE_SERVICE_KEY
 //   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID
+//   STRIPE_CONNECT_WEBHOOK_SECRET  — separate signing secret for the Connect webhook (Connected-account events, not the platform webhook)
 //   ANTHROPIC_API_KEY
 //   RESEND_API_KEY
 //   CRON_SECRET  — shared secret for /api/cron/* endpoints (set in Railway dashboard)
@@ -45,6 +47,22 @@ function getSupabaseAdmin() {
   return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 }
 
+async function verifyInstructorAuth(req, res) {
+  const authHeader = req.headers['authorization'] || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) {
+    res.status(401).json({ error: 'unauthorized' });
+    return null;
+  }
+  const supabaseAdmin = getSupabaseAdmin();
+  const { data, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !data?.user) {
+    res.status(401).json({ error: 'unauthorized' });
+    return null;
+  }
+  return { userId: data.user.id, email: data.user.email ?? null, supabaseAdmin };
+}
+
 function requireCronAuth(req, res) {
   const secret = process.env.CRON_SECRET;
   if (!secret || req.headers['x-cron-secret'] !== secret) {
@@ -53,6 +71,20 @@ function requireCronAuth(req, res) {
   }
   return true;
 }
+
+// Stripe error types where the API response itself confirms no transfer was
+// created, so it's safe to release the claimed earnings for a retry.
+// Anything NOT in this set (network/connection errors, Stripe-side API
+// errors, or an unrecognized error type) is treated as ambiguous — the
+// transfer may have actually succeeded even though we didn't get a
+// confirmed response, so those earnings are deliberately NOT reverted to
+// avoid creating a second real transfer for the same money.
+const SAFE_TO_RETRY_STRIPE_ERROR_TYPES = new Set([
+  'StripeInvalidRequestError',
+  'StripeRateLimitError',
+  'StripeAuthenticationError',
+  'StripePermissionError',
+]);
 
 // ── Webhook (must be before express.json() to receive raw body) ───────────────
 
@@ -140,6 +172,49 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
   res.json({ received: true });
 });
 
+app.post('/api/stripe/connect-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  const webhookSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
+
+  if (!stripe || !webhookSecret) {
+    return res.status(500).json({ error: 'Stripe Connect webhook not configured' });
+  }
+
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+  } catch (err) {
+    console.error('[connect-webhook] signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  if (event.type === 'account.updated') {
+    const account = event.data.object;
+    try {
+      const supabaseAdmin = getSupabaseAdmin();
+      const status = deriveConnectStatus(account);
+      const { error } = await supabaseAdmin
+        .from('instructor_connect_accounts')
+        .update({
+          status,
+          payouts_enabled: !!account.payouts_enabled,
+          details_submitted: !!account.details_submitted,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('stripe_account_id', account.id);
+      if (error) {
+        console.error(`[connect-webhook] Failed to update account ${account.id}: ${error.message}`);
+      } else {
+        console.log(`[connect-webhook] account ${account.id} -> ${status}`);
+      }
+    } catch (e) {
+      console.error('[connect-webhook] Supabase update error:', e);
+    }
+  }
+
+  res.json({ received: true });
+});
+
 app.use(express.json());
 
 // ── AI explain proxy ──────────────────────────────────────────────────────────
@@ -196,40 +271,219 @@ app.post('/api/create-checkout-session', async (req, res) => {
   }
 });
 
-// ── Instructor payout request ─────────────────────────────────────────────────
+// ── Instructor Stripe Connect onboarding ───────────────────────────────────────
 
-app.post('/api/payout-request', async (req, res) => {
-  const { instructorName, instructorEmail, amount, conversions } = req.body;
-  if (!instructorName || !instructorEmail || amount === undefined) {
-    return res.status(400).json({ error: 'Missing required fields' });
+app.post('/api/instructor/connect/onboarding-link', async (req, res) => {
+  if (!stripe) {
+    return res.status(500).json({ error: 'stripe_not_configured' });
   }
+  const auth = await verifyInstructorAuth(req, res);
+  if (!auth) return;
+  const { userId, email, supabaseAdmin } = auth;
+
   try {
-    const nodemailer = require('nodemailer');
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: false,
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    const { data: connectRow, error: selectError } = await supabaseAdmin
+      .from('instructor_connect_accounts')
+      .select('stripe_account_id')
+      .eq('instructor_id', userId)
+      .maybeSingle();
+
+    if (selectError) {
+      console.error('[connect/onboarding-link] select error:', selectError);
+      return res.status(500).json({ error: 'onboarding_link_failed', detail: String(selectError.message || selectError) });
+    }
+
+    let accountId = connectRow?.stripe_account_id ?? null;
+
+    if (!accountId) {
+      const account = await stripe.accounts.create({
+        type: 'express',
+        country: 'GB',
+        email: email ?? undefined,
+        business_type: 'individual',
+        capabilities: { transfers: { requested: true } },
+      });
+      accountId = account.id;
+      const { error: upsertError } = await supabaseAdmin.from('instructor_connect_accounts').upsert({
+        instructor_id: userId,
+        stripe_account_id: accountId,
+        status: 'not_started',
+      });
+
+      if (upsertError) {
+        console.error('[connect/onboarding-link] upsert error:', upsertError);
+        return res.status(500).json({ error: 'onboarding_link_failed', detail: String(upsertError.message || upsertError) });
+      }
+    }
+
+    const accountLink = await stripe.accountLinks.create({
+      account: accountId,
+      // Stripe's Account Links API requires a real https:// URL here — it
+      // rejects custom app schemes (e.g. clearpass://) with a url_invalid
+      // error. These are plain informational pages; the actual status sync
+      // happens via the Connect webhook + the app's AppState-triggered
+      // refresh on foreground, same as the existing checkout success_url.
+      refresh_url: 'https://clearpass-app.vercel.app/connect-refresh',
+      return_url: 'https://clearpass-app.vercel.app/connect-return',
+      type: 'account_onboarding',
     });
-    await transporter.sendMail({
-      from: process.env.SMTP_USER,
-      to: 'craig@zen-finance.co.uk',
-      subject: `Payout Request - ${instructorName}`,
-      text: [
-        'ClearPass Instructor Payout Request',
-        '',
-        `Instructor: ${instructorName}`,
-        `Email: ${instructorEmail}`,
-        `Amount owed: £${Number(amount).toFixed(2)}`,
-        `Conversions: ${conversions}`,
-        '',
-        'Please process this payout at your earliest convenience.',
-      ].join('\n'),
-    });
-    res.json({ success: true });
+
+    res.json({ url: accountLink.url });
+  } catch (err) {
+    console.error('[connect/onboarding-link] error:', err);
+    res.status(500).json({ error: 'onboarding_link_failed', detail: String(err.message || err) });
+  }
+});
+
+// ── Instructor Stripe Connect payout requests ──────────────────────────────────
+
+app.post('/api/instructor/payout-request', async (req, res) => {
+  if (!stripe) {
+    return res.status(500).json({ error: 'stripe_not_configured' });
+  }
+  const auth = await verifyInstructorAuth(req, res);
+  if (!auth) return;
+  const { userId, supabaseAdmin } = auth;
+
+  try {
+    const { data: connectRow, error: connectError } = await supabaseAdmin
+      .from('instructor_connect_accounts')
+      .select('stripe_account_id, payouts_enabled')
+      .eq('instructor_id', userId)
+      .maybeSingle();
+
+    if (connectError) throw connectError;
+
+    if (!connectRow?.stripe_account_id || !connectRow.payouts_enabled) {
+      return res.status(409).json({ error: 'not_onboarded' });
+    }
+
+    // Atomically claim every pending earning row for this instructor by
+    // flipping it to 'processing' in one update — the returned rows are the
+    // exact set we're paying out, so a concurrent referral webhook inserting
+    // a new earning mid-request can't be double-counted or dropped.
+    const { data: claimed, error: claimError } = await supabaseAdmin
+      .from('instructor_earnings')
+      .update({ status: 'processing' })
+      .eq('instructor_id', userId)
+      .eq('status', 'pending')
+      .select('id, amount');
+
+    if (claimError) throw claimError;
+
+    const amount = (claimed || []).reduce((sum, e) => sum + Number(e.amount), 0);
+    const claimedIds = (claimed || []).map(e => e.id);
+
+    // Revert helper: releases the claimed earnings back to pending. Used by
+    // every failure branch below the claim, so a partial failure can never
+    // leave earnings stuck in 'processing' with no way to retry.
+    async function revertClaim() {
+      if (claimedIds.length === 0) return;
+      const { error: revertError } = await supabaseAdmin
+        .from('instructor_earnings')
+        .update({ status: 'pending', payout_id: null })
+        .in('id', claimedIds);
+      if (revertError) {
+        console.error('[payout-request] failed to revert claimed earnings to pending:', revertError, 'earning_ids:', claimedIds);
+      }
+    }
+
+    async function markPayoutFailed(payoutId, reason) {
+      const { error: failError } = await supabaseAdmin
+        .from('payouts')
+        .update({ status: 'failed', failure_reason: reason, updated_at: new Date().toISOString() })
+        .eq('id', payoutId);
+      if (failError) {
+        console.error('[payout-request] failed to mark payout failed:', failError, 'payout_id:', payoutId);
+      }
+    }
+
+    if (amount < 10) {
+      await revertClaim();
+      return res.status(400).json({ error: 'below_minimum' });
+    }
+
+    const { data: payout, error: payoutError } = await supabaseAdmin
+      .from('payouts')
+      .insert({ instructor_id: userId, amount, status: 'processing' })
+      .select('id')
+      .single();
+    if (payoutError) {
+      await revertClaim();
+      throw payoutError;
+    }
+
+    const { error: stampError } = await supabaseAdmin
+      .from('instructor_earnings')
+      .update({ payout_id: payout.id })
+      .in('id', claimedIds);
+
+    if (stampError) {
+      await revertClaim();
+      await markPayoutFailed(payout.id, String(stampError.message || stampError));
+      throw stampError;
+    }
+
+    try {
+      const transfer = await stripe.transfers.create({
+        amount: Math.round(amount * 100),
+        currency: 'gbp',
+        destination: connectRow.stripe_account_id,
+        metadata: { payout_id: payout.id, instructor_id: userId },
+      }, {
+        idempotencyKey: `payout-transfer-${payout.id}`,
+      });
+
+      const { error: paidPayoutError } = await supabaseAdmin
+        .from('payouts')
+        .update({ status: 'paid', stripe_transfer_id: transfer.id, updated_at: new Date().toISOString() })
+        .eq('id', payout.id);
+      if (paidPayoutError) {
+        console.error(
+          '[payout-request] failed to mark payout paid after successful transfer:',
+          paidPayoutError, 'payout_id:', payout.id, 'stripe_transfer_id:', transfer.id,
+        );
+      }
+
+      const { error: paidEarningsError } = await supabaseAdmin
+        .from('instructor_earnings')
+        .update({ status: 'paid' })
+        .eq('payout_id', payout.id);
+      if (paidEarningsError) {
+        console.error(
+          '[payout-request] failed to mark earnings paid after successful transfer:',
+          paidEarningsError, 'payout_id:', payout.id,
+        );
+      }
+
+      res.json({ success: true, amount });
+    } catch (transferErr) {
+      console.error('[payout-request] transfer failed:', transferErr);
+      await markPayoutFailed(payout.id, String(transferErr.message || transferErr));
+
+      if (SAFE_TO_RETRY_STRIPE_ERROR_TYPES.has(transferErr.type)) {
+        // Stripe's response confirms no transfer was created for this
+        // attempt — safe to release these earnings for another payout request.
+        await revertClaim();
+        res.status(502).json({ error: 'transfer_failed', detail: String(transferErr.message || transferErr) });
+      } else {
+        // Ambiguous outcome (network/connection error, Stripe-side API
+        // error, or an unrecognized error type) — Stripe may have actually
+        // processed the transfer even though we didn't get a confirmed
+        // response. Do NOT release these earnings for automatic retry,
+        // which could create a second real transfer for the same money.
+        // They stay at 'processing', still linked via payout_id to this
+        // now-'failed' payout row, for manual reconciliation against the
+        // Stripe Dashboard before deciding whether to retry or write off.
+        res.status(502).json({
+          error: 'transfer_ambiguous',
+          detail: 'We could not confirm whether this payout succeeded. Please contact support before retrying.',
+        });
+      }
+    }
   } catch (err) {
     console.error('[payout-request] error:', err);
-    res.status(500).json({ error: 'Failed to send payout request email' });
+    res.status(500).json({ error: 'payout_failed', detail: String(err.message || err) });
   }
 });
 
