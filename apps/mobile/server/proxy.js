@@ -318,8 +318,13 @@ app.post('/api/instructor/connect/onboarding-link', async (req, res) => {
 
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
-      refresh_url: 'clearpass://instructor?stripe=refresh',
-      return_url: 'clearpass://instructor?stripe=return',
+      // Stripe's Account Links API requires a real https:// URL here — it
+      // rejects custom app schemes (e.g. clearpass://) with a url_invalid
+      // error. These are plain informational pages; the actual status sync
+      // happens via the Connect webhook + the app's AppState-triggered
+      // refresh on foreground, same as the existing checkout success_url.
+      refresh_url: 'https://clearpass-app.vercel.app/connect-refresh',
+      return_url: 'https://clearpass-app.vercel.app/connect-return',
       type: 'account_onboarding',
     });
 
