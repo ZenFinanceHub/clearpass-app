@@ -30,7 +30,7 @@ export default function OnboardingScreen() {
       }
       const val = await AsyncStorage.getItem(ONBOARDING_KEY);
       if (val) {
-        router.replace('/auth');
+        router.replace('/auth/signin');
       } else {
         setChecking(false);
       }
@@ -61,12 +61,12 @@ export default function OnboardingScreen() {
 
   async function handleGetStarted() {
     await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-    router.replace('/auth');
+    router.replace('/auth/signup');
   }
 
   async function handleSignIn() {
     await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-    router.replace('/auth');
+    router.replace('/auth/signin');
   }
 
   if (checking) return null;

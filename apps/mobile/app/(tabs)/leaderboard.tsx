@@ -88,7 +88,7 @@ export default function LeaderboardScreen() {
         </Text>
         <TouchableOpacity
           style={styles.signInBtn}
-          onPress={() => router.push('/auth')}
+          onPress={() => router.push('/auth/signin')}
           activeOpacity={0.85}
         >
           <Text style={styles.signInBtnText}>Sign In</Text>

@@ -179,7 +179,7 @@ export default function ProgressScreen() {
 
   async function handleUpgrade() {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push('/auth'); return; }
+    if (!user) { router.push('/auth/signin'); return; }
     try {
       const res = await fetch(`${getProxyUrl()}/api/create-checkout-session`, {
         method: 'POST',
@@ -189,7 +189,7 @@ export default function ProgressScreen() {
       const data = await res.json() as { url?: string };
       if (data.url) await Linking.openURL(data.url);
     } catch {
-      router.push('/auth');
+      router.push('/auth/signin');
     }
   }
 
