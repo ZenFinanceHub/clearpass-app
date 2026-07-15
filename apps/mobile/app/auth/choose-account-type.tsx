@@ -69,6 +69,7 @@ export default function ChooseAccountTypeScreen() {
       if (!ok) {
         setError('Could not set up your account. Please try again.');
         setSaving(null);
+        setChecking(false);
         return;
       }
 
@@ -80,10 +81,12 @@ export default function ChooseAccountTypeScreen() {
             .eq('referral_code', referralCode)
             .maybeSingle();
           if (refProfile && (refProfile as { account_type?: string }).account_type === 'instructor') {
+            // Auto-link immediately — the referral code came from an
+            // instructor's link/code, which is the pupil's explicit consent.
             await supabase.from('instructor_relationships').insert({
               instructor_id: (refProfile as { id: string }).id,
               learner_id: user.id,
-              status: 'pending',
+              status: 'accepted',
               invite_code: referralCode,
             });
           }
@@ -94,6 +97,7 @@ export default function ChooseAccountTypeScreen() {
     } catch {
       setError('An unexpected error occurred.');
       setSaving(null);
+      setChecking(false);
     }
   }
 

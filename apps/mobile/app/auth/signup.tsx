@@ -91,13 +91,14 @@ export default function SignUpScreen() {
             if (!refProfile) {
               setReferralWarn('Code not recognised — continuing without it.');
             } else if ((refProfile as { account_type?: string }).account_type === 'instructor') {
-              // Code owner is an instructor — create a pending relationship;
-              // the pupil must explicitly accept before progress is shared
-              // (see Settings → Linked Instructors → Instructor Requests).
+              // Code owner is an instructor — auto-link immediately, since
+              // clicking their referral link is the pupil's explicit consent
+              // to be tracked (learners can remove the link later from
+              // Settings → Linked Instructors).
               await supabase.from('instructor_relationships').insert({
                 instructor_id: (refProfile as { id: string }).id,
                 learner_id: userId,
-                status: 'pending',
+                status: 'accepted',
                 invite_code: code,
               });
             }
