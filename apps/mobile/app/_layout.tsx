@@ -94,7 +94,10 @@ function RootLayout() {
         // navigation to /roadsigns), let it through without overriding.
         const entryPoints = new Set(['', 'index', 'onboarding', 'landing']);
         if (entryPoints.has(segments[0] ?? '')) {
-          const route = await resolvePostAuthRoute(session.user.id);
+          let route = '/(tabs)/home';
+          try {
+            route = await resolvePostAuthRoute(session.user.id);
+          } catch {}
           router.replace(route);
         }
         return;
