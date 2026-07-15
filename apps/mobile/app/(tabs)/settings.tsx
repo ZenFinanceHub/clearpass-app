@@ -671,7 +671,7 @@ export default function SettingsScreen() {
 
         <TouchableOpacity
           style={[styles.row, styles.rowBorder]}
-          onPress={() => router.push('/instructor?mode=learner' as any)}
+          onPress={() => router.push('/linked-instructors' as any)}
           activeOpacity={0.75}
         >
           <View style={styles.textWrap}>
@@ -706,13 +706,6 @@ export default function SettingsScreen() {
           <View style={styles.textWrap}>
             <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'🦔 Ask Pip'}</Text>
             <Text style={[styles.description, { fontSize: theme.fontSize(12), color: theme.subTextColor }]}>{'Theory questions & app support'}</Text>
-          </View>
-          <Text style={styles.chevron}>{'›'}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => router.push('/instructor?mode=instructor' as any)} activeOpacity={0.85}>
-          <View style={styles.textWrap}>
-            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Instructor / Parent Dashboard'}</Text>
           </View>
           <Text style={styles.chevron}>{'›'}</Text>
         </TouchableOpacity>
