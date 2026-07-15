@@ -83,11 +83,13 @@ export default function SignUpScreen() {
             if (!refProfile) {
               setReferralWarn('Code not recognised — continuing without it.');
             } else if ((refProfile as { instructor_code?: string | null }).instructor_code) {
-              // Code owner is an instructor — create instructor relationship
+              // Code owner is an instructor — create a pending relationship;
+              // the pupil must explicitly accept before progress is shared
+              // (see Settings → Linked Instructors → Instructor Requests).
               await supabase.from('instructor_relationships').insert({
                 instructor_id: refProfile.id,
                 learner_id: userId,
-                status: 'accepted',
+                status: 'pending',
                 invite_code: code,
               });
             }

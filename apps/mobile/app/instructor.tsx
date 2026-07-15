@@ -49,6 +49,11 @@ type LearnerEntry = {
   lastNoteDate: string | null;
 };
 
+type InstructorEntry = {
+  rel: Relationship;
+  instructorUsername: string | null;
+};
+
 type LessonNote = {
   id: string;
   instructor_id: string;
@@ -1033,7 +1038,7 @@ function LearnerModeView({
   loading,
   onRefresh,
 }: {
-  instructors: Relationship[];
+  instructors: InstructorEntry[];
   loading: boolean;
   onRefresh: () => void;
 }) {
@@ -1041,6 +1046,31 @@ function LearnerModeView({
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [enteredCode, setEnteredCode]     = useState('');
   const [linking, setLinking]             = useState(false);
+  const [responding, setResponding]       = useState<string | null>(null);
+
+  async function handleAcceptInvite(relId: string) {
+    setResponding(relId);
+    try {
+      await supabase.from('instructor_relationships').update({ status: 'accepted' }).eq('id', relId);
+      onRefresh();
+    } catch {
+      Alert.alert('Error', 'Could not accept invite. Please try again.');
+    } finally {
+      setResponding(null);
+    }
+  }
+
+  async function handleDeclineInvite(relId: string) {
+    setResponding(relId);
+    try {
+      await supabase.from('instructor_relationships').delete().eq('id', relId);
+      onRefresh();
+    } catch {
+      Alert.alert('Error', 'Could not decline invite. Please try again.');
+    } finally {
+      setResponding(null);
+    }
+  }
 
   async function handleEnterCode() {
     const code = enteredCode.trim().toUpperCase();
@@ -1132,18 +1162,63 @@ function LearnerModeView({
     );
   }
 
+  const pendingInvites   = instructors.filter(i => i.rel.status === 'pending');
+  const acceptedEntries  = instructors.filter(i => i.rel.status === 'accepted');
+
   return (
     <ScrollView
       style={[styles.screen, { backgroundColor: theme.backgroundColor }]}
       contentContainerStyle={styles.listContent}
       showsVerticalScrollIndicator={false}
     >
+      {pendingInvites.length > 0 && (
+        <>
+          <Text style={[styles.dashTitle, { color: theme.textColor }]}>{'Instructor Requests'}</Text>
+          <Text style={[styles.learnerModeSub, { color: theme.subTextColor }]}>
+            {'These instructors want to view your progress. They can only see it once you accept.'}
+          </Text>
+          {pendingInvites.map(entry => (
+            <View key={entry.rel.id} style={[styles.instructorCard, { backgroundColor: theme.cardColor }]}>
+              <View style={[styles.avatarCircle, { backgroundColor: Colors.indigo }]}>
+                <Text style={styles.avatarText}>
+                  {getInitials(entry.instructorUsername ?? 'IN')}
+                </Text>
+              </View>
+              <View style={styles.learnerMeta}>
+                <Text style={[styles.learnerName, { color: theme.textColor }]}>
+                  {entry.instructorUsername ?? 'An instructor'}
+                </Text>
+                <Text style={[styles.learnerSub, { color: theme.subTextColor }]}>
+                  {'Requested '}{formatDate(entry.rel.created_at)}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.removeBtn}
+                onPress={() => void handleDeclineInvite(entry.rel.id)}
+                activeOpacity={0.75}
+                disabled={responding === entry.rel.id}
+              >
+                <Text style={styles.removeBtnText}>{'Decline'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.acceptBtn}
+                onPress={() => void handleAcceptInvite(entry.rel.id)}
+                activeOpacity={0.75}
+                disabled={responding === entry.rel.id}
+              >
+                <Text style={styles.acceptBtnText}>{'Accept'}</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </>
+      )}
+
       <Text style={[styles.dashTitle, { color: theme.textColor }]}>{'Linked Instructors'}</Text>
       <Text style={[styles.learnerModeSub, { color: theme.subTextColor }]}>
         {'These people can view your progress on ClearPass.'}
       </Text>
 
-      {instructors.length === 0 ? (
+      {acceptedEntries.length === 0 ? (
         <View style={[styles.instructorEmpty, { backgroundColor: theme.cardColor }]}>
           <Pip size={64} mood="curious" />
           <Text style={[styles.instructorEmptyTitle, { color: theme.textColor }]}>
@@ -1154,24 +1229,24 @@ function LearnerModeView({
           </Text>
         </View>
       ) : (
-        instructors.map(rel => (
-          <View key={rel.id} style={[styles.instructorCard, { backgroundColor: theme.cardColor }]}>
+        acceptedEntries.map(entry => (
+          <View key={entry.rel.id} style={[styles.instructorCard, { backgroundColor: theme.cardColor }]}>
             <View style={[styles.avatarCircle, { backgroundColor: Colors.indigo }]}>
               <Text style={styles.avatarText}>
-                {getInitials(rel.learner_name ?? rel.learner_email ?? 'IN')}
+                {getInitials(entry.instructorUsername ?? 'IN')}
               </Text>
             </View>
             <View style={styles.learnerMeta}>
               <Text style={[styles.learnerName, { color: theme.textColor }]}>
-                {rel.learner_name ?? rel.learner_email ?? 'Instructor'}
+                {entry.instructorUsername ?? 'Instructor'}
               </Text>
               <Text style={[styles.learnerSub, { color: theme.subTextColor }]}>
-                {'Linked '}{formatDate(rel.created_at)}
+                {'Linked '}{formatDate(entry.rel.created_at)}
               </Text>
             </View>
             <TouchableOpacity
               style={styles.removeBtn}
-              onPress={() => void handleRemove(rel.id, rel.learner_name ?? rel.learner_email ?? 'Instructor')}
+              onPress={() => void handleRemove(entry.rel.id, entry.instructorUsername ?? 'Instructor')}
               activeOpacity={0.75}
             >
               <Text style={styles.removeBtnText}>{'Remove'}</Text>
@@ -1236,7 +1311,7 @@ export default function InstructorScreen() {
   const theme   = useTheme();
 
   const [learners,           setLearners]           = useState<LearnerEntry[]>([]);
-  const [instructors,        setInstructors]        = useState<Relationship[]>([]);
+  const [instructors,        setInstructors]        = useState<InstructorEntry[]>([]);
   const [instructorCode,     setInstructorCode]     = useState<string | null>(null);
   const [referralCode,       setReferralCode]       = useState<string | null>(null);
   const [earnings,           setEarnings]           = useState<EarningEntry[]>([]);
@@ -1359,7 +1434,23 @@ export default function InstructorScreen() {
           .select('*')
           .eq('learner_id', user.id)
           .neq('status', 'rejected');
-        setInstructors((rels as Relationship[] | null) ?? []);
+
+        const relationships = (rels as Relationship[] | null) ?? [];
+        const instructorIds = [...new Set(relationships.map(r => r.instructor_id))];
+
+        let instructorProfiles: { id: string; username: string | null }[] = [];
+        if (instructorIds.length > 0) {
+          const { data: profileRows } = await supabase
+            .from('profiles')
+            .select('id, username')
+            .in('id', instructorIds);
+          instructorProfiles = (profileRows as { id: string; username: string | null }[] | null) ?? [];
+        }
+
+        setInstructors(relationships.map(rel => ({
+          rel,
+          instructorUsername: instructorProfiles.find(p => p.id === rel.instructor_id)?.username ?? null,
+        })));
       }
     } catch {
       // Table likely doesn't exist yet — show empty state
@@ -1659,6 +1750,13 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   removeBtnText: { fontSize: 12, fontWeight: '700', color: '#EF4444' },
+  acceptBtn: {
+    borderRadius: 8,
+    backgroundColor: Colors.indigo,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  acceptBtnText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
   enterCodeBtn: {
     borderRadius: 14,
     paddingVertical: 16,
