@@ -16,6 +16,7 @@ import { NetworkProvider } from '@/src/NetworkContext';
 import { handleIncomingUrl } from '@/src/deepLinks';
 import { supabase } from '@/src/supabase';
 import { configureNotificationHandler } from '@/src/notifications';
+import { resolvePostAuthRoute } from '@/src/postAuthRouting';
 import {
   getCacheStatus,
   cacheQuestions,
@@ -93,7 +94,8 @@ function RootLayout() {
         // navigation to /roadsigns), let it through without overriding.
         const entryPoints = new Set(['', 'index', 'onboarding', 'landing']);
         if (entryPoints.has(segments[0] ?? '')) {
-          router.replace('/(tabs)/home');
+          const route = await resolvePostAuthRoute(session.user.id);
+          router.replace(route);
         }
         return;
       }
@@ -167,8 +169,8 @@ function RootLayout() {
             <Stack.Screen name="paywall" options={{ headerShown: false }} />
             <Stack.Screen name="payment-success" options={{ headerShown: false }} />
             <Stack.Screen name="taster" options={{ headerShown: false }} />
-            <Stack.Screen name="auth" options={{ headerShown: false }} />
             <Stack.Screen name="auth/signup" options={{ headerShown: false }} />
+            <Stack.Screen name="auth/choose-account-type" options={{ headerShown: false }} />
             <Stack.Screen name="auth/signin" options={{ headerShown: false }} />
             <Stack.Screen name="auth/testdate" options={{ headerShown: false }} />
             <Stack.Screen name="auth/forgot-password" options={{ headerShown: false }} />
