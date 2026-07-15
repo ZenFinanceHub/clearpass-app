@@ -1,8 +1,10 @@
-import { Platform, Text, View } from 'react-native';
-import { Tabs } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Platform, Text, View } from 'react-native';
+import { Tabs, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/src/constants/theme';
 import { Pip } from '@/src/components/Pip';
+import { supabase } from '@/src/supabase';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -32,6 +34,36 @@ const TABS: TabConfig[] = [
 ];
 
 export default function TabLayout() {
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    void guardInstructorAccounts();
+  }, []);
+
+  async function guardInstructorAccounts() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('account_type')
+        .eq('id', user.id)
+        .maybeSingle();
+      if ((profile as { account_type?: string } | null)?.account_type === 'instructor') {
+        router.replace('/instructor');
+        return;
+      }
+    }
+    setChecked(true);
+  }
+
+  if (!checked) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.cardWhite }}>
+        <ActivityIndicator size="large" color={Colors.indigo} />
+      </View>
+    );
+  }
+
   return (
     <Tabs
       screenOptions={{
