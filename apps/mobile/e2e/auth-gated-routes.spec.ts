@@ -23,6 +23,8 @@ const AUTH_ROUTES = [
   '/aitutor',
   '/challenge',
   '/instructor',
+  '/linked-instructors',
+  '/auth/choose-account-type',
   '/studyplan',
   '/study-plan',
   '/testday',
