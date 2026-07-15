@@ -81,12 +81,13 @@ export default function ChooseAccountTypeScreen() {
             .eq('referral_code', referralCode)
             .maybeSingle();
           if (refProfile && (refProfile as { account_type?: string }).account_type === 'instructor') {
-            // Auto-link immediately — the referral code came from an
-            // instructor's link/code, which is the pupil's explicit consent.
+            // Code owner is an instructor — create a pending relationship;
+            // the pupil must explicitly accept before progress is shared
+            // (see Settings → Linked Instructors → Instructor Requests).
             await supabase.from('instructor_relationships').insert({
               instructor_id: (refProfile as { id: string }).id,
               learner_id: user.id,
-              status: 'accepted',
+              status: 'pending',
               invite_code: referralCode,
             });
           }

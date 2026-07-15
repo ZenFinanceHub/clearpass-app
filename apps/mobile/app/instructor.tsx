@@ -1434,6 +1434,13 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   removeBtnText: { fontSize: 12, fontWeight: '700', color: '#EF4444' },
+  acceptBtn: {
+    borderRadius: 8,
+    backgroundColor: Colors.indigo,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  acceptBtnText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
   enterCodeBtn: {
     borderRadius: 14,
     paddingVertical: 16,

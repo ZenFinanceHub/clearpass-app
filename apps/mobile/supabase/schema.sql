@@ -197,6 +197,41 @@ ALTER TABLE instructor_earnings ADD COLUMN IF NOT EXISTS payout_id UUID REFERENC
 ALTER TABLE instructor_earnings DROP CONSTRAINT IF EXISTS instructor_earnings_status_check;
 ALTER TABLE instructor_earnings ADD CONSTRAINT instructor_earnings_status_check CHECK (status IN ('pending', 'processing', 'paid'));
 
+-- Security fix: "Anyone can read leaderboard" was a second permissive SELECT
+-- policy on user_progress USING (true). Postgres ORs permissive policies
+-- together, so it silently made every user's full progress JSONB (mock
+-- history, topic scores, isPro, testDate, etc.) readable by anyone, even
+-- unauthenticated requests, regardless of the owner-only policy above.
+-- The `leaderboard` view (top of this file) already exposes only
+-- username/readiness_score/xp/streak/updated_at, and being a plain view
+-- (no security_invoker), it runs with its owner's privileges, so it keeps
+-- working once this policy is dropped — it never needed this policy.
+DROP POLICY IF EXISTS "Anyone can read leaderboard" ON user_progress;
+
+-- The instructor dashboard (instructor.tsx) reads linked pupils' progress
+-- directly from user_progress. That only worked because of the policy just
+-- removed; restore it properly scoped to accepted instructor relationships
+-- so access is enforced at the database layer, not just client-side.
+CREATE POLICY "Instructors can read linked learner progress" ON user_progress
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM instructor_relationships ir
+      WHERE ir.learner_id = user_progress.id
+        AND ir.instructor_id = auth.uid()
+        AND ir.status = 'accepted'
+    )
+  );
+
+-- instructor_relationships previously had no UPDATE policy at all, so no one
+-- (not even the row's own participants) could update it via the anon/
+-- authenticated role. Needed so a learner can accept a pending instructor
+-- invite (e.g. one created via referral signup) from Settings → Linked
+-- Instructors, mirroring the existing participant-scoped SELECT/INSERT/DELETE
+-- policies above.
+DROP POLICY IF EXISTS "Participants can update own relationships" ON instructor_relationships;
+CREATE POLICY "Participants can update own relationships" ON instructor_relationships
+  FOR UPDATE USING (auth.uid() = instructor_id OR auth.uid() = learner_id);
+
 -- ─────────────────────────────────────────────────────────────────
 -- Account type: learner vs instructor.
 --
