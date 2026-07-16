@@ -72,7 +72,13 @@ export function AnswerOptions({
           // Pre-answer "selected" highlight — Mock Test's only state (it never
           // reveals correctness); the other 4 screens go straight from
           // unanswered to isAnswered=true in one tap, so they never render this.
+          // Mock Test's original block escalated all three parts (card border/
+          // background, badge fill, text weight+color), not just the card —
+          // match that exactly, it's the same 3-part pattern as the reveal states.
           cardStyle = styles.optionSelected;
+          badgeStyle = styles.badgeSelected;
+          textStyle = styles.optionTextSelected;
+          badgeTextStyle = styles.badgeTextColored;
         }
 
         const isDisabled = disabled || (isAnswered && !ttsEnabled);
@@ -152,6 +158,7 @@ const styles = StyleSheet.create({
   optionDimmed:   { backgroundColor: Colors.cardWhite, borderColor: Colors.border },
   badge: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   badgeDefault:   { backgroundColor: Colors.surfaceGray },
+  badgeSelected:  { backgroundColor: Colors.indigo },
   badgeCorrect:   { backgroundColor: Colors.emerald },
   badgeWrong:     { backgroundColor: Colors.red },
   badgeText: { fontSize: 13, fontWeight: '800' },
@@ -159,6 +166,7 @@ const styles = StyleSheet.create({
   badgeTextColored: { color: Colors.cardWhite },
   optionText: { flex: 1, lineHeight: 22 },
   optionTextDefault: { color: Colors.textPrimary },
+  optionTextSelected: { color: Colors.textPrimary, fontWeight: '600' },
   optionTextCorrect: { color: Colors.emerald, fontWeight: '600' },
   optionTextWrong:   { color: Colors.red, fontWeight: '600' },
   optionTextDimmed:  { color: Colors.subtleText },
