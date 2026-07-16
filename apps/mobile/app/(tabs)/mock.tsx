@@ -35,6 +35,7 @@ import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { ShareCardModal } from '@/src/components/ShareableCard';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { Pip } from '@/src/components/Pip';
+import { AnswerOptions, LABELS } from '@/src/components/AnswerOptions';
 import { Colors } from '@/src/constants/theme';
 
 const TOTAL_QUESTIONS = 50;
@@ -43,7 +44,6 @@ const PASS_MARK = 43;
 const QUICK_QUESTIONS = 25;
 const QUICK_TIME_SECONDS = 28 * 60;
 const QUICK_PASS_MARK = 22;
-const LABELS = ['A', 'B', 'C', 'D'];
 
 const TOPIC_LABELS: Record<TopicCategory, string> = {
   [TopicCategory.Alertness]: 'Alertness',
@@ -376,26 +376,11 @@ export default function MockScreen() {
         </View>
 
         {/* Options */}
-        <View style={styles.optionList}>
-          {q.options.map((option, idx) => {
-            const isSelected = idx === selectedOption;
-            return (
-              <TouchableOpacity
-                key={idx}
-                style={[styles.option, isSelected && styles.optionSelected]}
-                onPress={() => handleSelect(idx)}
-                activeOpacity={0.75}
-              >
-                <View style={[styles.badge, isSelected && styles.badgeSelected]}>
-                  <Text style={[styles.badgeText, isSelected && styles.badgeTextSelected]}>{LABELS[idx]}</Text>
-                </View>
-                <Text style={[styles.optionText, isSelected && styles.optionTextSelected, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing }]}>
-                  {option}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        <AnswerOptions
+          question={q}
+          selectedIndex={selectedOption}
+          onSelect={handleSelect}
+        />
 
         {/* Navigation */}
         <View style={styles.navRow}>
@@ -850,26 +835,6 @@ const styles = StyleSheet.create({
   flaggedPillText: { fontSize: 10, fontWeight: '800', color: '#B45309', letterSpacing: 1 },
   questionImage: { width: '100%', height: 160, borderRadius: 8, marginBottom: 12 },
   questionText: { fontSize: 17, fontWeight: '600', lineHeight: 26 },
-
-  // Options
-  optionList: { gap: 8 },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-    padding: 13,
-    gap: 12,
-  },
-  optionSelected: { borderColor: Colors.indigo, borderWidth: 2, backgroundColor: Colors.indigoBg },
-  badge: { width: 30, height: 30, borderRadius: 8, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  badgeSelected: { backgroundColor: Colors.indigo },
-  badgeText: { fontSize: 13, fontWeight: '800', color: '#6B7280' },
-  badgeTextSelected: { color: '#FFFFFF' },
-  optionText: { flex: 1, fontSize: 15, color: '#374151', lineHeight: 21 },
-  optionTextSelected: { color: '#111827', fontWeight: '600' },
 
   // Nav row
   navRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
