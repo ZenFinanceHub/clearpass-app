@@ -1073,8 +1073,12 @@ function LearnerModeView({
   }
 
   async function handleEnterCode() {
+    if (linking) return;
     const code = enteredCode.trim().toUpperCase();
-    if (code.length !== 6 || linking) return;
+    if (code.length !== 6) {
+      Alert.alert('Invalid code', 'Please enter a valid 6-character code.');
+      return;
+    }
     setLinking(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -1274,7 +1278,7 @@ function LearnerModeView({
             <TextInput
               style={[styles.codeInput, { color: theme.textColor }]}
               value={enteredCode}
-              onChangeText={v => setEnteredCode(v.toUpperCase().slice(0, 6))}
+              onChangeText={v => setEnteredCode(v.toUpperCase().replace(/\s/g, '').slice(0, 6))}
               placeholder="ABC123"
               placeholderTextColor="#9CA3AF"
               autoCapitalize="characters"
