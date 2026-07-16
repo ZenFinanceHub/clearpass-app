@@ -75,6 +75,12 @@ function calculateReadiness({ topicScores, totalQuestionsAnswered, mockTestHisto
 }
 
 function daysAgoIso(days, hour = 18) {
+  // For "today" (days === 0), pinning to a fixed clock hour can land in the
+  // future relative to whenever this script actually runs (e.g. seeding at
+  // 9am with hour=18 produces a timestamp 9 hours from now), which showed up
+  // as "Active -1 days ago" on the dashboard. Use a small fixed offset from
+  // now instead, so day 0 is always safely in the past regardless of run time.
+  if (days === 0) return new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
   const d = new Date();
   d.setDate(d.getDate() - days);
   d.setHours(hour, 0, 0, 0);
@@ -350,6 +356,15 @@ async function main() {
   for (const e of EARNINGS) {
     const learner = await findUserByEmail(supabaseAdmin, e.learnerEmail);
     if (!learner) continue;
+    const { data: existingEarning } = await supabaseAdmin
+      .from('instructor_earnings')
+      .select('id')
+      .eq('instructor_id', instructor.id)
+      .eq('learner_id', learner.id)
+      .eq('amount', e.amount)
+      .eq('status', e.status)
+      .maybeSingle();
+    if (existingEarning) continue;
     await supabaseAdmin.from('instructor_earnings').insert({
       instructor_id: instructor.id,
       learner_id: learner.id,

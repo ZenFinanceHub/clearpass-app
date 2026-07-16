@@ -139,14 +139,18 @@ function formatDate(iso: string): string {
 }
 
 function formatLastNote(iso: string): string {
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  // Clamp to 0 so clock skew or a timestamp landing slightly in the future
+  // (e.g. seeded/synced data, timezone edge cases) never shows a negative count.
+  const days = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000));
   if (days === 0) return 'today';
   if (days === 1) return 'yesterday';
   return `${days} days ago`;
 }
 
 function formatLastActive(iso: string): string {
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  // Clamp to 0 so clock skew or a timestamp landing slightly in the future
+  // (e.g. seeded/synced data, timezone edge cases) never shows a negative count.
+  const days = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000));
   if (days === 0) return 'Active today';
   if (days === 1) return 'Active yesterday';
   return `Active ${days} days ago`;
