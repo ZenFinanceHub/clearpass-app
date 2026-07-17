@@ -66,11 +66,11 @@ import { useAccessibility } from '@/src/AccessibilityContext';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 import { getProxyUrl } from '@/src/proxyUrl';
+import { AnswerOptions, LABELS } from '@/src/components/AnswerOptions';
 
 const SESSION_SIZE = 10;
 const BATTLE_PER_TOPIC = 5;
 const BATTLE_ADVANCE_MS = 1000;
-const LABELS = ['A', 'B', 'C', 'D'];
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? '';
 
@@ -1174,60 +1174,15 @@ export default function PracticeScreen() {
         justCompleted={challengeJustCompletedFlash}
       />
 
-      <View style={styles.optionList}>
-        {question.options.map((option, idx) => {
-          const isCorrect = idx === question.correctIndex;
-          const isSelected = idx === selectedIndex;
-
-          let cardStyle = styles.optionDefault;
-          let badgeStyle = styles.badgeDefault;
-          let textStyle = styles.optionTextDefault;
-          let badgeTextStyle = styles.badgeTextDefault;
-
-          if (isAnswered) {
-            if (isCorrect) {
-              cardStyle = styles.optionCorrect;
-              badgeStyle = styles.badgeCorrect;
-              textStyle = styles.optionTextCorrect;
-              badgeTextStyle = styles.badgeTextColored;
-            } else if (isSelected) {
-              cardStyle = styles.optionWrong;
-              badgeStyle = styles.badgeWrong;
-              textStyle = styles.optionTextWrong;
-              badgeTextStyle = styles.badgeTextColored;
-            } else {
-              cardStyle = styles.optionDimmed;
-              textStyle = styles.optionTextDimmed;
-            }
-          }
-
-          return (
-            <Animated.View key={idx} style={{ transform: [{ scale: optionScales[idx] }] }}>
-              <TouchableOpacity
-                style={[styles.option, cardStyle, settings.highContrast ? { borderWidth: 2, borderColor: isAnswered ? undefined : theme.borderColor } : undefined]}
-                onPress={() => {
-                  if (isAnswered) {
-                    if (settings.textToSpeech) { Speech.stop(); Speech.speak(option, { language: 'en-GB' }); }
-                    return;
-                  }
-                  Animated.sequence([
-                    Animated.timing(optionScales[idx], { toValue: 0.95, duration: 70, useNativeDriver: true }),
-                    Animated.spring(optionScales[idx], { toValue: 1, useNativeDriver: true, speed: 50, bounciness: 4 }),
-                  ]).start();
-                  void handleAnswer(idx);
-                }}
-                activeOpacity={!isAnswered || settings.textToSpeech ? 0.75 : 1}
-                disabled={isAnswered && !settings.textToSpeech}
-              >
-                <View style={[styles.badge, badgeStyle]}>
-                  <Text style={[styles.badgeText, badgeTextStyle]}>{LABELS[idx]}</Text>
-                </View>
-                <Text style={[styles.optionText, textStyle, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing }]}>{option}</Text>
-              </TouchableOpacity>
-            </Animated.View>
-          );
-        })}
-      </View>
+      <AnswerOptions
+        question={question}
+        selectedIndex={selectedIndex}
+        onSelect={(idx) => void handleAnswer(idx)}
+        isAnswered={isAnswered}
+        highContrast={settings.highContrast}
+        ttsEnabled={settings.textToSpeech}
+        animateOnPress
+      />
 
       {isAnswered && (
         <View
