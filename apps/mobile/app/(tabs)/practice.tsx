@@ -1174,15 +1174,17 @@ export default function PracticeScreen() {
         justCompleted={challengeJustCompletedFlash}
       />
 
-      <AnswerOptions
-        question={question}
-        selectedIndex={selectedIndex}
-        onSelect={(idx) => void handleAnswer(idx)}
-        isAnswered={isAnswered}
-        highContrast={settings.highContrast}
-        ttsEnabled={settings.textToSpeech}
-        animateOnPress
-      />
+      <View style={styles.optionList}>
+        <AnswerOptions
+          question={question}
+          selectedIndex={selectedIndex}
+          onSelect={(idx) => void handleAnswer(idx)}
+          isAnswered={isAnswered}
+          highContrast={settings.highContrast}
+          ttsEnabled={settings.textToSpeech}
+          animateOnPress
+        />
+      </View>
 
       {isAnswered && (
         <View
