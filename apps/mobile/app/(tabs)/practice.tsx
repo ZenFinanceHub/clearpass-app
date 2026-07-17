@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
   Image,
   Linking,
   ScrollView,
@@ -66,11 +65,11 @@ import { useAccessibility } from '@/src/AccessibilityContext';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 import { getProxyUrl } from '@/src/proxyUrl';
+import { AnswerOptions, LABELS } from '@/src/components/AnswerOptions';
 
 const SESSION_SIZE = 10;
 const BATTLE_PER_TOPIC = 5;
 const BATTLE_ADVANCE_MS = 1000;
-const LABELS = ['A', 'B', 'C', 'D'];
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? '';
 
@@ -231,38 +230,10 @@ export default function PracticeScreen() {
   const weakAnsweredRef3 = useRef(false);
   const weakAttemptsRef  = useRef(0);
 
-  const optionScales = useRef([0,1,2,3].map(() => new Animated.Value(1))).current;
-
-  // Reset option scales each new question
-  useEffect(() => {
-    optionScales.forEach(s => s.setValue(1));
-  }, [currentIndex]);
-
   // Clear the daily-challenge-complete flash once the next question loads
   useEffect(() => {
     setChallengeJustCompletedFlash(false);
   }, [currentIndex, battleDisplay.idx]);
-
-  // Bounce the correct answer card when revealed
-  useEffect(() => {
-    if (selectedIndex === null || questions.length === 0) return;
-    const q = questions[currentIndex];
-    if (!q) return;
-    const correctScale = optionScales[q.correctIndex];
-    Animated.spring(correctScale, {
-      toValue: 1.04,
-      useNativeDriver: true,
-      speed: 60,
-      bounciness: 10,
-    }).start(() => {
-      Animated.spring(correctScale, {
-        toValue: 1,
-        useNativeDriver: true,
-        speed: 30,
-        bounciness: 3,
-      }).start();
-    });
-  }, [selectedIndex]);
 
   useEffect(() => {
     void getWeakSpotQuestions().then(ids => setWeakSpotCount(ids.length));
@@ -1175,58 +1146,15 @@ export default function PracticeScreen() {
       />
 
       <View style={styles.optionList}>
-        {question.options.map((option, idx) => {
-          const isCorrect = idx === question.correctIndex;
-          const isSelected = idx === selectedIndex;
-
-          let cardStyle = styles.optionDefault;
-          let badgeStyle = styles.badgeDefault;
-          let textStyle = styles.optionTextDefault;
-          let badgeTextStyle = styles.badgeTextDefault;
-
-          if (isAnswered) {
-            if (isCorrect) {
-              cardStyle = styles.optionCorrect;
-              badgeStyle = styles.badgeCorrect;
-              textStyle = styles.optionTextCorrect;
-              badgeTextStyle = styles.badgeTextColored;
-            } else if (isSelected) {
-              cardStyle = styles.optionWrong;
-              badgeStyle = styles.badgeWrong;
-              textStyle = styles.optionTextWrong;
-              badgeTextStyle = styles.badgeTextColored;
-            } else {
-              cardStyle = styles.optionDimmed;
-              textStyle = styles.optionTextDimmed;
-            }
-          }
-
-          return (
-            <Animated.View key={idx} style={{ transform: [{ scale: optionScales[idx] }] }}>
-              <TouchableOpacity
-                style={[styles.option, cardStyle, settings.highContrast ? { borderWidth: 2, borderColor: isAnswered ? undefined : theme.borderColor } : undefined]}
-                onPress={() => {
-                  if (isAnswered) {
-                    if (settings.textToSpeech) { Speech.stop(); Speech.speak(option, { language: 'en-GB' }); }
-                    return;
-                  }
-                  Animated.sequence([
-                    Animated.timing(optionScales[idx], { toValue: 0.95, duration: 70, useNativeDriver: true }),
-                    Animated.spring(optionScales[idx], { toValue: 1, useNativeDriver: true, speed: 50, bounciness: 4 }),
-                  ]).start();
-                  void handleAnswer(idx);
-                }}
-                activeOpacity={!isAnswered || settings.textToSpeech ? 0.75 : 1}
-                disabled={isAnswered && !settings.textToSpeech}
-              >
-                <View style={[styles.badge, badgeStyle]}>
-                  <Text style={[styles.badgeText, badgeTextStyle]}>{LABELS[idx]}</Text>
-                </View>
-                <Text style={[styles.optionText, textStyle, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing }]}>{option}</Text>
-              </TouchableOpacity>
-            </Animated.View>
-          );
-        })}
+        <AnswerOptions
+          question={question}
+          selectedIndex={selectedIndex}
+          onSelect={(idx) => void handleAnswer(idx)}
+          isAnswered={isAnswered}
+          highContrast={settings.highContrast}
+          ttsEnabled={settings.textToSpeech}
+          animateOnPress
+        />
       </View>
 
       {isAnswered && (
@@ -1756,48 +1684,13 @@ function BattleView({
       />
 
       <View style={styles.optionList}>
-        {question.options.map((option, idx) => {
-          const isCorrect = idx === question.correctIndex;
-          const isSelected = idx === selected;
-          const isAnswered = selected !== null;
-
-          let cardStyle = styles.optionDefault;
-          let badgeStyle = styles.badgeDefault;
-          let textStyle = styles.optionTextDefault;
-          let badgeTextStyle = styles.badgeTextDefault;
-
-          if (isAnswered) {
-            if (isCorrect) {
-              cardStyle = styles.optionCorrect;
-              badgeStyle = styles.badgeCorrect;
-              textStyle = styles.optionTextCorrect;
-              badgeTextStyle = styles.badgeTextColored;
-            } else if (isSelected) {
-              cardStyle = styles.optionWrong;
-              badgeStyle = styles.badgeWrong;
-              textStyle = styles.optionTextWrong;
-              badgeTextStyle = styles.badgeTextColored;
-            } else {
-              cardStyle = styles.optionDimmed;
-              textStyle = styles.optionTextDimmed;
-            }
-          }
-
-          return (
-            <TouchableOpacity
-              key={idx}
-              style={[styles.option, cardStyle, theme.highContrast ? { borderWidth: 2, borderColor: isAnswered ? undefined : theme.borderColor } : undefined]}
-              onPress={() => onAnswer(idx)}
-              activeOpacity={isAnswered ? 1 : 0.75}
-              disabled={isAnswered}
-            >
-              <View style={[styles.badge, badgeStyle]}>
-                <Text style={[styles.badgeText, badgeTextStyle]}>{LABELS[idx]}</Text>
-              </View>
-              <Text style={[styles.optionText, textStyle, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing }]}>{option}</Text>
-            </TouchableOpacity>
-          );
-        })}
+        <AnswerOptions
+          question={question}
+          selectedIndex={selected}
+          onSelect={onAnswer}
+          isAnswered={selected !== null}
+          highContrast={theme.highContrast}
+        />
       </View>
 
       {selected !== null && (
@@ -1969,33 +1862,12 @@ function WeakSpotView({
 
       {!showCleared && (
         <View style={styles.optionList}>
-          {question.options.map((option, idx) => {
-            const isCorrect = idx === question.correctIndex;
-            const isSelected = idx === selected;
-            let cardStyle = styles.optionDefault;
-            let badgeStyle = styles.badgeDefault;
-            let textStyle = styles.optionTextDefault;
-            let badgeTextStyle = styles.badgeTextDefault;
-            if (isAnswered) {
-              if (isCorrect) { cardStyle = styles.optionCorrect; badgeStyle = styles.badgeCorrect; textStyle = styles.optionTextCorrect; badgeTextStyle = styles.badgeTextColored; }
-              else if (isSelected) { cardStyle = styles.optionWrong; badgeStyle = styles.badgeWrong; textStyle = styles.optionTextWrong; badgeTextStyle = styles.badgeTextColored; }
-              else { cardStyle = styles.optionDimmed; textStyle = styles.optionTextDimmed; }
-            }
-            return (
-              <TouchableOpacity
-                key={idx}
-                style={[styles.option, cardStyle]}
-                onPress={() => onAnswer(idx)}
-                activeOpacity={isAnswered ? 1 : 0.75}
-                disabled={isAnswered}
-              >
-                <View style={[styles.badge, badgeStyle]}>
-                  <Text style={[styles.badgeText, badgeTextStyle]}>{LABELS[idx]}</Text>
-                </View>
-                <Text style={[styles.optionText, textStyle, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing }]}>{option}</Text>
-              </TouchableOpacity>
-            );
-          })}
+          <AnswerOptions
+            question={question}
+            selectedIndex={selected}
+            onSelect={onAnswer}
+            isAnswered={isAnswered}
+          />
         </View>
       )}
 
@@ -2127,48 +1999,12 @@ function SpeedRoundView({
       </View>
 
       <View style={styles.optionList}>
-        {question.options.map((option, idx) => {
-          const isCorrect = idx === question.correctIndex;
-          const isSelected = idx === selected;
-          const isAnswered = selected !== null;
-
-          let cardStyle = styles.optionDefault;
-          let badgeStyle = styles.badgeDefault;
-          let textStyle = styles.optionTextDefault;
-          let badgeTextStyle = styles.badgeTextDefault;
-
-          if (isAnswered) {
-            if (isCorrect) {
-              cardStyle = styles.optionCorrect;
-              badgeStyle = styles.badgeCorrect;
-              textStyle = styles.optionTextCorrect;
-              badgeTextStyle = styles.badgeTextColored;
-            } else if (isSelected) {
-              cardStyle = styles.optionWrong;
-              badgeStyle = styles.badgeWrong;
-              textStyle = styles.optionTextWrong;
-              badgeTextStyle = styles.badgeTextColored;
-            } else {
-              cardStyle = styles.optionDimmed;
-              textStyle = styles.optionTextDimmed;
-            }
-          }
-
-          return (
-            <TouchableOpacity
-              key={idx}
-              style={[styles.option, cardStyle]}
-              onPress={() => onAnswer(idx)}
-              activeOpacity={isAnswered ? 1 : 0.75}
-              disabled={isAnswered}
-            >
-              <View style={[styles.badge, badgeStyle]}>
-                <Text style={[styles.badgeText, badgeTextStyle]}>{LABELS[idx]}</Text>
-              </View>
-              <Text style={[styles.optionText, textStyle, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing }]}>{option}</Text>
-            </TouchableOpacity>
-          );
-        })}
+        <AnswerOptions
+          question={question}
+          selectedIndex={selected}
+          onSelect={onAnswer}
+          isAnswered={selected !== null}
+        />
       </View>
 
       {selected !== null && (
@@ -2359,37 +2195,6 @@ const styles = StyleSheet.create({
 
   // Options
   optionList: { gap: 10, marginBottom: 14 },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 14,
-    gap: 12,
-  },
-  optionDefault: { backgroundColor: Colors.cardWhite, borderColor: Colors.border },
-  optionCorrect: { backgroundColor: Colors.emeraldBg, borderColor: Colors.emerald, borderWidth: 2 },
-  optionWrong:   { backgroundColor: Colors.redBg, borderColor: Colors.red, borderWidth: 2 },
-  optionDimmed:  { backgroundColor: Colors.cardWhite, borderColor: Colors.border },
-  badge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  badgeDefault: { backgroundColor: Colors.surfaceGray },
-  badgeCorrect: { backgroundColor: Colors.emerald },
-  badgeWrong:   { backgroundColor: Colors.red },
-  badgeText: { fontSize: 13, fontWeight: '800' },
-  badgeTextDefault: { color: Colors.mutedText },
-  badgeTextColored: { color: Colors.cardWhite },
-  optionText: { flex: 1, fontSize: 15, lineHeight: 22 },
-  optionTextDefault: { color: Colors.textPrimary },
-  optionTextCorrect: { color: Colors.emerald, fontWeight: '600' },
-  optionTextWrong:   { color: Colors.red, fontWeight: '600' },
-  optionTextDimmed:  { color: Colors.subtleText },
 
   // Explanation
   explanation: { borderRadius: 12, padding: 16, marginBottom: 14, borderLeftWidth: 3 },

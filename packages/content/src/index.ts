@@ -15,14 +15,6 @@ import { documentsAndRegulationsQuestions } from './questions/documentsAndRegula
 import { accidentsAndEmergenciesQuestions } from './questions/accidentsAndEmergencies';
 import { vehicleLoadingQuestions } from './questions/vehicleLoading';
 
-// Picture-choice questions from the DVSA bank whose 4 answer options are each
-// meant to be a sign image, not text. We don't have per-option sign images yet
-// (pending the DVSA asset pack), so these would render as unanswerable blank
-// options. Excluded from the pool until that pack arrives.
-function hasUsableOptions(q: Question): boolean {
-  return q.options.some((o: string) => o.trim() !== '');
-}
-
 export const allQuestions: Question[] = [
   ...alertnessQuestions,
   ...attitudeQuestions,
@@ -38,7 +30,7 @@ export const allQuestions: Question[] = [
   ...documentsAndRegulationsQuestions,
   ...accidentsAndEmergenciesQuestions,
   ...vehicleLoadingQuestions,
-].filter(hasUsableOptions);
+];
 
 // Initialise every category to an empty array so the Record is always complete.
 export const questionsByTopic: Record<TopicCategory, Question[]> = (
