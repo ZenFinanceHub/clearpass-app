@@ -266,6 +266,7 @@ export const alertnessQuestions: Question[] = [
     "Change down one gear before you pass",
     ],
     correctIndex: 2,
+    imageUrl: "https://secavejbaapapvvqbwed.supabase.co/storage/v1/object/public/question-images/BB1439.png",
     explanation: "Allow the cyclist plenty of room in case they wobble or swerve around a pothole or raised drain. Look well ahead before you start to overtake, because you'll need to cross the hazard line. Look for entrances where vehicles could be waiting to pull out.",
     topicCategory: TopicCategory.Alertness,
     difficulty: 1,

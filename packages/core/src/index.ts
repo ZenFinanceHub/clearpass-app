@@ -10,3 +10,4 @@ export * from './xp';
 export * from './achievements';
 export * from './dailyChallenge';
 export * from './hazardScoring';
+export { isImageChoiceQuestion } from './isImageChoiceQuestion';

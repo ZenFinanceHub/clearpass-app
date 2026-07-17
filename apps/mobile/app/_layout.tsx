@@ -199,10 +199,14 @@ function RootLayout() {
             <Stack.Screen name="study-plan" options={{ headerShown: false }} />
           </Stack>
           <StatusBar style="light" />
-          {/* Pip FAB — opens Ask Pip; hidden when already on tutor tab */}
+          {/* Pip FAB — opens Ask Pip; hidden when already on tutor tab.
+              Anchored below the header (not bottom-right) so it never overlaps
+              in-content bottom controls — e.g. Mock Test's Prev/Next row, or any
+              other screen's bottom CTA — which a fixed bottom-right FAB would
+              otherwise sit on top of and intercept taps for. */}
           {!(segments as string[]).includes('tutor') && (
             <TouchableOpacity
-              style={[toastStyles.pipFab, { bottom: 96 + insets.bottom }]}
+              style={[toastStyles.pipFab, { top: insets.top + 56 }]}
               onPress={() => router.push('/tutor' as any)}
               accessibilityLabel="Ask Pip"
               accessibilityRole="button"

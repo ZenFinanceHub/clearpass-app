@@ -166,6 +166,8 @@ export default function SettingsScreen() {
 
   // Referral code state
   const [myReferralCode, setMyReferralCode] = useState<string | null>(null);
+  // Instructor-linking code — only present for accounts that have used instructor features
+  const [myInstructorCode, setMyInstructorCode] = useState<string | null>(null);
 
   // Parent email state
   const [parentEmail, setParentEmail]         = useState<string | null>(null);
@@ -200,7 +202,7 @@ export default function SettingsScreen() {
         setEmail(user.email ?? null);
         const { data: profile } = await supabase
           .from('profiles')
-          .select('username, referral_code')
+          .select('username, referral_code, instructor_code')
           .eq('id', user.id)
           .single();
         if (profile?.username) setUsername(profile.username as string);
@@ -214,6 +216,10 @@ export default function SettingsScreen() {
           await supabase.from('profiles').update({ referral_code: code }).eq('id', user.id);
         }
         setMyReferralCode(code);
+
+        // Only shown if the account already has one — never generated from Settings,
+        // so learner-only accounts don't get pushed into instructor UI.
+        setMyInstructorCode((profile as { instructor_code?: string | null } | null)?.instructor_code ?? null);
       }
       if (!username) {
         const pending = await AsyncStorage.getItem('@clearpass/pending_username');
@@ -382,6 +388,12 @@ export default function SettingsScreen() {
     if (!myReferralCode) return;
     await Clipboard.setStringAsync(myReferralCode);
     Alert.alert('Copied!', `Code ${myReferralCode} copied to clipboard.`);
+  }
+
+  async function handleCopyInstructorCode() {
+    if (!myInstructorCode) return;
+    await Clipboard.setStringAsync(myInstructorCode);
+    Alert.alert('Copied!', `Code ${myInstructorCode} copied to clipboard.`);
   }
 
   async function handleSaveParentEmail() {
@@ -629,8 +641,9 @@ export default function SettingsScreen() {
         {myReferralCode && (
           <View style={styles.referralRow}>
             <View style={styles.referralLeft}>
-              <Text style={[styles.referralLabel, { color: theme.subTextColor }]}>{'Your code'}</Text>
+              <Text style={[styles.referralLabel, { color: theme.subTextColor }]}>{'Referral code'}</Text>
               <Text style={[styles.referralCode, { color: theme.textColor }]}>{myReferralCode}</Text>
+              <Text style={[styles.referralHint, { color: theme.subTextColor }]}>{'For inviting friends to ClearPass — not for instructor linking'}</Text>
             </View>
             <View style={styles.referralBtns}>
               <TouchableOpacity style={styles.referralCopyBtn} onPress={() => void handleCopyReferralCode()} activeOpacity={0.75}>
@@ -638,6 +651,20 @@ export default function SettingsScreen() {
               </TouchableOpacity>
               <TouchableOpacity style={styles.referralShareBtn} onPress={() => void handleShareReferralCode()} activeOpacity={0.75}>
                 <Text style={styles.referralShareText}>{'Share'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+        {myInstructorCode && (
+          <View style={styles.referralRow}>
+            <View style={styles.referralLeft}>
+              <Text style={[styles.referralLabel, { color: theme.subTextColor }]}>{'Instructor code'}</Text>
+              <Text style={[styles.referralCode, { color: theme.textColor }]}>{myInstructorCode}</Text>
+              <Text style={[styles.referralHint, { color: theme.subTextColor }]}>{'Share this so a learner can link to you'}</Text>
+            </View>
+            <View style={styles.referralBtns}>
+              <TouchableOpacity style={styles.referralCopyBtn} onPress={() => void handleCopyInstructorCode()} activeOpacity={0.75}>
+                <Text style={styles.referralCopyText}>{'Copy'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1245,6 +1272,7 @@ const styles = StyleSheet.create({
   referralLeft:    { gap: 2 },
   referralLabel:   { fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
   referralCode:    { fontSize: 18, fontWeight: '800', letterSpacing: 2 },
+  referralHint:    { fontSize: 10, marginTop: 1 },
   referralBtns:    { flexDirection: 'row', gap: 8 },
   referralCopyBtn: {
     borderRadius: 8,

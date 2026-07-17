@@ -9,4 +9,10 @@ export interface Question {
   topicCategory: TopicCategory;
   difficulty: 1 | 2 | 3;
   imageUrl?: string;
+  /**
+   * When set, one image per entry in `options` (same length, same order).
+   * `options[i]` becomes the accessible/TTS label for that image rather
+   * than visible button text — see isImageChoiceQuestion().
+   */
+  optionImages?: string[];
 }
