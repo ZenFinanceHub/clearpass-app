@@ -390,6 +390,7 @@ export const attitudeQuestions: Question[] = [
     "Flash your headlights several times",
     ],
     correctIndex: 2,
+    imageUrl: "https://secavejbaapapvvqbwed.supabase.co/storage/v1/object/public/question-images/BB1013.png",
     explanation: "There are times when other drivers make incorrect or ill-judged decisions. Be tolerant and try not to retaliate or react aggressively. Always consider the safety of other road users, your passengers and yourself.",
     topicCategory: TopicCategory.Attitude,
     difficulty: 1,

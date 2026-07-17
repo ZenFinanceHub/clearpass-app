@@ -181,6 +181,7 @@ export const otherTypesQuestions: Question[] = [
     "Move to the right-hand side of the road",
     ],
     correctIndex: 0,
+    imageUrl: "https://secavejbaapapvvqbwed.supabase.co/storage/v1/object/public/question-images/AB2737.png",
     explanation: "When turning, long vehicles need much more room on the road than other vehicles. At junctions, they may take up the whole of the road space, so be patient and allow them the room they need.",
     topicCategory: TopicCategory.OtherTypes,
     difficulty: 1,

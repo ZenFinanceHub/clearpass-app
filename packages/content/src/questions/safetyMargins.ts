@@ -320,6 +320,7 @@ export const safetyMarginsQuestions: Question[] = [
     "Test your brakes",
     ],
     correctIndex: 3,
+    imageUrl: "https://secavejbaapapvvqbwed.supabase.co/storage/v1/object/public/question-images/BB1351.png",
     explanation: "If your brakes have been thoroughly soaked, you should check that they're working properly before you build up speed again. Before you do this, remember to check your mirrors and consider what's behind you.",
     topicCategory: TopicCategory.SafetyMargins,
     difficulty: 1,
