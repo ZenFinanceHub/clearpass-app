@@ -1891,33 +1891,12 @@ function WeakSpotView({
 
       {!showCleared && (
         <View style={styles.optionList}>
-          {question.options.map((option, idx) => {
-            const isCorrect = idx === question.correctIndex;
-            const isSelected = idx === selected;
-            let cardStyle = styles.optionDefault;
-            let badgeStyle = styles.badgeDefault;
-            let textStyle = styles.optionTextDefault;
-            let badgeTextStyle = styles.badgeTextDefault;
-            if (isAnswered) {
-              if (isCorrect) { cardStyle = styles.optionCorrect; badgeStyle = styles.badgeCorrect; textStyle = styles.optionTextCorrect; badgeTextStyle = styles.badgeTextColored; }
-              else if (isSelected) { cardStyle = styles.optionWrong; badgeStyle = styles.badgeWrong; textStyle = styles.optionTextWrong; badgeTextStyle = styles.badgeTextColored; }
-              else { cardStyle = styles.optionDimmed; textStyle = styles.optionTextDimmed; }
-            }
-            return (
-              <TouchableOpacity
-                key={idx}
-                style={[styles.option, cardStyle]}
-                onPress={() => onAnswer(idx)}
-                activeOpacity={isAnswered ? 1 : 0.75}
-                disabled={isAnswered}
-              >
-                <View style={[styles.badge, badgeStyle]}>
-                  <Text style={[styles.badgeText, badgeTextStyle]}>{LABELS[idx]}</Text>
-                </View>
-                <Text style={[styles.optionText, textStyle, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing }]}>{option}</Text>
-              </TouchableOpacity>
-            );
-          })}
+          <AnswerOptions
+            question={question}
+            selectedIndex={selected}
+            onSelect={onAnswer}
+            isAnswered={isAnswered}
+          />
         </View>
       )}
 
