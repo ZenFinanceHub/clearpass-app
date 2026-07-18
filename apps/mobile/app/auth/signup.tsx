@@ -39,9 +39,16 @@ export default function SignUpScreen() {
   const [socialError,     setSocialError]     = useState('');
 
   useEffect(() => {
+    // Don't persist params.ref to storage here — that would write on mere
+    // page visit, before the user has actually chosen to sign up (and
+    // linger indefinitely if they never do). A ?ref= on this exact page
+    // only needs to survive for the lifetime of this screen, which local
+    // state already covers; it's read directly at submission time below.
+    // Storage is reserved for codes captured via a *different* deep link
+    // that doesn't land here directly (_layout.tsx's 'referralCapture'),
+    // which this still needs to fall back to.
     if (params.ref) {
       setReferralCode(params.ref);
-      void AsyncStorage.setItem(REFERRAL_CODE_KEY, params.ref);
       return;
     }
     void AsyncStorage.getItem(REFERRAL_CODE_KEY).then((stored) => {
