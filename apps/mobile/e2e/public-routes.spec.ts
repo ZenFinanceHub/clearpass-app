@@ -108,23 +108,6 @@ test.describe('/onboarding', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// /auth
-// ─────────────────────────────────────────────────────────────────
-test.describe('/auth', () => {
-  test.beforeEach(async ({ page }) => { await page.goto('/auth'); });
-
-  test('loads auth page', async ({ page }) => {
-    await expect(page.locator('body')).toBeVisible();
-    await page.waitForLoadState('networkidle');
-  });
-
-  test('shows sign in and sign up tabs or inputs', async ({ page }) => {
-    const signIn = page.getByText(/sign in/i).first();
-    await expect(signIn).toBeVisible({ timeout: 10000 });
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────
 // /auth/signin
 // ─────────────────────────────────────────────────────────────────
 test.describe('/auth/signin', () => {

@@ -16,6 +16,7 @@ import { NetworkProvider } from '@/src/NetworkContext';
 import { handleIncomingUrl } from '@/src/deepLinks';
 import { supabase } from '@/src/supabase';
 import { configureNotificationHandler } from '@/src/notifications';
+import { resolvePostAuthRoute } from '@/src/postAuthRouting';
 import {
   getCacheStatus,
   cacheQuestions,
@@ -93,12 +94,21 @@ function RootLayout() {
         // navigation to /roadsigns), let it through without overriding.
         const entryPoints = new Set(['', 'index', 'onboarding', 'landing']);
         if (entryPoints.has(segments[0] ?? '')) {
-          router.replace('/(tabs)/home');
+          let route = '/(tabs)/home';
+          try {
+            route = await resolvePostAuthRoute(session.user.id);
+          } catch {}
+          router.replace(route);
         }
         return;
       }
       navigated.current = true;
-      if (PUBLIC_ROUTES.has(segments[0] ?? '')) {
+      // /auth/* covers signin, signup, choose-account-type, testdate,
+      // forgot-password, reset-password — all valid unauthenticated
+      // destinations in their own right. Overriding them here would strip
+      // any in-flight route (and its query string, e.g. a referral link's
+      // ?ref=) by bouncing straight to /auth/signin.
+      if (PUBLIC_ROUTES.has(segments[0] ?? '') || segments[0] === 'auth') {
         return;
       }
       const seen = await AsyncStorage.getItem(ONBOARDING_KEY);
@@ -167,8 +177,8 @@ function RootLayout() {
             <Stack.Screen name="paywall" options={{ headerShown: false }} />
             <Stack.Screen name="payment-success" options={{ headerShown: false }} />
             <Stack.Screen name="taster" options={{ headerShown: false }} />
-            <Stack.Screen name="auth" options={{ headerShown: false }} />
             <Stack.Screen name="auth/signup" options={{ headerShown: false }} />
+            <Stack.Screen name="auth/choose-account-type" options={{ headerShown: false }} />
             <Stack.Screen name="auth/signin" options={{ headerShown: false }} />
             <Stack.Screen name="auth/testdate" options={{ headerShown: false }} />
             <Stack.Screen name="auth/forgot-password" options={{ headerShown: false }} />

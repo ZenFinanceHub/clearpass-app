@@ -15,6 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/src/supabase';
 import { signInWithApple, signInWithGoogle } from '@/src/socialAuth';
+import { resolvePostAuthRoute } from '@/src/postAuthRouting';
 import { Colors } from '@/src/constants/theme';
 import PasswordInput from '@/src/components/PasswordInput';
 
@@ -27,7 +28,7 @@ export default function SignUpScreen() {
   const [username,        setUsername]        = useState('');
   const [email,           setEmail]           = useState('');
   const [password,        setPassword]        = useState('');
-  const [referralCode,    setReferralCode]    = useState(params.ref ?? '');
+  const [referralCode,    setReferralCode]    = useState('');
   const [loading,         setLoading]         = useState(false);
   const [error,           setError]           = useState('');
   const [referralWarn,    setReferralWarn]    = useState('');
@@ -38,10 +39,21 @@ export default function SignUpScreen() {
   const [socialError,     setSocialError]     = useState('');
 
   useEffect(() => {
+    // Don't persist params.ref to storage here — that would write on mere
+    // page visit, before the user has actually chosen to sign up (and
+    // linger indefinitely if they never do). A ?ref= on this exact page
+    // only needs to survive for the lifetime of this screen, which local
+    // state already covers; it's read directly at submission time below.
+    // Storage is reserved for codes captured via a *different* deep link
+    // that doesn't land here directly (_layout.tsx's 'referralCapture'),
+    // which this still needs to fall back to.
     if (params.ref) {
       setReferralCode(params.ref);
-      void AsyncStorage.setItem(REFERRAL_CODE_KEY, params.ref);
+      return;
     }
+    void AsyncStorage.getItem(REFERRAL_CODE_KEY).then((stored) => {
+      if (stored) setReferralCode(stored);
+    });
   }, [params.ref]);
 
   async function handleSignUp() {
@@ -60,43 +72,50 @@ export default function SignUpScreen() {
 
       // user.id is available even when email confirmation is required (session will be null)
       const userId = session?.user?.id ?? user?.id;
+      const name = username.trim();
+      await AsyncStorage.setItem(PENDING_USERNAME_KEY, name);
 
-      if (userId) {
-        const name = username.trim();
-        const code = referralCode.trim().toUpperCase() || (await AsyncStorage.getItem(REFERRAL_CODE_KEY)) || null;
-        const profileData: Record<string, string> = { id: userId, username: name };
-        if (code) profileData.referred_by = code;
-        const { error: profileError } = await supabase.from('profiles').insert(profileData);
-        if (profileError && profileError.code !== '23505') {
-          await AsyncStorage.setItem(PENDING_USERNAME_KEY, name);
-        }
+      const code = referralCode.trim().toUpperCase() || (await AsyncStorage.getItem(REFERRAL_CODE_KEY)) || null;
+      let pendingInstructorLinked = false;
 
-        if (code) {
-          await AsyncStorage.setItem(REFERRAL_CODE_KEY, code);
+      if (userId && code) {
+        // A referral/instructor code — typed manually or pre-filled from a
+        // ?ref= link — always forces the learner path with no picker shown.
+        await AsyncStorage.setItem(REFERRAL_CODE_KEY, code);
+        const { error: profileError } = await supabase.from('profiles').insert({
+          id: userId,
+          username: name,
+          account_type: 'learner',
+          referred_by: code,
+        });
+        if (!profileError || profileError.code === '23505') {
           try {
             const { data: refProfile } = await supabase
               .from('profiles')
-              .select('id, instructor_code')
+              .select('id, account_type')
               .eq('referral_code', code)
               .maybeSingle();
 
             if (!refProfile) {
               setReferralWarn('Code not recognised — continuing without it.');
-            } else if ((refProfile as { instructor_code?: string | null }).instructor_code) {
+            } else if ((refProfile as { account_type?: string }).account_type === 'instructor') {
               // Code owner is an instructor — create a pending relationship;
               // the pupil must explicitly accept before progress is shared
               // (see Settings → Linked Instructors → Instructor Requests).
-              await supabase.from('instructor_relationships').insert({
-                instructor_id: refProfile.id,
+              const { error: relError } = await supabase.from('instructor_relationships').insert({
+                instructor_id: (refProfile as { id: string }).id,
                 learner_id: userId,
                 status: 'pending',
                 invite_code: code,
               });
+              if (!relError) pendingInstructorLinked = true;
             }
           } catch {}
         }
-      } else {
-        await AsyncStorage.setItem(PENDING_USERNAME_KEY, username.trim());
+        // The code has now been used to create this account — clear it so
+        // it can't silently attach to an unrelated future signup on the
+        // same browser/device.
+        await AsyncStorage.removeItem(REFERRAL_CODE_KEY);
       }
 
       if (!session) {
@@ -106,7 +125,14 @@ export default function SignUpScreen() {
       }
 
       await new Promise<void>((res) => setTimeout(res, 400));
-      router.replace('/auth/testdate');
+      if (code) {
+        router.replace({
+          pathname: '/auth/testdate',
+          params: pendingInstructorLinked ? { pendingInstructor: '1' } : {},
+        } as any);
+      } else {
+        router.replace('/auth/choose-account-type');
+      }
     } catch {
       setError('An unexpected error occurred.');
     } finally {
@@ -132,7 +158,7 @@ export default function SignUpScreen() {
     setSocialError('');
     try {
       const result = await signInWithApple();
-      router.replace(result.isNewUser ? '/auth/testdate' : '/(tabs)/home');
+      router.replace(result.isNewUser ? '/auth/choose-account-type' : await resolvePostAuthRoute(result.session.user.id));
     } catch (e: unknown) {
       if ((e as { code?: string }).code === 'ERR_REQUEST_CANCELED') return;
       setSocialError('Apple Sign In failed. Please try again.');
@@ -146,7 +172,7 @@ export default function SignUpScreen() {
     setSocialError('');
     try {
       const result = await signInWithGoogle();
-      if (result) router.replace(result.isNewUser ? '/auth/testdate' : '/(tabs)/home');
+      if (result) router.replace(result.isNewUser ? '/auth/choose-account-type' : await resolvePostAuthRoute(result.session.user.id));
     } catch {
       setSocialError('Google Sign In failed. Please try again.');
     } finally {

@@ -14,7 +14,7 @@ import {
   View,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
 import { createFreshUserProgress } from '@/src/storage';
 import {
@@ -26,6 +26,7 @@ import {
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 import { Pip } from '@/src/components/Pip';
+import { generateInstructorCode, generateReferralCode } from '@/src/accountCodes';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,11 +48,6 @@ type LearnerEntry = {
   progress: UserProgress | null;
   username: string | null;
   lastNoteDate: string | null;
-};
-
-type InstructorEntry = {
-  rel: Relationship;
-  instructorUsername: string | null;
 };
 
 type LessonNote = {
@@ -166,17 +162,6 @@ function activityDots(progress: UserProgress): boolean[] {
     const ds = d.toDateString();
     return ds === lastDate || mockDates.has(ds);
   });
-}
-
-function generateCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-}
-
-function generateReferralCode(username: string): string {
-  const prefix = username.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 3).padEnd(3, 'X');
-  const digits = Math.floor(100 + Math.random() * 900).toString();
-  return prefix + digits;
 }
 
 function payoutButtonLabel(pending: number, connectStatus: ConnectAccountRow | null, requesting: boolean): string {
@@ -1035,299 +1020,20 @@ function InstructorDashboard({
   );
 }
 
-// ─── LearnerModeView ──────────────────────────────────────────────────────────
-
-function LearnerModeView({
-  instructors,
-  loading,
-  onRefresh,
-}: {
-  instructors: InstructorEntry[];
-  loading: boolean;
-  onRefresh: () => void;
-}) {
-  const theme = useTheme();
-  const [showCodeModal, setShowCodeModal] = useState(false);
-  const [enteredCode, setEnteredCode]     = useState('');
-  const [linking, setLinking]             = useState(false);
-  const [responding, setResponding]       = useState<string | null>(null);
-
-  async function handleAcceptInvite(relId: string) {
-    setResponding(relId);
-    try {
-      await supabase.from('instructor_relationships').update({ status: 'accepted' }).eq('id', relId);
-      onRefresh();
-    } catch {
-      Alert.alert('Error', 'Could not accept invite. Please try again.');
-    } finally {
-      setResponding(null);
-    }
-  }
-
-  async function handleDeclineInvite(relId: string) {
-    setResponding(relId);
-    try {
-      await supabase.from('instructor_relationships').delete().eq('id', relId);
-      onRefresh();
-    } catch {
-      Alert.alert('Error', 'Could not decline invite. Please try again.');
-    } finally {
-      setResponding(null);
-    }
-  }
-
-  async function handleEnterCode() {
-    if (linking) return;
-    const code = enteredCode.trim().toUpperCase();
-    if (code.length !== 6) {
-      Alert.alert('Invalid code', 'Please enter a valid 6-character code.');
-      return;
-    }
-    setLinking(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: instructorProfile, error } = await supabase
-        .from('profiles')
-        .select('id, username')
-        .eq('instructor_code', code)
-        .single();
-
-      if (error || !instructorProfile) {
-        Alert.alert('Code not found', 'Please check the code and try again.');
-        return;
-      }
-
-      if (instructorProfile.id === user.id) {
-        Alert.alert('That\'s your own code', 'You cannot link to yourself.');
-        return;
-      }
-
-      const { data: existing } = await supabase
-        .from('instructor_relationships')
-        .select('id')
-        .eq('instructor_id', instructorProfile.id)
-        .eq('learner_id', user.id)
-        .maybeSingle();
-
-      if (existing) {
-        Alert.alert('Already linked', 'You are already linked to this instructor.');
-        return;
-      }
-
-      const { data: myProfile } = await supabase
-        .from('profiles')
-        .select('username')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      await supabase.from('instructor_relationships').insert({
-        instructor_id: instructorProfile.id,
-        learner_id: user.id,
-        learner_name: (myProfile as { username?: string } | null)?.username ?? null,
-        status: 'accepted',
-        invite_code: code,
-      });
-
-      const iname = (instructorProfile as { username?: string }).username ?? 'your instructor';
-      Alert.alert('Linked!', `You are now linked to ${iname}.`);
-      setEnteredCode('');
-      setShowCodeModal(false);
-      onRefresh();
-    } catch {
-      Alert.alert('Error', 'Could not link. Please try again.');
-    } finally {
-      setLinking(false);
-    }
-  }
-
-  async function handleRemove(relId: string, instructorName: string) {
-    Alert.alert(
-      'Remove access',
-      `${instructorName} will no longer be able to view your progress.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () => {
-            void (async () => {
-              await supabase.from('instructor_relationships').delete().eq('id', relId);
-              onRefresh();
-            })();
-          },
-        },
-      ],
-    );
-  }
-
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <Text style={[styles.loadingText, { color: theme.subTextColor }]}>{'Loading...'}</Text>
-      </View>
-    );
-  }
-
-  const pendingInvites   = instructors.filter(i => i.rel.status === 'pending');
-  const acceptedEntries  = instructors.filter(i => i.rel.status === 'accepted');
-
-  return (
-    <ScrollView
-      style={[styles.screen, { backgroundColor: theme.backgroundColor }]}
-      contentContainerStyle={styles.listContent}
-      showsVerticalScrollIndicator={false}
-    >
-      {pendingInvites.length > 0 && (
-        <>
-          <Text style={[styles.dashTitle, { color: theme.textColor }]}>{'Instructor Requests'}</Text>
-          <Text style={[styles.learnerModeSub, { color: theme.subTextColor }]}>
-            {'These instructors want to view your progress. They can only see it once you accept.'}
-          </Text>
-          {pendingInvites.map(entry => (
-            <View key={entry.rel.id} style={[styles.instructorCard, { backgroundColor: theme.cardColor }]}>
-              <View style={[styles.avatarCircle, { backgroundColor: Colors.indigo }]}>
-                <Text style={styles.avatarText}>
-                  {getInitials(entry.instructorUsername ?? 'IN')}
-                </Text>
-              </View>
-              <View style={styles.learnerMeta}>
-                <Text style={[styles.learnerName, { color: theme.textColor }]}>
-                  {entry.instructorUsername ?? 'An instructor'}
-                </Text>
-                <Text style={[styles.learnerSub, { color: theme.subTextColor }]}>
-                  {'Requested '}{formatDate(entry.rel.created_at)}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.removeBtn}
-                onPress={() => void handleDeclineInvite(entry.rel.id)}
-                activeOpacity={0.75}
-                disabled={responding === entry.rel.id}
-              >
-                <Text style={styles.removeBtnText}>{'Decline'}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.acceptBtn}
-                onPress={() => void handleAcceptInvite(entry.rel.id)}
-                activeOpacity={0.75}
-                disabled={responding === entry.rel.id}
-              >
-                <Text style={styles.acceptBtnText}>{'Accept'}</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </>
-      )}
-
-      <Text style={[styles.dashTitle, { color: theme.textColor }]}>{'Linked Instructors'}</Text>
-      <Text style={[styles.learnerModeSub, { color: theme.subTextColor }]}>
-        {'These people can view your progress on ClearPass.'}
-      </Text>
-
-      {acceptedEntries.length === 0 ? (
-        <View style={[styles.instructorEmpty, { backgroundColor: theme.cardColor }]}>
-          <Pip size={64} mood="curious" />
-          <Text style={[styles.instructorEmptyTitle, { color: theme.textColor }]}>
-            {'No one is monitoring you yet'}
-          </Text>
-          <Text style={[styles.instructorEmptySub, { color: theme.subTextColor }]}>
-            {'Enter an instructor code to allow a parent or instructor to follow your progress.'}
-          </Text>
-        </View>
-      ) : (
-        acceptedEntries.map(entry => (
-          <View key={entry.rel.id} style={[styles.instructorCard, { backgroundColor: theme.cardColor }]}>
-            <View style={[styles.avatarCircle, { backgroundColor: Colors.indigo }]}>
-              <Text style={styles.avatarText}>
-                {getInitials(entry.instructorUsername ?? 'IN')}
-              </Text>
-            </View>
-            <View style={styles.learnerMeta}>
-              <Text style={[styles.learnerName, { color: theme.textColor }]}>
-                {entry.instructorUsername ?? 'Instructor'}
-              </Text>
-              <Text style={[styles.learnerSub, { color: theme.subTextColor }]}>
-                {'Linked '}{formatDate(entry.rel.created_at)}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.removeBtn}
-              onPress={() => void handleRemove(entry.rel.id, entry.instructorUsername ?? 'Instructor')}
-              activeOpacity={0.75}
-            >
-              <Text style={styles.removeBtnText}>{'Remove'}</Text>
-            </TouchableOpacity>
-          </View>
-        ))
-      )}
-
-      <TouchableOpacity
-        style={styles.enterCodeBtn}
-        onPress={() => setShowCodeModal(true)}
-        activeOpacity={0.85}
-      >
-        <Text style={styles.enterCodeBtnText}>{'Enter Instructor Code'}</Text>
-      </TouchableOpacity>
-
-      {/* Enter code modal */}
-      <Modal visible={showCodeModal} transparent animationType="fade" onRequestClose={() => setShowCodeModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: theme.cardColor }]}>
-            <Text style={[styles.modalTitle, { color: theme.textColor }]}>{'Enter Instructor Code'}</Text>
-            <Text style={[styles.codeLabel, { color: theme.subTextColor }]}>
-              {'Ask your instructor or parent for their 6-character code.'}
-            </Text>
-            <TextInput
-              style={[styles.codeInput, { color: theme.textColor }]}
-              value={enteredCode}
-              onChangeText={v => setEnteredCode(v.toUpperCase().replace(/\s/g, '').slice(0, 6))}
-              placeholder="ABC123"
-              placeholderTextColor="#9CA3AF"
-              autoCapitalize="characters"
-              autoCorrect={false}
-              maxLength={6}
-            />
-            <TouchableOpacity
-              style={[styles.addEmailBtn, (enteredCode.length < 6 || linking) && styles.btnDisabled]}
-              onPress={() => void handleEnterCode()}
-              activeOpacity={0.85}
-              disabled={enteredCode.length < 6 || linking}
-            >
-              <Text style={styles.addEmailBtnText}>{linking ? 'Linking...' : 'Link Account'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.modalCancelBtn}
-              onPress={() => { setEnteredCode(''); setShowCodeModal(false); }}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.modalCancelText}>{'Cancel'}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-    </ScrollView>
-  );
-}
-
 // ─── InstructorScreen ─────────────────────────────────────────────────────────
 
 export default function InstructorScreen() {
-  const params  = useLocalSearchParams<{ mode?: string }>();
-  const mode    = params.mode === 'learner' ? 'learner' : 'instructor';
-  const theme   = useTheme();
+  const theme = useTheme();
 
-  const [learners,           setLearners]           = useState<LearnerEntry[]>([]);
-  const [instructors,        setInstructors]        = useState<InstructorEntry[]>([]);
-  const [instructorCode,     setInstructorCode]     = useState<string | null>(null);
-  const [referralCode,       setReferralCode]       = useState<string | null>(null);
-  const [earnings,           setEarnings]           = useState<EarningEntry[]>([]);
-  const [connectStatus,      setConnectStatus]      = useState<ConnectAccountRow | null>(null);
-  const [payouts,            setPayouts]            = useState<PayoutEntry[]>([]);
-  const [loading,            setLoading]            = useState(true);
+  const [learners,       setLearners]       = useState<LearnerEntry[]>([]);
+  const [instructorCode, setInstructorCode] = useState<string | null>(null);
+  const [referralCode,   setReferralCode]   = useState<string | null>(null);
+  const [earnings,       setEarnings]       = useState<EarningEntry[]>([]);
+  const [connectStatus,  setConnectStatus]  = useState<ConnectAccountRow | null>(null);
+  const [payouts,        setPayouts]        = useState<PayoutEntry[]>([]);
+  const [loading,        setLoading]        = useState(true);
 
-  useEffect(() => { void loadData(); }, [mode]);
+  useEffect(() => { void loadData(); }, []);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', state => {
@@ -1343,21 +1049,24 @@ export default function InstructorScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.replace('/auth/signin'); return; }
 
-      // Ensure instructor code and referral code exist
       const { data: profile } = await supabase
         .from('profiles')
         .select('id, instructor_code, referral_code, username')
         .eq('id', user.id)
         .single();
 
+      const uname = (profile as { username?: string } | null)?.username ?? '';
+
       let code = (profile as { instructor_code?: string } | null)?.instructor_code ?? null;
       if (!code) {
-        code = generateCode();
+        // Defensive fallback only — accounts created after this plan ships
+        // get their instructor_code from choose-account-type.tsx at signup.
+        // This covers pre-split accounts backfilled in Task 2 that somehow
+        // lack one.
+        code = generateInstructorCode();
         await supabase.from('profiles').upsert({ id: user.id, instructor_code: code });
       }
       setInstructorCode(code);
-
-      const uname = (profile as { username?: string } | null)?.username ?? '';
 
       let refCode = (profile as { referral_code?: string } | null)?.referral_code ?? null;
       if (!refCode && uname) {
@@ -1366,7 +1075,6 @@ export default function InstructorScreen() {
       }
       setReferralCode(refCode);
 
-      // Load earnings
       const { data: earningsData } = await supabase
         .from('instructor_earnings')
         .select('*')
@@ -1374,7 +1082,6 @@ export default function InstructorScreen() {
         .order('created_at', { ascending: false });
       setEarnings((earningsData as EarningEntry[] | null) ?? []);
 
-      // Load Stripe Connect status and payout history
       const { data: connectRow } = await supabase
         .from('instructor_connect_accounts')
         .select('stripe_account_id, status, payouts_enabled')
@@ -1389,76 +1096,51 @@ export default function InstructorScreen() {
         .order('created_at', { ascending: false });
       setPayouts((payoutRows as PayoutEntry[] | null) ?? []);
 
-      if (mode === 'instructor') {
-        const { data: rels } = await supabase
-          .from('instructor_relationships')
-          .select('*')
-          .eq('instructor_id', user.id)
-          .neq('status', 'rejected');
+      const { data: rels } = await supabase
+        .from('instructor_relationships')
+        .select('*')
+        .eq('instructor_id', user.id)
+        .neq('status', 'rejected');
 
-        const accepted = (rels as Relationship[] | null)?.filter(r => r.status === 'accepted' && r.learner_id) ?? [];
+      const accepted = (rels as Relationship[] | null)?.filter(r => r.status === 'accepted' && r.learner_id) ?? [];
 
-        if (accepted.length > 0) {
-          const learnerIds = accepted.map(r => r.learner_id!);
+      if (accepted.length > 0) {
+        const learnerIds = accepted.map(r => r.learner_id!);
 
-          const [{ data: progressRows }, { data: profileRows }] = await Promise.all([
-            supabase.from('user_progress').select('id, progress').in('id', learnerIds),
-            supabase.from('profiles').select('id, username').in('id', learnerIds),
-          ]);
+        const [{ data: progressRows }, { data: profileRows }] = await Promise.all([
+          supabase.from('user_progress').select('id, progress').in('id', learnerIds),
+          supabase.from('profiles').select('id, username').in('id', learnerIds),
+        ]);
 
-          let lastNoteDates: Map<string, string> = new Map();
-          try {
-            const { data: notesData } = await supabase
-              .from('instructor_lesson_notes')
-              .select('learner_id, created_at')
-              .eq('instructor_id', user.id)
-              .order('created_at', { ascending: false });
-            for (const n of (notesData as { learner_id: string; created_at: string }[] | null) ?? []) {
-              if (n.learner_id && !lastNoteDates.has(n.learner_id)) {
-                lastNoteDates.set(n.learner_id, n.created_at);
-              }
+        let lastNoteDates: Map<string, string> = new Map();
+        try {
+          const { data: notesData } = await supabase
+            .from('instructor_lesson_notes')
+            .select('learner_id, created_at')
+            .eq('instructor_id', user.id)
+            .order('created_at', { ascending: false });
+          for (const n of (notesData as { learner_id: string; created_at: string }[] | null) ?? []) {
+            if (n.learner_id && !lastNoteDates.has(n.learner_id)) {
+              lastNoteDates.set(n.learner_id, n.created_at);
             }
-          } catch {}
+          }
+        } catch {}
 
-          const entries: LearnerEntry[] = accepted.map(rel => {
-            const pd  = (progressRows as { id: string; progress: unknown }[] | null)?.find(p => p.id === rel.learner_id);
-            const pf  = (profileRows  as { id: string; username: string }[] | null)?.find(p => p.id === rel.learner_id);
-            const raw = pd?.progress as Partial<UserProgress> | undefined;
-            const progress = raw ? ({ ...createFreshUserProgress(), ...raw } as UserProgress) : null;
-            return {
-              rel,
-              progress,
-              username: pf?.username ?? null,
-              lastNoteDate: rel.learner_id ? (lastNoteDates.get(rel.learner_id) ?? null) : null,
-            };
-          });
-          setLearners(entries);
-        } else {
-          setLearners([]);
-        }
-      } else if (mode === 'learner') {
-        const { data: rels } = await supabase
-          .from('instructor_relationships')
-          .select('*')
-          .eq('learner_id', user.id)
-          .neq('status', 'rejected');
-
-        const relationships = (rels as Relationship[] | null) ?? [];
-        const instructorIds = [...new Set(relationships.map(r => r.instructor_id))];
-
-        let instructorProfiles: { id: string; username: string | null }[] = [];
-        if (instructorIds.length > 0) {
-          const { data: profileRows } = await supabase
-            .from('profiles')
-            .select('id, username')
-            .in('id', instructorIds);
-          instructorProfiles = (profileRows as { id: string; username: string | null }[] | null) ?? [];
-        }
-
-        setInstructors(relationships.map(rel => ({
-          rel,
-          instructorUsername: instructorProfiles.find(p => p.id === rel.instructor_id)?.username ?? null,
-        })));
+        const entries: LearnerEntry[] = accepted.map(rel => {
+          const pd  = (progressRows as { id: string; progress: unknown }[] | null)?.find(p => p.id === rel.learner_id);
+          const pf  = (profileRows  as { id: string; username: string }[] | null)?.find(p => p.id === rel.learner_id);
+          const raw = pd?.progress as Partial<UserProgress> | undefined;
+          const progress = raw ? ({ ...createFreshUserProgress(), ...raw } as UserProgress) : null;
+          return {
+            rel,
+            progress,
+            username: pf?.username ?? null,
+            lastNoteDate: rel.learner_id ? (lastNoteDates.get(rel.learner_id) ?? null) : null,
+          };
+        });
+        setLearners(entries);
+      } else {
+        setLearners([]);
       }
     } catch {
       // Table likely doesn't exist yet — show empty state
@@ -1467,24 +1149,26 @@ export default function InstructorScreen() {
     }
   }
 
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    router.replace('/auth/signin');
+  }
+
   return (
     <View style={[styles.screen, { backgroundColor: theme.backgroundColor }]}>
-      {/* Header */}
       <View style={[styles.header, { backgroundColor: theme.cardColor, borderBottomColor: theme.borderColor }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerBack} activeOpacity={0.7}>
-          <Text style={[styles.headerBackArrow, { color: theme.textColor }]}>{'←'}</Text>
+        <View style={styles.headerBack} />
+        <Text style={[styles.headerTitle, { color: theme.textColor }]}>{'Instructor Dashboard'}</Text>
+        <TouchableOpacity onPress={() => void handleSignOut()} style={styles.headerSignOut} activeOpacity={0.7}>
+          <Text style={styles.headerSignOutText}>{'Sign Out'}</Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.textColor }]}>
-          {mode === 'instructor' ? 'Instructor Dashboard' : 'Linked Instructors'}
-        </Text>
-        <View style={styles.headerSpacer} />
       </View>
 
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.indigo} />
         </View>
-      ) : mode === 'instructor' ? (
+      ) : (
         <InstructorDashboard
           learners={learners}
           instructorCode={instructorCode}
@@ -1492,12 +1176,6 @@ export default function InstructorScreen() {
           earnings={earnings}
           connectStatus={connectStatus}
           payouts={payouts}
-          loading={loading}
-          onRefresh={() => void loadData()}
-        />
-      ) : (
-        <LearnerModeView
-          instructors={instructors}
           loading={loading}
           onRefresh={() => void loadData()}
         />
@@ -1525,6 +1203,8 @@ const styles = StyleSheet.create({
   headerBackArrow: { fontSize: 22, fontWeight: '600', lineHeight: 26 },
   headerTitle:     { flex: 1, fontSize: 18, fontWeight: '800', textAlign: 'center' },
   headerSpacer:    { width: 34 },
+  headerSignOut:      { paddingHorizontal: 8, paddingVertical: 4 },
+  headerSignOutText:  { color: '#EF4444', fontSize: 14, fontWeight: '700' },
 
   // Shared layout
   center:      { flex: 1, alignItems: 'center', justifyContent: 'center' },

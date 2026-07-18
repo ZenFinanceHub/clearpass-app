@@ -231,3 +231,23 @@ CREATE POLICY "Instructors can read linked learner progress" ON user_progress
 DROP POLICY IF EXISTS "Participants can update own relationships" ON instructor_relationships;
 CREATE POLICY "Participants can update own relationships" ON instructor_relationships
   FOR UPDATE USING (auth.uid() = instructor_id OR auth.uid() = learner_id);
+
+-- ─────────────────────────────────────────────────────────────────
+-- Account type: learner vs instructor.
+--
+-- Replaces the old heuristic of "instructor_code is non-null" — that
+-- column was auto-minted the first time ANY account opened /instructor,
+-- in either mode, so it never reliably indicated a real instructor.
+-- Everyone defaults to 'learner' (fail-safe); real instructors are
+-- promoted by the reviewed script that follows this file separately —
+-- see docs/superpowers/plans/2026-07-15-instructor-learner-account-split.md
+-- Task 2. Do not add a blanket 'instructor' backfill here.
+-- ─────────────────────────────────────────────────────────────────
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS account_type TEXT;
+UPDATE profiles SET account_type = 'learner' WHERE account_type IS NULL;
+ALTER TABLE profiles ALTER COLUMN account_type SET DEFAULT 'learner';
+ALTER TABLE profiles ALTER COLUMN account_type SET NOT NULL;
+ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_account_type_check;
+ALTER TABLE profiles ADD CONSTRAINT profiles_account_type_check
+  CHECK (account_type IN ('learner', 'instructor'));
+-- (existing profile RLS policies already cover this column)

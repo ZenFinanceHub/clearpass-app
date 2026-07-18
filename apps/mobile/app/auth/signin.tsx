@@ -14,6 +14,7 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
 import { signInWithApple, signInWithGoogle } from '@/src/socialAuth';
+import { resolvePostAuthRoute } from '@/src/postAuthRouting';
 import { Colors } from '@/src/constants/theme';
 import PasswordInput from '@/src/components/PasswordInput';
 
@@ -48,7 +49,9 @@ export default function SignInScreen() {
         }
       } else {
         await new Promise<void>((res) => setTimeout(res, 400));
-        router.replace('/(tabs)/home');
+        const { data: { user } } = await supabase.auth.getUser();
+        const route = user ? await resolvePostAuthRoute(user.id) : '/(tabs)/home';
+        router.replace(route);
       }
     } catch {
       setError('An unexpected error occurred.');
@@ -75,7 +78,7 @@ export default function SignInScreen() {
     setSocialError('');
     try {
       const result = await signInWithApple();
-      router.replace(result.isNewUser ? '/auth/testdate' : '/(tabs)/home');
+      router.replace(result.isNewUser ? '/auth/choose-account-type' : await resolvePostAuthRoute(result.session.user.id));
     } catch (e: unknown) {
       if ((e as { code?: string }).code === 'ERR_REQUEST_CANCELED') return;
       setSocialError('Apple Sign In failed. Please try again.');
@@ -89,7 +92,7 @@ export default function SignInScreen() {
     setSocialError('');
     try {
       const result = await signInWithGoogle();
-      if (result) router.replace(result.isNewUser ? '/auth/testdate' : '/(tabs)/home');
+      if (result) router.replace(result.isNewUser ? '/auth/choose-account-type' : await resolvePostAuthRoute(result.session.user.id));
     } catch {
       setSocialError('Google Sign In failed. Please try again.');
     } finally {

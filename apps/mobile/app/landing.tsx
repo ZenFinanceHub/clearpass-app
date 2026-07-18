@@ -50,7 +50,7 @@ const PRO_FEATURES = ['Unlimited questions', 'Full mock tests', 'Hazard percepti
 
 async function handleGetPro() {
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) { router.push('/auth'); return; }
+  if (!user) { router.push('/auth/signin'); return; }
   try {
     const res = await fetch(`${getProxyUrl()}/api/create-checkout-session`, {
       method: 'POST',
@@ -88,10 +88,10 @@ export default function LandingPage() {
       <View style={styles.navbar}>
         <Text style={styles.navBrand}>{'ClearPass'}</Text>
         <View style={styles.navRight}>
-          <TouchableOpacity onPress={() => router.push('/auth')} activeOpacity={0.75}>
+          <TouchableOpacity onPress={() => router.push('/auth/signin')} activeOpacity={0.75}>
             <Text style={styles.navSignIn}>{'Sign In'}</Text>
           </TouchableOpacity>
-          <ScaleButton style={styles.navCta} onPress={() => router.push('/auth')} activeOpacity={0.85} accessibilityLabel="Start Free">
+          <ScaleButton style={styles.navCta} onPress={() => router.push('/auth/signup')} activeOpacity={0.85} accessibilityLabel="Start Free">
             <Text style={styles.navCtaText}>{'Start Free'}</Text>
           </ScaleButton>
         </View>
@@ -109,10 +109,10 @@ export default function LandingPage() {
           <Text style={styles.heroH1Accent}>{'First Time'}</Text>
           <Text style={styles.heroSub}>{'The UK\'s smartest revision app. AI tutor, personalised study plan, and the only app built for dyslexic learners.'}</Text>
           <View style={styles.heroBtns}>
-            <ScaleButton style={styles.btnPrimary} onPress={() => router.push('/auth')} activeOpacity={0.85} accessibilityLabel="Start learning for free">
+            <ScaleButton style={styles.btnPrimary} onPress={() => router.push('/auth/signup')} activeOpacity={0.85} accessibilityLabel="Start learning for free">
               <Text style={styles.btnPrimaryText}>{'Start Free →'}</Text>
             </ScaleButton>
-            <ScaleButton style={styles.btnOutline} onPress={() => router.push('/auth')} activeOpacity={0.85}>
+            <ScaleButton style={styles.btnOutline} onPress={() => router.push('/auth/signup')} activeOpacity={0.85}>
               <Text style={styles.btnOutlineText}>{'See How It Works'}</Text>
             </ScaleButton>
           </View>
@@ -249,7 +249,7 @@ export default function LandingPage() {
                   <Text style={styles.planFeatureText}>{f}</Text>
                 </View>
               ))}
-              <ScaleButton style={styles.planCtaFree} onPress={() => router.push('/auth')} activeOpacity={0.85}>
+              <ScaleButton style={styles.planCtaFree} onPress={() => router.push('/auth/signup')} activeOpacity={0.85}>
                 <Text style={styles.planCtaFreeText}>{'Get started free'}</Text>
               </ScaleButton>
             </View>

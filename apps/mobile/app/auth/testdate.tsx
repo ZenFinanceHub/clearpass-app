@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -9,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/src/supabase';
 import { loadUserProgress, saveUserProgress } from '@/src/storage';
 
@@ -36,9 +37,21 @@ async function saveTestDate(isoDate: string) {
 }
 
 export default function TestDateScreen() {
+  const params = useLocalSearchParams<{ pendingInstructor?: string }>();
   const [dateInput, setDateInput] = useState('');
   const [error, setError]         = useState('');
   const [saving, setSaving]       = useState(false);
+  // React Native Web's Alert.alert is a no-op (react-native-web ships an
+  // empty static alert() stub), so this needs a real cross-platform modal
+  // rather than Alert — matching the existing custom-Modal pattern used
+  // for code entry elsewhere (e.g. linked-instructors.tsx), which does
+  // render correctly on web.
+  const [showPendingModal, setShowPendingModal] = useState(false);
+
+  useEffect(() => {
+    if (params.pendingInstructor === '1') setShowPendingModal(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSave() {
     const parsed = parseDdMmYyyy(dateInput.trim());
@@ -92,6 +105,31 @@ export default function TestDateScreen() {
           <Text style={styles.skipText}>{"I don't have a date yet"}</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <Modal visible={showPendingModal} transparent animationType="fade" onRequestClose={() => setShowPendingModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{'Instructor request pending'}</Text>
+            <Text style={styles.modalBody}>
+              {'An instructor has requested to view your progress. Approve or decline it from Linked Instructors.'}
+            </Text>
+            <TouchableOpacity
+              style={styles.modalPrimaryBtn}
+              onPress={() => { setShowPendingModal(false); router.push('/linked-instructors' as any); }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.modalPrimaryBtnText}>{'Review now'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modalCancelBtn}
+              onPress={() => setShowPendingModal(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.modalCancelText}>{'Later'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -136,4 +174,13 @@ const styles = StyleSheet.create({
 
   skipLink: { paddingVertical: 12 },
   skipText: { fontSize: 14, color: '#4B5563', textDecorationLine: 'underline' },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  modalCard: { width: '100%', maxWidth: 360, backgroundColor: '#13131A', borderRadius: 16, padding: 20, gap: 12 },
+  modalTitle: { fontSize: 17, fontWeight: '800', color: '#F1F0FF' },
+  modalBody: { fontSize: 14, color: '#9CA3AF', lineHeight: 20 },
+  modalPrimaryBtn: { backgroundColor: '#7B5EA7', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  modalPrimaryBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  modalCancelBtn: { alignItems: 'center', paddingVertical: 10 },
+  modalCancelText: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
 });
