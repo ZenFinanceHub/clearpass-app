@@ -130,6 +130,14 @@ function formatTime(hour: number, minute: number): string {
   return `Daily at ${h}:${m} ${ampm}`;
 }
 
+function linkedInstructorsSubtitle(linked: number, pending: number): string {
+  if (linked === 0 && pending === 0) return 'No instructors linked yet';
+  if (linked === 0) return `${pending} pending request${pending === 1 ? '' : 's'}`;
+  const linkedText = `${linked} instructor${linked === 1 ? '' : 's'} monitoring your progress`;
+  if (pending === 0) return linkedText;
+  return `${linked} linked · ${pending} pending`;
+}
+
 // ─── SettingsScreen ───────────────────────────────────────────────────────────
 
 export default function SettingsScreen() {
@@ -160,6 +168,7 @@ export default function SettingsScreen() {
 
   // Instructor state
   const [linkedInstructorCount, setLinkedInstructorCount] = useState(0);
+  const [pendingInstructorCount, setPendingInstructorCount] = useState(0);
 
   // Badge state
   const [earnedBadgeCount, setEarnedBadgeCount] = useState(0);
@@ -226,15 +235,17 @@ export default function SettingsScreen() {
         if (pending) setUsername(pending);
       }
 
-      // Load linked instructor count
+      // Load linked instructor count (accepted vs. pending, shown separately)
       if (user) {
         try {
-          const { count } = await supabase
+          const { data: relRows } = await supabase
             .from('instructor_relationships')
-            .select('id', { count: 'exact', head: true })
+            .select('status')
             .eq('learner_id', user.id)
-            .eq('status', 'accepted');
-          setLinkedInstructorCount(count ?? 0);
+            .in('status', ['accepted', 'pending']);
+          const rows = (relRows as { status: string }[] | null) ?? [];
+          setLinkedInstructorCount(rows.filter(r => r.status === 'accepted').length);
+          setPendingInstructorCount(rows.filter(r => r.status === 'pending').length);
         } catch {}
       }
 
@@ -704,9 +715,7 @@ export default function SettingsScreen() {
           <View style={styles.textWrap}>
             <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Linked Instructors'}</Text>
             <Text style={[styles.description, { fontSize: theme.fontSize(12), color: theme.subTextColor }]}>
-              {linkedInstructorCount > 0
-                ? `${linkedInstructorCount} instructor${linkedInstructorCount === 1 ? '' : 's'} monitoring your progress`
-                : 'No instructors linked yet'}
+              {linkedInstructorsSubtitle(linkedInstructorCount, pendingInstructorCount)}
             </Text>
           </View>
           <Text style={styles.chevron}>{'›'}</Text>
