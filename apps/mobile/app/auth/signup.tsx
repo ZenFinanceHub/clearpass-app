@@ -28,7 +28,7 @@ export default function SignUpScreen() {
   const [username,        setUsername]        = useState('');
   const [email,           setEmail]           = useState('');
   const [password,        setPassword]        = useState('');
-  const [referralCode,    setReferralCode]    = useState(params.ref ?? '');
+  const [referralCode,    setReferralCode]    = useState('');
   const [loading,         setLoading]         = useState(false);
   const [error,           setError]           = useState('');
   const [referralWarn,    setReferralWarn]    = useState('');
@@ -103,6 +103,10 @@ export default function SignUpScreen() {
             }
           } catch {}
         }
+        // The code has now been used to create this account — clear it so
+        // it can't silently attach to an unrelated future signup on the
+        // same browser/device.
+        await AsyncStorage.removeItem(REFERRAL_CODE_KEY);
       }
 
       if (!session) {

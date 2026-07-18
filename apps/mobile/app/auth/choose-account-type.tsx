@@ -92,6 +92,10 @@ export default function ChooseAccountTypeScreen() {
             });
           }
         } catch {}
+        // The code has now been used to create this account — clear it so
+        // it can't silently attach to an unrelated future signup on the
+        // same browser/device.
+        await AsyncStorage.removeItem(REFERRAL_CODE_KEY);
       }
 
       router.replace(accountType === 'instructor' ? '/instructor' : '/auth/testdate');

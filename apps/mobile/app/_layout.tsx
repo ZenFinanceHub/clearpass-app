@@ -103,7 +103,12 @@ function RootLayout() {
         return;
       }
       navigated.current = true;
-      if (PUBLIC_ROUTES.has(segments[0] ?? '')) {
+      // /auth/* covers signin, signup, choose-account-type, testdate,
+      // forgot-password, reset-password — all valid unauthenticated
+      // destinations in their own right. Overriding them here would strip
+      // any in-flight route (and its query string, e.g. a referral link's
+      // ?ref=) by bouncing straight to /auth/signin.
+      if (PUBLIC_ROUTES.has(segments[0] ?? '') || segments[0] === 'auth') {
         return;
       }
       const seen = await AsyncStorage.getItem(ONBOARDING_KEY);
