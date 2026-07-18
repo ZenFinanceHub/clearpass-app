@@ -73,6 +73,7 @@ export default function ChooseAccountTypeScreen() {
         return;
       }
 
+      let pendingInstructorLinked = false;
       if (referralCode) {
         try {
           const { data: refProfile } = await supabase
@@ -84,12 +85,13 @@ export default function ChooseAccountTypeScreen() {
             // Code owner is an instructor — create a pending relationship;
             // the pupil must explicitly accept before progress is shared
             // (see Settings → Linked Instructors → Instructor Requests).
-            await supabase.from('instructor_relationships').insert({
+            const { error: relError } = await supabase.from('instructor_relationships').insert({
               instructor_id: (refProfile as { id: string }).id,
               learner_id: user.id,
               status: 'pending',
               invite_code: referralCode,
             });
+            if (!relError) pendingInstructorLinked = true;
           }
         } catch {}
         // The code has now been used to create this account — clear it so
@@ -98,7 +100,14 @@ export default function ChooseAccountTypeScreen() {
         await AsyncStorage.removeItem(REFERRAL_CODE_KEY);
       }
 
-      router.replace(accountType === 'instructor' ? '/instructor' : '/auth/testdate');
+      if (accountType === 'instructor') {
+        router.replace('/instructor');
+      } else {
+        router.replace({
+          pathname: '/auth/testdate',
+          params: pendingInstructorLinked ? { pendingInstructor: '1' } : {},
+        } as any);
+      }
     } catch {
       setError('An unexpected error occurred.');
       setSaving(null);
