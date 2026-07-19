@@ -98,6 +98,14 @@ export default function RoadmapPath({ progress, passProbability, pipMood = 'happ
   const height     = heightProp ?? Math.round(width * VBOX_H / VBOX_W);
   const scaleX     = width  / VBOX_W;
   const scaleY     = height / VBOX_H;
+  // The SVG stretches x/y independently to fill width×height (preserveAspectRatio
+  // "none"), so text glyphs get stretched by scaleX/scaleY too. Fine when the two
+  // are close (phones), but scaleX grows much faster than scaleY on wide screens
+  // (width tracks the device, height is a fixed prop) — at iPad widths scaleX can
+  // be 4-5x scaleY, squashing letters into unreadable shapes. Each label below is
+  // wrapped in a counter-scale transform anchored at its own position so its net
+  // scale is always scaleY in both axes, keeping glyphs undistorted at any width.
+  const labelXScale = scaleY / scaleX;
 
   // Pulsing glow for current node
   const pulseAnim = useRef(new Animated.Value(0)).current;
@@ -176,6 +184,8 @@ export default function RoadmapPath({ progress, passProbability, pipMood = 'happ
           const fill  = state === 'complete' ? Colors.indigo : state === 'current' ? '#FFFFFF' : '#F3F4F6';
           const stroke = state === 'complete' ? Colors.indigo : state === 'current' ? Colors.indigo : Colors.border;
           const opacity = state === 'upcoming' ? 0.55 : 1;
+          const labelX  = node.x >= CENTER_X ? node.x + NODE_R + 4 : node.x - NODE_R - 4;
+          const labelY  = node.y + 4;
 
           return (
             <G key={i} opacity={opacity}>
@@ -198,18 +208,23 @@ export default function RoadmapPath({ progress, passProbability, pipMood = 'happ
               >
                 {state === 'complete' ? '✓' : node.emoji}
               </SvgText>
-              {/* Label — always offset to a side so it never sits on top of the icon */}
-              <SvgText
-                x={node.x >= CENTER_X ? node.x + NODE_R + 4 : node.x - NODE_R - 4}
-                y={node.y + 4}
-                textAnchor={node.x >= CENTER_X ? 'start' : 'end'}
-                fontSize={7.5}
-                fontWeight="700"
-                fill={state === 'current' ? Colors.indigo : state === 'complete' ? Colors.indigo : Colors.mutedText}
-                letterSpacing={0.3}
-              >
-                {node.short}
-              </SvgText>
+              {/* Label — always offset to a side so it never sits on top of the icon.
+                  Wrapped in a counter-scale transform anchored at its own (x,y) so
+                  the glyphs render at a uniform scale (see labelXScale above) no
+                  matter how wide the container is. */}
+              <G transform={`translate(${labelX} ${labelY}) scale(${labelXScale} 1) translate(${-labelX} ${-labelY})`}>
+                <SvgText
+                  x={labelX}
+                  y={labelY}
+                  textAnchor={node.x >= CENTER_X ? 'start' : 'end'}
+                  fontSize={7.5}
+                  fontWeight="700"
+                  fill={state === 'current' ? Colors.indigo : state === 'complete' ? Colors.indigo : Colors.mutedText}
+                  letterSpacing={0.3}
+                >
+                  {node.short}
+                </SvgText>
+              </G>
             </G>
           );
         })}
