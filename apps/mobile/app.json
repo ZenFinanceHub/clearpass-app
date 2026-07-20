@@ -84,6 +84,12 @@
       "expo-apple-authentication",
       "expo-web-browser",
       [
+        "expo-media-library",
+        {
+          "granularPermissions": ["photo"]
+        }
+      ],
+      [
         "@sentry/react-native/expo",
         {
           "organization": "zen-finance-hub",
