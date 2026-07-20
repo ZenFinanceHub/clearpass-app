@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 
-const LAST_UPDATED = '4 June 2026';
+const LAST_UPDATED = '20 July 2026';
 
 export default function PrivacyPolicyScreen() {
   const theme = useTheme();
@@ -90,7 +90,11 @@ export default function PrivacyPolicyScreen() {
         {'- Request deletion of your data\n'}
         {'- Object to processing\n'}
         {'- Data portability\n\n'}
-        {'To exercise these rights, email privacy@clearpass.app. Deleting your account from Settings removes all your personal data from our servers within 30 days.'}
+        {'To exercise these rights, email privacy@clearpass.app.'}
+      </Section>
+
+      <Section title="Account Deletion" theme={theme}>
+        {'Deleting your account from Settings immediately and permanently removes all your personal data, progress, and profile information from our servers.'}
       </Section>
 
       <Section title="Data retention" theme={theme}>
