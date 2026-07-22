@@ -70,6 +70,10 @@ img { max-width: 100%; display: block; }
   .fade-up { transition: none; opacity: 1; transform: none; }
 }
 
+/* Hero is always above the fold on load, so it must never depend on the
+   IntersectionObserver firing before first paint — keep it visible by default. */
+.hero .fade-up { opacity: 1; transform: none; }
+
 /* ── NAVBAR ────────────────────────────────────────────────── */
 .navbar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 100;
