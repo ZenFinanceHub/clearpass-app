@@ -11,10 +11,11 @@ import {
   View,
 } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Sentry from '@sentry/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/src/supabase';
-import { signInWithApple, signInWithGoogle } from '@/src/socialAuth';
+import { signInWithApple, signInWithGoogle, getAuthErrorCode } from '@/src/socialAuth';
 import { resolvePostAuthRoute } from '@/src/postAuthRouting';
 import { Colors } from '@/src/constants/theme';
 import PasswordInput from '@/src/components/PasswordInput';
@@ -37,6 +38,12 @@ export default function SignUpScreen() {
   const [resendMessage,   setResendMessage]   = useState('');
   const [socialLoading,   setSocialLoading]   = useState(false);
   const [socialError,     setSocialError]     = useState('');
+  const [appleAvailable,  setAppleAvailable]  = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    void AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
+  }, []);
 
   useEffect(() => {
     // Don't persist params.ref to storage here — that would write on mere
@@ -161,7 +168,13 @@ export default function SignUpScreen() {
       router.replace(result.isNewUser ? '/auth/choose-account-type' : await resolvePostAuthRoute(result.session.user.id));
     } catch (e: unknown) {
       if ((e as { code?: string }).code === 'ERR_REQUEST_CANCELED') return;
-      setSocialError('Apple Sign In failed. Please try again.');
+      console.error('[AppleSignIn]', e);
+      Sentry.captureException(e, {
+        tags: { flow: 'apple_signin' },
+        extra: { platform: Platform.OS, osVersion: Platform.Version },
+      });
+      const code = getAuthErrorCode(e);
+      setSocialError(code ? `Apple Sign In failed. Please try again. (${code})` : 'Apple Sign In failed. Please try again.');
     } finally {
       setSocialLoading(false);
     }
@@ -173,8 +186,14 @@ export default function SignUpScreen() {
     try {
       const result = await signInWithGoogle();
       if (result) router.replace(result.isNewUser ? '/auth/choose-account-type' : await resolvePostAuthRoute(result.session.user.id));
-    } catch {
-      setSocialError('Google Sign In failed. Please try again.');
+    } catch (e: unknown) {
+      console.error('[GoogleSignIn]', e);
+      Sentry.captureException(e, {
+        tags: { flow: 'google_signin' },
+        extra: { platform: Platform.OS, osVersion: Platform.Version },
+      });
+      const code = getAuthErrorCode(e);
+      setSocialError(code ? `Google Sign In failed. Please try again. (${code})` : 'Google Sign In failed. Please try again.');
     } finally {
       setSocialLoading(false);
     }
@@ -243,7 +262,7 @@ export default function SignUpScreen() {
                   )}
             </TouchableOpacity>
 
-            {Platform.OS === 'ios' && (
+            {Platform.OS === 'ios' && appleAvailable && (
               <AppleAuthentication.AppleAuthenticationButton
                 buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP}
                 buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}

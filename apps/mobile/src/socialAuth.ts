@@ -1,4 +1,5 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
 import type { Session } from '@supabase/supabase-js';
@@ -9,6 +10,12 @@ export type SocialAuthResult = {
   session: Session;
   isNewUser: boolean;
 };
+
+export function getAuthErrorCode(e: unknown): string | number | undefined {
+  if (typeof e !== 'object' || e === null) return undefined;
+  const err = e as { code?: string; status?: number };
+  return err.code ?? err.status;
+}
 
 const PENDING_USERNAME_KEY = '@clearpass/pending_username';
 
@@ -34,11 +41,18 @@ async function stashPendingIdentity(displayName?: string, email?: string): Promi
 }
 
 export async function signInWithApple(): Promise<SocialAuthResult> {
+  // Apple requires the SHA-256 hash of the nonce; Supabase then verifies the
+  // id_token's embedded hash against the RAW nonce we send it. Swapping these
+  // two breaks sign-in outright, so keep rawNonce/hashedNonce distinct below.
+  const rawNonce = Crypto.randomUUID();
+  const hashedNonce = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawNonce);
+
   const credential = await AppleAuthentication.signInAsync({
     requestedScopes: [
       AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
       AppleAuthentication.AppleAuthenticationScope.EMAIL,
     ],
+    nonce: hashedNonce,
   });
 
   if (!credential.identityToken) throw new Error('Apple Sign In: no identity token received');
@@ -46,6 +60,7 @@ export async function signInWithApple(): Promise<SocialAuthResult> {
   const { data, error } = await supabase.auth.signInWithIdToken({
     provider: 'apple',
     token: credential.identityToken,
+    nonce: rawNonce,
   });
   if (error) throw error;
 
