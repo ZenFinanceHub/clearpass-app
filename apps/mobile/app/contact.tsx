@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 
-const SUPPORT_EMAIL = 'privacy@clearpass.app';
+const SUPPORT_EMAIL = 'support@getclearpass.co.uk';
 
 export default function ContactScreen() {
   const theme = useTheme();

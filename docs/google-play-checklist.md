@@ -60,7 +60,7 @@ Navigate to **Store presence > Main store listing**:
 - **App icon:** Upload `apps/mobile/assets/icon.png` (must be 512x512 PNG)
 - **Feature graphic:** Create a 1024x500px banner (teal gradient with app name)
 - **Phone screenshots:** Upload at least 4 portrait screenshots (see app-store-metadata.md for list)
-- **Contact details:** Email `privacy@clearpass.app`
+- **Contact details:** Email `support@getclearpass.co.uk`
 - **Privacy policy:** `https://clearpass-app.vercel.app/privacy-policy`
 
 ---

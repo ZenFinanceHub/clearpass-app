@@ -82,7 +82,7 @@ function MockCard({ data }: { data: MockCardData }) {
       <Text style={cs.motivational}>
         {data.passed ? 'Ready for the real test!' : "Keep practising, you've got this!"}
       </Text>
-      <Text style={cs.footer}>{'clearpass.app'}</Text>
+      <Text style={cs.footer}>{'getclearpass.co.uk'}</Text>
     </LinearGradient>
   );
 }
@@ -106,7 +106,7 @@ function PracticeCard({ data }: { data: PracticeCardData }) {
           <Text style={[cs.streakText, { color: Colors.indigo }]}>{'🔥 '}{data.streakDays}{'-day streak'}</Text>
         </View>
       )}
-      <Text style={[cs.footer, { color: '#0F766E' }]}>{'clearpass.app'}</Text>
+      <Text style={[cs.footer, { color: '#0F766E' }]}>{'getclearpass.co.uk'}</Text>
     </LinearGradient>
   );
 }
@@ -129,7 +129,7 @@ function HazardCard({ data }: { data: HazardCardData }) {
       <Text style={cs.motivational}>
         {data.passed ? 'Excellent hazard awareness!' : 'Aim for 60%+ to pass'}
       </Text>
-      <Text style={cs.footer}>{'clearpass.app'}</Text>
+      <Text style={cs.footer}>{'getclearpass.co.uk'}</Text>
     </LinearGradient>
   );
 }

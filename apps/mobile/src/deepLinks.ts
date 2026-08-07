@@ -5,17 +5,16 @@ export type DeepLink =
   | { type: 'unknown' };
 
 // Hosts that legitimately carry a root-level ?ref= (marketing site + app web build)
-const REFERRAL_HOSTS = new Set(['clearpass.app', 'getclearpass.co.uk', 'clearpass-app.vercel.app']);
+const REFERRAL_HOSTS = new Set(['getclearpass.co.uk', 'clearpass-app.vercel.app']);
 
 export function handleIncomingUrl(url: string): DeepLink {
   try {
     // Normalise custom scheme to https for URL parsing
     const normalised = url
-      .replace('clearpass://confirmParent', 'https://clearpass.app/confirm-parent')
-      .replace('clearpass://confirm-parent', 'https://clearpass.app/confirm-parent')
-      .replace('clearpass://referral', 'https://clearpass.app/referral')
-      .replace('clearpass://', 'https://clearpass.app/')
-      .replace('https://getclearpass.co.uk/', 'https://clearpass.app/');
+      .replace('clearpass://confirmParent', 'https://getclearpass.co.uk/confirm-parent')
+      .replace('clearpass://confirm-parent', 'https://getclearpass.co.uk/confirm-parent')
+      .replace('clearpass://referral', 'https://getclearpass.co.uk/referral')
+      .replace('clearpass://', 'https://getclearpass.co.uk/');
 
     const parsed = new URL(normalised);
     const path = parsed.pathname.replace(/^\/+/, '').toLowerCase();

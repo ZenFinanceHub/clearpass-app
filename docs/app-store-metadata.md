@@ -119,7 +119,7 @@ https://clearpass-app.vercel.app/privacy-policy
 
 ## SUPPORT EMAIL
 
-privacy@clearpass.app
+support@getclearpass.co.uk
 
 ---
 

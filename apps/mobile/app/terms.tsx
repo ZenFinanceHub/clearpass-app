@@ -32,7 +32,7 @@ export default function TermsScreen() {
       </Section>
 
       <Section title="3. Accounts" theme={theme}>
-        {'You are responsible for maintaining the confidentiality of your login credentials and for all activity that occurs under your account. You must notify us immediately of any unauthorised use at privacy@clearpass.app.\n\n'}
+        {'You are responsible for maintaining the confidentiality of your login credentials and for all activity that occurs under your account. You must notify us immediately of any unauthorised use at support@getclearpass.co.uk.\n\n'}
         {'We reserve the right to terminate or suspend accounts that violate these terms.'}
       </Section>
 
@@ -40,7 +40,7 @@ export default function TermsScreen() {
         {'ClearPass offers a one-off Pro access purchase of GBP 7.99 for three months of full access. This is a one-time payment, not a recurring subscription.\n\n'}
         {'All payments are processed securely by Stripe. ClearPass does not store your card details.\n\n'}
         {'Pro access includes: unlimited practice questions, full timed mock tests, AI tutor explanations, progress tracking, and all future features released during your access period.\n\n'}
-        {'Refunds: if you experience a technical issue that prevents you from using the Pro features, contact privacy@clearpass.app within 14 days of purchase.'}
+        {'Refunds: if you experience a technical issue that prevents you from using the Pro features, contact support@getclearpass.co.uk within 14 days of purchase.'}
       </Section>
 
       <Section title="5. Free tier limitations" theme={theme}>
@@ -94,7 +94,7 @@ export default function TermsScreen() {
       </Section>
 
       <Section title="15. Contact" theme={theme}>
-        {'For questions about these terms, contact us at privacy@clearpass.app.'}
+        {'For questions about these terms, contact us at support@getclearpass.co.uk.'}
       </Section>
 
       <View style={styles.footer}>

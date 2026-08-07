@@ -379,7 +379,7 @@ export default function SettingsScreen() {
       await supabase.auth.signOut();
       router.replace('/landing');
     } catch {
-      Alert.alert('Error', 'Could not delete account. Please contact privacy@clearpass.app.');
+      Alert.alert('Error', 'Could not delete account. Please contact support@getclearpass.co.uk.');
     }
   }
 

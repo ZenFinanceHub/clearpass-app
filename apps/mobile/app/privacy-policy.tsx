@@ -24,7 +24,7 @@ export default function PrivacyPolicyScreen() {
       </View>
 
       <Section title="Who we are" theme={theme}>
-        {'ClearPass is a UK driving theory test preparation app operated by ZenFinanceHub. Our registered contact email is privacy@clearpass.app.'}
+        {'ClearPass is a UK driving theory test preparation app operated by ZenFinanceHub. Our registered contact email is privacy@getclearpass.co.uk.'}
       </Section>
 
       <Section title="Information we collect" theme={theme}>
@@ -90,7 +90,7 @@ export default function PrivacyPolicyScreen() {
         {'- Request deletion of your data\n'}
         {'- Object to processing\n'}
         {'- Data portability\n\n'}
-        {'To exercise these rights, email privacy@clearpass.app.'}
+        {'To exercise these rights, email privacy@getclearpass.co.uk.'}
       </Section>
 
       <Section title="Account Deletion" theme={theme}>
@@ -102,7 +102,7 @@ export default function PrivacyPolicyScreen() {
       </Section>
 
       <Section title="Children" theme={theme}>
-        {'ClearPass is intended for users aged 13 and over. Users under 16 should have parental consent before creating an account. If you believe a child under 13 has created an account, please contact privacy@clearpass.app.'}
+        {'ClearPass is intended for users aged 13 and over. Users under 16 should have parental consent before creating an account. If you believe a child under 13 has created an account, please contact privacy@getclearpass.co.uk.'}
       </Section>
 
       <Section title="Cookies and tracking" theme={theme}>
@@ -114,7 +114,7 @@ export default function PrivacyPolicyScreen() {
       </Section>
 
       <Section title="Contact" theme={theme}>
-        {'For any privacy-related questions or requests, contact us at privacy@clearpass.app.'}
+        {'For any privacy-related questions or requests, contact us at privacy@getclearpass.co.uk.'}
       </Section>
 
       <View style={styles.footer}>
