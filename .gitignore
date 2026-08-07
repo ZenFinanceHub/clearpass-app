@@ -4,3 +4,11 @@ node_modules
 dist 
 .turbo
 .claude/ 
+
+# Large media / licensed content — must not enter git
+dvsa-clips/
+roadsigns/
+apps/files/
+apps/files (2)/
+apps/files (3)/
+apps/files.zip
