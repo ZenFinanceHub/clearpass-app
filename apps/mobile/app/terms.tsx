@@ -37,14 +37,14 @@ export default function TermsScreen() {
       </Section>
 
       <Section title="4. Subscription and payment" theme={theme}>
-        {'ClearPass offers a one-off Premium access purchase of GBP 7.99 for three months of full access. This is a one-time payment, not a recurring subscription.\n\n'}
+        {'ClearPass offers a one-off Pro access purchase of GBP 7.99 for three months of full access. This is a one-time payment, not a recurring subscription.\n\n'}
         {'All payments are processed securely by Stripe. ClearPass does not store your card details.\n\n'}
-        {'Premium access includes: unlimited practice questions, full timed mock tests, AI tutor explanations, progress tracking, and all future features released during your access period.\n\n'}
-        {'Refunds: if you experience a technical issue that prevents you from using the premium features, contact privacy@clearpass.app within 14 days of purchase.'}
+        {'Pro access includes: unlimited practice questions, full timed mock tests, AI tutor explanations, progress tracking, and all future features released during your access period.\n\n'}
+        {'Refunds: if you experience a technical issue that prevents you from using the Pro features, contact privacy@clearpass.app within 14 days of purchase.'}
       </Section>
 
       <Section title="5. Free tier limitations" theme={theme}>
-        {'Free users may access up to 10 practice questions per day. Mock tests, AI tutor, and certain features require a Premium account. We reserve the right to adjust free tier limits at any time with reasonable notice.'}
+        {'Free users may access up to 10 practice questions per day. Mock tests, AI tutor, and certain features require a Pro account. We reserve the right to adjust free tier limits at any time with reasonable notice.'}
       </Section>
 
       <Section title="6. Acceptable use" theme={theme}>

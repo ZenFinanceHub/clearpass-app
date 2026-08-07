@@ -208,9 +208,9 @@ test.describe('/paywall', () => {
     await page.waitForLoadState('networkidle');
   });
 
-  test('shows Go Premium or pricing content', async ({ page }) => {
-    const premium = page.getByText(/premium|upgrade|£/i).first();
-    await expect(premium).toBeVisible({ timeout: 10000 });
+  test('shows Go Pro or pricing content', async ({ page }) => {
+    const pro = page.getByText(/\bpro\b|upgrade|£/i).first();
+    await expect(pro).toBeVisible({ timeout: 10000 });
   });
 
   test('shows Maybe later button', async ({ page }) => {

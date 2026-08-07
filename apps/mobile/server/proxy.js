@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const { computeProExpiresAt } = require('./lib/proExpiry');
 const { deriveConnectStatus } = require('./lib/connectStatus');
+const { INSTRUCTOR_PAYOUT_STRIPE_MINOR } = require('../src/constants/earnings');
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? require('stripe')(process.env.STRIPE_SECRET_KEY)
@@ -152,10 +153,13 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
             .single();
 
           if (instructor) {
+            // This webhook only fires for Stripe Checkout purchases (every platform
+            // currently routes through Stripe — see paywall.tsx), so the Stripe-fee
+            // net applies here, not the App Store/Google Play commission rate.
             await supabaseAdmin.from('instructor_earnings').insert({
               instructor_id: instructor.id,
               learner_id: userId,
-              amount: 2.50,
+              amount: INSTRUCTOR_PAYOUT_STRIPE_MINOR / 100,
               status: 'pending',
             });
             console.log('[webhook] Referral commission recorded for instructor:', instructor.id);

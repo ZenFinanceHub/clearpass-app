@@ -106,7 +106,7 @@ export default function PaywallScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Pip size={84} mood={trialExpired ? 'sympathetic' : 'celebrate'} />
-        <Text style={styles.headerTitle}>{trialExpired ? 'Your Trial Has Ended' : 'Go Premium'}</Text>
+        <Text style={styles.headerTitle}>{trialExpired ? 'Your Trial Has Ended' : 'Go Pro'}</Text>
         <Text style={styles.headerSub}>
           {trialExpired
             ? 'Subscribe to keep all your Pro features and progress'
@@ -146,7 +146,7 @@ export default function PaywallScreen() {
           <View style={styles.androidBanner}>
             <Text style={styles.androidBannerTitle}>{'[!] Android payments coming soon'}</Text>
             <Text style={styles.androidBannerBody}>
-              {'Premium is not yet available for direct purchase on Android. You can subscribe via our website.'}
+              {'Pro is not yet available for direct purchase on Android. You can subscribe via our website.'}
             </Text>
           </View>
           <ScaleButton
