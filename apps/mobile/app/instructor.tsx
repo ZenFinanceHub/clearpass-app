@@ -25,6 +25,7 @@ import {
 } from '@clearpass/core';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
+import { INSTRUCTOR_PAYOUT_WORST_CASE_MINOR, formatMinor } from '@/src/constants/earnings';
 import { Pip } from '@/src/components/Pip';
 import { generateInstructorCode, generateReferralCode } from '@/src/accountCodes';
 
@@ -698,7 +699,7 @@ function ReferralSection({
         <View style={{ flex: 1 }}>
           <Text style={[styles.refSectionTitle, { color: theme.textColor }]}>{'Share Your Referral Link'}</Text>
           <Text style={[styles.refSectionSub, { color: theme.subTextColor }]}>
-            {'Earn £2.50 for every pupil who subscribes to Premium'}
+            {`Earn ${formatMinor(INSTRUCTOR_PAYOUT_WORST_CASE_MINOR)} for every pupil who subscribes to Pro`}
           </Text>
         </View>
       </View>
@@ -816,9 +817,9 @@ function EarningsSection({
           <View key={e.id} style={styles.earningRow}>
             <View>
               <Text style={[styles.earningDate, { color: theme.textColor }]}>{formatDate(e.created_at)}</Text>
-              <Text style={[styles.earningDesc, { color: theme.subTextColor }]}>{`Learner ${idx + 1} converted to Premium`}</Text>
+              <Text style={[styles.earningDesc, { color: theme.subTextColor }]}>{`Learner ${idx + 1} converted to Pro`}</Text>
             </View>
-            <Text style={styles.earningAmount}>{'£2.50'}</Text>
+            <Text style={styles.earningAmount}>{`£${Number(e.amount).toFixed(2)}`}</Text>
           </View>
         ))
       )}

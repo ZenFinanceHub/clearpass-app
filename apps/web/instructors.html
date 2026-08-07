@@ -137,10 +137,10 @@
           <span class="inst-earn-calc-unit">Pro pupils referred</span>
         </div>
         <div class="inst-earn-calc-result">
-          Estimated monthly earnings
-          <strong id="calc-result">&#8776; &#163;7.99</strong>
+          Estimated earnings per quarter
+          <strong id="calc-result">&#8776; &#163;20.40</strong>
         </div>
-        <p class="inst-earn-calc-note">Based on roughly 30% of pupil subscription revenue. Actual earnings depend on when pupils renew.</p>
+        <p class="inst-earn-calc-note">Based on 30% of net revenue after app store fees. Web signups earn slightly more.</p>
       </div>
     </div>
   </section>
@@ -280,10 +280,16 @@
         window.scrollY > 10 ? '0 2px 24px rgba(0,0,0,0.07)' : 'none';
     }, { passive: true });
 
+    // Instructor payout per learner per quarter (GBP), worst case across purchase
+    // channels. Keep in sync with apps/mobile/src/constants/earnings.js -
+    // INSTRUCTOR_PAYOUT_WORST_CASE_MINOR (30% of net receipts after the App
+    // Store/Google Play 15% commission: GBP 7.99 -> GBP 6.79 net -> GBP 2.04).
+    const INSTRUCTOR_PAYOUT_PER_PUPIL_PER_QUARTER = 2.04;
+
     function updateCalc() {
       const pupils = Math.max(0, parseInt(document.getElementById('calc-pupils').value) || 0);
-      const monthly = (pupils * 7.99 / 3 * 0.30).toFixed(2);
-      document.getElementById('calc-result').textContent = '\u2248 \u00A3' + monthly;
+      const total = (pupils * INSTRUCTOR_PAYOUT_PER_PUPIL_PER_QUARTER).toFixed(2);
+      document.getElementById('calc-result').textContent = '\u2248 \u00A3' + total;
     }
     updateCalc(); // Ensure displayed value always matches the formula, even before user interaction
 

@@ -257,7 +257,7 @@ export default function LandingPage() {
             {/* Pro card */}
             <View style={[styles.priceCard, styles.priceCardPro]}>
               <View style={styles.planBadge}><Text style={styles.planBadgeText}>{'Most Popular'}</Text></View>
-              <Text style={[styles.planName, styles.planNamePro]}>{'Premium'}</Text>
+              <Text style={[styles.planName, styles.planNamePro]}>{'Pro'}</Text>
               <View style={styles.planPriceRow}>
                 <Text style={styles.planAmountPro}>{'£7.99'}</Text>
                 <Text style={styles.planPeriod}>{' / 3 months'}</Text>

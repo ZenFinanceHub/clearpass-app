@@ -254,7 +254,7 @@ export default function ProgressScreen() {
       {!(progress.isPro ?? false) && (
         <TouchableOpacity style={styles.proBanner} onPress={() => void handleUpgrade()} activeOpacity={0.85}>
           <View style={styles.proBannerContent}>
-            <Text style={styles.proBannerTitle}>Go Pro for £4.99</Text>
+            <Text style={styles.proBannerTitle}>Go Pro for £7.99</Text>
             <Text style={styles.proBannerSub}>Unlock unlimited questions, AI tutor and more</Text>
           </View>
           <Text style={styles.proBannerArrow}>{'→'}</Text>
