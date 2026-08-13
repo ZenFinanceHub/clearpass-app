@@ -24,6 +24,7 @@ import { ShareCardModal } from '@/src/components/ShareableCard';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { Pip } from '@/src/components/Pip';
 import { PaywallPrompt } from '@/src/components/PaywallPrompt';
+import { usePipVisibility } from '@/src/PipVisibilityContext';
 
 type Phase = 'info' | 'pre-clip' | 'player' | 'clip-result' | 'solution' | 'results';
 
@@ -141,6 +142,12 @@ export default function HazardScreen() {
   const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
   const [warningAcked, setWarningAcked] = useState(false);
+
+  const { setHidden: setPipHidden } = usePipVisibility();
+  useEffect(() => {
+    setPipHidden(phase === 'player');
+    return () => setPipHidden(false);
+  }, [phase, setPipHidden]);
 
   useFocusEffect(
     useCallback(() => {

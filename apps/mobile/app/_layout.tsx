@@ -13,6 +13,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AccessibilityProvider } from '@/src/AccessibilityContext';
 import { NetworkProvider } from '@/src/NetworkContext';
+import { PipVisibilityProvider, usePipVisibility } from '@/src/PipVisibilityContext';
 import { handleIncomingUrl } from '@/src/deepLinks';
 import { supabase } from '@/src/supabase';
 import { configureNotificationHandler } from '@/src/notifications';
@@ -168,6 +169,7 @@ function RootLayout() {
     <Sentry.ErrorBoundary fallback={<SentryFallback />}>
       <AccessibilityProvider>
       <NetworkProvider>
+      <PipVisibilityProvider>
         {Platform.OS === 'web' && <Head><title>ClearPass</title></Head>}
         <View suppressHydrationWarning style={{ flex: 1 }}>
           <Stack screenOptions={{ title: 'ClearPass' }}>
@@ -204,30 +206,43 @@ function RootLayout() {
             <Stack.Screen name="study-plan" options={{ headerShown: false }} />
           </Stack>
           <StatusBar style="light" />
-          {/* Pip FAB — opens Ask Pip; hidden when already on tutor tab.
+          {/* Pip FAB — opens Ask Pip; hidden when already on tutor tab, or while
+              PipVisibilityContext reports the current screen wants it hidden
+              (e.g. the hazard perception player, so it doesn't sit over the
+              video or steal taps meant for hazard scoring).
               Anchored below the header (not bottom-right) so it never overlaps
               in-content bottom controls — e.g. Mock Test's Prev/Next row, or any
               other screen's bottom CTA — which a fixed bottom-right FAB would
               otherwise sit on top of and intercept taps for. */}
-          {!(segments as string[]).includes('tutor') && (
-            <TouchableOpacity
-              style={[toastStyles.pipFab, { top: insets.top + 56 }]}
-              onPress={() => router.push('/tutor' as any)}
-              accessibilityLabel="Ask Pip"
-              accessibilityRole="button"
-            >
-              <Text style={toastStyles.pipFabIcon}>{'🦔'}</Text>
-            </TouchableOpacity>
-          )}
+          <PipFab top={insets.top + 56} />
           {showCachingToast && (
             <View style={[toastStyles.toast, { bottom: 96 + insets.bottom }]} pointerEvents="none">
               <Text style={toastStyles.text}>{'Downloading content for offline use...'}</Text>
             </View>
           )}
         </View>
+      </PipVisibilityProvider>
       </NetworkProvider>
       </AccessibilityProvider>
     </Sentry.ErrorBoundary>
+  );
+}
+
+function PipFab({ top }: { top: number }) {
+  const segments = useSegments();
+  const { hidden } = usePipVisibility();
+
+  if (hidden || (segments as string[]).includes('tutor')) return null;
+
+  return (
+    <TouchableOpacity
+      style={[toastStyles.pipFab, { top }]}
+      onPress={() => router.push('/tutor' as any)}
+      accessibilityLabel="Ask Pip"
+      accessibilityRole="button"
+    >
+      <Text style={toastStyles.pipFabIcon}>{'🦔'}</Text>
+    </TouchableOpacity>
   );
 }
 
