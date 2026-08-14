@@ -5,6 +5,7 @@ import {
   HazardResult,
   HazardTimelineLayout,
   HazardWindow,
+  missedHazardMessage,
 } from '@clearpass/core';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
@@ -62,21 +63,18 @@ const BAND_TEXT_COLORS: Record<number, string> = {
 type Theme = ReturnType<typeof useTheme>;
 
 function buildAccessibilityLabel(layout: HazardTimelineLayout, result: HazardResult): string {
-  if (layout.noTapsAtAll) return "You didn't tap during this hazard.";
-
   const earlyCount = layout.taps.filter((t) => t.kind === 'too-early').length;
   const lateCount = layout.taps.filter((t) => t.kind === 'too-late').length;
 
-  const parts: string[] = [];
-  if (result.scoringTap !== null) {
-    parts.push(
-      result.zeroed
-        ? `You tapped at a scoring moment, but it was zeroed for excessive tapping elsewhere in this clip.`
-        : `You scored ${result.points} point${result.points === 1 ? '' : 's'}.`,
-    );
-  } else {
-    parts.push('You did not tap within the scoring window for this hazard.');
+  if (result.scoringTap === null) {
+    return missedHazardMessage(layout.noTapsAtAll, earlyCount, lateCount);
   }
+
+  const parts: string[] = [
+    result.zeroed
+      ? `You tapped at a scoring moment, but it was zeroed for excessive tapping elsewhere in this clip.`
+      : `You scored ${result.points} point${result.points === 1 ? '' : 's'}.`,
+  ];
   if (earlyCount > 0) parts.push(`${earlyCount} earlier tap${earlyCount > 1 ? 's' : ''} didn't count.`);
   if (lateCount > 0) parts.push(`${lateCount} later tap${lateCount > 1 ? 's' : ''} didn't count.`);
   return parts.join(' ');
@@ -160,20 +158,26 @@ export function HazardTimeline({ hazard, clicks, result }: HazardTimelineProps) 
         })}
       </View>
 
-      {layout.noTapsAtAll && (
+      {result.scoringTap === null ? (
+        // Missed entirely — one coaching message covering all four cases
+        // (no taps / all-early / all-late / mixed), instead of the neutral
+        // per-direction counts used below for a hazard that DID score.
         <Text style={[styles.stateText, { fontFamily: theme.fontFamily, color: theme.subTextColor }]}>
-          {"You didn't tap during this hazard"}
+          {missedHazardMessage(layout.noTapsAtAll, tooEarly.length, tooLate.length)}
         </Text>
-      )}
-      {tooEarly.length > 0 && (
-        <Text style={[styles.stateText, { fontFamily: theme.fontFamily, color: theme.subTextColor }]}>
-          {tooEarly.length === 1 ? "1 earlier tap didn't count" : `${tooEarly.length} earlier taps didn't count`}
-        </Text>
-      )}
-      {tooLate.length > 0 && (
-        <Text style={[styles.stateText, { fontFamily: theme.fontFamily, color: theme.subTextColor }]}>
-          {tooLate.length === 1 ? "1 later tap didn't count" : `${tooLate.length} later taps didn't count`}
-        </Text>
+      ) : (
+        <>
+          {tooEarly.length > 0 && (
+            <Text style={[styles.stateText, { fontFamily: theme.fontFamily, color: theme.subTextColor }]}>
+              {tooEarly.length === 1 ? "1 earlier tap didn't count" : `${tooEarly.length} earlier taps didn't count`}
+            </Text>
+          )}
+          {tooLate.length > 0 && (
+            <Text style={[styles.stateText, { fontFamily: theme.fontFamily, color: theme.subTextColor }]}>
+              {tooLate.length === 1 ? "1 later tap didn't count" : `${tooLate.length} later taps didn't count`}
+            </Text>
+          )}
+        </>
       )}
       {result.zeroed && (
         <Text style={[styles.stateText, styles.zeroedText, { fontFamily: theme.fontFamily }]}>

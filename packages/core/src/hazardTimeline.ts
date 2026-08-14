@@ -93,3 +93,23 @@ export function computeHazardTimelineLayout(
     zeroed,
   };
 }
+
+/**
+ * Coaching copy for a hazard the learner missed entirely (no scoring tap —
+ * the caller decides that by checking HazardResult.scoringTap === null
+ * before calling this; it isn't re-derived here). Plain, encouraging
+ * language for a nervous learner: what happened and what to try next time,
+ * not a tally of failed taps.
+ */
+export function missedHazardMessage(noTapsAtAll: boolean, earlyCount: number, lateCount: number): string {
+  if (noTapsAtAll) {
+    return "You didn't tap for this one — that's okay, keep watching for the next hazard.";
+  }
+  if (earlyCount > 0 && lateCount === 0) {
+    return 'You tapped a little too soon — try waiting just a moment longer before reacting.';
+  }
+  if (lateCount > 0 && earlyCount === 0) {
+    return 'You tapped a little too late — try to spot the hazard developing a bit sooner.';
+  }
+  return "Your taps didn't quite line up with this hazard — it takes practice to get the timing right.";
+}

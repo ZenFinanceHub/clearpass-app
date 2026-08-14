@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { computeHazardTimelineLayout, HAZARD_TIMELINE_PADDING_SEC } from './hazardTimeline';
+import { computeHazardTimelineLayout, HAZARD_TIMELINE_PADDING_SEC, missedHazardMessage } from './hazardTimeline';
 import { CGI1_WINDOW, BRIDGE_H1_WINDOW, BRIDGE_H2_WINDOW } from './fixtures/hazardBands';
 
 describe('computeHazardTimelineLayout — CGI Clip 1, one tap per band', () => {
@@ -115,5 +115,53 @@ describe('computeHazardTimelineLayout — double-hazard clip (Priority Bridge)',
     // crush each hazard's ~0.4-0.7s bands into unreadable slivers over the
     // ~13s gap between the two hazards).
     expect(h1Layout.visibleEnd).toBeLessThan(h2Layout.visibleStart);
+  });
+});
+
+// ── missedHazardMessage — coaching copy for a hazard with no scoring tap ────
+// Only meaningful when the hazard was actually missed (HazardResult.scoringTap
+// === null) — the caller decides that, this function just picks the wording
+// for the four ways a miss can look. Plain, encouraging language for a
+// nervous learner, not a scolding or a driving-instructor's jargon.
+
+describe('missedHazardMessage', () => {
+  test('no taps at all in the clip: distinct, gentle message', () => {
+    expect(missedHazardMessage(true, 0, 0)).toBe(
+      "You didn't tap for this one — that's okay, keep watching for the next hazard.",
+    );
+  });
+
+  test('every tap was too early (none late): directive about reacting later', () => {
+    expect(missedHazardMessage(false, 1, 0)).toBe(
+      'You tapped a little too soon — try waiting just a moment longer before reacting.',
+    );
+    // Message text does not change with count — it's coaching, not a tally.
+    expect(missedHazardMessage(false, 3, 0)).toBe(
+      'You tapped a little too soon — try waiting just a moment longer before reacting.',
+    );
+  });
+
+  test('every tap was too late (none early): directive about spotting sooner', () => {
+    expect(missedHazardMessage(false, 0, 1)).toBe(
+      'You tapped a little too late — try to spot the hazard developing a bit sooner.',
+    );
+    expect(missedHazardMessage(false, 0, 2)).toBe(
+      'You tapped a little too late — try to spot the hazard developing a bit sooner.',
+    );
+  });
+
+  test('taps on both sides (early AND late, none in-window): neutral message', () => {
+    expect(missedHazardMessage(false, 1, 1)).toBe(
+      "Your taps didn't quite line up with this hazard — it takes practice to get the timing right.",
+    );
+    expect(missedHazardMessage(false, 2, 3)).toBe(
+      "Your taps didn't quite line up with this hazard — it takes practice to get the timing right.",
+    );
+  });
+
+  test('noTapsAtAll takes priority even if counts are (implausibly) nonzero', () => {
+    expect(missedHazardMessage(true, 5, 5)).toBe(
+      "You didn't tap for this one — that's okay, keep watching for the next hazard.",
+    );
   });
 });
