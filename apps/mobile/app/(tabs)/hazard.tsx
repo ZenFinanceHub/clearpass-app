@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -377,6 +378,23 @@ export default function HazardScreen() {
         </Text>
         <TouchableOpacity style={styles.primaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
           <Text style={styles.primaryBtnText}>{'Go Back'}</Text>
+        </TouchableOpacity>
+        {/* Same store URLs as the existing "rate the app" flow in ipassed.tsx —
+            not re-deciding them here. Both shown (not branched by platform)
+            since a web visitor's device isn't known from Platform.OS === 'web'. */}
+        <TouchableOpacity
+          style={styles.secondaryBtn}
+          onPress={() => { Linking.openURL('https://apps.apple.com/app/clearpass-theory-test/id000000000').catch(() => {}); }}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.secondaryBtnText}>{'Get it on the App Store'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.secondaryBtn}
+          onPress={() => { Linking.openURL('https://play.google.com/store/apps/details?id=co.uk.getclearpass.app').catch(() => {}); }}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.secondaryBtnText}>{'Get it on Google Play'}</Text>
         </TouchableOpacity>
       </View>
     );
