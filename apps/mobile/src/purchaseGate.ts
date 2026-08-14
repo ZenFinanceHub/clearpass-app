@@ -27,13 +27,13 @@ export function getPurchaseRoute(): PurchaseRoute {
 
 /** Copy for the full paywall screen's coming-soon state (no price, no external link). */
 export const COMING_SOON_COPY = {
-  title: 'Pro is coming to iPhone',
+  title: 'Pro is coming to iOS',
   body: "We're finishing up Pro for iOS so you can upgrade right here in the app. Check back soon!",
 };
 
 /** Copy for the compact inline prompt (daily-limit paywalls, PaywallPrompt). */
 export const COMING_SOON_COPY_COMPACT = {
   title: 'Pro is coming soon',
-  body: "You've reached today's free limit. Pro is coming to iPhone soon — thanks for bearing with us!",
+  body: "You've reached today's free limit. Pro is coming to iOS soon — thanks for bearing with us!",
   buttonLabel: 'Got it',
 };
