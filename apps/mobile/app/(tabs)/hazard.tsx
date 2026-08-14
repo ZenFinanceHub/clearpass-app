@@ -358,6 +358,30 @@ export default function HazardScreen() {
     setPhase('info');
   }
 
+  // ── WEB GUARD ────────────────────────────────────────────────────────────
+  // The web build has no ground-truth video clock (see WebVideoPlayer — its
+  // `currentTime` is a setInterval stopwatch never synced to real playback),
+  // so any score computed on web isn't trustworthy. Disable the feature
+  // outright on web rather than present a score that may not reflect what
+  // actually happened. Remove once the web player reads real position via
+  // the YouTube IFrame API.
+
+  if (Platform.OS === 'web') {
+    return (
+      <View style={[styles.bg, styles.centerFill, { backgroundColor: theme.backgroundColor }]}>
+        <Text style={[styles.heading, { fontSize: theme.fontSize(24), fontFamily: theme.fontFamily, color: theme.textColor }]}>
+          {'Mobile app only'}
+        </Text>
+        <Text style={[styles.bodyText, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>
+          {'Hazard Perception practice is only available in the ClearPass mobile app — open ClearPass on your phone to try it.'}
+        </Text>
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
+          <Text style={styles.primaryBtnText}>{'Go Back'}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   // ── INFO ─────────────────────────────────────────────────────────────────
 
   if (phase === 'info') {
@@ -514,7 +538,12 @@ export default function HazardScreen() {
 
   if (phase === 'player') {
     let videoContent: React.ReactElement;
-    if (Platform.OS !== 'web') {
+    // Widened to `string` — the WEB GUARD above already returns before `phase`
+    // can reach 'player' on web, which makes TS prove this branch is currently
+    // unreachable for 'web' and flag the literal comparison as redundant. Kept
+    // as a runtime check (not deleted) so the WebVideoPlayer branch is intact
+    // and reachable again the moment the web guard is lifted.
+    if ((Platform.OS as string) !== 'web') {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const WebView = (require('react-native-webview') as { default: React.ComponentType<any> }).default;
       videoContent = (
