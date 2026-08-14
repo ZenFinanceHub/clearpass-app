@@ -21,8 +21,19 @@ test('shouldApplyProGrant: instructor grant is idempotent against itself', () =>
   assert.equal(shouldApplyProGrant('instructor', 'instructor'), true);
 });
 
-test('isExemptFromProExpiry is true only for instructor-sourced grants', () => {
+test('shouldApplyProGrant: an existing comp grant is never overwritten by instructor or seat', () => {
+  assert.equal(shouldApplyProGrant('comp', 'instructor'), false);
+  assert.equal(shouldApplyProGrant('comp', 'seat'), false);
+});
+
+test('shouldApplyProGrant: a comp grant can upgrade an existing instructor grant, but not stripe', () => {
+  assert.equal(shouldApplyProGrant('instructor', 'comp'), true);
+  assert.equal(shouldApplyProGrant('stripe', 'comp'), false);
+});
+
+test('isExemptFromProExpiry is true for instructor- and comp-sourced grants only', () => {
   assert.equal(isExemptFromProExpiry('instructor'), true);
+  assert.equal(isExemptFromProExpiry('comp'), true);
   assert.equal(isExemptFromProExpiry('stripe'), false);
   assert.equal(isExemptFromProExpiry('seat'), false);
   assert.equal(isExemptFromProExpiry(null), false);
@@ -32,6 +43,16 @@ test('isEligibleForProExpiry excludes instructor grants even with a past expiry 
   assert.equal(
     isEligibleForProExpiry(
       { isPro: true, proExpiresAt: '2020-01-01T00:00:00.000Z', proSource: 'instructor' },
+      '2026-08-14T00:00:00.000Z'
+    ),
+    false
+  );
+});
+
+test('isEligibleForProExpiry excludes comp grants even with a past expiry date', () => {
+  assert.equal(
+    isEligibleForProExpiry(
+      { isPro: true, proExpiresAt: '2020-01-01T00:00:00.000Z', proSource: 'comp' },
       '2026-08-14T00:00:00.000Z'
     ),
     false

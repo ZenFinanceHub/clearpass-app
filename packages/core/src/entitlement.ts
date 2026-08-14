@@ -1,4 +1,4 @@
-export type ProSource = 'stripe' | 'instructor' | 'seat';
+export type ProSource = 'stripe' | 'instructor' | 'comp' | 'seat';
 
 export interface ProGrantState {
   isPro: boolean;
@@ -6,13 +6,17 @@ export interface ProGrantState {
   proSource?: ProSource | null;
 }
 
-// Higher wins. A paid Stripe grant is never silently downgraded by a free
-// instructor or seat grant; an instructor grant is never downgraded by a
-// seat grant. Equal priority still applies, so e.g. a Stripe renewal for an
-// already-'stripe' user, or the instructor cron re-confirming an existing
-// instructor grant, both go through.
+// Higher wins. A paid Stripe grant is never silently downgraded by any free
+// grant. 'comp' (manually granted, e.g. reviewers/partners/beta testers) sits
+// above 'instructor' so the automated instructor-grant cron can never
+// silently overwrite a deliberate manual comp — comp is a one-off human
+// decision, instructor is a recurring automated reconciliation. Equal
+// priority still applies, so e.g. a Stripe renewal for an already-'stripe'
+// user, or the instructor cron re-confirming an existing instructor grant,
+// both go through.
 const PRO_SOURCE_PRIORITY: Record<ProSource, number> = {
-  stripe: 3,
+  stripe: 4,
+  comp: 3,
   instructor: 2,
   seat: 1,
 };
@@ -25,10 +29,11 @@ export function shouldApplyProGrant(
   return PRO_SOURCE_PRIORITY[incomingSource] >= PRO_SOURCE_PRIORITY[currentSource];
 }
 
-// Instructor-sourced Pro is granted unconditionally for as long as the
-// account is an instructor and never expires on its own.
+// Instructor-sourced and comp-sourced Pro are both granted unconditionally
+// and never expire on their own — instructor for as long as the account is
+// an instructor, comp for as long as someone manually granted it stands.
 export function isExemptFromProExpiry(source: ProSource | null | undefined): boolean {
-  return source === 'instructor';
+  return source === 'instructor' || source === 'comp';
 }
 
 export function isEligibleForProExpiry(state: ProGrantState, nowIso: string): boolean {

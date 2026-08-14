@@ -29,11 +29,33 @@ describe('shouldApplyProGrant', () => {
   test('a seat grant can upgrade to an instructor grant', () => {
     expect(shouldApplyProGrant('seat', 'instructor')).toBe(true);
   });
+
+  test('an existing comp grant is never overwritten by instructor or seat', () => {
+    expect(shouldApplyProGrant('comp', 'instructor')).toBe(false);
+    expect(shouldApplyProGrant('comp', 'seat')).toBe(false);
+  });
+
+  test('a comp grant can upgrade an existing instructor or seat grant', () => {
+    expect(shouldApplyProGrant('instructor', 'comp')).toBe(true);
+    expect(shouldApplyProGrant('seat', 'comp')).toBe(true);
+  });
+
+  test('an existing stripe grant is never overwritten by comp', () => {
+    expect(shouldApplyProGrant('stripe', 'comp')).toBe(false);
+  });
+
+  test('a comp grant can reapply over itself (idempotent reconciliation)', () => {
+    expect(shouldApplyProGrant('comp', 'comp')).toBe(true);
+  });
 });
 
 describe('isExemptFromProExpiry', () => {
   test('instructor-sourced grants are exempt', () => {
     expect(isExemptFromProExpiry('instructor')).toBe(true);
+  });
+
+  test('comp-sourced grants are exempt', () => {
+    expect(isExemptFromProExpiry('comp')).toBe(true);
   });
 
   test('stripe and seat grants are not exempt', () => {
@@ -71,6 +93,12 @@ describe('isEligibleForProExpiry', () => {
   test('an instructor grant with no expiry date at all is never eligible', () => {
     expect(
       isEligibleForProExpiry({ isPro: true, proExpiresAt: null, proSource: 'instructor' }, NOW)
+    ).toBe(false);
+  });
+
+  test('a comp grant past its (irrelevant) expiry date is never eligible', () => {
+    expect(
+      isEligibleForProExpiry({ isPro: true, proExpiresAt: '2026-08-01T00:00:00.000Z', proSource: 'comp' }, NOW)
     ).toBe(false);
   });
 

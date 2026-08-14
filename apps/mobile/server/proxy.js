@@ -1023,9 +1023,11 @@ app.post('/api/cron/expire-pro', async (req, res) => {
       .select('id, progress');
     if (error) throw error;
 
-    // isEligibleForProExpiry excludes proSource: 'instructor' rows — those
-    // are unconditional and non-expiring for as long as the account is an
-    // instructor (see /api/cron/grant-instructor-pro below).
+    // isEligibleForProExpiry excludes proSource: 'instructor' rows (granted
+    // by /api/cron/grant-instructor-pro below, unconditional for as long as
+    // the account is an instructor) and proSource: 'comp' rows (manually
+    // granted, e.g. reviewers/partners/beta testers — never expires on its
+    // own, no automated process re-grants it).
     const toExpire = (rows || []).filter(row => isEligibleForProExpiry(row.progress || {}, now));
 
     let expired = 0;
@@ -1058,11 +1060,13 @@ app.post('/api/cron/expire-pro', async (req, res) => {
 // POST /api/cron/grant-instructor-pro
 // Idempotent reconciliation: every profile with account_type = 'instructor'
 // gets unconditional, non-expiring Pro-level access tagged proSource:
-// 'instructor'. Never overwrites an existing 'stripe' grant (see
+// 'instructor'. Never overwrites an existing 'stripe' or 'comp' grant (see
 // shouldApplyProGrant in lib/entitlement.js) — an instructor who separately
 // paid keeps their own paid entitlement and its own expiry until it lapses,
-// at which point expire-pro clears proSource and this cron picks them up
-// on its next run.
+// at which point expire-pro clears proSource and this cron picks them up on
+// its next run; an instructor who was manually comp'd keeps that grant
+// indefinitely, since comp is a deliberate one-off decision this automated
+// cron should never silently override.
 // Schedule: daily at 02:00 Europe/London (after expire-pro).
 
 app.post('/api/cron/grant-instructor-pro', async (req, res) => {
