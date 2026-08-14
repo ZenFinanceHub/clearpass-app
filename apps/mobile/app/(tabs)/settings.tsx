@@ -52,6 +52,10 @@ import {
   showPermissionDeniedAlert,
 } from '@/src/notifications';
 import * as Sentry from '@sentry/react-native';
+import { getBuildInfo, buildInfoClipboardText } from '@/src/buildInfo';
+
+// Static for the lifetime of this running instance — computed once, not per render.
+const BUILD_INFO = getBuildInfo();
 
 // ─── Accessibility config ─────────────────────────────────────────────────────
 
@@ -405,6 +409,11 @@ export default function SettingsScreen() {
     if (!myInstructorCode) return;
     await Clipboard.setStringAsync(myInstructorCode);
     Alert.alert('Copied!', `Code ${myInstructorCode} copied to clipboard.`);
+  }
+
+  async function handleCopyBuildInfo() {
+    await Clipboard.setStringAsync(buildInfoClipboardText(BUILD_INFO));
+    Alert.alert('Copied!', 'Build info copied to clipboard.');
   }
 
   async function handleSaveParentEmail() {
@@ -1011,7 +1020,7 @@ export default function SettingsScreen() {
           <View style={styles.textWrap}>
             <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'App Version'}</Text>
           </View>
-          <Text style={[styles.description, { color: theme.subTextColor }]}>{'1.0.0'}</Text>
+          <Text style={[styles.description, { color: theme.subTextColor }]}>{BUILD_INFO.appVersion}</Text>
         </View>
       </View>
 
@@ -1032,6 +1041,38 @@ export default function SettingsScreen() {
           <Text style={[styles.signOutBtnText, { color: '#F59E0B' }]}>{'Test Sentry (dev only)'}</Text>
         </TouchableOpacity>
       )}
+
+      {/* ── Build Info ───────────────────────────────────────────────────────────
+          Diagnostic only, not a real setting — kept small and muted, and always
+          reachable (no hidden gesture) so testers can find it without instructions
+          and paste it straight into a bug report. */}
+      <View style={styles.buildInfoSection}>
+        <Text style={[styles.buildInfoHeader, { fontFamily: theme.fontFamily, color: theme.subTextColor }]}>
+          {'BUILD INFO'}
+        </Text>
+        {([
+          ['App version', BUILD_INFO.appVersion],
+          ['Build number', BUILD_INFO.buildNumber],
+          ['Update ID', BUILD_INFO.updateId],
+          ['Published', BUILD_INFO.publishedAt],
+          ['Channel', BUILD_INFO.channel],
+          ['Runtime version', BUILD_INFO.runtimeVersion],
+          ['Launch type', BUILD_INFO.launchType],
+        ] as [string, string][]).map(([k, v]) => (
+          <Text
+            key={k}
+            selectable
+            style={[styles.buildInfoRow, { fontFamily: theme.fontFamily, fontSize: theme.fontSize(11), color: theme.subTextColor }]}
+          >
+            {k}
+            {': '}
+            {v}
+          </Text>
+        ))}
+        <TouchableOpacity onPress={() => void handleCopyBuildInfo()} activeOpacity={0.7} style={styles.buildInfoCopyBtn}>
+          <Text style={[styles.buildInfoCopyText, { fontFamily: theme.fontFamily }]}>{'Copy build info'}</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* ── Edit Profile Modal ───────────────────────────────────────────────── */}
       <Modal
@@ -1515,4 +1556,17 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   ampmText: { fontSize: 16, fontWeight: '800', color: Colors.indigo },
+
+  // ── Build Info (diagnostic, de-emphasised) ─────────────────────────────────
+  buildInfoSection: {
+    marginTop: 32,
+    paddingTop: 16,
+    borderTopWidth: 0.5,
+    borderTopColor: '#E5E7EB',
+    gap: 3,
+  },
+  buildInfoHeader: { fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
+  buildInfoRow: { lineHeight: 16 },
+  buildInfoCopyBtn: { marginTop: 8, alignSelf: 'flex-start' },
+  buildInfoCopyText: { fontSize: 12, fontWeight: '600', color: Colors.indigo },
 });
