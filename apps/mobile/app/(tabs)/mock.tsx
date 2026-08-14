@@ -37,6 +37,7 @@ import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { Pip } from '@/src/components/Pip';
 import { AnswerOptions, LABELS } from '@/src/components/AnswerOptions';
 import { Colors } from '@/src/constants/theme';
+import { PaywallPrompt } from '@/src/components/PaywallPrompt';
 
 const TOTAL_QUESTIONS = 50;
 const TIME_LIMIT_SECONDS = 57 * 60;
@@ -129,6 +130,7 @@ export default function MockScreen() {
   const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [mockMode, setMockMode] = useState<'standard' | 'quick'>('standard');
+  const [locked, setLocked] = useState(false);
 
   const questionsRef = useRef<Question[]>([]);
   const answersRef = useRef<(number | null)[]>([]);
@@ -139,11 +141,15 @@ export default function MockScreen() {
   const activeTotalRef = useRef(TOTAL_QUESTIONS);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Non-Pro users see an in-place locked state on this screen (below) rather
+  // than being redirected away — a forced router.replace('/paywall') on
+  // focus is exactly the kind of visible external-purchase-adjacent flow
+  // Apple's 3.1.1 review would hit immediately on iOS.
   useFocusEffect(
     useCallback(() => {
       void (async () => {
         const premium = await isPremium();
-        if (!premium) router.replace('/paywall');
+        setLocked(!premium);
       })();
     }, []),
   );
@@ -295,9 +301,15 @@ export default function MockScreen() {
   if (phase === 'start') return (
     <>
       <OfflineBanner />
-      <StartView
-        onStart={handleStart}
-      />
+      {locked ? (
+        <View style={[styles.lockedWrap, { backgroundColor: theme.backgroundColor }]}>
+          <PaywallPrompt onUpgrade={() => router.push('/paywall')} />
+        </View>
+      ) : (
+        <StartView
+          onStart={handleStart}
+        />
+      )}
     </>
   );
 
@@ -768,6 +780,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   scroll: { flex: 1 },
   content: { padding: 16, paddingBottom: 48, gap: 12 },
+  lockedWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
 
   // Test top bar
   topBar: {
