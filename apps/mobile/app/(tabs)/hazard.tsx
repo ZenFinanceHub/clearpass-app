@@ -118,6 +118,23 @@ function WebVideoPlayer({ youtubeId, durationSec, onEnded, onTimeUpdate }: WebVi
 }
 
 /**
+ * Wraps any WebView/video element actually rendering hazard footage — the
+ * scored clip AND the solution/reveal clip both use this. Hides the global
+ * Pip FAB for exactly as long as this is mounted, tied to real video
+ * playback rather than a hand-maintained list of phase names. A future
+ * phase that plays video is covered automatically just by wrapping its
+ * video element in this, instead of needing a separate gate kept in sync.
+ */
+function VideoSurface({ children }: { children: React.ReactNode }) {
+  const { setHidden } = usePipVisibility();
+  useEffect(() => {
+    setHidden(true);
+    return () => setHidden(false);
+  }, [setHidden]);
+  return <>{children}</>;
+}
+
+/**
  * Shared detail view for a single clip's result — used both by the live
  * clip-result phase right after a clip ends, and by the end-of-session
  * "revisit" modal, so both render identically (including the timeline and
@@ -212,12 +229,6 @@ export default function HazardScreen() {
   const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
   const [warningAcked, setWarningAcked] = useState(false);
-
-  const { setHidden: setPipHidden } = usePipVisibility();
-  useEffect(() => {
-    setPipHidden(phase === 'player');
-    return () => setPipHidden(false);
-  }, [phase, setPipHidden]);
 
   useFocusEffect(
     useCallback(() => {
@@ -670,7 +681,7 @@ export default function HazardScreen() {
     return (
       <View style={styles.playerScreen}>
         <View style={styles.videoWrap}>
-          {videoContent}
+          <VideoSurface>{videoContent}</VideoSurface>
 
           {/* Tap overlay — disabled outright once scoring windows have closed, so
               taps during any reveal footage register nothing at all. */}
@@ -780,15 +791,17 @@ v.addEventListener('ended', function() { window.ReactNativeWebView.postMessage(J
       <View style={styles.playerScreen}>
         <View style={styles.videoWrap}>
           {solutionVideoUrl ? (
-            <WebView
-              key={`solution-${clipIndex}`}
-              source={{ html: solHtml }}
-              style={StyleSheet.absoluteFillObject}
-              scrollEnabled={false}
-              allowsInlineMediaPlayback
-              mediaPlaybackRequiresUserAction={false}
-              onMessage={() => handleNextClip()}
-            />
+            <VideoSurface>
+              <WebView
+                key={`solution-${clipIndex}`}
+                source={{ html: solHtml }}
+                style={StyleSheet.absoluteFillObject}
+                scrollEnabled={false}
+                allowsInlineMediaPlayback
+                mediaPlaybackRequiresUserAction={false}
+                onMessage={() => handleNextClip()}
+              />
+            </VideoSurface>
           ) : null}
           <View style={[styles.hud, { top: 16, bottom: undefined }]} pointerEvents="none">
             <Text style={styles.hudText}>{'Solution clip'}</Text>
