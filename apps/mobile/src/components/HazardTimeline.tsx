@@ -35,15 +35,19 @@ const BAND_COLORS: Record<number, string> = {
   1: Colors.indigoBg, // #EDE9FE — existing token
 };
 
-// Lighter bands (3/2/1) are too light for white numerals to read against —
-// dark indigo text instead, still on-brand, still passes the "not colour
-// alone" requirement since the numeral itself is what carries the meaning.
+// Lighter bands (3/2/1) are too light for white numerals to read against.
+// Colors.indigo text measured 5.30:1 on band 1 (passes WCAG AA 4.5:1) but
+// only 3.68:1 on band 2 and 2.47:1 on band 3 (both fail) — see the
+// contrast-ratio table in the commit message. Colors.textPrimary
+// (near-black, #111827) clears 4.5:1 against all three: 14.94:1 (band 1),
+// 10.39:1 (band 2), 6.95:1 (band 3). Band colours are untouched — only the
+// text darkened, per instruction.
 const BAND_TEXT_COLORS: Record<number, string> = {
   5: '#FFFFFF',
   4: '#FFFFFF',
-  3: Colors.indigo,
-  2: Colors.indigo,
-  1: Colors.indigo,
+  3: Colors.textPrimary,
+  2: Colors.textPrimary,
+  1: Colors.textPrimary,
 };
 
 type Theme = ReturnType<typeof useTheme>;
