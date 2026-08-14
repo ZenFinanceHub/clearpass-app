@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Pip } from './Pip';
 import { Colors } from '@/src/constants/theme';
+import { getPurchaseRoute, COMING_SOON_COPY_COMPACT } from '@/src/purchaseGate';
 
 interface PaywallPromptProps {
   onUpgrade: () => void;
@@ -10,6 +11,24 @@ interface PaywallPromptProps {
 }
 
 export function PaywallPrompt({ onUpgrade, onDismiss, dismissLabel = 'Maybe later' }: PaywallPromptProps) {
+  const route = getPurchaseRoute();
+
+  // iOS today: nothing to upgrade to yet (IAP isn't implemented), so there's
+  // no purchase CTA at all — just the coming-soon message with a single
+  // acknowledge button. Every caller of PaywallPrompt gets this for free.
+  if (route !== 'stripe_checkout') {
+    return (
+      <View style={styles.card}>
+        <Pip size={72} mood="sympathetic" />
+        <Text style={styles.title}>{COMING_SOON_COPY_COMPACT.title}</Text>
+        <Text style={styles.body}>{COMING_SOON_COPY_COMPACT.body}</Text>
+        <TouchableOpacity style={styles.upgradeBtn} onPress={onDismiss ?? onUpgrade} activeOpacity={0.85}>
+          <Text style={styles.upgradeBtnText}>{COMING_SOON_COPY_COMPACT.buttonLabel}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.card}>
       <Pip size={72} mood="sympathetic" />

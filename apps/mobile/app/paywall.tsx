@@ -17,6 +17,7 @@ import { Colors } from '@/src/constants/theme';
 import { ScaleButton } from '@/src/components/ScaleButton';
 import { loadUserProgress, isTrialActive } from '@/src/storage';
 import { Pip } from '@/src/components/Pip';
+import { getPurchaseRoute, COMING_SOON_COPY } from '@/src/purchaseGate';
 
 const FEATURES = [
   'Unlimited practice questions',
@@ -29,6 +30,7 @@ const FEATURES = [
 
 
 export default function PaywallScreen() {
+  const route = getPurchaseRoute();
   const [loading,      setLoading]      = useState(false);
   const [error,        setError]        = useState('');
   const [referredBy,   setReferredBy]   = useState<string | null>(null);
@@ -124,21 +126,24 @@ export default function PaywallScreen() {
         ))}
       </View>
 
-      {/* Pricing */}
-      <View style={styles.pricingBox}>
-        {!trialExpired && (
-          <View style={styles.trialPill}>
-            <Text style={styles.trialPillText}>{'7 days free'}</Text>
+      {/* Pricing — hidden entirely in the iOS coming-soon state: no price
+          should be shown for something that can't be purchased yet. */}
+      {(Platform.OS === 'android' || route === 'stripe_checkout') && (
+        <View style={styles.pricingBox}>
+          {!trialExpired && (
+            <View style={styles.trialPill}>
+              <Text style={styles.trialPillText}>{'7 days free'}</Text>
+            </View>
+          )}
+          <View style={styles.priceRow}>
+            <Text style={styles.priceAmount}>{'£7.99'}</Text>
+            <Text style={styles.pricePeriod}>{' / 3 months'}</Text>
           </View>
-        )}
-        <View style={styles.priceRow}>
-          <Text style={styles.priceAmount}>{'£7.99'}</Text>
-          <Text style={styles.pricePeriod}>{' / 3 months'}</Text>
+          <Text style={styles.priceSub}>
+            {trialExpired ? "That's less than £2.67/month" : "Free for 7 days, then just £2.67/month"}
+          </Text>
         </View>
-        <Text style={styles.priceSub}>
-          {trialExpired ? "That's less than £2.67/month" : "Free for 7 days, then just £2.67/month"}
-        </Text>
-      </View>
+      )}
 
       {/* TODO: replace with Google Play IAP once policy decision is made */}
       {Platform.OS === 'android' ? (
@@ -157,7 +162,7 @@ export default function PaywallScreen() {
             <Text style={styles.ctaBtnText}>{'Visit getclearpass.co.uk'}</Text>
           </ScaleButton>
         </>
-      ) : (
+      ) : route === 'stripe_checkout' ? (
         <>
           {error.length > 0 && <Text style={styles.errorText}>{error}</Text>}
           <ScaleButton
@@ -174,6 +179,13 @@ export default function PaywallScreen() {
             }
           </ScaleButton>
         </>
+      ) : (
+        // iOS, IAP not implemented yet: no price, no external link, no
+        // mention of an alternate purchase route — just the honest state.
+        <View style={styles.comingSoonBanner}>
+          <Text style={styles.comingSoonTitle}>{COMING_SOON_COPY.title}</Text>
+          <Text style={styles.comingSoonBody}>{COMING_SOON_COPY.body}</Text>
+        </View>
       )}
 
       <TouchableOpacity style={styles.skipBtn} onPress={handleMaybeLater} activeOpacity={0.7}>
@@ -285,4 +297,17 @@ const styles = StyleSheet.create({
   },
   androidBannerTitle: { fontSize: 14, fontWeight: '800', color: '#0891B2' },
   androidBannerBody:  { fontSize: 13, color: '#374151', lineHeight: 20 },
+
+  comingSoonBanner: {
+    backgroundColor: Colors.indigoBg ?? '#EEF2FF',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: Colors.indigo,
+    padding: 20,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    gap: 6,
+  },
+  comingSoonTitle: { fontSize: 16, fontWeight: '800', color: Colors.indigo, textAlign: 'center' },
+  comingSoonBody:  { fontSize: 13, color: '#374151', lineHeight: 20, textAlign: 'center' },
 });
