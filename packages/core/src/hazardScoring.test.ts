@@ -246,3 +246,41 @@ describe('Full session — theoretical maximum depends on session composition', 
     expect(total.score).toBe(70);
   });
 });
+
+// ── l) Fail closed on an unbanded clip ───────────────────────────────────────
+// A clip with no bands can only be scored via the thirds fallback (max 5/4/3,
+// never 2 or 1) — an inflated, plausible-looking approximation of the DVSA
+// model this app is licensed to mirror. Refuse to score it at all instead:
+// 0 score, 0 maxScore, excluded from the session, rather than guessing.
+
+describe('A clip with any unbanded hazard fails closed', () => {
+  const unbandedClip = makeClip('unbanded', [{ startSec: 5, endSec: 10 }]); // no bands
+
+  test('is not scored even when a tap would have landed in-window', () => {
+    const result = scoreClip(unbandedClip, [7]); // thirds fallback would have scored 5
+    expect(result.score).toBe(0);
+    expect(result.maxScore).toBe(0);
+    expect(result.scorable).toBe(false);
+  });
+
+  test('a mixed clip (one hazard banded, one not) fails closed entirely — not partially scored', () => {
+    const mixedClip = makeClip('mixed', [BRIDGE_H1_WINDOW, { startSec: 20.96, endSec: 23.16 }]);
+    // 7.54 would score hazard 1's band 5 (5pts) if hazard 1 were scored alone.
+    const result = scoreClip(mixedClip, [7.54]);
+    expect(result.score).toBe(0);
+    expect(result.maxScore).toBe(0);
+    expect(result.scorable).toBe(false);
+  });
+
+  test('a fully-banded clip is unaffected: scorable stays true', () => {
+    expect(scoreClip(CGI1_CLIP, [18.685]).scorable).toBe(true);
+    expect(scoreClip(BRIDGE_CLIP, [7.54, 21.18]).scorable).toBe(true);
+  });
+
+  test('an excluded clip contributes nothing to the session total, alongside a normally-scored clip', () => {
+    const results = [scoreClip(unbandedClip, [7]), scoreClip(CGI1_CLIP, [18.685])];
+    const total = calculateHazardTotal(results);
+    expect(total.score).toBe(5); // only CGI1's band-5 tap
+    expect(total.maxScore).toBe(5); // unbanded clip contributes 0, not 5
+  });
+});

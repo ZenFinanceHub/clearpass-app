@@ -28,6 +28,13 @@ export interface HazardClipResult {
   maxScore: number;
   /** Taps that landed inside a scoring window and so actually counted toward the score. */
   countedTaps: number;
+  /**
+   * False when the clip has any hazard authored without bands. Such a clip
+   * fails closed — it isn't scored at all (score/maxScore both 0) rather
+   * than falling back to an approximate thirds model that can only ever
+   * return 5, 4, or 3 points, never 2 or 1.
+   */
+  scorable: boolean;
 }
 
 export interface HazardSessionResult {
