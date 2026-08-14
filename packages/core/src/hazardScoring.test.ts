@@ -283,4 +283,53 @@ describe('A clip with any unbanded hazard fails closed', () => {
     expect(total.score).toBe(5); // only CGI1's band-5 tap
     expect(total.maxScore).toBe(5); // unbanded clip contributes 0, not 5
   });
+
+  test('an unscorable clip has an empty per-hazard breakdown, not a crash', () => {
+    expect(scoreClip(unbandedClip, [7]).hazards).toEqual([]);
+  });
+});
+
+// ── m) Per-hazard breakdown (HazardResult) ───────────────────────────────────
+// Prerequisite for the review-mode timeline: the clip-result screen currently
+// labels every hazard row with the CLIP TOTAL (result.score), which is wrong
+// the moment a clip has more than one hazard. scoreClip must expose, per
+// hazard: points actually awarded, which tap scored it (if any — even when
+// zeroed, so a reviewer can see the tap that *would* have scored), and
+// whether it was zeroed by the clip-wide anti-cheat rule.
+
+describe('Per-hazard breakdown — Priority Bridge, where the two hazards score differently', () => {
+  test('hazard 1 scores band 5, hazard 2 scores band 3 — distinct per-hazard results', () => {
+    const result = scoreClip(BRIDGE_CLIP, [7.54, 22.08]); // h1 band-5 mid, h2 band-3 mid
+    expect(result.hazards).toEqual([
+      { points: 5, scoringTap: 7.54, zeroed: false },
+      { points: 3, scoringTap: 22.08, zeroed: false },
+    ]);
+    // The per-hazard points must sum to the clip's reported total — this is
+    // exactly the invariant the old "label every hazard with result.score"
+    // bug violated.
+    expect(result.score).toBe(8);
+  });
+
+  test('a hazard with no tap at all is "missed", not zeroed', () => {
+    const result = scoreClip(BRIDGE_CLIP, [7.54]); // only hazard 1
+    expect(result.hazards[0]).toEqual({ points: 5, scoringTap: 7.54, zeroed: false });
+    expect(result.hazards[1]).toEqual({ points: 0, scoringTap: null, zeroed: false });
+  });
+
+  test('scoringTap reflects the EARLIEST qualifying tap, matching the earliest-wins scoring rule', () => {
+    // Later band's tap appears first in the array — the earlier-in-time tap must still be scoringTap.
+    const result = scoreClip(CGI1_CLIP, [22.685, 18.685]);
+    expect(result.hazards).toEqual([{ points: 5, scoringTap: 18.685, zeroed: false }]);
+  });
+
+  test('clip-wide anti-cheat zeroes every hazard that had a qualifying tap, and reports it as zeroed (not missed)', () => {
+    const spamTaps = [7.20, 7.21, 7.22, 7.23, 7.24, 7.25, 7.26, 7.27]; // 8 taps, floor(t) === 7, all in hazard 1's window
+    const legitimateHazard2Tap = 21.18; // band 5 midpoint — would score 5 on its own
+    const result = scoreClip(BRIDGE_CLIP, [...spamTaps, legitimateHazard2Tap]);
+    expect(result.hazards).toEqual([
+      { points: 0, scoringTap: 7.20, zeroed: true },
+      { points: 0, scoringTap: 21.18, zeroed: true },
+    ]);
+    expect(result.score).toBe(0);
+  });
 });
