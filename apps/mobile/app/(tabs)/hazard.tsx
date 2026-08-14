@@ -651,36 +651,52 @@ export default function HazardScreen() {
         </Text>
         <Text style={[styles.heading, { fontSize: theme.fontSize(26), fontFamily: theme.fontFamily, color: theme.textColor }]}>{clip.title}</Text>
 
-        <View style={styles.resultCard}>
-          <Text style={styles.resultScore}>
-            {result.score}
-            {' / '}
-            {result.maxScore}
-          </Text>
-          <Text style={styles.resultScoreLabel}>{'Score for this clip'}</Text>
-          {clip.hazards.map((_: HazardWindow, i: number) => (
-            <View key={i} style={styles.hazardRow}>
-              <Text style={styles.hazardLabel}>
-                {result.score > 0
-                  ? 'Hazard ' + String(i + 1) + ': ' + String(result.score) + ' pts'
-                  : 'Hazard ' + String(i + 1) + ': missed'}
+        {result.scorable ? (
+          <>
+            <View style={styles.resultCard}>
+              <Text style={styles.resultScore}>
+                {result.score}
+                {' / '}
+                {result.maxScore}
               </Text>
-              <View style={styles.dots}>
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <View
-                    key={n}
-                    style={[styles.dot, n <= result.score ? styles.dotFilled : styles.dotEmpty]}
-                  />
-                ))}
-              </View>
+              <Text style={styles.resultScoreLabel}>{'Score for this clip'}</Text>
+              {clip.hazards.map((_: HazardWindow, i: number) => (
+                <View key={i} style={styles.hazardRow}>
+                  <Text style={styles.hazardLabel}>
+                    {result.score > 0
+                      ? 'Hazard ' + String(i + 1) + ': ' + String(result.score) + ' pts'
+                      : 'Hazard ' + String(i + 1) + ': missed'}
+                  </Text>
+                  <View style={styles.dots}>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <View
+                        key={n}
+                        style={[styles.dot, n <= result.score ? styles.dotFilled : styles.dotEmpty]}
+                      />
+                    ))}
+                  </View>
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
 
-        <Text style={[styles.bodyText, { color: theme.subTextColor }]}>
-          {result.countedTaps}
-          {' tap(s) recorded'}
-        </Text>
+            <Text style={[styles.bodyText, { color: theme.subTextColor }]}>
+              {result.countedTaps}
+              {' tap(s) recorded'}
+            </Text>
+          </>
+        ) : (
+          // Fails closed: this clip is missing scoring data (no bands authored),
+          // so we don't know a real score for it — showing 0/0 would read as a
+          // failed attempt rather than a content gap. It's excluded from the
+          // session total (calculateHazardTotal sums 0/0), not just displayed
+          // as zero.
+          <View style={styles.resultCard}>
+            <Text style={styles.resultScoreLabel}>{"This clip couldn't be scored"}</Text>
+            <Text style={[styles.bodyText, { color: theme.subTextColor, textAlign: 'center' }]}>
+              {"This clip is missing scoring data, so it won't count toward your total. Your other clips aren't affected."}
+            </Text>
+          </View>
+        )}
 
         {supabaseClips[clipIndex]?.has_solution_clip && (
           <TouchableOpacity style={styles.secondaryBtn} onPress={handleWatchSolution} activeOpacity={0.85}>
@@ -784,14 +800,24 @@ v.addEventListener('ended', function() { window.ReactNativeWebView.postMessage(J
               {': '}
               {activeClips[i]?.title ?? 'Unknown'}
             </Text>
-            <Text style={[styles.breakdownScore, r.score > 0 ? styles.passText : styles.failText]}>
-              {r.score}
-              {'/'}
-              {r.maxScore}
-            </Text>
+            {r.scorable ? (
+              <Text style={[styles.breakdownScore, r.score > 0 ? styles.passText : styles.failText]}>
+                {r.score}
+                {'/'}
+                {r.maxScore}
+              </Text>
+            ) : (
+              <Text style={[styles.breakdownScore, { color: theme.subTextColor }]}>{'Not scored'}</Text>
+            )}
           </View>
         ))}
       </View>
+
+      {clipResults.some((r) => !r.scorable) && (
+        <Text style={[styles.bodyText, { color: theme.subTextColor, textAlign: 'center' }]}>
+          {'One or more clips were missing scoring data and were excluded from your total above.'}
+        </Text>
+      )}
 
       <TouchableOpacity
         style={[styles.secondaryBtn, { width: '100%' as any, maxWidth: 480 }]}
