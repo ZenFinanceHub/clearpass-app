@@ -11,6 +11,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/src/constants/theme';
+import { DVSA_HAZARD_PASS_RATIO } from '@clearpass/core';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -127,7 +128,7 @@ function HazardCard({ data }: { data: HazardCardData }) {
       <Text style={[cs.bigScore, { color: scoreColor }]}>{data.score}{' / '}{data.maxScore}</Text>
       <Text style={[cs.pctLabel, { color: scoreColor }]}>{pct}{'%'}</Text>
       <Text style={cs.motivational}>
-        {data.passed ? 'Excellent hazard awareness!' : 'Aim for 60%+ to pass'}
+        {data.passed ? 'Excellent hazard awareness!' : `Aim for ${Math.round(DVSA_HAZARD_PASS_RATIO * 100)}%+ to pass`}
       </Text>
       <Text style={cs.footer}>{'getclearpass.co.uk'}</Text>
     </LinearGradient>

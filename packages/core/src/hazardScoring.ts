@@ -9,6 +9,12 @@ import { HazardClip, HazardClipResult, HazardWindow } from './types/HazardClip';
 // can't leak tolerance into reveal/solution footage or otherwise widen the window.
 const WINDOW_OPEN_TOLERANCE_SEC = 0.08;
 
+// DVSA passmark: 44 out of a 75-point full session. Exported as a ratio, not
+// a literal "44/75", so every place that displays a pass threshold (which
+// may be for a partial/single-clip session, not the full 75) derives it from
+// the same single source of truth instead of re-hardcoding the fraction.
+export const DVSA_HAZARD_PASS_RATIO = 44 / 75;
+
 function isInWindow(t: number, window: HazardWindow): boolean {
   return t >= window.startSec - WINDOW_OPEN_TOLERANCE_SEC && t <= window.endSec;
 }
@@ -27,33 +33,57 @@ function detectAntiCheat(clicks: number[]): boolean {
 function scoreWindow(clicks: number[], window: HazardWindow): number {
   const windowClicks = clicks.filter((t) => isInWindow(t, window));
   if (windowClicks.length === 0) return 0;
-  // DVSA rule: repeated/multiple taps against the same developing hazard score zero for that hazard.
-  if (windowClicks.length > 1) return 0;
+
+  // The EARLIEST qualifying tap scores. A learner may legitimately tap once
+  // on spotting a hazard and again as it develops — a later, additional tap
+  // in the same window no longer zeroes the hazard; only the clip-wide
+  // excessive-clicking rule (detectAntiCheat, in scoreClip) still zeroes for
+  // spam-tapping. `windowClicks` preserves the original clicks[] order, not
+  // necessarily chronological order, so take the minimum explicitly.
+  const earliest = Math.min(...windowClicks);
 
   // A tap that landed in the tolerance zone just before the window's nominal start
   // is treated as if it landed exactly on the opening edge — absorbed as on-time
   // jitter, not scored as "early" against the bands/thirds below.
-  const first = Math.max(windowClicks[0], window.startSec);
+  const first = Math.max(earliest, window.startSec);
 
-  if (window.bands && window.bands.length > 0) {
-    // DVSA explicit bands: find which band contains the first qualifying click.
-    // Bands are ordered 5→1; return the first match.
-    const sorted = [...window.bands].sort((a, b) => b.points - a.points);
-    for (const band of sorted) {
-      if (first >= band.startSec && first <= band.endSec) return band.points;
-    }
-    return 0;
+  // scoreClip only calls this once every hazard in the clip is confirmed to
+  // have bands (see hasAllBands below) — an unbanded window should never
+  // reach here. Returning 0 defensively is safer than a crash if it somehow
+  // does, but there is deliberately no thirds/percentage approximation
+  // anymore: this app is licensed to mirror the official DVSA test, and an
+  // unbanded clip fails closed at the scoreClip level instead.
+  if (!window.bands || window.bands.length === 0) return 0;
+
+  // DVSA explicit bands: prefer an exact match first (both edges inclusive).
+  // Bands are ordered 5→1 by points, so a tap landing exactly on a shared,
+  // touching boundary between two bands (a real tie in some clips' data)
+  // resolves to the higher-point band, since it's checked first.
+  const byPoints = [...window.bands].sort((a, b) => b.points - a.points);
+  for (const band of byPoints) {
+    if (first >= band.startSec && first <= band.endSec) return band.points;
   }
-
-  // Fallback: divide window into thirds (5/4/3 pts) for non-DVSA clips.
-  const range = window.endSec - window.startSec;
-  const pos = (first - window.startSec) / range;
-  if (pos < 1 / 3) return 5;
-  if (pos < 2 / 3) return 4;
-  return 3;
+  // No band's own range contains the tap — a genuine inter-band gap (e.g. a
+  // real 0.01s/0.04s authoring hole between adjacent bands, distinct from
+  // the touching-boundary case above). Credit the band that most recently
+  // opened: the one with the greatest startSec still <= the tap. Fixed in
+  // code, not data — the bands themselves are untouched.
+  const byStartDesc = [...window.bands].sort((a, b) => b.startSec - a.startSec);
+  const opened = byStartDesc.find((band) => band.startSec <= first);
+  return opened ? opened.points : 0;
 }
 
 export function scoreClip(clip: HazardClip, clicks: number[]): HazardClipResult {
+  const hasAllBands = clip.hazards.every((h) => h.bands && h.bands.length > 0);
+  if (!hasAllBands) {
+    // Fail closed: a clip with any unbanded hazard cannot be scored against
+    // the DVSA 5-band model, and the previous thirds approximation (max
+    // 5/4/3, never 2 or 1) produced an inflated, plausible-looking score.
+    // Exclude the whole clip from the session — 0 score, 0 maxScore — rather
+    // than guess at a scoring model this app isn't licensed to invent.
+    return { clipId: clip.id, clicks, score: 0, maxScore: 0, countedTaps: 0, scorable: false };
+  }
+
   const cheating = detectAntiCheat(clicks);
   let score = 0;
   if (!cheating) {
@@ -73,6 +103,7 @@ export function scoreClip(clip: HazardClip, clicks: number[]): HazardClipResult 
     score,
     maxScore: clip.hazards.length * 5,
     countedTaps,
+    scorable: true,
   };
 }
 
@@ -81,7 +112,6 @@ export function calculateHazardTotal(
 ): { score: number; maxScore: number; passed: boolean } {
   const score = results.reduce((sum, r) => sum + r.score, 0);
   const maxScore = results.reduce((sum, r) => sum + r.maxScore, 0);
-  // DVSA passmark: 44 out of 75 (≈58.7%)
-  const passed = maxScore > 0 && score / maxScore >= 44 / 75;
+  const passed = maxScore > 0 && score / maxScore >= DVSA_HAZARD_PASS_RATIO;
   return { score, maxScore, passed };
 }

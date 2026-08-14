@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -11,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { HazardClipResult, HazardSessionResult, HazardWindow, UserProgress, calculateHazardTotal, scoreClip } from '@clearpass/core';
+import { DVSA_HAZARD_PASS_RATIO, HazardClipResult, HazardSessionResult, HazardWindow, UserProgress, calculateHazardTotal, scoreClip } from '@clearpass/core';
 import { hazardClips } from '@clearpass/content';
 import { loadUserProgress, saveUserProgress } from '@/src/storage';
 import { getHazardVideoList, getVideoUrl, buildHazardClip, type HazardClipMeta } from '@/src/hazardVideos';
@@ -57,16 +58,16 @@ video { width: 100%; height: 100%; object-fit: cover; display: block; }
 <video id="v" src="${url}" autoplay playsinline muted></video>
 <script>
 var v = document.getElementById('v');
-var lastSecond = -1;
+// Sample real playback position on a fixed 50ms cadence instead of relying on
+// the DOM 'timeupdate' event, whose firing rate the browser controls (not
+// bounded below ~250ms in practice) — bounds worst-case staleness of the
+// currentTime the RN side scores against to ~50ms, down from up to ~1s.
+var tick = setInterval(function() {
+  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'timeupdate', currentTime: v.currentTime }));
+}, 50);
 v.addEventListener('ended', function() {
+  clearInterval(tick);
   window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ended' }));
-});
-v.addEventListener('timeupdate', function() {
-  var sec = Math.floor(v.currentTime);
-  if (sec !== lastSecond) {
-    lastSecond = sec;
-    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'timeupdate', currentTime: v.currentTime }));
-  }
 });
 v.play().catch(function() {});
 </script>
@@ -239,7 +240,7 @@ export default function HazardScreen() {
             date: new Date().toISOString(),
             score: r.score,
             maxScore: r.maxScore,
-            passed: r.score > 0,
+            passed: r.maxScore > 0 && r.score / r.maxScore >= DVSA_HAZARD_PASS_RATIO,
             clipId: r.clipId,
           }))
         : [{ date: new Date().toISOString(), score: total.score, maxScore: total.maxScore, passed: total.passed }];
@@ -358,6 +359,47 @@ export default function HazardScreen() {
     setPhase('info');
   }
 
+  // ── WEB GUARD ────────────────────────────────────────────────────────────
+  // The web build has no ground-truth video clock (see WebVideoPlayer — its
+  // `currentTime` is a setInterval stopwatch never synced to real playback),
+  // so any score computed on web isn't trustworthy. Disable the feature
+  // outright on web rather than present a score that may not reflect what
+  // actually happened. Remove once the web player reads real position via
+  // the YouTube IFrame API.
+
+  if (Platform.OS === 'web') {
+    return (
+      <View style={[styles.bg, styles.centerFill, { backgroundColor: theme.backgroundColor }]}>
+        <Text style={[styles.heading, { fontSize: theme.fontSize(24), fontFamily: theme.fontFamily, color: theme.textColor }]}>
+          {'Mobile app only'}
+        </Text>
+        <Text style={[styles.bodyText, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>
+          {'Hazard Perception practice is only available in the ClearPass mobile app — open ClearPass on your phone to try it.'}
+        </Text>
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
+          <Text style={styles.primaryBtnText}>{'Go Back'}</Text>
+        </TouchableOpacity>
+        {/* Same store URLs as the existing "rate the app" flow in ipassed.tsx —
+            not re-deciding them here. Both shown (not branched by platform)
+            since a web visitor's device isn't known from Platform.OS === 'web'. */}
+        <TouchableOpacity
+          style={styles.secondaryBtn}
+          onPress={() => { Linking.openURL('https://apps.apple.com/app/clearpass-theory-test/id000000000').catch(() => {}); }}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.secondaryBtnText}>{'Get it on the App Store'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.secondaryBtn}
+          onPress={() => { Linking.openURL('https://play.google.com/store/apps/details?id=co.uk.getclearpass.app').catch(() => {}); }}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.secondaryBtnText}>{'Get it on Google Play'}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   // ── INFO ─────────────────────────────────────────────────────────────────
 
   if (phase === 'info') {
@@ -407,7 +449,7 @@ export default function HazardScreen() {
             {([
               [String(supabaseClips.length), 'clips'],
               [String(attempted), 'played'],
-              ['~60%', 'to pass'],
+              [`${Math.round(DVSA_HAZARD_PASS_RATIO * 100)}%`, 'to pass'],
             ] as [string, string][]).map(([num, lbl]) => (
               <View key={lbl} style={styles.statPill}>
                 <Text style={styles.statNum}>{num}</Text>
@@ -423,7 +465,7 @@ export default function HazardScreen() {
           <View style={styles.grid}>
             {supabaseClips.map((meta, i) => {
               const stats = getClipStats(meta.id);
-              const passed = stats && stats.best >= Math.ceil(stats.max * 0.6);
+              const passed = stats && stats.best >= Math.ceil(stats.max * DVSA_HAZARD_PASS_RATIO);
               return (
                 <TouchableOpacity
                   key={meta.id}
@@ -464,6 +506,11 @@ export default function HazardScreen() {
   // ── PRE-CLIP ─────────────────────────────────────────────────────────────
 
   if (phase === 'pre-clip') {
+    // activeClips is set (single clip or the full shuffled practice set)
+    // before entering this phase, so this reflects the session actually
+    // about to be played — not a hardcoded, possibly-wrong session size.
+    const sessionMaxScore = activeClips.reduce((sum, c) => sum + c.hazards.length * 5, 0);
+    const sessionPassScore = Math.ceil(sessionMaxScore * DVSA_HAZARD_PASS_RATIO);
     return (
       <View style={[styles.bg, styles.centerFill, { backgroundColor: theme.backgroundColor }]}>
         <TouchableOpacity style={styles.exitBtn} onPress={handleExitClip} activeOpacity={0.85}>
@@ -480,7 +527,7 @@ export default function HazardScreen() {
         <View style={[styles.reminderBox, { flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
           <Pip size={44} mood="teaching" />
           <Text style={[styles.reminderText, { flex: 1 }]}>
-            {'Spot each developing hazard early — score up to 5 points based on how quickly you react. Click too early, too late, or spam the screen and you’ll score 0. You need 44/75 to pass.'}
+            {`Spot each developing hazard early — score up to 5 points based on how quickly you react. Click too early, too late, or spam the screen and you'll score 0. You need ${sessionPassScore}/${sessionMaxScore} to pass.`}
           </Text>
         </View>
         <TouchableOpacity
@@ -514,7 +561,12 @@ export default function HazardScreen() {
 
   if (phase === 'player') {
     let videoContent: React.ReactElement;
-    if (Platform.OS !== 'web') {
+    // Widened to `string` — the WEB GUARD above already returns before `phase`
+    // can reach 'player' on web, which makes TS prove this branch is currently
+    // unreachable for 'web' and flag the literal comparison as redundant. Kept
+    // as a runtime check (not deleted) so the WebVideoPlayer branch is intact
+    // and reachable again the moment the web guard is lifted.
+    if ((Platform.OS as string) !== 'web') {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const WebView = (require('react-native-webview') as { default: React.ComponentType<any> }).default;
       videoContent = (
@@ -617,36 +669,52 @@ export default function HazardScreen() {
         </Text>
         <Text style={[styles.heading, { fontSize: theme.fontSize(26), fontFamily: theme.fontFamily, color: theme.textColor }]}>{clip.title}</Text>
 
-        <View style={styles.resultCard}>
-          <Text style={styles.resultScore}>
-            {result.score}
-            {' / '}
-            {result.maxScore}
-          </Text>
-          <Text style={styles.resultScoreLabel}>{'Score for this clip'}</Text>
-          {clip.hazards.map((_: HazardWindow, i: number) => (
-            <View key={i} style={styles.hazardRow}>
-              <Text style={styles.hazardLabel}>
-                {result.score > 0
-                  ? 'Hazard ' + String(i + 1) + ': ' + String(result.score) + ' pts'
-                  : 'Hazard ' + String(i + 1) + ': missed'}
+        {result.scorable ? (
+          <>
+            <View style={styles.resultCard}>
+              <Text style={styles.resultScore}>
+                {result.score}
+                {' / '}
+                {result.maxScore}
               </Text>
-              <View style={styles.dots}>
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <View
-                    key={n}
-                    style={[styles.dot, n <= result.score ? styles.dotFilled : styles.dotEmpty]}
-                  />
-                ))}
-              </View>
+              <Text style={styles.resultScoreLabel}>{'Score for this clip'}</Text>
+              {clip.hazards.map((_: HazardWindow, i: number) => (
+                <View key={i} style={styles.hazardRow}>
+                  <Text style={styles.hazardLabel}>
+                    {result.score > 0
+                      ? 'Hazard ' + String(i + 1) + ': ' + String(result.score) + ' pts'
+                      : 'Hazard ' + String(i + 1) + ': missed'}
+                  </Text>
+                  <View style={styles.dots}>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <View
+                        key={n}
+                        style={[styles.dot, n <= result.score ? styles.dotFilled : styles.dotEmpty]}
+                      />
+                    ))}
+                  </View>
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
 
-        <Text style={[styles.bodyText, { color: theme.subTextColor }]}>
-          {result.countedTaps}
-          {' tap(s) recorded'}
-        </Text>
+            <Text style={[styles.bodyText, { color: theme.subTextColor }]}>
+              {result.countedTaps}
+              {' tap(s) recorded'}
+            </Text>
+          </>
+        ) : (
+          // Fails closed: this clip is missing scoring data (no bands authored),
+          // so we don't know a real score for it — showing 0/0 would read as a
+          // failed attempt rather than a content gap. It's excluded from the
+          // session total (calculateHazardTotal sums 0/0), not just displayed
+          // as zero.
+          <View style={styles.resultCard}>
+            <Text style={styles.resultScoreLabel}>{"This clip couldn't be scored"}</Text>
+            <Text style={[styles.bodyText, { color: theme.subTextColor, textAlign: 'center' }]}>
+              {"This clip is missing scoring data, so it won't count toward your total. Your other clips aren't affected."}
+            </Text>
+          </View>
+        )}
 
         {supabaseClips[clipIndex]?.has_solution_clip && (
           <TouchableOpacity style={styles.secondaryBtn} onPress={handleWatchSolution} activeOpacity={0.85}>
@@ -733,7 +801,7 @@ v.addEventListener('ended', function() { window.ReactNativeWebView.postMessage(J
       <Text style={[styles.bodyText, { color: theme.subTextColor }]}>
         {total.passed
           ? 'Great hazard awareness! You would pass.'
-          : 'Keep practising — aim for 60% or above.'}
+          : `Keep practising — aim for ${Math.round(DVSA_HAZARD_PASS_RATIO * 100)}% or above.`}
       </Text>
 
       <View style={styles.xpBadge}>
@@ -750,14 +818,24 @@ v.addEventListener('ended', function() { window.ReactNativeWebView.postMessage(J
               {': '}
               {activeClips[i]?.title ?? 'Unknown'}
             </Text>
-            <Text style={[styles.breakdownScore, r.score > 0 ? styles.passText : styles.failText]}>
-              {r.score}
-              {'/'}
-              {r.maxScore}
-            </Text>
+            {r.scorable ? (
+              <Text style={[styles.breakdownScore, r.score > 0 ? styles.passText : styles.failText]}>
+                {r.score}
+                {'/'}
+                {r.maxScore}
+              </Text>
+            ) : (
+              <Text style={[styles.breakdownScore, { color: theme.subTextColor }]}>{'Not scored'}</Text>
+            )}
           </View>
         ))}
       </View>
+
+      {clipResults.some((r) => !r.scorable) && (
+        <Text style={[styles.bodyText, { color: theme.subTextColor, textAlign: 'center' }]}>
+          {'One or more clips were missing scoring data and were excluded from your total above.'}
+        </Text>
+      )}
 
       <TouchableOpacity
         style={[styles.secondaryBtn, { width: '100%' as any, maxWidth: 480 }]}
