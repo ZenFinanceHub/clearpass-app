@@ -4,6 +4,7 @@ export * from './types/MockTestResult';
 export * from './types/DailyChallenge';
 export * from './types/HazardClip';
 export * from './types/UserProgress';
+export * from './entitlement';
 export * from './spacedRepetition';
 export * from './calculateReadiness';
 export * from './xp';

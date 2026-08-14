@@ -251,3 +251,18 @@ ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_account_type_check;
 ALTER TABLE profiles ADD CONSTRAINT profiles_account_type_check
   CHECK (account_type IN ('learner', 'instructor'));
 -- (existing profile RLS policies already cover this column)
+
+-- Stripe webhook event dedup. The platform webhook (/api/webhook) grants Pro
+-- and records referral commission — a retried or duplicated delivery must
+-- not re-apply either. Keyed on Stripe's own event id; the webhook handler
+-- inserts a row before doing anything else and treats a unique-constraint
+-- conflict as "already processed, skip". Written and read server-side only,
+-- via the service role key (same convention as instructor_earnings/payouts).
+CREATE TABLE IF NOT EXISTS stripe_webhook_events (
+  event_id     TEXT PRIMARY KEY,
+  event_type   TEXT NOT NULL,
+  processed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE stripe_webhook_events ENABLE ROW LEVEL SECURITY;
+-- No policies: no client-side access of any kind, service role only.
