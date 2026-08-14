@@ -64,8 +64,8 @@ function buildAccessibilityLabel(layout: HazardTimelineLayout, result: HazardRes
   } else {
     parts.push('You did not tap within the scoring window for this hazard.');
   }
-  if (earlyCount > 0) parts.push(`${earlyCount} tap${earlyCount > 1 ? 's' : ''} too early.`);
-  if (lateCount > 0) parts.push(`${lateCount} tap${lateCount > 1 ? 's' : ''} too late.`);
+  if (earlyCount > 0) parts.push(`${earlyCount} earlier tap${earlyCount > 1 ? 's' : ''} didn't count.`);
+  if (lateCount > 0) parts.push(`${lateCount} later tap${lateCount > 1 ? 's' : ''} didn't count.`);
   return parts.join(' ');
 }
 
@@ -154,12 +154,12 @@ export function HazardTimeline({ hazard, clicks, result }: HazardTimelineProps) 
       )}
       {tooEarly.length > 0 && (
         <Text style={[styles.stateText, { fontFamily: theme.fontFamily, color: theme.subTextColor }]}>
-          {tooEarly.length === 1 ? 'You tapped too early' : `You tapped too early (${tooEarly.length}×)`}
+          {tooEarly.length === 1 ? "1 earlier tap didn't count" : `${tooEarly.length} earlier taps didn't count`}
         </Text>
       )}
       {tooLate.length > 0 && (
         <Text style={[styles.stateText, { fontFamily: theme.fontFamily, color: theme.subTextColor }]}>
-          {tooLate.length === 1 ? 'You tapped too late' : `You tapped too late (${tooLate.length}×)`}
+          {tooLate.length === 1 ? "1 later tap didn't count" : `${tooLate.length} later taps didn't count`}
         </Text>
       )}
       {result.zeroed && (
