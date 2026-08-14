@@ -181,14 +181,6 @@ function ClipResultDetail({ clip, result }: { clip: HazardClip; result: HazardCl
                     ? 'Hazard ' + String(i + 1) + ': ' + String(hazardResult.points) + ' pts'
                     : 'Hazard ' + String(i + 1) + ': missed'}
               </Text>
-              <View style={styles.dots}>
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <View
-                    key={n}
-                    style={[styles.dot, n <= hazardResult.points ? styles.dotFilled : styles.dotEmpty]}
-                  />
-                ))}
-              </View>
             </View>
             <HazardTimeline hazard={hazard} clicks={result.clicks} result={hazardResult} />
           </View>
@@ -1151,10 +1143,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   hazardLabel: { fontSize: 13, color: '#374151', flex: 1 },
-  dots: { flexDirection: 'row', gap: 4 },
-  dot: { width: 12, height: 12, borderRadius: 6 },
-  dotFilled: { backgroundColor: Colors.emerald },
-  dotEmpty: { backgroundColor: '#E5E7EB' },
 
   // Results
   resultBadge: {
