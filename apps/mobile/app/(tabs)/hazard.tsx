@@ -155,47 +155,46 @@ function ClipResultDetail({ clip, result }: { clip: HazardClip; result: HazardCl
     );
   }
 
+  // No standalone tap-count line here: the timeline below already shows
+  // every recorded tap per hazard (including too-early/too-late ones), and
+  // a single clip-level count had no correct definition to give it — it
+  // previously showed HazardClipResult.countedTaps, which deliberately
+  // excludes out-of-window taps, so it could (and did) contradict the
+  // timeline's "you tapped too early ×2" on the exact same screen.
   return (
-    <>
-      <View style={styles.resultCard}>
-        <Text style={styles.resultScore}>
-          {result.score}
-          {' / '}
-          {result.maxScore}
-        </Text>
-        <Text style={styles.resultScoreLabel}>{'Score for this clip'}</Text>
-        {clip.hazards.map((hazard, i) => {
-          const hazardResult = result.hazards[i];
-          return (
-            <View key={i} style={styles.hazardBlock}>
-              <View style={styles.hazardRow}>
-                <Text style={styles.hazardLabel}>
-                  {hazardResult.zeroed
-                    ? 'Hazard ' + String(i + 1) + ': zeroed (too many taps this clip)'
-                    : hazardResult.points > 0
-                      ? 'Hazard ' + String(i + 1) + ': ' + String(hazardResult.points) + ' pts'
-                      : 'Hazard ' + String(i + 1) + ': missed'}
-                </Text>
-                <View style={styles.dots}>
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <View
-                      key={n}
-                      style={[styles.dot, n <= hazardResult.points ? styles.dotFilled : styles.dotEmpty]}
-                    />
-                  ))}
-                </View>
-              </View>
-              <HazardTimeline hazard={hazard} clicks={result.clicks} result={hazardResult} />
-            </View>
-          );
-        })}
-      </View>
-
-      <Text style={[styles.bodyText, { color: theme.subTextColor }]}>
-        {result.countedTaps}
-        {' tap(s) recorded'}
+    <View style={styles.resultCard}>
+      <Text style={styles.resultScore}>
+        {result.score}
+        {' / '}
+        {result.maxScore}
       </Text>
-    </>
+      <Text style={styles.resultScoreLabel}>{'Score for this clip'}</Text>
+      {clip.hazards.map((hazard, i) => {
+        const hazardResult = result.hazards[i];
+        return (
+          <View key={i} style={styles.hazardBlock}>
+            <View style={styles.hazardRow}>
+              <Text style={styles.hazardLabel}>
+                {hazardResult.zeroed
+                  ? 'Hazard ' + String(i + 1) + ': zeroed (too many taps this clip)'
+                  : hazardResult.points > 0
+                    ? 'Hazard ' + String(i + 1) + ': ' + String(hazardResult.points) + ' pts'
+                    : 'Hazard ' + String(i + 1) + ': missed'}
+              </Text>
+              <View style={styles.dots}>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <View
+                    key={n}
+                    style={[styles.dot, n <= hazardResult.points ? styles.dotFilled : styles.dotEmpty]}
+                  />
+                ))}
+              </View>
+            </View>
+            <HazardTimeline hazard={hazard} clicks={result.clicks} result={hazardResult} />
+          </View>
+        );
+      })}
+    </View>
   );
 }
 
