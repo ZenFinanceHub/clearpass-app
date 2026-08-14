@@ -174,9 +174,10 @@ export function HazardTimeline({ hazard, clicks, result }: HazardTimelineProps) 
 const styles = StyleSheet.create({
   container: { gap: 4 },
   barWrap: {
-    height: 28,
+    height: 44,
     borderRadius: 6,
     overflow: 'visible',
+    justifyContent: 'flex-end',
   },
   bandsRow: {
     flexDirection: 'row',
@@ -191,7 +192,11 @@ const styles = StyleSheet.create({
   bandNumeralShadow: { textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 },
   marker: {
     position: 'absolute',
-    top: -2,
+    // Above the bar (bandsRow is 20 tall, anchored to barWrap's bottom via
+    // justifyContent: 'flex-end'), not centred on it — a marker centred on
+    // the bar sat directly on top of the band numeral, hiding the one
+    // piece of text that has to survive independently of colour.
+    bottom: 22,
     width: 20,
     height: 20,
     marginLeft: -10,
