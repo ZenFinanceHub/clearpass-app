@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'vitest';
-import { isEligibleForProExpiry, isExemptFromProExpiry, shouldApplyProGrant } from './entitlement';
+import {
+  clearInstructorGrant,
+  hasBlockingRelationships,
+  isEligibleForProExpiry,
+  isExemptFromProExpiry,
+  shouldApplyProGrant,
+} from './entitlement';
 
 describe('shouldApplyProGrant', () => {
   test('applies when there is no current source', () => {
@@ -112,5 +118,46 @@ describe('isEligibleForProExpiry', () => {
     expect(
       isEligibleForProExpiry({ isPro: true, proExpiresAt: null, proSource: 'seat' }, NOW)
     ).toBe(false);
+  });
+});
+
+describe('clearInstructorGrant', () => {
+  test('clears isPro, proExpiresAt, and proSource when the grant is instructor-sourced', () => {
+    const result = clearInstructorGrant({
+      isPro: true,
+      proExpiresAt: null,
+      proSource: 'instructor',
+      xp: 500,
+    });
+    expect(result).toEqual({ isPro: false, proExpiresAt: null, proSource: null, xp: 500 });
+  });
+
+  test('leaves a stripe-sourced grant completely untouched', () => {
+    const state = { isPro: true, proExpiresAt: '2027-01-01T00:00:00.000Z', proSource: 'stripe' as const, xp: 10 };
+    expect(clearInstructorGrant(state)).toEqual(state);
+  });
+
+  test('leaves a comp-sourced grant completely untouched', () => {
+    const state = { isPro: true, proExpiresAt: null, proSource: 'comp' as const };
+    expect(clearInstructorGrant(state)).toEqual(state);
+  });
+
+  test('leaves a user with no proSource at all untouched (nothing to clear)', () => {
+    const state = { isPro: false, proExpiresAt: null };
+    expect(clearInstructorGrant(state)).toEqual(state);
+  });
+});
+
+describe('hasBlockingRelationships', () => {
+  test('true when any relationship has status accepted', () => {
+    expect(hasBlockingRelationships([{ status: 'pending' }, { status: 'accepted' }])).toBe(true);
+  });
+
+  test('false when every relationship is pending or rejected', () => {
+    expect(hasBlockingRelationships([{ status: 'pending' }, { status: 'rejected' }])).toBe(false);
+  });
+
+  test('false for an empty relationship list', () => {
+    expect(hasBlockingRelationships([])).toBe(false);
   });
 });

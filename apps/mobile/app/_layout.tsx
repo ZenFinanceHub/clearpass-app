@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/react-native';
 import { useEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Linking } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { Stack, useSegments } from 'expo-router';
@@ -18,6 +18,7 @@ import { handleIncomingUrl } from '@/src/deepLinks';
 import { supabase } from '@/src/supabase';
 import { configureNotificationHandler } from '@/src/notifications';
 import { resolvePostAuthRoute } from '@/src/postAuthRouting';
+import { Colors } from '@/src/constants/theme';
 import {
   getCacheStatus,
   cacheQuestions,
@@ -39,6 +40,158 @@ const ONBOARDING_KEY = '@clearpass/hasSeenOnboarding';
 // Legal/contact pages must stay reachable without an account — the App Store
 // listing links directly to these, and they're legally required to be public.
 const PUBLIC_ROUTES = new Set(['privacy-policy', 'terms', 'legal', 'contact']);
+
+// ── Instructor route guard ────────────────────────────────────────────────────
+// Instructor accounts get unconditional free Pro-level access (see
+// apps/mobile/server/lib/entitlement.js), so letting one reach the learner
+// app is a free-Pro bypass, not just a UI mismatch. This is the ONE place
+// that check happens — it covers the (tabs) group AND the legacy top-level
+// sibling routes kept for deep-linking (hazard.tsx, roadsigns.tsx, etc. exist
+// alongside their (tabs) counterparts; not deleting those is separate work).
+// Screens are not individually guarded — this overlay renders above whatever
+// mounted underneath and blocks/covers it, so the check lives in one place
+// without needing an early-return in every guarded screen.
+//
+// Fails CLOSED: a Supabase/network error holds the blocking overlay and
+// retries with backoff (1s, 2s, 4s, 8s — ~15s of retrying) rather than
+// admitting the user as a learner — a network blip must not become a free-Pro
+// bypass. If every retry is exhausted, the overlay shows a manual Retry
+// button and a Sign Out escape hatch — never an infinite spinner with no way
+// out, and never silent admission either.
+
+const GUARDED_TAB_SEGMENT = '(tabs)';
+const GUARDED_TOP_LEVEL_SEGMENTS = new Set([
+  'hazard', 'roadsigns', 'highwaycode', 'progress', 'leaderboard',
+  'studyplan', 'study-plan', 'testday', 'aitutor', 'challenge', 'ipassed',
+]);
+const INSTRUCTOR_CHECK_MAX_RETRIES = 4;
+const INSTRUCTOR_CHECK_BASE_DELAY_MS = 1000;
+
+function isGuardedSegment(segment: string | undefined): boolean {
+  return segment === GUARDED_TAB_SEGMENT || GUARDED_TOP_LEVEL_SEGMENTS.has(segment ?? '');
+}
+
+type GuardStatus = 'ok' | 'blocked' | 'failed';
+type GuardResult = { segment: string | undefined; status: GuardStatus };
+
+function useInstructorRouteGuard() {
+  const segments = useSegments();
+  const currentSegment = segments[0] as string | undefined;
+  const guarded = isGuardedSegment(currentSegment);
+
+  const [result, setResult] = useState<GuardResult | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
+
+  useEffect(() => {
+    if (!guarded) return;
+    let cancelled = false;
+    let attempt = 0;
+
+    async function check() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (cancelled) return;
+        if (!user) {
+          // No session: not this guard's concern — other routing handles
+          // unauthenticated access. Matches the prior per-screen guard,
+          // which also only acted when a user was present.
+          setResult({ segment: currentSegment, status: 'ok' });
+          return;
+        }
+
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('account_type')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (cancelled) return;
+        if (error) throw error;
+
+        if ((profile as { account_type?: string } | null)?.account_type === 'instructor') {
+          setResult({ segment: currentSegment, status: 'blocked' });
+          router.replace('/instructor');
+        } else {
+          setResult({ segment: currentSegment, status: 'ok' });
+        }
+      } catch {
+        if (cancelled) return;
+        attempt += 1;
+        if (attempt > INSTRUCTOR_CHECK_MAX_RETRIES) {
+          setResult({ segment: currentSegment, status: 'failed' });
+          return;
+        }
+        const delay = INSTRUCTOR_CHECK_BASE_DELAY_MS * 2 ** (attempt - 1);
+        setTimeout(() => { if (!cancelled) void check(); }, delay);
+      }
+    }
+
+    void check();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSegment, guarded, retryNonce]);
+
+  const effectiveStatus: 'checking' | GuardStatus = !guarded
+    ? 'ok'
+    : (result && result.segment === currentSegment) ? result.status : 'checking';
+
+  return {
+    blocking: effectiveStatus !== 'ok',
+    effectiveStatus,
+    retry: () => setRetryNonce(n => n + 1),
+  };
+}
+
+async function handleGuardSignOut() {
+  await supabase.auth.signOut();
+  router.replace('/onboarding');
+}
+
+function InstructorRouteGuardOverlay() {
+  const { blocking, effectiveStatus, retry } = useInstructorRouteGuard();
+  if (!blocking) return null;
+
+  return (
+    <View style={guardStyles.overlay} pointerEvents="auto">
+      {effectiveStatus === 'failed' ? (
+        <View style={guardStyles.content}>
+          <Text style={guardStyles.title}>{"Couldn't verify your account"}</Text>
+          <Text style={guardStyles.body}>{'Check your connection and try again.'}</Text>
+          <TouchableOpacity style={guardStyles.retryBtn} onPress={retry} activeOpacity={0.85}>
+            <Text style={guardStyles.retryBtnText}>{'Retry'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => void handleGuardSignOut()} activeOpacity={0.7}>
+            <Text style={guardStyles.signOutText}>{'Sign Out'}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <ActivityIndicator size="large" color={Colors.indigo} />
+      )}
+    </View>
+  );
+}
+
+const guardStyles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+    elevation: 10,
+  },
+  content: { alignItems: 'center', paddingHorizontal: 32 },
+  title: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 8, textAlign: 'center' },
+  body: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginBottom: 20 },
+  retryBtn: {
+    backgroundColor: Colors.indigo,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 10,
+    marginBottom: 14,
+  },
+  retryBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  signOutText: { color: '#6B7280', fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' },
+});
 
 function SentryFallback() {
   return (
@@ -215,6 +368,7 @@ function RootLayout() {
               other screen's bottom CTA — which a fixed bottom-right FAB would
               otherwise sit on top of and intercept taps for. */}
           <PipFab top={insets.top + 56} />
+          <InstructorRouteGuardOverlay />
           {showCachingToast && (
             <View style={[toastStyles.toast, { bottom: 96 + insets.bottom }]} pointerEvents="none">
               <Text style={toastStyles.text}>{'Downloading content for offline use...'}</Text>

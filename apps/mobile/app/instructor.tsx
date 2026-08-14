@@ -885,6 +885,98 @@ function PayoutHistorySection({ payouts }: { payouts: PayoutEntry[] }) {
   );
 }
 
+// ─── AccountSection ───────────────────────────────────────────────────────────
+// Self-service instructor -> learner switch. The reverse (learner ->
+// instructor) is deliberately NOT offered here — choose-account-type.tsx at
+// signup is enough, and a switch INTO instructor is a free-Pro path that
+// needs its own design pass, not a quick addition alongside this one.
+
+function AccountSection({ acceptedLearnerCount }: { acceptedLearnerCount: number }) {
+  const theme = useTheme();
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [switching, setSwitching]     = useState(false);
+
+  async function handleConfirmSwitch() {
+    setSwitching(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        Alert.alert('Error', 'Please sign in again.');
+        return;
+      }
+
+      const res = await fetch(`${PROXY_URL}/api/instructor/switch-to-learner`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+
+      if (res.ok && data.switched) {
+        setShowConfirm(false);
+        router.replace('/(tabs)/home');
+        return;
+      }
+
+      if (data.error === 'has_linked_learners') {
+        const count = data.acceptedCount ?? acceptedLearnerCount;
+        Alert.alert(
+          'Unlink your learners first',
+          `You still have ${count} learner${count === 1 ? '' : 's'} linked to your account. Contact support@getclearpass.co.uk to unlink them before switching to a learner account.`,
+        );
+      } else {
+        Alert.alert('Could not switch', 'Please try again in a moment.');
+      }
+    } catch {
+      Alert.alert('Error', 'Could not switch accounts. Please try again.');
+    } finally {
+      setSwitching(false);
+    }
+  }
+
+  return (
+    <View style={[styles.earningsSection, { backgroundColor: theme.cardColor }]}>
+      <Text style={[styles.earningsSectionTitle, { color: theme.textColor }]}>{'Account'}</Text>
+      <TouchableOpacity
+        style={styles.switchToLearnerBtn}
+        onPress={() => setShowConfirm(true)}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.switchToLearnerBtnText}>{'Switch to Learner Account'}</Text>
+      </TouchableOpacity>
+
+      <Modal visible={showConfirm} transparent animationType="fade" onRequestClose={() => setShowConfirm(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: theme.cardColor }]}>
+            <Text style={[styles.modalTitle, { color: theme.textColor }]}>{'Switch to a learner account?'}</Text>
+            <Text style={[styles.modalBodyText, { color: theme.subTextColor }]}>
+              {"You'll lose access to the instructor dashboard and your free Pro access. You'll keep your practice history, but from then on you'd need to pay for Pro like any other learner."}
+            </Text>
+            {acceptedLearnerCount > 0 && (
+              <Text style={styles.modalWarningText}>
+                {`You currently have ${acceptedLearnerCount} learner${acceptedLearnerCount === 1 ? '' : 's'} linked — you'll need to unlink them first.`}
+              </Text>
+            )}
+            <TouchableOpacity
+              style={[styles.modalConfirmDangerBtn, switching && styles.btnDisabled]}
+              onPress={() => void handleConfirmSwitch()}
+              activeOpacity={0.85}
+              disabled={switching}
+            >
+              {switching
+                ? <ActivityIndicator color="#FFFFFF" size="small" />
+                : <Text style={styles.modalConfirmDangerBtnText}>{'Switch to Learner'}</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowConfirm(false)} activeOpacity={0.85} disabled={switching}>
+              <Text style={styles.modalCancelText}>{'Cancel'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
 // ─── InstructorDashboard ──────────────────────────────────────────────────────
 
 function InstructorDashboard({
@@ -970,6 +1062,7 @@ function InstructorDashboard({
         )}
         <EarningsSection earnings={earnings} connectStatus={connectStatus} onRefresh={onRefresh} />
         <PayoutHistorySection payouts={payouts} />
+        <AccountSection acceptedLearnerCount={learners.length} />
         <AddLearnerModal
           visible={showAdd}
           instructorCode={instructorCode}
@@ -1010,6 +1103,7 @@ function InstructorDashboard({
       )}
       <EarningsSection earnings={earnings} connectStatus={connectStatus} onRefresh={onRefresh} />
       <PayoutHistorySection payouts={payouts} />
+      <AccountSection acceptedLearnerCount={learners.length} />
 
       <AddLearnerModal
         visible={showAdd}
@@ -1473,6 +1567,15 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   modalTitle: { fontSize: 20, fontWeight: '800' },
+  modalBodyText: { fontSize: 14, lineHeight: 20 },
+  modalWarningText: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: '#EF4444' },
+  modalConfirmDangerBtn: {
+    backgroundColor: '#EF4444',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  modalConfirmDangerBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
   modalTabRow: { flexDirection: 'row', borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#E5E7EB' },
   modalTab: { flex: 1, paddingVertical: 10, alignItems: 'center', backgroundColor: '#F9FAFB' },
   modalTabActive: { backgroundColor: Colors.indigo },
@@ -1626,6 +1729,15 @@ const styles = StyleSheet.create({
   },
   payoutBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
   payoutMinText: { fontSize: 12, textAlign: 'center' },
+
+  switchToLearnerBtn: {
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#EF4444',
+  },
+  switchToLearnerBtnText: { color: '#EF4444', fontSize: 15, fontWeight: '700' },
   payoutHistoryRight:  { alignItems: 'flex-end', gap: 4 },
   payoutStatusBadge: {
     borderRadius: 8,

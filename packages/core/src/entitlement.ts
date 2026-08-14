@@ -40,3 +40,19 @@ export function isEligibleForProExpiry(state: ProGrantState, nowIso: string): bo
   if (isExemptFromProExpiry(state.proSource)) return false;
   return state.isPro === true && !!state.proExpiresAt && state.proExpiresAt < nowIso;
 }
+
+// Used when an instructor switches their own account back to learner. Only
+// clears the Pro grant if it was actually instructor-sourced — a learner who
+// separately paid, or was manually comp'd, keeps that entitlement untouched;
+// it has nothing to do with their now-former instructor status.
+export function clearInstructorGrant<T extends ProGrantState>(state: T): T {
+  if (state.proSource !== 'instructor') return state;
+  return { ...state, isPro: false, proExpiresAt: null, proSource: null };
+}
+
+// True if any relationship is 'accepted' — an instructor switching to
+// learner must unlink every accepted learner first, so no learner is left
+// with an instructor who no longer exists as one.
+export function hasBlockingRelationships(relationships: { status: string }[]): boolean {
+  return relationships.some(r => r.status === 'accepted');
+}

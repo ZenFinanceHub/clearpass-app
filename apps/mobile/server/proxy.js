@@ -4,7 +4,12 @@ const express = require('express');
 const cors = require('cors');
 const { computeProExpiresAt } = require('./lib/proExpiry');
 const { deriveConnectStatus } = require('./lib/connectStatus');
-const { shouldApplyProGrant, isEligibleForProExpiry } = require('./lib/entitlement');
+const {
+  shouldApplyProGrant,
+  isEligibleForProExpiry,
+  clearInstructorGrant,
+  hasBlockingRelationships,
+} = require('./lib/entitlement');
 const { INSTRUCTOR_PAYOUT_STRIPE_MINOR } = require('../src/constants/earnings');
 
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -515,6 +520,79 @@ app.post('/api/instructor/payout-request', async (req, res) => {
   } catch (err) {
     console.error('[payout-request] error:', err);
     res.status(500).json({ error: 'payout_failed', detail: String(err.message || err) });
+  }
+});
+
+// ─── Instructor self-service switch to learner ────────────────────────────────
+// POST /api/instructor/switch-to-learner
+// Blocked if the caller has any 'accepted' instructor_relationships — we must
+// not orphan a learner whose instructor no longer exists as one; they're
+// told to unlink first. Clears the Pro grant only if it's instructor-sourced
+// (see clearInstructorGrant) — a learner who separately paid or was comped
+// keeps that entitlement untouched.
+//
+// Order matters: the progress/entitlement clear happens BEFORE the
+// account_type update. If the account_type update then fails, the caller is
+// left as account_type: 'instructor' with a cleared grant — the next run of
+// /api/cron/grant-instructor-pro simply re-grants them, a safe self-healing
+// state. The reverse order would risk the opposite: account_type flips to
+// 'learner' while an instructor-sourced isPro:true/proSource:'instructor'
+// grant is left behind — and since expire-pro explicitly excludes
+// proSource: 'instructor', that grant would never expire on its own,
+// permanently leaking free Pro to a learner account.
+
+app.post('/api/instructor/switch-to-learner', async (req, res) => {
+  const auth = await verifyInstructorAuth(req, res);
+  if (!auth) return;
+  const { userId, supabaseAdmin } = auth;
+
+  try {
+    const { data: profile, error: profileErr } = await supabaseAdmin
+      .from('profiles')
+      .select('account_type')
+      .eq('id', userId)
+      .maybeSingle();
+    if (profileErr) throw profileErr;
+
+    if (!profile || profile.account_type !== 'instructor') {
+      return res.status(409).json({ error: 'not_an_instructor' });
+    }
+
+    const { data: relationships, error: relErr } = await supabaseAdmin
+      .from('instructor_relationships')
+      .select('status')
+      .eq('instructor_id', userId);
+    if (relErr) throw relErr;
+
+    if (hasBlockingRelationships(relationships || [])) {
+      const acceptedCount = (relationships || []).filter(r => r.status === 'accepted').length;
+      return res.status(409).json({ error: 'has_linked_learners', acceptedCount });
+    }
+
+    const { data: existing, error: progressErr } = await supabaseAdmin
+      .from('user_progress')
+      .select('progress')
+      .eq('id', userId)
+      .maybeSingle();
+    if (progressErr) throw progressErr;
+
+    const updatedProgress = clearInstructorGrant(existing?.progress || {});
+    const { error: updateProgressErr } = await supabaseAdmin
+      .from('user_progress')
+      .upsert({ id: userId, progress: updatedProgress, updated_at: new Date().toISOString() });
+    if (updateProgressErr) throw updateProgressErr;
+
+    const { error: updateProfileErr } = await supabaseAdmin
+      .from('profiles')
+      .update({ account_type: 'learner' })
+      .eq('id', userId);
+    if (updateProfileErr) throw updateProfileErr;
+
+    console.log('[switch-to-learner] switched', userId);
+    res.json({ switched: true });
+  } catch (err) {
+    console.error('[switch-to-learner] error:', err);
+    res.status(500).json({ error: 'switch_failed', detail: String(err.message || err) });
   }
 });
 

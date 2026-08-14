@@ -1,6 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { shouldApplyProGrant, isExemptFromProExpiry, isEligibleForProExpiry } = require('./entitlement');
+const {
+  shouldApplyProGrant,
+  isExemptFromProExpiry,
+  isEligibleForProExpiry,
+  clearInstructorGrant,
+  hasBlockingRelationships,
+} = require('./entitlement');
 
 test('shouldApplyProGrant applies when there is no current source', () => {
   assert.equal(shouldApplyProGrant(null, 'instructor'), true);
@@ -67,4 +73,30 @@ test('isEligibleForProExpiry includes a stripe grant past its expiry date', () =
     ),
     true
   );
+});
+
+test('clearInstructorGrant clears an instructor-sourced grant', () => {
+  assert.deepEqual(
+    clearInstructorGrant({ isPro: true, proExpiresAt: null, proSource: 'instructor', xp: 500 }),
+    { isPro: false, proExpiresAt: null, proSource: null, xp: 500 }
+  );
+});
+
+test('clearInstructorGrant leaves a stripe-sourced grant untouched', () => {
+  const state = { isPro: true, proExpiresAt: '2027-01-01T00:00:00.000Z', proSource: 'stripe' };
+  assert.deepEqual(clearInstructorGrant(state), state);
+});
+
+test('clearInstructorGrant leaves a comp-sourced grant untouched', () => {
+  const state = { isPro: true, proExpiresAt: null, proSource: 'comp' };
+  assert.deepEqual(clearInstructorGrant(state), state);
+});
+
+test('hasBlockingRelationships is true when any relationship is accepted', () => {
+  assert.equal(hasBlockingRelationships([{ status: 'pending' }, { status: 'accepted' }]), true);
+});
+
+test('hasBlockingRelationships is false when none are accepted', () => {
+  assert.equal(hasBlockingRelationships([{ status: 'pending' }, { status: 'rejected' }]), false);
+  assert.equal(hasBlockingRelationships([]), false);
 });
