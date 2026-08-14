@@ -520,7 +520,12 @@ export default function HazardScreen() {
             {([
               [String(supabaseClips.length), 'clips'],
               [String(attempted), 'played'],
-              [`${Math.round(DVSA_HAZARD_PASS_RATIO * 100)}%`, 'to pass'],
+              // No concrete session chosen yet on this browse screen (Practice
+              // All vs a single clip have different maxScores), so this stays
+              // a percentage — but rounded DOWN, never up: rounding up would
+              // display a bar higher than the real 44/75 ratio, which can
+              // tell a learner who just passed that they fell short.
+              [`${Math.floor(DVSA_HAZARD_PASS_RATIO * 100)}%`, 'to pass'],
             ] as [string, string][]).map(([num, lbl]) => (
               <View key={lbl} style={styles.statPill}>
                 <Text style={styles.statNum}>{num}</Text>
@@ -814,6 +819,10 @@ v.addEventListener('ended', function() { window.ReactNativeWebView.postMessage(J
 
   const total = calculateHazardTotal(clipResults);
   const xpEarned = 20 + (total.passed ? 50 : 0);
+  // Minimum whole-number score that clears DVSA_HAZARD_PASS_RATIO for THIS
+  // session's actual maxScore — e.g. 44/75 x 25 = 14.67, so 15 is the real
+  // pass mark for a 25-point session, not a rounded percentage.
+  const sessionPassScore = Math.ceil(total.maxScore * DVSA_HAZARD_PASS_RATIO);
   const reviewClip = reviewClipIndex !== null ? activeClips[reviewClipIndex] : null;
   const reviewResult = reviewClipIndex !== null ? clipResults[reviewClipIndex] : null;
 
@@ -834,7 +843,7 @@ v.addEventListener('ended', function() { window.ReactNativeWebView.postMessage(J
       <Text style={[styles.bodyText, { color: theme.subTextColor }]}>
         {total.passed
           ? 'Great hazard awareness! You would pass.'
-          : `Keep practising — aim for ${Math.round(DVSA_HAZARD_PASS_RATIO * 100)}% or above.`}
+          : `Keep practising — aim for ${sessionPassScore}/${total.maxScore} or above.`}
       </Text>
 
       <View style={styles.xpBadge}>

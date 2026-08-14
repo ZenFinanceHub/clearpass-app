@@ -128,7 +128,9 @@ function HazardCard({ data }: { data: HazardCardData }) {
       <Text style={[cs.bigScore, { color: scoreColor }]}>{data.score}{' / '}{data.maxScore}</Text>
       <Text style={[cs.pctLabel, { color: scoreColor }]}>{pct}{'%'}</Text>
       <Text style={cs.motivational}>
-        {data.passed ? 'Excellent hazard awareness!' : `Aim for ${Math.round(DVSA_HAZARD_PASS_RATIO * 100)}%+ to pass`}
+        {data.passed
+          ? 'Excellent hazard awareness!'
+          : `Aim for ${Math.ceil(data.maxScore * DVSA_HAZARD_PASS_RATIO)}/${data.maxScore} to pass`}
       </Text>
       <Text style={cs.footer}>{'getclearpass.co.uk'}</Text>
     </LinearGradient>
