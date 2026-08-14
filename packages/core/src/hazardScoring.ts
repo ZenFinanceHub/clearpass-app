@@ -67,6 +67,19 @@ function scoreWindow(clicks: number[], window: HazardWindow): number {
   }
 
   // Fallback: divide window into thirds (5/4/3 pts) for non-DVSA clips.
+  // NOTE: this path can only ever return 5, 4, or 3 — never 2 or 1 — unlike
+  // the 5-band DVSA model above. It is unreachable against every clip in
+  // production today (all 38 active clips have bands populated), but would
+  // silently mis-score any future clip authored without them. `typeof`
+  // guards `__DEV__` so this stays safe in non-RN contexts (this package's
+  // own vitest/Node test run has no such global).
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    console.warn(
+      `[hazardScoring] Clip hazard window ${window.startSec}-${window.endSec}s has no DVSA bands — ` +
+      'falling back to simplified thirds scoring (max 5/4/3 pts, never 2 or 1). ' +
+      'This clip should be authored with bands.',
+    );
+  }
   const range = window.endSec - window.startSec;
   const pos = (first - window.startSec) / range;
   if (pos < 1 / 3) return 5;
