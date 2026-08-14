@@ -9,6 +9,12 @@ import { HazardClip, HazardClipResult, HazardWindow } from './types/HazardClip';
 // can't leak tolerance into reveal/solution footage or otherwise widen the window.
 const WINDOW_OPEN_TOLERANCE_SEC = 0.08;
 
+// DVSA passmark: 44 out of a 75-point full session. Exported as a ratio, not
+// a literal "44/75", so every place that displays a pass threshold (which
+// may be for a partial/single-clip session, not the full 75) derives it from
+// the same single source of truth instead of re-hardcoding the fraction.
+export const DVSA_HAZARD_PASS_RATIO = 44 / 75;
+
 function isInWindow(t: number, window: HazardWindow): boolean {
   return t >= window.startSec - WINDOW_OPEN_TOLERANCE_SEC && t <= window.endSec;
 }
@@ -96,7 +102,6 @@ export function calculateHazardTotal(
 ): { score: number; maxScore: number; passed: boolean } {
   const score = results.reduce((sum, r) => sum + r.score, 0);
   const maxScore = results.reduce((sum, r) => sum + r.maxScore, 0);
-  // DVSA passmark: 44 out of 75 (≈58.7%)
-  const passed = maxScore > 0 && score / maxScore >= 44 / 75;
+  const passed = maxScore > 0 && score / maxScore >= DVSA_HAZARD_PASS_RATIO;
   return { score, maxScore, passed };
 }

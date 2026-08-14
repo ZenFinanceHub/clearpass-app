@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { HazardClipResult, HazardSessionResult, HazardWindow, UserProgress, calculateHazardTotal, scoreClip } from '@clearpass/core';
+import { DVSA_HAZARD_PASS_RATIO, HazardClipResult, HazardSessionResult, HazardWindow, UserProgress, calculateHazardTotal, scoreClip } from '@clearpass/core';
 import { hazardClips } from '@clearpass/content';
 import { loadUserProgress, saveUserProgress } from '@/src/storage';
 import { getHazardVideoList, getVideoUrl, buildHazardClip, type HazardClipMeta } from '@/src/hazardVideos';
@@ -239,7 +239,7 @@ export default function HazardScreen() {
             date: new Date().toISOString(),
             score: r.score,
             maxScore: r.maxScore,
-            passed: r.score > 0,
+            passed: r.maxScore > 0 && r.score / r.maxScore >= DVSA_HAZARD_PASS_RATIO,
             clipId: r.clipId,
           }))
         : [{ date: new Date().toISOString(), score: total.score, maxScore: total.maxScore, passed: total.passed }];
@@ -431,7 +431,7 @@ export default function HazardScreen() {
             {([
               [String(supabaseClips.length), 'clips'],
               [String(attempted), 'played'],
-              ['~60%', 'to pass'],
+              [`${Math.round(DVSA_HAZARD_PASS_RATIO * 100)}%`, 'to pass'],
             ] as [string, string][]).map(([num, lbl]) => (
               <View key={lbl} style={styles.statPill}>
                 <Text style={styles.statNum}>{num}</Text>
@@ -447,7 +447,7 @@ export default function HazardScreen() {
           <View style={styles.grid}>
             {supabaseClips.map((meta, i) => {
               const stats = getClipStats(meta.id);
-              const passed = stats && stats.best >= Math.ceil(stats.max * 0.6);
+              const passed = stats && stats.best >= Math.ceil(stats.max * DVSA_HAZARD_PASS_RATIO);
               return (
                 <TouchableOpacity
                   key={meta.id}
@@ -488,6 +488,11 @@ export default function HazardScreen() {
   // ── PRE-CLIP ─────────────────────────────────────────────────────────────
 
   if (phase === 'pre-clip') {
+    // activeClips is set (single clip or the full shuffled practice set)
+    // before entering this phase, so this reflects the session actually
+    // about to be played — not a hardcoded, possibly-wrong session size.
+    const sessionMaxScore = activeClips.reduce((sum, c) => sum + c.hazards.length * 5, 0);
+    const sessionPassScore = Math.ceil(sessionMaxScore * DVSA_HAZARD_PASS_RATIO);
     return (
       <View style={[styles.bg, styles.centerFill, { backgroundColor: theme.backgroundColor }]}>
         <TouchableOpacity style={styles.exitBtn} onPress={handleExitClip} activeOpacity={0.85}>
@@ -504,7 +509,7 @@ export default function HazardScreen() {
         <View style={[styles.reminderBox, { flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
           <Pip size={44} mood="teaching" />
           <Text style={[styles.reminderText, { flex: 1 }]}>
-            {'Spot each developing hazard early — score up to 5 points based on how quickly you react. Click too early, too late, or spam the screen and you’ll score 0. You need 44/75 to pass.'}
+            {`Spot each developing hazard early — score up to 5 points based on how quickly you react. Click too early, too late, or spam the screen and you'll score 0. You need ${sessionPassScore}/${sessionMaxScore} to pass.`}
           </Text>
         </View>
         <TouchableOpacity
