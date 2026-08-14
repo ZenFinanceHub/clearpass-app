@@ -42,13 +42,22 @@ function scoreWindow(clicks: number[], window: HazardWindow): number {
   const first = Math.max(earliest, window.startSec);
 
   if (window.bands && window.bands.length > 0) {
-    // DVSA explicit bands: find which band contains the first qualifying click.
-    // Bands are ordered 5→1; return the first match.
-    const sorted = [...window.bands].sort((a, b) => b.points - a.points);
-    for (const band of sorted) {
+    // DVSA explicit bands: prefer an exact match first (both edges inclusive).
+    // Bands are ordered 5→1 by points, so a tap landing exactly on a shared,
+    // touching boundary between two bands (a real tie in some clips' data)
+    // resolves to the higher-point band, since it's checked first.
+    const byPoints = [...window.bands].sort((a, b) => b.points - a.points);
+    for (const band of byPoints) {
       if (first >= band.startSec && first <= band.endSec) return band.points;
     }
-    return 0;
+    // No band's own range contains the tap — a genuine inter-band gap (e.g. a
+    // real 0.01s/0.04s authoring hole between adjacent bands, distinct from
+    // the touching-boundary case above). Credit the band that most recently
+    // opened: the one with the greatest startSec still <= the tap. Fixed in
+    // code, not data — the bands themselves are untouched.
+    const byStartDesc = [...window.bands].sort((a, b) => b.startSec - a.startSec);
+    const opened = byStartDesc.find((band) => band.startSec <= first);
+    return opened ? opened.points : 0;
   }
 
   // Fallback: divide window into thirds (5/4/3 pts) for non-DVSA clips.
