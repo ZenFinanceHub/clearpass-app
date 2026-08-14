@@ -699,7 +699,7 @@ function ReferralSection({
         <View style={{ flex: 1 }}>
           <Text style={[styles.refSectionTitle, { color: theme.textColor }]}>{'Share Your Referral Link'}</Text>
           <Text style={[styles.refSectionSub, { color: theme.subTextColor }]}>
-            {`Earn ${formatMinor(INSTRUCTOR_PAYOUT_WORST_CASE_MINOR)} for every pupil who subscribes to Pro`}
+            {`Earn ${formatMinor(INSTRUCTOR_PAYOUT_WORST_CASE_MINOR)} for every pupil who upgrades using your referral`}
           </Text>
         </View>
       </View>
