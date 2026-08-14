@@ -199,6 +199,9 @@ export default function HazardScreen() {
   const [celebQueue, setCelebQueue] = useState<CelebrationEvent[]>([]);
   const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
   const [showShareCard, setShowShareCard] = useState(false);
+  // Index into clipResults/activeClips of the clip currently open in the
+  // end-of-session "revisit" modal; null when closed.
+  const [reviewClipIndex, setReviewClipIndex] = useState<number | null>(null);
 
   // Supabase clip loading
   const [clipsLoading, setClipsLoading] = useState(true);
@@ -807,6 +810,8 @@ v.addEventListener('ended', function() { window.ReactNativeWebView.postMessage(J
 
   const total = calculateHazardTotal(clipResults);
   const xpEarned = 20 + (total.passed ? 50 : 0);
+  const reviewClip = reviewClipIndex !== null ? activeClips[reviewClipIndex] : null;
+  const reviewResult = reviewClipIndex !== null ? clipResults[reviewClipIndex] : null;
 
   return (
     <>
@@ -835,7 +840,12 @@ v.addEventListener('ended', function() { window.ReactNativeWebView.postMessage(J
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{'Clip Breakdown'}</Text>
         {clipResults.map((r, i) => (
-          <View key={r.clipId} style={styles.breakdownRow}>
+          <TouchableOpacity
+            key={r.clipId}
+            style={styles.breakdownRow}
+            onPress={() => setReviewClipIndex(i)}
+            activeOpacity={0.7}
+          >
             <Text style={styles.breakdownLabel} numberOfLines={1}>
               {'Clip '}
               {i + 1}
@@ -851,7 +861,8 @@ v.addEventListener('ended', function() { window.ReactNativeWebView.postMessage(J
             ) : (
               <Text style={[styles.breakdownScore, { color: theme.subTextColor }]}>{'Not scored'}</Text>
             )}
-          </View>
+            <Text style={styles.breakdownChevron}>{'>'}</Text>
+          </TouchableOpacity>
         ))}
       </View>
 
@@ -896,6 +907,31 @@ v.addEventListener('ended', function() { window.ReactNativeWebView.postMessage(J
         data={{ type: 'hazard', score: total.score, maxScore: total.maxScore, passed: total.passed }}
       />
     )}
+    {reviewClip && reviewResult && (
+      <Modal
+        visible
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReviewClipIndex(null)}
+      >
+        <View style={styles.reviewOverlay}>
+          <View style={[styles.reviewCard, { backgroundColor: theme.cardColor }]}>
+            <Text
+              style={[styles.heading, { fontSize: theme.fontSize(20), fontFamily: theme.fontFamily, color: theme.textColor }]}
+              numberOfLines={1}
+            >
+              {reviewClip.title}
+            </Text>
+            <ScrollView style={styles.reviewScroll} contentContainerStyle={styles.reviewScrollContent}>
+              <ClipResultDetail clip={reviewClip} result={reviewResult} />
+            </ScrollView>
+            <TouchableOpacity style={styles.primaryBtn} onPress={() => setReviewClipIndex(null)} activeOpacity={0.85}>
+              <Text style={styles.primaryBtnText}>{'Close'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    )}
     </>
   );
 }
@@ -918,6 +954,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
   },
+  reviewOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  reviewCard: {
+    width: '100%' as any,
+    maxWidth: 480,
+    maxHeight: '80%' as any,
+    borderRadius: 16,
+    padding: 20,
+    gap: 12,
+  },
+  reviewScroll: { flexGrow: 0 },
+  reviewScrollContent: { gap: 16, paddingBottom: 4 },
 
   heading: { fontSize: 26, fontWeight: '800', textAlign: 'center' },
   sub: { fontSize: 14, textAlign: 'center' },
@@ -1123,6 +1176,7 @@ const styles = StyleSheet.create({
   },
   breakdownLabel: { fontSize: 13, color: '#6B7280', flex: 1 },
   breakdownScore: { fontSize: 14, fontWeight: '700' },
+  breakdownChevron: { fontSize: 15, color: '#9CA3AF', fontWeight: '600', marginLeft: 6 },
   btnRow: { flexDirection: 'row', gap: 12, width: '100%' as any, maxWidth: 480 },
   secondaryBtn: {
     backgroundColor: '#FFFFFF',
