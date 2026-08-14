@@ -767,7 +767,7 @@ v.addEventListener('ended', function() { window.ReactNativeWebView.postMessage(J
       <Text style={[styles.bodyText, { color: theme.subTextColor }]}>
         {total.passed
           ? 'Great hazard awareness! You would pass.'
-          : 'Keep practising — aim for 60% or above.'}
+          : `Keep practising — aim for ${Math.round(DVSA_HAZARD_PASS_RATIO * 100)}% or above.`}
       </Text>
 
       <View style={styles.xpBadge}>
