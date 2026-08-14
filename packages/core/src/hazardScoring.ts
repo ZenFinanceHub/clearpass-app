@@ -1,4 +1,4 @@
-import { HazardClip, HazardClipResult, HazardWindow } from './types/HazardClip';
+import { HazardClip, HazardClipResult, HazardResult, HazardWindow } from './types/HazardClip';
 
 // Absorbs timing jitter (video currentTime staleness, touch-dispatch latency) at the
 // moment a hazard's scoring window OPENS, so a genuinely correctly-timed tap isn't
@@ -30,9 +30,9 @@ function detectAntiCheat(clicks: number[]): boolean {
   return Math.max(...bySecond.values()) >= 8;
 }
 
-function scoreWindow(clicks: number[], window: HazardWindow): number {
+function scoreWindow(clicks: number[], window: HazardWindow): { points: number; scoringTap: number | null } {
   const windowClicks = clicks.filter((t) => isInWindow(t, window));
-  if (windowClicks.length === 0) return 0;
+  if (windowClicks.length === 0) return { points: 0, scoringTap: null };
 
   // The EARLIEST qualifying tap scores. A learner may legitimately tap once
   // on spotting a hazard and again as it develops — a later, additional tap
@@ -40,12 +40,12 @@ function scoreWindow(clicks: number[], window: HazardWindow): number {
   // excessive-clicking rule (detectAntiCheat, in scoreClip) still zeroes for
   // spam-tapping. `windowClicks` preserves the original clicks[] order, not
   // necessarily chronological order, so take the minimum explicitly.
-  const earliest = Math.min(...windowClicks);
+  const scoringTap = Math.min(...windowClicks);
 
   // A tap that landed in the tolerance zone just before the window's nominal start
   // is treated as if it landed exactly on the opening edge — absorbed as on-time
   // jitter, not scored as "early" against the bands/thirds below.
-  const first = Math.max(earliest, window.startSec);
+  const first = Math.max(scoringTap, window.startSec);
 
   // scoreClip only calls this once every hazard in the clip is confirmed to
   // have bands (see hasAllBands below) — an unbanded window should never
@@ -53,7 +53,7 @@ function scoreWindow(clicks: number[], window: HazardWindow): number {
   // does, but there is deliberately no thirds/percentage approximation
   // anymore: this app is licensed to mirror the official DVSA test, and an
   // unbanded clip fails closed at the scoreClip level instead.
-  if (!window.bands || window.bands.length === 0) return 0;
+  if (!window.bands || window.bands.length === 0) return { points: 0, scoringTap };
 
   // DVSA explicit bands: prefer an exact match first (both edges inclusive).
   // Bands are ordered 5→1 by points, so a tap landing exactly on a shared,
@@ -61,7 +61,7 @@ function scoreWindow(clicks: number[], window: HazardWindow): number {
   // resolves to the higher-point band, since it's checked first.
   const byPoints = [...window.bands].sort((a, b) => b.points - a.points);
   for (const band of byPoints) {
-    if (first >= band.startSec && first <= band.endSec) return band.points;
+    if (first >= band.startSec && first <= band.endSec) return { points: band.points, scoringTap };
   }
   // No band's own range contains the tap — a genuine inter-band gap (e.g. a
   // real 0.01s/0.04s authoring hole between adjacent bands, distinct from
@@ -70,7 +70,7 @@ function scoreWindow(clicks: number[], window: HazardWindow): number {
   // code, not data — the bands themselves are untouched.
   const byStartDesc = [...window.bands].sort((a, b) => b.startSec - a.startSec);
   const opened = byStartDesc.find((band) => band.startSec <= first);
-  return opened ? opened.points : 0;
+  return { points: opened ? opened.points : 0, scoringTap };
 }
 
 export function scoreClip(clip: HazardClip, clicks: number[]): HazardClipResult {
@@ -81,16 +81,26 @@ export function scoreClip(clip: HazardClip, clicks: number[]): HazardClipResult 
     // 5/4/3, never 2 or 1) produced an inflated, plausible-looking score.
     // Exclude the whole clip from the session — 0 score, 0 maxScore — rather
     // than guess at a scoring model this app isn't licensed to invent.
-    return { clipId: clip.id, clicks, score: 0, maxScore: 0, countedTaps: 0, scorable: false };
+    return { clipId: clip.id, clicks, score: 0, maxScore: 0, countedTaps: 0, scorable: false, hazards: [] };
   }
 
   const cheating = detectAntiCheat(clicks);
-  let score = 0;
-  if (!cheating) {
-    for (const hazard of clip.hazards) {
-      score += scoreWindow(clicks, hazard);
-    }
-  }
+
+  // Per-hazard breakdown, computed BEFORE the clip-wide cheating override so
+  // `scoringTap` still identifies the tap that would have scored even when
+  // `zeroed` is true — a reviewer needs to see that distinction, not just a
+  // flat 0.
+  const hazards: HazardResult[] = clip.hazards.map((hazard) => {
+    const { points, scoringTap } = scoreWindow(clicks, hazard);
+    return {
+      points: cheating ? 0 : points,
+      scoringTap,
+      zeroed: cheating && scoringTap !== null,
+    };
+  });
+
+  const score = hazards.reduce((sum, h) => sum + h.points, 0);
+
   // Taps that actually fell inside a scoring window — i.e. the ones that counted
   // toward (or zeroed) a hazard's score, as opposed to every tap made anywhere in
   // the clip (which also includes taps outside any window, before it opens etc).
@@ -104,6 +114,7 @@ export function scoreClip(clip: HazardClip, clicks: number[]): HazardClipResult 
     maxScore: clip.hazards.length * 5,
     countedTaps,
     scorable: true,
+    hazards,
   };
 }
 

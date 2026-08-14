@@ -21,6 +21,23 @@ export interface HazardClip {
   hazards: HazardWindow[];
 }
 
+export interface HazardResult {
+  /** Final awarded points for this one hazard — 0 if missed or zeroed. */
+  points: number;
+  /**
+   * The earliest qualifying in-window tap's timestamp, or null if no tap
+   * landed in this hazard's window. Set even when `zeroed` is true, so a
+   * reviewer can still see which tap *would* have scored.
+   */
+  scoringTap: number | null;
+  /**
+   * True when a qualifying tap existed (scoringTap !== null) but the
+   * clip-wide excessive-clicking rule zeroed the whole clip's score —
+   * distinct from simply never having tapped this hazard at all.
+   */
+  zeroed: boolean;
+}
+
 export interface HazardClipResult {
   clipId: string;
   clicks: number[];
@@ -35,6 +52,8 @@ export interface HazardClipResult {
    * return 5, 4, or 3 points, never 2 or 1.
    */
   scorable: boolean;
+  /** Per-hazard breakdown, parallel to the clip's `hazards` array. Empty when !scorable. */
+  hazards: HazardResult[];
 }
 
 export interface HazardSessionResult {
