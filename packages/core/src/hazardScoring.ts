@@ -47,47 +47,43 @@ function scoreWindow(clicks: number[], window: HazardWindow): number {
   // jitter, not scored as "early" against the bands/thirds below.
   const first = Math.max(earliest, window.startSec);
 
-  if (window.bands && window.bands.length > 0) {
-    // DVSA explicit bands: prefer an exact match first (both edges inclusive).
-    // Bands are ordered 5→1 by points, so a tap landing exactly on a shared,
-    // touching boundary between two bands (a real tie in some clips' data)
-    // resolves to the higher-point band, since it's checked first.
-    const byPoints = [...window.bands].sort((a, b) => b.points - a.points);
-    for (const band of byPoints) {
-      if (first >= band.startSec && first <= band.endSec) return band.points;
-    }
-    // No band's own range contains the tap — a genuine inter-band gap (e.g. a
-    // real 0.01s/0.04s authoring hole between adjacent bands, distinct from
-    // the touching-boundary case above). Credit the band that most recently
-    // opened: the one with the greatest startSec still <= the tap. Fixed in
-    // code, not data — the bands themselves are untouched.
-    const byStartDesc = [...window.bands].sort((a, b) => b.startSec - a.startSec);
-    const opened = byStartDesc.find((band) => band.startSec <= first);
-    return opened ? opened.points : 0;
-  }
+  // scoreClip only calls this once every hazard in the clip is confirmed to
+  // have bands (see hasAllBands below) — an unbanded window should never
+  // reach here. Returning 0 defensively is safer than a crash if it somehow
+  // does, but there is deliberately no thirds/percentage approximation
+  // anymore: this app is licensed to mirror the official DVSA test, and an
+  // unbanded clip fails closed at the scoreClip level instead.
+  if (!window.bands || window.bands.length === 0) return 0;
 
-  // Fallback: divide window into thirds (5/4/3 pts) for non-DVSA clips.
-  // NOTE: this path can only ever return 5, 4, or 3 — never 2 or 1 — unlike
-  // the 5-band DVSA model above. It is unreachable against every clip in
-  // production today (all 38 active clips have bands populated), but would
-  // silently mis-score any future clip authored without them. `typeof`
-  // guards `__DEV__` so this stays safe in non-RN contexts (this package's
-  // own vitest/Node test run has no such global).
-  if (typeof __DEV__ !== 'undefined' && __DEV__) {
-    console.warn(
-      `[hazardScoring] Clip hazard window ${window.startSec}-${window.endSec}s has no DVSA bands — ` +
-      'falling back to simplified thirds scoring (max 5/4/3 pts, never 2 or 1). ' +
-      'This clip should be authored with bands.',
-    );
+  // DVSA explicit bands: prefer an exact match first (both edges inclusive).
+  // Bands are ordered 5→1 by points, so a tap landing exactly on a shared,
+  // touching boundary between two bands (a real tie in some clips' data)
+  // resolves to the higher-point band, since it's checked first.
+  const byPoints = [...window.bands].sort((a, b) => b.points - a.points);
+  for (const band of byPoints) {
+    if (first >= band.startSec && first <= band.endSec) return band.points;
   }
-  const range = window.endSec - window.startSec;
-  const pos = (first - window.startSec) / range;
-  if (pos < 1 / 3) return 5;
-  if (pos < 2 / 3) return 4;
-  return 3;
+  // No band's own range contains the tap — a genuine inter-band gap (e.g. a
+  // real 0.01s/0.04s authoring hole between adjacent bands, distinct from
+  // the touching-boundary case above). Credit the band that most recently
+  // opened: the one with the greatest startSec still <= the tap. Fixed in
+  // code, not data — the bands themselves are untouched.
+  const byStartDesc = [...window.bands].sort((a, b) => b.startSec - a.startSec);
+  const opened = byStartDesc.find((band) => band.startSec <= first);
+  return opened ? opened.points : 0;
 }
 
 export function scoreClip(clip: HazardClip, clicks: number[]): HazardClipResult {
+  const hasAllBands = clip.hazards.every((h) => h.bands && h.bands.length > 0);
+  if (!hasAllBands) {
+    // Fail closed: a clip with any unbanded hazard cannot be scored against
+    // the DVSA 5-band model, and the previous thirds approximation (max
+    // 5/4/3, never 2 or 1) produced an inflated, plausible-looking score.
+    // Exclude the whole clip from the session — 0 score, 0 maxScore — rather
+    // than guess at a scoring model this app isn't licensed to invent.
+    return { clipId: clip.id, clicks, score: 0, maxScore: 0, countedTaps: 0, scorable: false };
+  }
+
   const cheating = detectAntiCheat(clicks);
   let score = 0;
   if (!cheating) {
@@ -107,6 +103,7 @@ export function scoreClip(clip: HazardClip, clicks: number[]): HazardClipResult 
     score,
     maxScore: clip.hazards.length * 5,
     countedTaps,
+    scorable: true,
   };
 }
 
