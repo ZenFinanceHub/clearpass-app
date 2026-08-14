@@ -24,12 +24,21 @@ interface HazardTimelineProps {
 // greyscale, unlike red/amber/green which can collapse to similar
 // luminance. Reuses two existing theme tokens at the endpoints —
 // Colors.indigo (band 5) and Colors.indigoBg (band 1) — the app has no
-// pre-built 5-step ramp between them, so bands 4/3/2 are derived by linear
-// RGB interpolation between those same two tokens (25/50/75%), not new
-// arbitrary hex values.
+// pre-built 5-step ramp between them, so bands 3/2 are linear RGB
+// interpolations between those same two tokens (50/75%), not new arbitrary
+// hex values. Band 4 is NOT the even 25% interpolation (#776FEB) — that
+// value only gave white numerals a 3.99:1 contrast ratio (fails WCAG AA's
+// 4.5:1; the numeral is 10px, well under the large-text threshold where
+// 3:1 would apply). #6B63EA (~18% toward indigoBg) is the lightest point
+// on the same ramp line where white text still clears 4.5:1 (4.57:1) —
+// chosen over enlarging the numeral because bands can be as narrow as
+// ~0.4s within a ~6s padded span (Priority Bridge hazard 2), and a
+// large-text-sized numeral risked not fitting inside that width at all.
+// This does compress band 4 slightly closer to band 5 visually — a minor,
+// accepted trade-off against actually failing contrast.
 const BAND_COLORS: Record<number, string> = {
   5: Colors.indigo,   // #4F46E5 — existing token
-  4: '#776FEB',       // 25% toward indigoBg
+  4: '#6B63EA',       // ~18% toward indigoBg — darkened from the even 25% step for contrast
   3: '#9E98F2',       // 50% toward indigoBg
   2: '#C6C0F8',       // 75% toward indigoBg
   1: Colors.indigoBg, // #EDE9FE — existing token
