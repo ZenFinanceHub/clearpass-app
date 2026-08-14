@@ -7,6 +7,7 @@ import {
   HazardWindow,
 } from '@clearpass/core';
 import { useTheme } from '@/src/theme';
+import { Colors } from '@/src/constants/theme';
 
 interface HazardTimelineProps {
   hazard: HazardWindow;
@@ -15,15 +16,34 @@ interface HazardTimelineProps {
   result: HazardResult;
 }
 
-// Local to this component — a 5-step "good to bad" scale distinct enough
-// that band identity doesn't depend on colour alone (every segment also
-// carries its numeral).
+// Single-hue ramp on the brand indigo, darkest/most saturated at 5 down to
+// lightest at 1 — deliberately NOT a green→red "good→bad" scale. Every band
+// is a pass (1 point still means the hazard was correctly spotted, just
+// later); red specifically implies failure, which is the wrong lesson.
+// A single-hue lightness ramp also stays monotonically distinguishable in
+// greyscale, unlike red/amber/green which can collapse to similar
+// luminance. Reuses two existing theme tokens at the endpoints —
+// Colors.indigo (band 5) and Colors.indigoBg (band 1) — the app has no
+// pre-built 5-step ramp between them, so bands 4/3/2 are derived by linear
+// RGB interpolation between those same two tokens (25/50/75%), not new
+// arbitrary hex values.
 const BAND_COLORS: Record<number, string> = {
-  5: '#10B981',
-  4: '#65A30D',
-  3: '#F5A623',
-  2: '#EA580C',
-  1: '#EF4444',
+  5: Colors.indigo,   // #4F46E5 — existing token
+  4: '#776FEB',       // 25% toward indigoBg
+  3: '#9E98F2',       // 50% toward indigoBg
+  2: '#C6C0F8',       // 75% toward indigoBg
+  1: Colors.indigoBg, // #EDE9FE — existing token
+};
+
+// Lighter bands (3/2/1) are too light for white numerals to read against —
+// dark indigo text instead, still on-brand, still passes the "not colour
+// alone" requirement since the numeral itself is what carries the meaning.
+const BAND_TEXT_COLORS: Record<number, string> = {
+  5: '#FFFFFF',
+  4: '#FFFFFF',
+  3: Colors.indigo,
+  2: Colors.indigo,
+  1: Colors.indigo,
 };
 
 type Theme = ReturnType<typeof useTheme>;
@@ -72,7 +92,16 @@ function BandsRow({ layout, theme }: { layout: HazardTimelineLayout; theme: Them
             },
           ]}
         >
-          <Text style={styles.bandNumeral} numberOfLines={1}>{seg.points}</Text>
+          <Text
+            style={[
+              styles.bandNumeral,
+              { color: BAND_TEXT_COLORS[seg.points] },
+              BAND_TEXT_COLORS[seg.points] === '#FFFFFF' ? styles.bandNumeralShadow : null,
+            ]}
+            numberOfLines={1}
+          >
+            {seg.points}
+          </Text>
         </View>
       ))}
       {trailingPct > 0 && <View style={[styles.paddingSeg, { width: `${trailingPct}%` }]} />}
@@ -158,7 +187,8 @@ const styles = StyleSheet.create({
   },
   paddingSeg: { backgroundColor: '#E5E7EB' },
   bandSeg: { alignItems: 'center', justifyContent: 'center' },
-  bandNumeral: { fontSize: 10, fontWeight: '800', color: '#FFFFFF', textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 },
+  bandNumeral: { fontSize: 10, fontWeight: '800' },
+  bandNumeralShadow: { textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 },
   marker: {
     position: 'absolute',
     top: -2,
