@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
-  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,7 +9,6 @@ import {
   View,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { supabase } from '@/src/supabase';
 import {
   Achievement,
   applyCorrectAnswerToChallenge,
@@ -64,7 +62,6 @@ import * as Haptics from 'expo-haptics';
 import { useAccessibility } from '@/src/AccessibilityContext';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
-import { getProxyUrl } from '@/src/proxyUrl';
 import { AnswerOptions, LABELS } from '@/src/components/AnswerOptions';
 
 const SESSION_SIZE = 10;
@@ -276,20 +273,11 @@ export default function PracticeScreen() {
     setCurrentBookmarked(nowBookmarked);
   }
 
-  async function handleProUpgrade() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push('/auth/signin'); return; }
-    try {
-      const res = await fetch(`${getProxyUrl()}/api/create-checkout-session`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
-      });
-      const data = await res.json() as { url?: string };
-      if (data.url) await Linking.openURL(data.url);
-    } catch {
-      router.push('/auth/signin');
-    }
+  // Routes to the paywall screen, which is the single place that decides
+  // (via src/purchaseGate) whether that means Stripe Checkout or an iOS
+  // coming-soon state.
+  function handleProUpgrade() {
+    router.push('/paywall');
   }
 
   async function startSession() {
@@ -949,7 +937,7 @@ export default function PracticeScreen() {
     return (
       <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}>
         <PaywallPrompt
-          onUpgrade={() => void handleProUpgrade()}
+          onUpgrade={handleProUpgrade}
           onDismiss={() => setPhase('start')}
           dismissLabel="Back"
         />

@@ -4,7 +4,6 @@ import { computeAndSavePassProbability, PassProbabilityResult } from '@/src/pass
 import { allQuestions } from '@clearpass/content';
 import {
   Alert,
-  Linking,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -22,7 +21,6 @@ import {
   UserProgress,
 } from '@clearpass/core';
 import { getSessionHistory, getTopicAccuracy, getMasteredTopics, loadUserProgress, type SessionHistoryEntry } from '@/src/storage';
-import { getProxyUrl } from '@/src/proxyUrl';
 import { TOPIC_BADGES, type TopicBadge } from '@/src/badges';
 import { getComparativeStats } from '@/src/analytics';
 import { useTheme } from '@/src/theme';
@@ -177,20 +175,11 @@ export default function ProgressScreen() {
     setRefreshing(false);
   }
 
-  async function handleUpgrade() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push('/auth/signin'); return; }
-    try {
-      const res = await fetch(`${getProxyUrl()}/api/create-checkout-session`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
-      });
-      const data = await res.json() as { url?: string };
-      if (data.url) await Linking.openURL(data.url);
-    } catch {
-      router.push('/auth/signin');
-    }
+  // Routes to the paywall screen, which is the single place that decides
+  // (via src/purchaseGate) whether that means Stripe Checkout or an iOS
+  // coming-soon state.
+  function handleUpgrade() {
+    router.push('/paywall');
   }
 
   if (!loaded) return null;
@@ -252,7 +241,7 @@ export default function ProgressScreen() {
       <Text style={[styles.screenTitle, { fontSize: theme.fontSize(26), fontFamily: theme.fontFamily, color: theme.textColor }]}>Your Progress</Text>
 
       {!(progress.isPro ?? false) && (
-        <TouchableOpacity style={styles.proBanner} onPress={() => void handleUpgrade()} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.proBanner} onPress={handleUpgrade} activeOpacity={0.85}>
           <View style={styles.proBannerContent}>
             <Text style={styles.proBannerTitle}>Go Pro for £7.99</Text>
             <Text style={styles.proBannerSub}>Unlock unlimited questions, AI tutor and more</Text>

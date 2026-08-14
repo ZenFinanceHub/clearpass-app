@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { getProxyUrl } from '@/src/proxyUrl';
-import { supabase } from '@/src/supabase';
 import { Colors } from '@/src/constants/theme';
 import { ScaleButton } from '@/src/components/ScaleButton';
 
@@ -48,20 +47,11 @@ const FEATURES = [
 const FREE_FEATURES = ['10 questions per day', 'Highway Code & road signs', '5 AI tutor questions/day'];
 const PRO_FEATURES = ['Unlimited questions', 'Full mock tests', 'Hazard perception', 'Unlimited AI tutor', 'AI study plan', 'Offline mode'];
 
-async function handleGetPro() {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) { router.push('/auth/signin'); return; }
-  try {
-    const res = await fetch(`${getProxyUrl()}/api/create-checkout-session`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user.id }),
-    });
-    const data = await res.json() as { url?: string };
-    if (data.url) await Linking.openURL(data.url);
-  } catch {
-    router.push('/paywall');
-  }
+// Routes to the paywall screen, which is the single place that decides
+// (via src/purchaseGate) whether that means Stripe Checkout or an iOS
+// coming-soon state — this function no longer decides that itself.
+function handleGetPro() {
+  router.push('/paywall');
 }
 
 export default function LandingPage() {
@@ -270,7 +260,7 @@ export default function LandingPage() {
                   <Text style={styles.planFeatureTextPro}>{f}</Text>
                 </View>
               ))}
-              <ScaleButton style={styles.planCtaPro} onPress={() => void handleGetPro()} activeOpacity={0.85}>
+              <ScaleButton style={styles.planCtaPro} onPress={handleGetPro} activeOpacity={0.85}>
                 <Text style={styles.planCtaProText}>{'Start Learning Now'}</Text>
               </ScaleButton>
               <Text style={styles.planSmall}>{'The theory test costs £23. ClearPass pays for itself.'}</Text>
