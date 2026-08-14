@@ -57,16 +57,16 @@ video { width: 100%; height: 100%; object-fit: cover; display: block; }
 <video id="v" src="${url}" autoplay playsinline muted></video>
 <script>
 var v = document.getElementById('v');
-var lastSecond = -1;
+// Sample real playback position on a fixed 50ms cadence instead of relying on
+// the DOM 'timeupdate' event, whose firing rate the browser controls (not
+// bounded below ~250ms in practice) — bounds worst-case staleness of the
+// currentTime the RN side scores against to ~50ms, down from up to ~1s.
+var tick = setInterval(function() {
+  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'timeupdate', currentTime: v.currentTime }));
+}, 50);
 v.addEventListener('ended', function() {
+  clearInterval(tick);
   window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ended' }));
-});
-v.addEventListener('timeupdate', function() {
-  var sec = Math.floor(v.currentTime);
-  if (sec !== lastSecond) {
-    lastSecond = sec;
-    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'timeupdate', currentTime: v.currentTime }));
-  }
 });
 v.play().catch(function() {});
 </script>
