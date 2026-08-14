@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { DVSA_HAZARD_PASS_RATIO, HazardClipResult, HazardSessionResult, HazardWindow, UserProgress, calculateHazardTotal, scoreClip } from '@clearpass/core';
+import { DVSA_HAZARD_PASS_RATIO, HazardClip, HazardClipResult, HazardSessionResult, HazardWindow, UserProgress, calculateHazardTotal, scoreClip } from '@clearpass/core';
 import { hazardClips } from '@clearpass/content';
 import { loadUserProgress, saveUserProgress } from '@/src/storage';
 import { getHazardVideoList, getVideoUrl, buildHazardClip, type HazardClipMeta } from '@/src/hazardVideos';
@@ -24,6 +24,7 @@ import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { ShareCardModal } from '@/src/components/ShareableCard';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { Pip } from '@/src/components/Pip';
+import { HazardTimeline } from '@/src/components/HazardTimeline';
 import { PaywallPrompt } from '@/src/components/PaywallPrompt';
 import { usePipVisibility } from '@/src/PipVisibilityContext';
 
@@ -114,6 +115,71 @@ function WebVideoPlayer({ youtubeId, durationSec, onEnded, onTimeUpdate }: WebVi
       pointerEvents: 'none',
     } as any,
   });
+}
+
+/**
+ * Shared detail view for a single clip's result — used both by the live
+ * clip-result phase right after a clip ends, and by the end-of-session
+ * "revisit" modal, so both render identically (including the timeline and
+ * the unscorable-clip state) from a single source rather than two UIs that
+ * could drift apart.
+ */
+function ClipResultDetail({ clip, result }: { clip: HazardClip; result: HazardClipResult }) {
+  const theme = useTheme();
+
+  if (!result.scorable) {
+    return (
+      <View style={styles.resultCard}>
+        <Text style={styles.resultScoreLabel}>{"This clip couldn't be scored"}</Text>
+        <Text style={[styles.bodyText, { color: theme.subTextColor, textAlign: 'center' }]}>
+          {"This clip is missing scoring data, so it won't count toward your total. Your other clips aren't affected."}
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <>
+      <View style={styles.resultCard}>
+        <Text style={styles.resultScore}>
+          {result.score}
+          {' / '}
+          {result.maxScore}
+        </Text>
+        <Text style={styles.resultScoreLabel}>{'Score for this clip'}</Text>
+        {clip.hazards.map((hazard, i) => {
+          const hazardResult = result.hazards[i];
+          return (
+            <View key={i} style={styles.hazardBlock}>
+              <View style={styles.hazardRow}>
+                <Text style={styles.hazardLabel}>
+                  {hazardResult.zeroed
+                    ? 'Hazard ' + String(i + 1) + ': zeroed (too many taps this clip)'
+                    : hazardResult.points > 0
+                      ? 'Hazard ' + String(i + 1) + ': ' + String(hazardResult.points) + ' pts'
+                      : 'Hazard ' + String(i + 1) + ': missed'}
+                </Text>
+                <View style={styles.dots}>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <View
+                      key={n}
+                      style={[styles.dot, n <= hazardResult.points ? styles.dotFilled : styles.dotEmpty]}
+                    />
+                  ))}
+                </View>
+              </View>
+              <HazardTimeline hazard={hazard} clicks={result.clicks} result={hazardResult} />
+            </View>
+          );
+        })}
+      </View>
+
+      <Text style={[styles.bodyText, { color: theme.subTextColor }]}>
+        {result.countedTaps}
+        {' tap(s) recorded'}
+      </Text>
+    </>
+  );
 }
 
 export default function HazardScreen() {
@@ -660,7 +726,10 @@ export default function HazardScreen() {
     const result = clipResults[clipResults.length - 1];
     const isLast = clipIndex + 1 === hazardClips.length;
     return (
-      <View style={[styles.bg, styles.centerFill, { backgroundColor: theme.backgroundColor }]}>
+      <ScrollView
+        style={[styles.bg, { backgroundColor: theme.backgroundColor }]}
+        contentContainerStyle={styles.scrollContent}
+      >
         <Text style={styles.clipCounter}>
           {'Clip '}
           {clipIndex + 1}
@@ -669,52 +738,7 @@ export default function HazardScreen() {
         </Text>
         <Text style={[styles.heading, { fontSize: theme.fontSize(26), fontFamily: theme.fontFamily, color: theme.textColor }]}>{clip.title}</Text>
 
-        {result.scorable ? (
-          <>
-            <View style={styles.resultCard}>
-              <Text style={styles.resultScore}>
-                {result.score}
-                {' / '}
-                {result.maxScore}
-              </Text>
-              <Text style={styles.resultScoreLabel}>{'Score for this clip'}</Text>
-              {clip.hazards.map((_: HazardWindow, i: number) => (
-                <View key={i} style={styles.hazardRow}>
-                  <Text style={styles.hazardLabel}>
-                    {result.score > 0
-                      ? 'Hazard ' + String(i + 1) + ': ' + String(result.score) + ' pts'
-                      : 'Hazard ' + String(i + 1) + ': missed'}
-                  </Text>
-                  <View style={styles.dots}>
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <View
-                        key={n}
-                        style={[styles.dot, n <= result.score ? styles.dotFilled : styles.dotEmpty]}
-                      />
-                    ))}
-                  </View>
-                </View>
-              ))}
-            </View>
-
-            <Text style={[styles.bodyText, { color: theme.subTextColor }]}>
-              {result.countedTaps}
-              {' tap(s) recorded'}
-            </Text>
-          </>
-        ) : (
-          // Fails closed: this clip is missing scoring data (no bands authored),
-          // so we don't know a real score for it — showing 0/0 would read as a
-          // failed attempt rather than a content gap. It's excluded from the
-          // session total (calculateHazardTotal sums 0/0), not just displayed
-          // as zero.
-          <View style={styles.resultCard}>
-            <Text style={styles.resultScoreLabel}>{"This clip couldn't be scored"}</Text>
-            <Text style={[styles.bodyText, { color: theme.subTextColor, textAlign: 'center' }]}>
-              {"This clip is missing scoring data, so it won't count toward your total. Your other clips aren't affected."}
-            </Text>
-          </View>
-        )}
+        <ClipResultDetail clip={clip} result={result} />
 
         {supabaseClips[clipIndex]?.has_solution_clip && (
           <TouchableOpacity style={styles.secondaryBtn} onPress={handleWatchSolution} activeOpacity={0.85}>
@@ -725,7 +749,7 @@ export default function HazardScreen() {
         <TouchableOpacity style={styles.primaryBtn} onPress={handleNextClip} activeOpacity={0.85}>
           <Text style={styles.primaryBtnText}>{isLast ? 'See Results' : 'Next Clip'}</Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     );
   }
 
@@ -1050,6 +1074,10 @@ const styles = StyleSheet.create({
   },
   resultScore: { fontSize: 52, fontWeight: '900', color: '#111827' },
   resultScoreLabel: { fontSize: 14, color: '#6B7280' },
+  hazardBlock: {
+    width: '100%' as any,
+    gap: 6,
+  },
   hazardRow: {
     width: '100%' as any,
     flexDirection: 'row',
