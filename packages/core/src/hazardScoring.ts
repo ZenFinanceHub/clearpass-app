@@ -27,13 +27,19 @@ function detectAntiCheat(clicks: number[]): boolean {
 function scoreWindow(clicks: number[], window: HazardWindow): number {
   const windowClicks = clicks.filter((t) => isInWindow(t, window));
   if (windowClicks.length === 0) return 0;
-  // DVSA rule: repeated/multiple taps against the same developing hazard score zero for that hazard.
-  if (windowClicks.length > 1) return 0;
+
+  // The EARLIEST qualifying tap scores. A learner may legitimately tap once
+  // on spotting a hazard and again as it develops — a later, additional tap
+  // in the same window no longer zeroes the hazard; only the clip-wide
+  // excessive-clicking rule (detectAntiCheat, in scoreClip) still zeroes for
+  // spam-tapping. `windowClicks` preserves the original clicks[] order, not
+  // necessarily chronological order, so take the minimum explicitly.
+  const earliest = Math.min(...windowClicks);
 
   // A tap that landed in the tolerance zone just before the window's nominal start
   // is treated as if it landed exactly on the opening edge — absorbed as on-time
   // jitter, not scored as "early" against the bands/thirds below.
-  const first = Math.max(windowClicks[0], window.startSec);
+  const first = Math.max(earliest, window.startSec);
 
   if (window.bands && window.bands.length > 0) {
     // DVSA explicit bands: find which band contains the first qualifying click.
