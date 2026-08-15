@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const { computeProExpiresAt } = require('./lib/proExpiry');
 const { deriveConnectStatus } = require('./lib/connectStatus');
+const { shouldApplyProGrant, isEligibleForProExpiry } = require('./lib/entitlement');
 const { INSTRUCTOR_PAYOUT_STRIPE_MINOR } = require('../src/constants/earnings');
 
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -105,6 +106,28 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
+  const supabaseAdmin = getSupabaseAdmin();
+
+  // Dedup on Stripe's event id before doing anything else, so a retried
+  // delivery (Stripe retries on any non-2xx, and can also just double-send)
+  // can't re-grant Pro or re-insert a commission row. Insert-then-check-
+  // conflict is atomic against two near-simultaneous retries; a unique
+  // constraint on event_id is the source of truth, not an in-memory check.
+  // On any error OTHER than "already recorded", fail closed (500) so Stripe
+  // retries later rather than risk processing without dedup protection.
+  const { error: dedupError } = await supabaseAdmin
+    .from('stripe_webhook_events')
+    .insert({ event_id: event.id, event_type: event.type });
+
+  if (dedupError) {
+    if (dedupError.code === '23505') {
+      console.log('[webhook] duplicate event, skipping:', event.id);
+      return res.json({ received: true, duplicate: true });
+    }
+    console.error('[webhook] dedup insert error:', dedupError);
+    return res.status(500).json({ error: 'Webhook dedup failed' });
+  }
+
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     const userId = session.metadata?.userId;
@@ -116,19 +139,18 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
     }
 
     try {
-      const supabaseAdmin = getSupabaseAdmin();
-
       const { data: existing } = await supabaseAdmin
         .from('user_progress')
         .select('progress')
         .eq('id', userId)
         .single();
 
-      const updatedProgress = {
-        ...(existing?.progress || {}),
-        isPro: true,
-        proExpiresAt: computeProExpiresAt(),
-      };
+      const updatedProgress = { ...(existing?.progress || {}) };
+      if (shouldApplyProGrant(updatedProgress.proSource, 'stripe')) {
+        updatedProgress.isPro = true;
+        updatedProgress.proExpiresAt = computeProExpiresAt();
+        updatedProgress.proSource = 'stripe';
+      }
 
       const { error } = await supabaseAdmin
         .from('user_progress')
@@ -146,23 +168,28 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
           .single();
 
         if (userProfile?.referred_by) {
-          const { data: instructor } = await supabaseAdmin
+          const { data: referrer } = await supabaseAdmin
             .from('profiles')
-            .select('id')
+            .select('id, account_type')
             .eq('referral_code', userProfile.referred_by)
             .single();
 
-          if (instructor) {
+          // Only a real instructor account earns commission — referral_code
+          // is a column any profile can carry (e.g. a learner's "invite a
+          // friend" code shares the same column), and previously this
+          // matched on referral_code alone with no account_type check, so
+          // any matching profile got credited regardless of role.
+          if (referrer && referrer.account_type === 'instructor') {
             // This webhook only fires for Stripe Checkout purchases (every platform
             // currently routes through Stripe — see paywall.tsx), so the Stripe-fee
             // net applies here, not the App Store/Google Play commission rate.
             await supabaseAdmin.from('instructor_earnings').insert({
-              instructor_id: instructor.id,
+              instructor_id: referrer.id,
               learner_id: userId,
               amount: INSTRUCTOR_PAYOUT_STRIPE_MINOR / 100,
               status: 'pending',
             });
-            console.log('[webhook] Referral commission recorded for instructor:', instructor.id);
+            console.log('[webhook] Referral commission recorded for instructor:', referrer.id);
           }
         }
       } catch (e) {
@@ -996,14 +1023,23 @@ app.post('/api/cron/expire-pro', async (req, res) => {
       .select('id, progress');
     if (error) throw error;
 
-    const toExpire = (rows || []).filter(row => {
-      const p = row.progress || {};
-      return p.isPro === true && p.proExpiresAt && p.proExpiresAt < now;
-    });
+    // isEligibleForProExpiry excludes proSource: 'instructor' rows (granted
+    // by /api/cron/grant-instructor-pro below, unconditional for as long as
+    // the account is an instructor) and proSource: 'comp' rows (manually
+    // granted, e.g. reviewers/partners/beta testers — never expires on its
+    // own, no automated process re-grants it).
+    const toExpire = (rows || []).filter(row => isEligibleForProExpiry(row.progress || {}, now));
 
     let expired = 0;
     for (const row of toExpire) {
-      const updatedProgress = { ...row.progress, isPro: false, proExpiresAt: null };
+      // Clear proSource along with isPro/proExpiresAt — it must always
+      // describe the *current* active grant, not history. Leaving a stale
+      // proSource: 'stripe' behind here would permanently block
+      // /api/cron/grant-instructor-pro from ever granting this user the
+      // instructor exemption later (shouldApplyProGrant treats 'stripe' as
+      // higher priority than 'instructor'), even after their paid period is
+      // long gone.
+      const updatedProgress = { ...row.progress, isPro: false, proExpiresAt: null, proSource: null };
       const { error: updateError } = await supabaseAdmin
         .from('user_progress')
         .update({ progress: updatedProgress, updated_at: new Date().toISOString() })
@@ -1017,6 +1053,77 @@ app.post('/api/cron/expire-pro', async (req, res) => {
   } catch (err) {
     console.error('[expire-pro] error:', err);
     res.status(500).json({ error: 'Expire pro failed', detail: String(err) });
+  }
+});
+
+// ── Cron: grant instructor Pro ────────────────────────────────────────────
+// POST /api/cron/grant-instructor-pro
+// Idempotent reconciliation: every profile with account_type = 'instructor'
+// gets unconditional, non-expiring Pro-level access tagged proSource:
+// 'instructor'. Never overwrites an existing 'stripe' or 'comp' grant (see
+// shouldApplyProGrant in lib/entitlement.js) — an instructor who separately
+// paid keeps their own paid entitlement and its own expiry until it lapses,
+// at which point expire-pro clears proSource and this cron picks them up on
+// its next run; an instructor who was manually comp'd keeps that grant
+// indefinitely, since comp is a deliberate one-off decision this automated
+// cron should never silently override.
+// Schedule: daily at 02:00 Europe/London (after expire-pro).
+
+app.post('/api/cron/grant-instructor-pro', async (req, res) => {
+  if (!requireCronAuth(req, res)) return;
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+
+    const { data: instructors, error: instructorsErr } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('account_type', 'instructor');
+    if (instructorsErr) throw instructorsErr;
+
+    const instructorIds = (instructors || []).map(i => i.id);
+    if (instructorIds.length === 0) {
+      return res.json({ granted: 0, skipped: 0 });
+    }
+
+    const { data: rows, error: progressErr } = await supabaseAdmin
+      .from('user_progress')
+      .select('id, progress')
+      .in('id', instructorIds);
+    if (progressErr) throw progressErr;
+
+    const progressById = Object.fromEntries((rows || []).map(r => [r.id, r.progress || {}]));
+
+    let granted = 0;
+    let skipped = 0;
+    for (const id of instructorIds) {
+      const currentProgress = progressById[id] || {};
+      const alreadyGranted =
+        currentProgress.isPro === true &&
+        currentProgress.proSource === 'instructor' &&
+        currentProgress.proExpiresAt === null;
+      if (alreadyGranted) continue;
+
+      if (!shouldApplyProGrant(currentProgress.proSource, 'instructor')) {
+        skipped++;
+        continue;
+      }
+
+      const updatedProgress = { ...currentProgress, isPro: true, proExpiresAt: null, proSource: 'instructor' };
+      const { error: updateError } = await supabaseAdmin
+        .from('user_progress')
+        .upsert({ id, progress: updatedProgress, updated_at: new Date().toISOString() });
+      if (updateError) {
+        console.error('[grant-instructor-pro] update error for', id, updateError.message);
+        continue;
+      }
+      granted++;
+    }
+
+    console.log(`[grant-instructor-pro] granted ${granted}, skipped ${skipped} (blocked by an existing stripe grant)`);
+    res.json({ granted, skipped });
+  } catch (err) {
+    console.error('[grant-instructor-pro] error:', err);
+    res.status(500).json({ error: 'Grant instructor pro failed', detail: String(err) });
   }
 });
 
