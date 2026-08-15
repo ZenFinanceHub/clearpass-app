@@ -61,42 +61,53 @@ export default function PurchaseSuccessPage() {
 
   if (auth.status !== "instructor") {
     return (
-      <main>
+      <main className="centered-shell">
         <p className="muted">Loading…</p>
       </main>
     );
   }
 
   return (
-    <main>
-      <h1>Payment received</h1>
-      {seat ? (
-        <>
-          <p>Send this link to your learner. It works once.</p>
-          <p
-            style={{
-              wordBreak: "break-all",
-              background: "#fff",
-              border: "1px solid var(--border)",
-              padding: "0.75rem",
-              borderRadius: 4,
-            }}
-          >
-            {seatInviteLink(seat.invite_token)}
+    <div className="page-shell">
+      <header className="app-header">
+        <div className="wordmark">
+          <span className="wordmark-brand">ClearPass</span>
+          <span className="wordmark-context">Instructors</span>
+        </div>
+      </header>
+
+      <main className="centered-shell" style={{ minHeight: "auto", padding: "2rem 0" }}>
+        <div className="card" style={{ textAlign: "center" }}>
+          <h1 style={{ marginBottom: "0.75rem" }}>Payment received</h1>
+
+          {seat ? (
+            <>
+              <p className="muted" style={{ marginBottom: 0 }}>
+                Send this link to your learner. It works once.
+              </p>
+              <div className="invite-link-box">{seatInviteLink(seat.invite_token)}</div>
+              <button className={`btn btn-secondary btn-block${copied ? " is-copied" : ""}`} onClick={() => void handleCopy()}>
+                {copied ? "Copied ✓" : "Copy invite link"}
+              </button>
+            </>
+          ) : attempts >= MAX_ATTEMPTS ? (
+            <>
+              <p className="muted">Your payment went through, but the seat hasn&apos;t appeared yet. This can take a minute.</p>
+              <button className="btn btn-secondary btn-block" onClick={() => setAttempts(0)}>
+                Check again
+              </button>
+            </>
+          ) : (
+            <p className="muted">Confirming your purchase…</p>
+          )}
+
+          <p style={{ marginTop: "1.5rem", marginBottom: 0 }}>
+            <Link href="/dashboard" style={{ color: "var(--indigo)", fontWeight: 600, fontSize: "0.9rem" }}>
+              Back to your seats
+            </Link>
           </p>
-          <button onClick={() => void handleCopy()}>{copied ? "Copied!" : "Copy invite link"}</button>
-        </>
-      ) : attempts >= MAX_ATTEMPTS ? (
-        <>
-          <p>Your payment went through, but the seat hasn&apos;t appeared yet. This can take a minute.</p>
-          <button onClick={() => setAttempts(0)}>Check again</button>
-        </>
-      ) : (
-        <p className="muted">Confirming your purchase…</p>
-      )}
-      <p>
-        <Link href="/dashboard">Back to your seats</Link>
-      </p>
-    </main>
+        </div>
+      </main>
+    </div>
   );
 }

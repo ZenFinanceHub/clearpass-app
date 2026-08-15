@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -46,46 +47,67 @@ export default function LoginPage() {
 
   if (checkingSession) {
     return (
-      <main>
+      <main className="centered-shell">
         <p className="muted">Loading…</p>
       </main>
     );
   }
 
   return (
-    <main>
-      <h1>Instructor sign in</h1>
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.75rem", maxWidth: 320 }}>
-        <label>
-          Email
-          <br />
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-            style={{ width: "100%", padding: "0.5rem" }}
-          />
-        </label>
-        <label>
-          Password
-          <br />
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            autoComplete="current-password"
-            style={{ width: "100%", padding: "0.5rem" }}
-          />
-        </label>
-        {error && <p className="error">{error}</p>}
-        <button type="submit" disabled={submitting}>
-          {submitting ? "Signing in…" : "Sign in"}
-        </button>
-      </form>
-      <p className="muted">Use the same email and password as your ClearPass mobile app account.</p>
+    <main className="centered-shell">
+      <div className="card">
+        <div className="card-header">
+          <Image src="/pip-neutral.png" alt="" width={76} height={76} className="mascot" priority />
+          <div>
+            <div className="wordmark" style={{ justifyContent: "center" }}>
+              <span className="wordmark-brand">ClearPass</span>
+              <span className="wordmark-context">Instructors</span>
+            </div>
+            <h1 style={{ marginTop: "0.6rem", fontWeight: 600, fontSize: "1rem", color: "var(--text-dark)" }}>
+              Sign in to manage learner seats
+            </h1>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div className="field">
+            <label htmlFor="email">Email</label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="password">Password</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+            />
+          </div>
+
+          {error && (
+            <div className="error-banner" role="alert">
+              <span>{error}</span>
+            </div>
+          )}
+
+          <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
+            {submitting ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
+
+        <p className="muted" style={{ marginTop: "1.25rem", marginBottom: 0, textAlign: "center" }}>
+          Use the same email and password as your ClearPass mobile app account.
+        </p>
+      </div>
     </main>
   );
 }
