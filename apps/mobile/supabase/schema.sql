@@ -266,3 +266,35 @@ CREATE TABLE IF NOT EXISTS stripe_webhook_events (
 
 ALTER TABLE stripe_webhook_events ENABLE ROW LEVEL SECURITY;
 -- No policies: no client-side access of any kind, service role only.
+
+-- Instructor-purchased seats for the learner-Pro-gifting flow (instructor-
+-- paid seats phase 2). Minted unredeemed by the Stripe webhook on purchase
+-- (POST /api/instructor/seats/purchase); redeemed exactly once by a
+-- learner via POST /api/seats/redeem. redeemed_at IS NULL is the
+-- unredeemed state — no separate status column, so there's nothing to
+-- drift out of sync with it. Unredeemed seats do not expire: "no refunds"
+-- means letting one lapse would be a worse outcome for the instructor than
+-- a refund, not a better one.
+CREATE TABLE IF NOT EXISTS instructor_seats (
+  id                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  instructor_id               UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  stripe_checkout_session_id  TEXT UNIQUE NOT NULL,
+  invite_token                TEXT UNIQUE NOT NULL,
+  redeemed_by                 UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  redeemed_at                 TIMESTAMP WITH TIME ZONE,
+  pro_expires_at              TIMESTAMP WITH TIME ZONE,
+  created_at                  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS instructor_seats_instructor_id_idx ON instructor_seats(instructor_id);
+
+ALTER TABLE instructor_seats ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Instructors can view own seats" ON instructor_seats
+  FOR SELECT USING (auth.uid() = instructor_id);
+-- No INSERT/UPDATE/DELETE policy, and — deliberately — no policy at all
+-- granting a learner read access, not even to their own redeemed seat.
+-- Every write (minting, redemption) happens server-side via the service
+-- role key. Redemption is looked up by exact invite_token through
+-- POST /api/seats/redeem, never through a learner's own Supabase session,
+-- so there is no RLS surface for a learner to enumerate against.
