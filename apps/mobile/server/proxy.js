@@ -13,10 +13,9 @@ const {
 const { INSTRUCTOR_PAYOUT_STRIPE_MINOR } = require('./lib/earnings');
 const {
   generateSeatToken,
-  computeSeatExpiresAt,
   isSeatPurchaseSession,
   resolveSeatGrant,
-  resolveRedeemOutcome,
+  resolveSeatLookupOutcome,
 } = require('./lib/seats');
 
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -422,13 +421,24 @@ app.post('/api/instructor/seats/purchase', async (req, res) => {
 // ─── Seat redemption ────────────────────────────────────────────────────────
 // POST /api/seats/redeem
 // Authenticated as the redeeming learner (any account_type — not
-// instructor-gated). Atomic claim via a single conditional UPDATE, same
-// pattern the phase-1 payout-request endpoint already relies on for
-// claiming instructor_earnings rows: two simultaneous requests for the
-// same token can only result in one row actually flipping from
-// redeemed_at IS NULL, because Postgres re-evaluates the WHERE clause
-// against the current committed row at lock time — the loser's UPDATE
-// matches zero rows, not a partial/racy write.
+// instructor-gated).
+//
+// The entitlement decision happens BEFORE any write, not after: a learner
+// with permanent (comp/instructor) Pro must not consume the seat at all —
+// redeeming it would burn the instructor's £5.99 for nothing, which is
+// exactly the outcome resolveSeatGrant's 'skip' action exists to prevent.
+// Only once the decision is "grant" do we attempt the atomic claim.
+//
+// The claim itself is a single conditional UPDATE, same pattern the
+// phase-1 payout-request endpoint already relies on for claiming
+// instructor_earnings rows: two simultaneous requests for the same token
+// can only result in one row actually flipping from redeemed_at IS NULL,
+// because Postgres re-evaluates the WHERE clause against the current
+// committed row at lock time — the loser's UPDATE matches zero rows, not a
+// partial/racy write. resolveSeatLookupOutcome handles both the initial
+// "is this token even redeemable" check and the re-check if that claim
+// loses a race, so the same already-redeemed/idempotent-retry rules apply
+// either way.
 
 app.post('/api/seats/redeem', async (req, res) => {
   const auth = await verifyAuth(req, res);
@@ -441,53 +451,60 @@ app.post('/api/seats/redeem', async (req, res) => {
   }
 
   try {
-    const proExpiresAt = computeSeatExpiresAt();
+    const { data: seat, error: seatErr } = await supabaseAdmin
+      .from('instructor_seats')
+      .select('id, redeemed_by, redeemed_at, pro_expires_at')
+      .eq('invite_token', token)
+      .maybeSingle();
+    if (seatErr) throw seatErr;
+
+    const initialOutcome = resolveSeatLookupOutcome(seat, userId);
+    if (initialOutcome) {
+      return res.status(initialOutcome.httpStatus).json(initialOutcome.body);
+    }
+
+    const { data: existingProgress, error: progressErr } = await supabaseAdmin
+      .from('user_progress')
+      .select('progress')
+      .eq('id', userId)
+      .maybeSingle();
+    if (progressErr) throw progressErr;
+
+    const decision = resolveSeatGrant(existingProgress?.progress || {}, new Date().toISOString());
+
+    if (decision.action === 'skip') {
+      console.log('[seats/redeem] skipped — learner already has permanent Pro:', userId);
+      return res.json({ redeemed: false, seatStillValid: true, reason: 'already_has_pro' });
+    }
 
     const { data: claimed, error: claimError } = await supabaseAdmin
       .from('instructor_seats')
-      .update({ redeemed_by: userId, redeemed_at: new Date().toISOString(), pro_expires_at: proExpiresAt })
-      .eq('invite_token', token)
+      .update({ redeemed_by: userId, redeemed_at: new Date().toISOString(), pro_expires_at: decision.proExpiresAt })
+      .eq('id', seat.id)
       .is('redeemed_at', null)
-      .select('id, instructor_id')
+      .select('id')
       .maybeSingle();
     if (claimError) throw claimError;
 
-    let granted = false;
-
-    if (claimed) {
-      const { data: existingProgress, error: progressErr } = await supabaseAdmin
-        .from('user_progress')
-        .select('progress')
-        .eq('id', userId)
-        .maybeSingle();
-      if (progressErr) throw progressErr;
-
-      const { granted: didGrant, updatedProgress } = resolveSeatGrant(existingProgress?.progress || {}, proExpiresAt);
-      granted = didGrant;
-
-      if (didGrant) {
-        const { error: updateErr } = await supabaseAdmin
-          .from('user_progress')
-          .upsert({ id: userId, progress: updatedProgress, updated_at: new Date().toISOString() });
-        if (updateErr) throw updateErr;
-      }
-
-      console.log('[seats/redeem] redeemed seat', claimed.id, 'for', userId, 'granted:', granted);
-    }
-
-    let existing = null;
     if (!claimed) {
-      const { data, error: existingErr } = await supabaseAdmin
+      // Someone else claimed it between our read above and this attempt.
+      const { data: nowSeat, error: recheckErr } = await supabaseAdmin
         .from('instructor_seats')
         .select('redeemed_by, redeemed_at, pro_expires_at')
-        .eq('invite_token', token)
+        .eq('id', seat.id)
         .maybeSingle();
-      if (existingErr) throw existingErr;
-      existing = data;
+      if (recheckErr) throw recheckErr;
+      const raceOutcome = resolveSeatLookupOutcome(nowSeat, userId);
+      return res.status(raceOutcome.httpStatus).json(raceOutcome.body);
     }
 
-    const outcome = resolveRedeemOutcome({ claimed, existing, userId, granted, proExpiresAt });
-    res.status(outcome.httpStatus).json(outcome.body);
+    const { error: updateErr } = await supabaseAdmin
+      .from('user_progress')
+      .upsert({ id: userId, progress: decision.updatedProgress, updated_at: new Date().toISOString() });
+    if (updateErr) throw updateErr;
+
+    console.log('[seats/redeem] redeemed seat', claimed.id, 'for', userId, 'extended:', decision.extended);
+    res.json({ redeemed: true, granted: true, extended: decision.extended, proExpiresAt: decision.proExpiresAt });
   } catch (err) {
     console.error('[seats/redeem] error:', err);
     res.status(500).json({ error: 'redeem_failed', detail: String(err.message || err) });

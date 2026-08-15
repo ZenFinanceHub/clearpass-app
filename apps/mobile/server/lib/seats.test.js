@@ -5,9 +5,12 @@ const {
   generateSeatToken,
   computeSeatExpiresAt,
   isSeatPurchaseSession,
+  classifyExistingPro,
   resolveSeatGrant,
-  resolveRedeemOutcome,
+  resolveSeatLookupOutcome,
 } = require('./seats');
+
+const NOW = '2026-08-15T00:00:00.000Z';
 
 test('SEAT_DURATION_DAYS is 90', () => {
   assert.equal(SEAT_DURATION_DAYS, 90);
@@ -43,73 +46,114 @@ test('isSeatPurchaseSession is true only when metadata.type is exactly "seat"', 
   assert.equal(isSeatPurchaseSession({}), false);
 });
 
-test('resolveSeatGrant grants Pro when the learner has no current proSource', () => {
-  const result = resolveSeatGrant({ xp: 10 }, '2027-01-01T00:00:00.000Z');
-  assert.equal(result.granted, true);
-  assert.deepEqual(result.updatedProgress, {
-    xp: 10,
-    isPro: true,
-    proExpiresAt: '2027-01-01T00:00:00.000Z',
-    proSource: 'seat',
-  });
+// ─── classifyExistingPro ────────────────────────────────────────────────────
+
+test('classifyExistingPro: no Pro at all is "none"', () => {
+  assert.equal(classifyExistingPro({}, NOW), 'none');
+  assert.equal(classifyExistingPro({ isPro: false }, NOW), 'none');
 });
 
-test('resolveSeatGrant does not grant when the learner already has a stripe grant', () => {
-  const current = { isPro: true, proExpiresAt: '2026-09-01T00:00:00.000Z', proSource: 'stripe' };
-  const result = resolveSeatGrant(current, '2027-01-01T00:00:00.000Z');
-  assert.equal(result.granted, false);
-  assert.deepEqual(result.updatedProgress, current, 'progress must be left completely untouched');
+test('classifyExistingPro: comp and instructor are "permanent" regardless of proExpiresAt', () => {
+  assert.equal(classifyExistingPro({ isPro: true, proSource: 'comp', proExpiresAt: null }, NOW), 'permanent');
+  assert.equal(classifyExistingPro({ isPro: true, proSource: 'instructor', proExpiresAt: null }, NOW), 'permanent');
+  // Even a past date doesn't matter for these — they're exempt from expiry.
+  assert.equal(classifyExistingPro({ isPro: true, proSource: 'comp', proExpiresAt: '2020-01-01T00:00:00.000Z' }, NOW), 'permanent');
 });
 
-test('resolveSeatGrant does not grant when the learner already has a comp grant', () => {
-  const current = { isPro: true, proExpiresAt: null, proSource: 'comp' };
-  const result = resolveSeatGrant(current, '2027-01-01T00:00:00.000Z');
-  assert.equal(result.granted, false);
+test('classifyExistingPro: stripe/seat with a future proExpiresAt is "active"', () => {
+  assert.equal(classifyExistingPro({ isPro: true, proSource: 'stripe', proExpiresAt: '2026-09-01T00:00:00.000Z' }, NOW), 'active');
+  assert.equal(classifyExistingPro({ isPro: true, proSource: 'seat', proExpiresAt: '2026-09-01T00:00:00.000Z' }, NOW), 'active');
 });
 
-test('resolveSeatGrant does not grant when the learner already has an instructor grant', () => {
+test('classifyExistingPro: stale case — isPro true, stripe/seat sourced, proExpiresAt already in the past is "none"', () => {
+  const stale = { isPro: true, proSource: 'stripe', proExpiresAt: '2026-08-01T00:00:00.000Z' };
+  assert.equal(classifyExistingPro(stale, NOW), 'none');
+  const staleSeat = { isPro: true, proSource: 'seat', proExpiresAt: '2026-08-01T00:00:00.000Z' };
+  assert.equal(classifyExistingPro(staleSeat, NOW), 'none');
+});
+
+test('classifyExistingPro: stripe/seat with no proExpiresAt at all is "none", not "active"', () => {
+  assert.equal(classifyExistingPro({ isPro: true, proSource: 'stripe', proExpiresAt: null }, NOW), 'none');
+});
+
+// ─── resolveSeatGrant — the three branches + the stale-expiry case ─────────
+
+test('branch 1 — permanent (comp): does not redeem, seat stays valid', () => {
+  const current = { isPro: true, proExpiresAt: null, proSource: 'comp', xp: 5 };
+  const result = resolveSeatGrant(current, NOW);
+  assert.equal(result.action, 'skip');
+  assert.equal(result.updatedProgress, null);
+});
+
+test('branch 1 — permanent (instructor): does not redeem, seat stays valid', () => {
   const current = { isPro: true, proExpiresAt: null, proSource: 'instructor' };
-  const result = resolveSeatGrant(current, '2027-01-01T00:00:00.000Z');
-  assert.equal(result.granted, false);
+  const result = resolveSeatGrant(current, NOW);
+  assert.equal(result.action, 'skip');
+  assert.equal(result.updatedProgress, null);
 });
 
-test('resolveRedeemOutcome: fresh redemption (row was claimed)', () => {
-  const outcome = resolveRedeemOutcome({
-    claimed: { id: 'seat1', instructor_id: 'inst1' },
-    existing: null,
-    userId: 'learner1',
-    granted: true,
-    proExpiresAt: '2027-01-01T00:00:00.000Z',
-  });
-  assert.equal(outcome.httpStatus, 200);
-  assert.equal(outcome.body.redeemed, true);
-  assert.equal(outcome.body.granted, true);
+test('branch 2 — active stripe: redeems and EXTENDS from the current expiry, not from now', () => {
+  const current = { isPro: true, proExpiresAt: '2026-09-01T00:00:00.000Z', proSource: 'stripe', xp: 5 };
+  const result = resolveSeatGrant(current, NOW);
+  assert.equal(result.action, 'grant');
+  assert.equal(result.extended, true);
+  // 90 days from the EXISTING expiry (2026-09-01), not from NOW (2026-08-15).
+  assert.equal(result.proExpiresAt, '2026-11-30T00:00:00.000Z');
+  assert.deepEqual(result.updatedProgress, { xp: 5, isPro: true, proExpiresAt: '2026-11-30T00:00:00.000Z', proSource: 'seat' });
 });
 
-test('resolveRedeemOutcome: idempotent retry by the same user who already redeemed it', () => {
-  const outcome = resolveRedeemOutcome({
-    claimed: null,
-    existing: { redeemed_by: 'learner1', redeemed_at: '2026-08-01T00:00:00.000Z', pro_expires_at: '2026-10-30T00:00:00.000Z' },
-    userId: 'learner1',
-  });
+test('branch 2 — active earlier seat: redeems and extends from the current expiry', () => {
+  const current = { isPro: true, proExpiresAt: '2026-09-01T00:00:00.000Z', proSource: 'seat' };
+  const result = resolveSeatGrant(current, NOW);
+  assert.equal(result.action, 'grant');
+  assert.equal(result.extended, true);
+  assert.equal(result.proExpiresAt, '2026-11-30T00:00:00.000Z');
+});
+
+test('branch 3 — no Pro: grants fresh 90 days from now', () => {
+  const current = { xp: 10 };
+  const result = resolveSeatGrant(current, NOW);
+  assert.equal(result.action, 'grant');
+  assert.equal(result.extended, false);
+  assert.equal(result.proExpiresAt, '2026-11-13T00:00:00.000Z');
+  assert.deepEqual(result.updatedProgress, { xp: 10, isPro: true, proExpiresAt: '2026-11-13T00:00:00.000Z', proSource: 'seat' });
+});
+
+test('stale-expiry case: isPro true but proExpiresAt already past — treated as no Pro, fresh grant from now, NOT extended from the stale date', () => {
+  const current = { isPro: true, proExpiresAt: '2026-08-01T00:00:00.000Z', proSource: 'stripe' };
+  const result = resolveSeatGrant(current, NOW);
+  assert.equal(result.action, 'grant');
+  assert.equal(result.extended, false, 'must not be treated as an extension of the stale date');
+  // Fresh 90 days from NOW, not 90 days from the stale 2026-08-01 date
+  // (which would produce an earlier, worse-value expiry).
+  assert.equal(result.proExpiresAt, '2026-11-13T00:00:00.000Z');
+});
+
+// ─── resolveSeatLookupOutcome ───────────────────────────────────────────────
+
+test('resolveSeatLookupOutcome: token does not exist at all', () => {
+  const outcome = resolveSeatLookupOutcome(null, 'learner1');
+  assert.equal(outcome.httpStatus, 404);
+  assert.equal(outcome.body.error, 'invalid_token');
+});
+
+test('resolveSeatLookupOutcome: unredeemed seat returns null (caller proceeds)', () => {
+  const outcome = resolveSeatLookupOutcome({ id: 'seat1', redeemed_at: null, redeemed_by: null }, 'learner1');
+  assert.equal(outcome, null);
+});
+
+test('resolveSeatLookupOutcome: idempotent retry by the same user who already redeemed it', () => {
+  const seat = { redeemed_by: 'learner1', redeemed_at: '2026-08-01T00:00:00.000Z', pro_expires_at: '2026-10-30T00:00:00.000Z' };
+  const outcome = resolveSeatLookupOutcome(seat, 'learner1');
   assert.equal(outcome.httpStatus, 200);
   assert.equal(outcome.body.redeemed, true);
   assert.equal(outcome.body.alreadyRedeemed, true);
   assert.equal(outcome.body.proExpiresAt, '2026-10-30T00:00:00.000Z');
 });
 
-test('resolveRedeemOutcome: conflict when a different user already redeemed it', () => {
-  const outcome = resolveRedeemOutcome({
-    claimed: null,
-    existing: { redeemed_by: 'someone-else', redeemed_at: '2026-08-01T00:00:00.000Z' },
-    userId: 'learner1',
-  });
+test('resolveSeatLookupOutcome: conflict when a different user already redeemed it', () => {
+  const seat = { redeemed_by: 'someone-else', redeemed_at: '2026-08-01T00:00:00.000Z' };
+  const outcome = resolveSeatLookupOutcome(seat, 'learner1');
   assert.equal(outcome.httpStatus, 409);
   assert.equal(outcome.body.error, 'already_redeemed');
-});
-
-test('resolveRedeemOutcome: not found when the token does not exist at all', () => {
-  const outcome = resolveRedeemOutcome({ claimed: null, existing: null, userId: 'learner1' });
-  assert.equal(outcome.httpStatus, 404);
-  assert.equal(outcome.body.error, 'invalid_token');
 });
