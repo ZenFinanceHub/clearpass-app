@@ -11,6 +11,13 @@ const {
   hasBlockingRelationships,
 } = require('./lib/entitlement');
 const { INSTRUCTOR_PAYOUT_STRIPE_MINOR } = require('./lib/earnings');
+const {
+  generateSeatToken,
+  computeSeatExpiresAt,
+  isSeatPurchaseSession,
+  resolveSeatGrant,
+  resolveRedeemOutcome,
+} = require('./lib/seats');
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? require('stripe')(process.env.STRIPE_SECRET_KEY)
@@ -22,6 +29,7 @@ const PORT = 3001;
 // Required env vars:
 //   SUPABASE_URL, SUPABASE_SERVICE_KEY
 //   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID
+//   STRIPE_SEAT_PRICE_ID  — separate £5.99 one-time Price for instructor-purchased seats (not yet created — see phase 2 PR)
 //   STRIPE_CONNECT_WEBHOOK_SECRET  — separate signing secret for the Connect webhook (Connected-account events, not the platform webhook)
 //   ANTHROPIC_API_KEY
 //   RESEND_API_KEY
@@ -54,7 +62,14 @@ function getSupabaseAdmin() {
   return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 }
 
-async function verifyInstructorAuth(req, res) {
+// Verifies the caller is a logged-in Supabase user — despite the name this
+// used to have (verifyInstructorAuth), it never actually checked
+// account_type; every existing call site does that separately if it needs
+// to (see e.g. the switch-to-learner endpoint). Renamed because the new
+// seat-redemption endpoint below needs the identical check for a learner,
+// and reusing something literally named "instructor" auth for that was
+// exactly the kind of confusion worth fixing while touching this again.
+async function verifyAuth(req, res) {
   const authHeader = req.headers['authorization'] || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
   if (!token) {
@@ -92,6 +107,38 @@ const SAFE_TO_RETRY_STRIPE_ERROR_TYPES = new Set([
   'StripeAuthenticationError',
   'StripePermissionError',
 ]);
+
+// Mints an unredeemed seat for the purchasing instructor. Deliberately does
+// NOT touch user_progress at all — nobody gets Pro at purchase time, only
+// at redemption (POST /api/seats/redeem, by a learner, later). If this ever
+// ran twice for the same session (it shouldn't — /api/webhook already
+// dedups on Stripe's event id above), the UNIQUE constraint on
+// instructor_seats.stripe_checkout_session_id is a second line of defense:
+// the insert fails with 23505 and is logged, not treated as an error.
+async function handleSeatPurchaseCompleted(session, supabaseAdmin) {
+  const instructorId = session.metadata?.instructorId;
+  if (!instructorId) {
+    console.error('[webhook] seat purchase missing instructorId in metadata:', session.id);
+    return;
+  }
+
+  const { error } = await supabaseAdmin.from('instructor_seats').insert({
+    instructor_id: instructorId,
+    stripe_checkout_session_id: session.id,
+    invite_token: generateSeatToken(),
+  });
+
+  if (error) {
+    if (error.code === '23505') {
+      console.log('[webhook] seat already minted for session, skipping:', session.id);
+    } else {
+      console.error('[webhook] failed to mint seat for session', session.id, error.message);
+    }
+    return;
+  }
+
+  console.log('[webhook] seat minted for instructor', instructorId, 'session', session.id);
+}
 
 // ── Webhook (must be before express.json() to receive raw body) ───────────────
 
@@ -135,6 +182,20 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
+
+    // Seat purchases are handled in a completely separate function and
+    // return here — structurally, not conditionally. Everything below this
+    // block (the isPro grant and, critically, the referral-commission
+    // insert) is unreachable code for a seat purchase, not skipped by a
+    // flag inside it. A seat purchase is the INSTRUCTOR paying for a
+    // LEARNER's access; it must never grant the instructor Pro and must
+    // never be capable of crediting anyone's referral_code, which is
+    // exactly what the shared logic below does for the normal purchase flow.
+    if (isSeatPurchaseSession(session)) {
+      await handleSeatPurchaseCompleted(session, supabaseAdmin);
+      return res.json({ received: true });
+    }
+
     const userId = session.metadata?.userId;
     console.log('Webhook - userId from metadata:', userId);
 
@@ -307,13 +368,139 @@ app.post('/api/create-checkout-session', async (req, res) => {
   }
 });
 
+// ─── Instructor seat purchase ───────────────────────────────────────────────
+// POST /api/instructor/seats/purchase
+// Separate from /api/create-checkout-session above, not an extension of it:
+// that endpoint has no auth check at all and grants Pro directly to
+// whoever the payer is; a seat purchase must be gated to a real,
+// authenticated instructor, must use a different Stripe Price (£5.99, not
+// £7.99), and must NOT grant Pro to the payer — it mints an unredeemed seat
+// for someone else entirely, redeemed later at POST /api/seats/redeem.
+// Reusing create-checkout-session's shape for something with such a
+// different authorization model and outcome would have meant bolting a
+// role check and a metadata-driven behaviour switch onto an endpoint that
+// currently has neither, for every future reader to untangle.
+
+app.post('/api/instructor/seats/purchase', async (req, res) => {
+  if (!stripe) {
+    return res.status(500).json({ error: 'stripe_not_configured' });
+  }
+  const auth = await verifyAuth(req, res);
+  if (!auth) return;
+  const { userId, supabaseAdmin } = auth;
+
+  try {
+    const { data: profile, error: profileErr } = await supabaseAdmin
+      .from('profiles')
+      .select('account_type')
+      .eq('id', userId)
+      .maybeSingle();
+    if (profileErr) throw profileErr;
+
+    if (!profile || profile.account_type !== 'instructor') {
+      return res.status(403).json({ error: 'not_an_instructor' });
+    }
+
+    // Placeholder destinations — no purchase UI exists yet (that's a later
+    // phase); apps/web/instructors.html is the nearest real page today.
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{ price: process.env.STRIPE_SEAT_PRICE_ID, quantity: 1 }],
+      mode: 'payment',
+      success_url: 'https://getclearpass.co.uk/instructors?seat=purchased',
+      cancel_url: 'https://getclearpass.co.uk/instructors?seat=cancelled',
+      metadata: { type: 'seat', instructorId: userId },
+      currency: 'gbp',
+    });
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error('[instructor/seats/purchase] error:', err);
+    res.status(500).json({ error: 'Failed to create checkout session', detail: String(err.message || err) });
+  }
+});
+
+// ─── Seat redemption ────────────────────────────────────────────────────────
+// POST /api/seats/redeem
+// Authenticated as the redeeming learner (any account_type — not
+// instructor-gated). Atomic claim via a single conditional UPDATE, same
+// pattern the phase-1 payout-request endpoint already relies on for
+// claiming instructor_earnings rows: two simultaneous requests for the
+// same token can only result in one row actually flipping from
+// redeemed_at IS NULL, because Postgres re-evaluates the WHERE clause
+// against the current committed row at lock time — the loser's UPDATE
+// matches zero rows, not a partial/racy write.
+
+app.post('/api/seats/redeem', async (req, res) => {
+  const auth = await verifyAuth(req, res);
+  if (!auth) return;
+  const { userId, supabaseAdmin } = auth;
+
+  const { token } = req.body;
+  if (!token) {
+    return res.status(400).json({ error: 'missing_token' });
+  }
+
+  try {
+    const proExpiresAt = computeSeatExpiresAt();
+
+    const { data: claimed, error: claimError } = await supabaseAdmin
+      .from('instructor_seats')
+      .update({ redeemed_by: userId, redeemed_at: new Date().toISOString(), pro_expires_at: proExpiresAt })
+      .eq('invite_token', token)
+      .is('redeemed_at', null)
+      .select('id, instructor_id')
+      .maybeSingle();
+    if (claimError) throw claimError;
+
+    let granted = false;
+
+    if (claimed) {
+      const { data: existingProgress, error: progressErr } = await supabaseAdmin
+        .from('user_progress')
+        .select('progress')
+        .eq('id', userId)
+        .maybeSingle();
+      if (progressErr) throw progressErr;
+
+      const { granted: didGrant, updatedProgress } = resolveSeatGrant(existingProgress?.progress || {}, proExpiresAt);
+      granted = didGrant;
+
+      if (didGrant) {
+        const { error: updateErr } = await supabaseAdmin
+          .from('user_progress')
+          .upsert({ id: userId, progress: updatedProgress, updated_at: new Date().toISOString() });
+        if (updateErr) throw updateErr;
+      }
+
+      console.log('[seats/redeem] redeemed seat', claimed.id, 'for', userId, 'granted:', granted);
+    }
+
+    let existing = null;
+    if (!claimed) {
+      const { data, error: existingErr } = await supabaseAdmin
+        .from('instructor_seats')
+        .select('redeemed_by, redeemed_at, pro_expires_at')
+        .eq('invite_token', token)
+        .maybeSingle();
+      if (existingErr) throw existingErr;
+      existing = data;
+    }
+
+    const outcome = resolveRedeemOutcome({ claimed, existing, userId, granted, proExpiresAt });
+    res.status(outcome.httpStatus).json(outcome.body);
+  } catch (err) {
+    console.error('[seats/redeem] error:', err);
+    res.status(500).json({ error: 'redeem_failed', detail: String(err.message || err) });
+  }
+});
+
 // ── Instructor Stripe Connect onboarding ───────────────────────────────────────
 
 app.post('/api/instructor/connect/onboarding-link', async (req, res) => {
   if (!stripe) {
     return res.status(500).json({ error: 'stripe_not_configured' });
   }
-  const auth = await verifyInstructorAuth(req, res);
+  const auth = await verifyAuth(req, res);
   if (!auth) return;
   const { userId, email, supabaseAdmin } = auth;
 
@@ -377,7 +564,7 @@ app.post('/api/instructor/payout-request', async (req, res) => {
   if (!stripe) {
     return res.status(500).json({ error: 'stripe_not_configured' });
   }
-  const auth = await verifyInstructorAuth(req, res);
+  const auth = await verifyAuth(req, res);
   if (!auth) return;
   const { userId, supabaseAdmin } = auth;
 
@@ -542,7 +729,7 @@ app.post('/api/instructor/payout-request', async (req, res) => {
 // permanently leaking free Pro to a learner account.
 
 app.post('/api/instructor/switch-to-learner', async (req, res) => {
-  const auth = await verifyInstructorAuth(req, res);
+  const auth = await verifyAuth(req, res);
   if (!auth) return;
   const { userId, supabaseAdmin } = auth;
 
