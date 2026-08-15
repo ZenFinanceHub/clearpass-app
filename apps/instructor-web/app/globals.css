@@ -122,21 +122,46 @@ p {
   margin-bottom: 1.75rem;
 }
 
-.mascot {
-  display: block;
-  width: 72px;
-  height: 72px;
+/* Wraps the mascot image in its own flex-centered circle rather than
+   sizing/padding the <img> itself — the source art (pip-neutral.png) is
+   240x288, a 5:6 ratio, not square. Forcing it into a square box via the
+   element's own width/height distorts it (a non-uniform stretch); the
+   image keeps its real aspect ratio (width set, height: auto) and the
+   wrapper does the centering, both horizontal and vertical, reliably. */
+.mascot-circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 76px;
+  height: 76px;
   border-radius: 50%;
   background: var(--indigo-bg);
-  padding: 10px;
+  overflow: hidden;
 }
 
-.mascot-small {
+.mascot-circle img {
+  display: block;
+  width: 46px;
+  height: auto;
+}
+
+.mascot-circle-small {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
   width: 48px;
   height: 48px;
   border-radius: 50%;
   background: var(--indigo-bg);
-  padding: 8px;
+  overflow: hidden;
+}
+
+.mascot-circle-small img {
+  display: block;
+  width: 30px;
+  height: auto;
 }
 
 .page-shell {

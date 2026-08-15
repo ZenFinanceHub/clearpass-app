@@ -136,7 +136,9 @@ export default function DashboardPage() {
           <p className="muted">Loading seats…</p>
         ) : seats.length === 0 ? (
           <div className="empty-state">
-            <Image src="/pip-neutral.png" alt="" width={48} height={48} className="mascot-small" />
+            <div className="mascot-circle-small">
+              <Image src="/pip-neutral.png" alt="" width={240} height={288} />
+            </div>
             <p style={{ margin: 0, fontWeight: 600 }}>No seats yet</p>
             <p className="muted" style={{ margin: 0 }}>
               Buy a seat above to get an invite link you can send to a learner.

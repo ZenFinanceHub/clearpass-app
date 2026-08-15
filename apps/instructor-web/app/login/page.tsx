@@ -57,7 +57,9 @@ export default function LoginPage() {
     <main className="centered-shell">
       <div className="card">
         <div className="card-header">
-          <Image src="/pip-neutral.png" alt="" width={76} height={76} className="mascot" priority />
+          <div className="mascot-circle">
+            <Image src="/pip-neutral.png" alt="" width={240} height={288} priority />
+          </div>
           <div>
             <div className="wordmark" style={{ justifyContent: "center" }}>
               <span className="wordmark-brand">ClearPass</span>
