@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useInstructorAuth } from "@/lib/useInstructorAuth";
 import { supabase } from "@/lib/supabase";
@@ -67,11 +68,9 @@ export default function DashboardPage() {
       const body = await res.json();
       if (!res.ok || !body.url) {
         const message = body.error ?? "Could not start checkout. Please try again.";
-        // The server's `detail` carries the actual cause (e.g. a Stripe
-        // API error) — body.error alone is a fixed, generic string per
-        // failure path (see proxy.js's /api/instructor/seats/purchase
-        // catch block), so surfacing only that once cost a full
-        // investigation for something the server had already diagnosed.
+        // The server's `detail` carries the actual cause (e.g. a Stripe API
+        // error) — body.error alone is a fixed, generic string per failure
+        // path (see proxy.js's /api/instructor/seats/purchase catch block).
         setBuyError(body.detail ? `${message}: ${body.detail}` : message);
         return;
       }
@@ -96,60 +95,93 @@ export default function DashboardPage() {
 
   if (auth.status !== "instructor") {
     return (
-      <main>
+      <main className="centered-shell">
         <p className="muted">Loading…</p>
       </main>
     );
   }
 
   return (
-    <main>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1>Learner seats</h1>
-        <button onClick={() => void handleSignOut()}>Sign out</button>
-      </div>
-
-      <p>
-        <button onClick={() => void handleBuy()} disabled={buying}>
-          {buying ? "Starting checkout…" : "Buy a seat — £5.99"}
+    <div className="page-shell">
+      <header className="app-header">
+        <div className="wordmark">
+          <span className="wordmark-brand">ClearPass</span>
+          <span className="wordmark-context">Instructors</span>
+        </div>
+        <button className="btn-text" onClick={() => void handleSignOut()}>
+          Sign out
         </button>
-      </p>
-      {buyError && <p className="error">{buyError}</p>}
+      </header>
 
-      {loadError && <p className="error">Could not load seats: {loadError}</p>}
+      <main>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", marginBottom: "1.25rem", flexWrap: "wrap" }}>
+          <h1>Learner seats</h1>
+          <button className="btn btn-primary" onClick={() => void handleBuy()} disabled={buying}>
+            {buying ? "Starting checkout…" : "Buy a seat — £5.99"}
+          </button>
+        </div>
 
-      {seats === null ? (
-        <p className="muted">Loading seats…</p>
-      ) : seats.length === 0 ? (
-        <p className="muted">No seats purchased yet.</p>
-      ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Purchased</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {seats.map((seat) => (
-              <tr key={seat.id}>
-                <td>{new Date(seat.created_at).toLocaleDateString("en-GB")}</td>
-                <td>
-                  {seat.redeemed_at ? `Redeemed ${new Date(seat.redeemed_at).toLocaleDateString("en-GB")}` : "Unredeemed"}
-                </td>
-                <td>
-                  {!seat.redeemed_at && (
-                    <button onClick={() => void handleCopy(seat.id, seat.invite_token)}>
-                      {copiedId === seat.id ? "Copied!" : "Copy invite link"}
-                    </button>
-                  )}
-                </td>
+        {buyError && (
+          <div className="error-banner" role="alert">
+            <span>{buyError}</span>
+          </div>
+        )}
+        {loadError && (
+          <div className="error-banner" role="alert">
+            <span>Could not load seats: {loadError}</span>
+          </div>
+        )}
+
+        {seats === null ? (
+          <p className="muted">Loading seats…</p>
+        ) : seats.length === 0 ? (
+          <div className="empty-state">
+            <div className="mascot-circle-small">
+              <Image src="/pip-neutral.png" alt="" width={240} height={288} />
+            </div>
+            <p style={{ margin: 0, fontWeight: 600 }}>No seats yet</p>
+            <p className="muted" style={{ margin: 0 }}>
+              Buy a seat above to get an invite link you can send to a learner.
+            </p>
+          </div>
+        ) : (
+          <table className="seats-table">
+            <thead>
+              <tr>
+                <th>Purchased</th>
+                <th>Status</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </main>
+            </thead>
+            <tbody>
+              {seats.map((seat) => (
+                <tr key={seat.id}>
+                  <td>{new Date(seat.created_at).toLocaleDateString("en-GB")}</td>
+                  <td>
+                    {seat.redeemed_at ? (
+                      <span className="badge badge-redeemed">
+                        Redeemed {new Date(seat.redeemed_at).toLocaleDateString("en-GB")}
+                      </span>
+                    ) : (
+                      <span className="badge badge-unredeemed">Unredeemed</span>
+                    )}
+                  </td>
+                  <td className="actions-cell">
+                    {!seat.redeemed_at && (
+                      <button
+                        className={`btn btn-secondary${copiedId === seat.id ? " is-copied" : ""}`}
+                        onClick={() => void handleCopy(seat.id, seat.invite_token)}
+                      >
+                        {copiedId === seat.id ? "Copied ✓" : "Copy invite link"}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </main>
+    </div>
   );
 }

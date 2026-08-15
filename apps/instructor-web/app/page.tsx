@@ -23,18 +23,22 @@ export default function HomePage() {
 
   if (auth.status === "not-instructor") {
     return (
-      <main>
-        <h1>This tool is for instructors only</h1>
-        <p>
-          Your account isn&apos;t set up as an instructor account, so you&apos;ve been signed out.
-          If you believe this is a mistake, contact support.
-        </p>
+      <main className="centered-shell">
+        <div className="card" style={{ textAlign: "center" }}>
+          <h1 style={{ marginBottom: "0.75rem" }}>This tool is for instructors only</h1>
+          <div className="error-banner" style={{ textAlign: "left" }} role="alert">
+            <span>
+              Your account isn&apos;t set up as an instructor account, so you&apos;ve been signed out. If you
+              believe this is a mistake, contact support.
+            </span>
+          </div>
+        </div>
       </main>
     );
   }
 
   return (
-    <main>
+    <main className="centered-shell">
       <p className="muted">Loading…</p>
     </main>
   );
