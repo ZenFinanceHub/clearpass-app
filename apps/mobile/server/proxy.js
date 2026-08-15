@@ -10,7 +10,7 @@ const {
   clearInstructorGrant,
   hasBlockingRelationships,
 } = require('./lib/entitlement');
-const { INSTRUCTOR_PAYOUT_STRIPE_MINOR } = require('../src/constants/earnings');
+const { INSTRUCTOR_PAYOUT_STRIPE_MINOR } = require('./lib/earnings');
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? require('stripe')(process.env.STRIPE_SECRET_KEY)
