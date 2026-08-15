@@ -66,7 +66,13 @@ export default function DashboardPage() {
       });
       const body = await res.json();
       if (!res.ok || !body.url) {
-        setBuyError(body.error ?? "Could not start checkout. Please try again.");
+        const message = body.error ?? "Could not start checkout. Please try again.";
+        // The server's `detail` carries the actual cause (e.g. a Stripe
+        // API error) — body.error alone is a fixed, generic string per
+        // failure path (see proxy.js's /api/instructor/seats/purchase
+        // catch block), so surfacing only that once cost a full
+        // investigation for something the server had already diagnosed.
+        setBuyError(body.detail ? `${message}: ${body.detail}` : message);
         return;
       }
       window.location.href = body.url;
