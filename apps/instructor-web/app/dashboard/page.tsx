@@ -134,9 +134,9 @@ export default function DashboardPage() {
           <tbody>
             {seats.map((seat) => (
               <tr key={seat.id}>
-                <td>{new Date(seat.created_at).toLocaleDateString()}</td>
+                <td>{new Date(seat.created_at).toLocaleDateString("en-GB")}</td>
                 <td>
-                  {seat.redeemed_at ? `Redeemed ${new Date(seat.redeemed_at).toLocaleDateString()}` : "Unredeemed"}
+                  {seat.redeemed_at ? `Redeemed ${new Date(seat.redeemed_at).toLocaleDateString("en-GB")}` : "Unredeemed"}
                 </td>
                 <td>
                   {!seat.redeemed_at && (
