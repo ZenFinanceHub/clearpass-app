@@ -282,8 +282,8 @@ CREATE TABLE IF NOT EXISTS instructor_seats (
   invite_token                TEXT UNIQUE NOT NULL,
   redeemed_by                 UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   redeemed_at                 TIMESTAMP WITH TIME ZONE,
-  pro_expires_at               TIMESTAMP WITH TIME ZONE,
-  created_at                   TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+  pro_expires_at              TIMESTAMP WITH TIME ZONE,
+  created_at                  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS instructor_seats_instructor_id_idx ON instructor_seats(instructor_id);
