@@ -25,7 +25,7 @@ import {
 } from '@clearpass/core';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
-import { INSTRUCTOR_PAYOUT_WORST_CASE_MINOR, formatMinor } from '@/src/constants/earnings';
+import { INSTRUCTOR_PAYOUT_WORST_CASE_MINOR, formatMinor } from '../server/lib/earnings';
 import { Pip } from '@/src/components/Pip';
 import { generateInstructorCode, generateReferralCode } from '@/src/accountCodes';
 

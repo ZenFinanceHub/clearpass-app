@@ -2,9 +2,19 @@
 
 // Single source of truth for the instructor referral payout model.
 //
-// Required directly by apps/mobile/server/proxy.js (Node, require()) and by
-// the mobile app (TS/TSX, import — Expo's allowJs + esModuleInterop make a
-// plain CommonJS module importable from TypeScript).
+// Lives here, not in apps/mobile/src/, because Railway's Root Directory for
+// this service is apps/mobile/server — anything outside that directory
+// doesn't exist in the deployed container (a prior '../src/constants/
+// earnings' require from here crashed production from at least 2026-08-14
+// to 2026-08-15 for exactly this reason). See
+// apps/mobile/server/scripts/verify-build-boundary.sh.
+//
+// Required directly by apps/mobile/server/proxy.js — Node, plain require —
+// and by the mobile app — TS/TSX, plain import; Expo's allowJs +
+// esModuleInterop make a CommonJS module importable from TypeScript, Metro
+// has no blockList excluding apps/mobile/server so it bundles fine, and
+// this file has zero dependencies of its own so nothing server-only leaks
+// into the client.
 //
 // apps/web/instructors.html is a static, unbundled page and can't import
 // this file — its calculator mirrors INSTRUCTOR_PAYOUT_WORST_CASE_MINOR by
