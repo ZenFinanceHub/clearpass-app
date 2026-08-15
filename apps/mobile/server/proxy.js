@@ -406,8 +406,8 @@ app.post('/api/instructor/seats/purchase', async (req, res) => {
       payment_method_types: ['card'],
       line_items: [{ price: process.env.STRIPE_SEAT_PRICE_ID, quantity: 1 }],
       mode: 'payment',
-      success_url: 'https://getclearpass.co.uk/instructors?seat=purchased',
-      cancel_url: 'https://getclearpass.co.uk/instructors?seat=cancelled',
+      success_url: 'https://instructors.getclearpass.co.uk/purchase-success?session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: 'https://instructors.getclearpass.co.uk/dashboard?seat=cancelled',
       metadata: { type: 'seat', instructorId: userId },
       currency: 'gbp',
     });
