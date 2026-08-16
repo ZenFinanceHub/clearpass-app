@@ -943,7 +943,10 @@ app.post('/api/instructor/switch-to-learner', async (req, res) => {
     if (relErr) throw relErr;
 
     if (hasBlockingRelationships(relationships || [])) {
-      const acceptedCount = (relationships || []).filter(r => r.status === 'accepted').length;
+      // Matches hasBlockingRelationships' own definition of blocking —
+      // 'consent_withdrawn' counts too, so this number doesn't undercount
+      // against what the learner-facing app.instructor.tsx shows.
+      const acceptedCount = (relationships || []).filter(r => r.status === 'accepted' || r.status === 'consent_withdrawn').length;
       return res.status(409).json({ error: 'has_linked_learners', acceptedCount });
     }
 

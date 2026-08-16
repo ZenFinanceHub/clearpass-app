@@ -360,6 +360,45 @@ CREATE TRIGGER progress_sharing_consent_set_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION set_updated_at();
 
+-- Withdraws or restores progress-sharing consent atomically. Both writes —
+-- progress_sharing_consent.consented (the record) and
+-- instructor_relationships.status (the switch RLS actually keys off) —
+-- move together in one transaction, so a client that dies between two
+-- separate .update() calls can never leave them disagreeing (see the
+-- consent-withdrawal report this was built from).
+--
+-- SECURITY INVOKER (the default — stated explicitly here) means this runs
+-- as the calling learner: the existing RLS policies on both tables still
+-- apply inside the function body, so it grants no access beyond what the
+-- learner's own session already has. 'consent_withdrawn' is deliberately
+-- excluded from re-consent's target set in the second UPDATE's WHERE — this
+-- only ever moves a relationship between 'accepted' and 'consent_withdrawn';
+-- it must never touch a 'pending' invite the learner hasn't accepted yet,
+-- or a 'rejected' one.
+CREATE OR REPLACE FUNCTION set_progress_sharing_consent(p_instructor_id UUID, p_consented BOOLEAN)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+AS $$
+BEGIN
+  UPDATE progress_sharing_consent
+  SET consented = p_consented
+  WHERE learner_id = auth.uid() AND instructor_id = p_instructor_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'no progress_sharing_consent row for learner % and instructor %', auth.uid(), p_instructor_id;
+  END IF;
+
+  UPDATE instructor_relationships
+  SET status = CASE WHEN p_consented THEN 'accepted' ELSE 'consent_withdrawn' END
+  WHERE learner_id = auth.uid()
+    AND instructor_id = p_instructor_id
+    AND status IN ('accepted', 'consent_withdrawn');
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION set_progress_sharing_consent(UUID, BOOLEAN) TO authenticated;
+
 -- Idempotency guard for POST /api/cron/seat-expiry-reminders. NULL means
 -- "not yet reminded"; the cron claims a seat with a conditional UPDATE
 -- (... WHERE expiry_reminder_sent_at IS NULL) before sending either email,

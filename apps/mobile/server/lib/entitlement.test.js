@@ -100,3 +100,11 @@ test('hasBlockingRelationships is false when none are accepted', () => {
   assert.equal(hasBlockingRelationships([{ status: 'pending' }, { status: 'rejected' }]), false);
   assert.equal(hasBlockingRelationships([]), false);
 });
+
+test('hasBlockingRelationships is true when any relationship is consent_withdrawn — still a real pupil, sharing is just off', () => {
+  assert.equal(hasBlockingRelationships([{ status: 'pending' }, { status: 'consent_withdrawn' }]), true);
+});
+
+test('hasBlockingRelationships is true for a mix of accepted and consent_withdrawn', () => {
+  assert.equal(hasBlockingRelationships([{ status: 'accepted' }, { status: 'consent_withdrawn' }]), true);
+});
