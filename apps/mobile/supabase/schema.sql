@@ -298,3 +298,38 @@ CREATE POLICY "Instructors can view own seats" ON instructor_seats
 -- role key. Redemption is looked up by exact invite_token through
 -- POST /api/seats/redeem, never through a learner's own Supabase session,
 -- so there is no RLS surface for a learner to enumerate against.
+
+-- Learner's explicit decision on instructor progress-sharing, captured on
+-- the seat redemption page (instructor-paid seats phase 4). Deliberately a
+-- separate table from instructor_relationships, not a flag folded into it:
+-- this is the audit record of what the learner actually agreed to and when,
+-- independent of whatever instructor_relationships.status happens to be
+-- doing for other reasons (referral-signup linking, etc). Declining still
+-- writes a row here (consented = false) — Pro access is never conditional
+-- on this and is granted by POST /api/seats/redeem regardless of consent.
+-- The redemption page separately upserts an 'accepted' instructor_relationships
+-- row ONLY when consented = true, reusing the existing RLS-enforced gate on
+-- user_progress (see "Instructors can read linked learner progress" above)
+-- rather than adding a second enforcement path — this table is the record,
+-- that policy is the switch.
+CREATE TABLE IF NOT EXISTS progress_sharing_consent (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  learner_id    UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  instructor_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  consented     BOOLEAN NOT NULL,
+  created_at    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  UNIQUE (learner_id, instructor_id)
+);
+
+ALTER TABLE progress_sharing_consent ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Learners can view own consent" ON progress_sharing_consent
+  FOR SELECT USING (auth.uid() = learner_id);
+CREATE POLICY "Learners can insert own consent" ON progress_sharing_consent
+  FOR INSERT WITH CHECK (auth.uid() = learner_id);
+CREATE POLICY "Learners can update own consent" ON progress_sharing_consent
+  FOR UPDATE USING (auth.uid() = learner_id);
+-- No instructor-facing policy: not needed by anything in this phase, and
+-- easy to add later scoped to auth.uid() = instructor_id if a future
+-- "your learners' consent status" view needs it.

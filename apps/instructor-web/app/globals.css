@@ -382,6 +382,21 @@ button:disabled {
   margin: 0.75rem 0 1rem;
 }
 
+/* ─── Info box ─────────────────────────────────────────────────────────── */
+/* Same neutral card look as .invite-link-box but for ordinary prose (no
+   word-break: break-all — that's specifically for an unbroken token/URL and
+   mangles wrapped sentences mid-word). */
+
+.info-box {
+  background: var(--off-white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 0.85rem 1rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--text-dark);
+}
+
 /* ─── Responsive: down to 375px ────────────────────────────────────────── */
 
 @media (max-width: 480px) {
