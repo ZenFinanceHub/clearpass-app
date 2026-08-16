@@ -157,3 +157,20 @@ test('resolveSeatLookupOutcome: conflict when a different user already redeemed 
   assert.equal(outcome.httpStatus, 409);
   assert.equal(outcome.body.error, 'already_redeemed');
 });
+
+test('resolveSeatLookupOutcome: invalidated (refunded, unredeemed) seat reads as an unknown token', () => {
+  const seat = { redeemed_at: null, redeemed_by: null, invalidated_at: '2026-08-20T00:00:00.000Z' };
+  const outcome = resolveSeatLookupOutcome(seat, 'learner1');
+  assert.equal(outcome.httpStatus, 404);
+  assert.equal(outcome.body.error, 'invalid_token');
+});
+
+test('resolveSeatLookupOutcome: invalidated check wins even if somehow also marked redeemed', () => {
+  // Shouldn't happen in practice (invalidated_at is only ever set on an
+  // unredeemed seat), but the invalidated check runs first regardless —
+  // defense in depth, not reliant on that invariant holding elsewhere.
+  const seat = { redeemed_at: '2026-08-01T00:00:00.000Z', redeemed_by: 'learner1', invalidated_at: '2026-08-20T00:00:00.000Z' };
+  const outcome = resolveSeatLookupOutcome(seat, 'learner1');
+  assert.equal(outcome.httpStatus, 404);
+  assert.equal(outcome.body.error, 'invalid_token');
+});

@@ -398,3 +398,48 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION set_progress_sharing_consent(UUID, BOOLEAN) TO authenticated;
+
+-- Idempotency guard for POST /api/cron/seat-expiry-reminders. NULL means
+-- "not yet reminded"; the cron claims a seat with a conditional UPDATE
+-- (... WHERE expiry_reminder_sent_at IS NULL) before sending either email,
+-- so a second same-day cron run finds nothing left to claim and sends
+-- nothing twice. No RLS policy needed — like every other write on this
+-- table, only the service role ever touches it.
+ALTER TABLE instructor_seats ADD COLUMN IF NOT EXISTS expiry_reminder_sent_at TIMESTAMP WITH TIME ZONE;
+
+-- ── Refund handling ─────────────────────────────────────────────────────
+-- stripe_payment_intent_id: captured for free in handleSeatPurchaseCompleted
+-- from the checkout session's own .payment_intent field (no extra Stripe
+-- API call). The primary way a later charge.refunded webhook finds its
+-- seat — a plain DB lookup, not a Stripe API round-trip. NULL for seats
+-- purchased before this shipped (as of writing, exactly one); those fall
+-- back to a Stripe API reverse-lookup by stripe_checkout_session_id, which
+-- every seat, old or new, already has.
+--
+-- invalidated_at / invalidated_reason: set when an UNREDEEMED seat's
+-- payment is refunded — nobody has benefited from it yet, so it's safe to
+-- invalidate outright. An already-redeemed seat's refund never touches
+-- this column, or the learner's Pro; see seat_refund_flags below instead.
+ALTER TABLE instructor_seats ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT;
+ALTER TABLE instructor_seats ADD COLUMN IF NOT EXISTS invalidated_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE instructor_seats ADD COLUMN IF NOT EXISTS invalidated_reason TEXT;
+
+-- One row per refund discovered on an ALREADY-REDEEMED seat — the case
+-- deliberately never auto-resolved (revoking a learner's Pro over a
+-- decision their instructor made is not something to do automatically).
+-- This is the queryable record of "needs a human decision"; the webhook
+-- also emails ADMIN_ALERT_EMAIL at refund time, but the row is what
+-- survives if that email is missed or the address isn't configured yet.
+CREATE TABLE IF NOT EXISTS seat_refund_flags (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  seat_id           UUID REFERENCES instructor_seats(id) ON DELETE CASCADE NOT NULL,
+  instructor_id     UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  learner_id        UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  stripe_charge_id  TEXT NOT NULL,
+  refunded_amount   INTEGER NOT NULL,
+  created_at        TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE seat_refund_flags ENABLE ROW LEVEL SECURITY;
+-- No policies: service-role only, same convention as stripe_webhook_events
+-- — an internal ops record, not user-facing data.

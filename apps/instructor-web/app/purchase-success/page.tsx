@@ -89,6 +89,10 @@ export default function PurchaseSuccessPage() {
               <button className={`btn btn-secondary btn-block${copied ? " is-copied" : ""}`} onClick={() => void handleCopy()}>
                 {copied ? "Copied ✓" : "Copy invite link"}
               </button>
+              <p className="muted" style={{ marginTop: "1rem", marginBottom: 0, fontSize: "0.85rem" }}>
+                Once your learner redeems this invite, they&apos;ll appear in the ClearPass mobile app — that&apos;s where
+                you&apos;ll see their progress, readiness score and mock test results.
+              </p>
             </>
           ) : attempts >= MAX_ATTEMPTS ? (
             <>

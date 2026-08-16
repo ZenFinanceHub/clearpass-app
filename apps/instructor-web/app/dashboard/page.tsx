@@ -207,12 +207,17 @@ export default function DashboardPage() {
           )}
         </div>
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", marginBottom: "1.25rem", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", marginBottom: "0.5rem", flexWrap: "wrap" }}>
           <h1>Learner seats</h1>
           <button className="btn btn-primary" onClick={() => void handleBuy()} disabled={buying}>
             {buying ? "Starting checkout…" : "Buy a seat — £5.99"}
           </button>
         </div>
+
+        <p className="muted" style={{ marginBottom: "1.25rem" }}>
+          Once a learner redeems their invite, they&apos;ll appear in the ClearPass mobile app — that&apos;s where you&apos;ll see
+          their progress, readiness score and mock test results.
+        </p>
 
         {buyError && (
           <div className="error-banner" role="alert">

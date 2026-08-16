@@ -124,6 +124,10 @@ async function handleSeatPurchaseCompleted(session, supabaseAdmin) {
   const { error } = await supabaseAdmin.from('instructor_seats').insert({
     instructor_id: instructorId,
     stripe_checkout_session_id: session.id,
+    // Captured here for free (the session object already carries it) so a
+    // later charge.refunded webhook can find this seat with a plain DB
+    // lookup instead of a Stripe API call — see findSeatForRefund below.
+    stripe_payment_intent_id: session.payment_intent ?? null,
     invite_token: generateSeatToken(),
   });
 
@@ -137,6 +141,108 @@ async function handleSeatPurchaseCompleted(session, supabaseAdmin) {
   }
 
   console.log('[webhook] seat minted for instructor', instructorId, 'session', session.id);
+}
+
+// ── Refund handling ────────────────────────────────────────────────────────
+// A refunded seat purchase never touches a learner's Pro, even if the seat
+// has already been redeemed — revoking access from a learner over a
+// decision their instructor made is not something to do automatically.
+//   - Unredeemed: nobody has benefited from it yet, so the seat is simply
+//     invalidated — its invite link starts reading as an unknown token
+//     (see resolveSeatLookupOutcome in lib/seats.js).
+//   - Already redeemed: left completely untouched, and instead recorded in
+//     seat_refund_flags plus an email to ADMIN_ALERT_EMAIL, for a human to
+//     decide. The row is the durable record; the email is just the nudge —
+//     if ADMIN_ALERT_EMAIL isn't set, or Resend fails, the row still exists
+//     to be queried later.
+
+// Finds the instructor_seats row a refunded Charge belongs to, or null if
+// this charge isn't a seat purchase at all (e.g. a regular Pro purchase).
+async function findSeatForRefund(charge, supabaseAdmin, stripeClient) {
+  if (!charge.payment_intent) return null;
+
+  // Primary path: a plain DB lookup, no Stripe API call. Populated for
+  // every seat purchased after stripe_payment_intent_id shipped.
+  const { data: byPaymentIntent, error: piError } = await supabaseAdmin
+    .from('instructor_seats')
+    .select('*')
+    .eq('stripe_payment_intent_id', charge.payment_intent)
+    .maybeSingle();
+  if (piError) throw piError;
+  if (byPaymentIntent) return byPaymentIntent;
+
+  // Fallback for seats purchased before that column existed. Reverse-looks-up
+  // the Checkout Session via its payment_intent — the one Stripe API call
+  // payment_intent_data.metadata (on the purchase endpoint) exists to avoid
+  // for future purchases, kept here only as a bridge for older rows.
+  const sessions = await stripeClient.checkout.sessions.list({ payment_intent: charge.payment_intent, limit: 1 });
+  const session = sessions.data[0];
+  if (!session || session.metadata?.type !== 'seat') return null;
+
+  const { data: bySessionId, error: sessionError } = await supabaseAdmin
+    .from('instructor_seats')
+    .select('*')
+    .eq('stripe_checkout_session_id', session.id)
+    .maybeSingle();
+  if (sessionError) throw sessionError;
+  return bySessionId ?? null;
+}
+
+async function handleChargeRefunded(charge, supabaseAdmin) {
+  try {
+    const seat = await findSeatForRefund(charge, supabaseAdmin, stripe);
+    if (!seat) return; // not a seat purchase (or one we can no longer trace) — nothing to do here
+
+    if (!seat.redeemed_at) {
+      const { error } = await supabaseAdmin
+        .from('instructor_seats')
+        .update({ invalidated_at: new Date().toISOString(), invalidated_reason: 'refunded' })
+        .eq('id', seat.id)
+        .is('redeemed_at', null); // guards against a race with a redemption landing first
+      if (error) console.error('[charge-refunded] failed to invalidate seat', seat.id, error.message);
+      else console.log('[charge-refunded] invalidated unredeemed seat', seat.id);
+      return;
+    }
+
+    const { error: flagError } = await supabaseAdmin.from('seat_refund_flags').insert({
+      seat_id: seat.id,
+      instructor_id: seat.instructor_id,
+      learner_id: seat.redeemed_by,
+      stripe_charge_id: charge.id,
+      refunded_amount: charge.amount_refunded,
+    });
+    if (flagError) {
+      console.error('[charge-refunded] failed to record refund flag for seat', seat.id, flagError.message);
+    }
+
+    const adminEmail = process.env.ADMIN_ALERT_EMAIL;
+    if (!adminEmail) {
+      console.error('[charge-refunded] ADMIN_ALERT_EMAIL not set — flag recorded but no email sent for seat', seat.id);
+    } else {
+      try {
+        await sendEmail({
+          to: adminEmail,
+          subject: 'Refunded seat was already redeemed — review needed',
+          html: `
+            <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
+              <h2 style="color:#DC2626">Refunded seat already redeemed</h2>
+              <p style="color:#374151">
+                Seat <code>${seat.id}</code> (instructor <code>${seat.instructor_id}</code>) was refunded via Stripe charge
+                <code>${charge.id}</code> after the learner (<code>${seat.redeemed_by}</code>) had already redeemed it.
+              </p>
+              <p style="color:#374151"><strong>The learner's Pro access has not been touched.</strong> Review and decide manually.</p>
+            </div>
+          `,
+        });
+      } catch (emailErr) {
+        console.error('[charge-refunded] failed to send admin alert for seat', seat.id, emailErr.message);
+      }
+    }
+
+    console.log('[charge-refunded] flagged already-redeemed seat', seat.id, 'for manual review');
+  } catch (err) {
+    console.error('[charge-refunded] error:', err);
+  }
 }
 
 // ── Webhook (must be before express.json() to receive raw body) ───────────────
@@ -263,6 +369,11 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
     } catch (e) {
       console.error('[webhook] Supabase error:', e);
     }
+  }
+
+  if (event.type === 'charge.refunded') {
+    await handleChargeRefunded(event.data.object, supabaseAdmin);
+    return res.json({ received: true });
   }
 
   res.json({ received: true });
@@ -409,6 +520,15 @@ app.post('/api/instructor/seats/purchase', async (req, res) => {
       success_url: 'https://instructors.getclearpass.co.uk/purchase-success?session_id={CHECKOUT_SESSION_ID}',
       cancel_url: 'https://instructors.getclearpass.co.uk/dashboard?seat=cancelled',
       metadata: { type: 'seat', instructorId: userId },
+      // Copied onto the resulting PaymentIntent so a refund is
+      // self-describing in the Stripe dashboard without cross-referencing
+      // our DB. findSeatForRefund's actual lookup relies on
+      // instructor_seats.stripe_payment_intent_id instead (captured in
+      // handleSeatPurchaseCompleted, no Stripe API call needed) — Stripe
+      // doesn't guarantee metadata set here propagates onto the Charge
+      // object a charge.refunded webhook delivers, so this is a defensive
+      // signal and dashboard aid, not the primary correlation mechanism.
+      payment_intent_data: { metadata: { type: 'seat', instructorId: userId } },
       currency: 'gbp',
     });
     res.json({ url: session.url });
@@ -527,12 +647,15 @@ app.get('/api/seats/:token', async (req, res) => {
   try {
     const { data: seat, error: seatErr } = await supabaseAdmin
       .from('instructor_seats')
-      .select('instructor_id, redeemed_at')
+      .select('instructor_id, redeemed_at, invalidated_at')
       .eq('invite_token', token)
       .maybeSingle();
     if (seatErr) throw seatErr;
 
-    if (!seat) {
+    // An invalidated (refunded, unredeemed) seat reads as an unknown token
+    // — see resolveSeatLookupOutcome in lib/seats.js for the same rule on
+    // the actual redeem path.
+    if (!seat || seat.invalidated_at) {
       return res.status(404).json({ valid: false });
     }
 
@@ -1460,6 +1583,183 @@ app.post('/api/cron/grant-instructor-pro', async (req, res) => {
   } catch (err) {
     console.error('[grant-instructor-pro] error:', err);
     res.status(500).json({ error: 'Grant instructor pro failed', detail: String(err) });
+  }
+});
+
+// ── Cron: seat expiry reminders ──────────────────────────────────────────
+// POST /api/cron/seat-expiry-reminders
+// Emails both instructor and learner 14 days before a redeemed seat's Pro
+// grant expires.
+// Schedule: daily, e.g. 03:00 Europe/London (after expire-pro at 01:00 and
+// grant-instructor-pro at 02:00 — no dependency between them, just keeping
+// the daily cron sequence in one place).
+//
+// Idempotent via instructor_seats.expiry_reminder_sent_at: each eligible
+// seat is claimed with a conditional UPDATE (... WHERE
+// expiry_reminder_sent_at IS NULL) BEFORE either email is sent — if this
+// cron fires twice in the same day, the second run's claim affects 0 rows
+// for every seat the first run already took, so nothing is ever sent
+// twice. Tradeoff: if sending fails after a successful claim, that seat is
+// marked sent without anyone actually having been emailed — logged loudly
+// (grep for "will not retry") since it's silent otherwise. Acceptable for
+// a reminder; this cron never changes access or entitlement, only sends
+// mail about a change that's already recorded elsewhere.
+
+function formatExpiryDate(iso) {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function instructorExpiryReminderHtml({ learnerName, expiryDate }) {
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;max-width:560px;width:100%;">
+        <tr><td style="background:#4F46E5;padding:28px 32px;">
+          <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${learnerName}'s Pro access ends soon</h1>
+        </td></tr>
+        <tr><td style="padding:28px 32px;">
+          <p style="color:#374151;font-size:15px;line-height:1.5;">
+            The 90 days of ClearPass Pro you gave <strong>${learnerName}</strong> ends on <strong>${expiryDate}</strong>.
+          </p>
+          <p style="color:#374151;font-size:15px;line-height:1.5;">
+            To keep their access going, buy them another seat from your dashboard — it picks up from this one's expiry date rather than starting over.
+          </p>
+          <p style="margin:24px 0;">
+            <a href="https://instructors.getclearpass.co.uk/dashboard" style="display:inline-block;background:#4F46E5;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:700">
+              Go to your dashboard
+            </a>
+          </p>
+        </td></tr>
+      </table>
+      <p style="color:#9CA3AF;font-size:12px;margin-top:16px;">ClearPass &bull; UK Theory Test Preparation</p>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+function learnerExpiryReminderHtml({ expiryDate }) {
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;max-width:560px;width:100%;">
+        <tr><td style="background:#4F46E5;padding:28px 32px;">
+          <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">Your ClearPass Pro access ends soon</h1>
+        </td></tr>
+        <tr><td style="padding:28px 32px;">
+          <p style="color:#374151;font-size:15px;line-height:1.5;">
+            Your ClearPass Pro access ends on <strong>${expiryDate}</strong>.
+          </p>
+          <p style="color:#374151;font-size:15px;line-height:1.5;">
+            If you'd like to keep using Pro after that, speak to your instructor.
+          </p>
+        </td></tr>
+      </table>
+      <p style="color:#9CA3AF;font-size:12px;margin-top:16px;">ClearPass &bull; UK Theory Test Preparation</p>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+app.post('/api/cron/seat-expiry-reminders', async (req, res) => {
+  if (!requireCronAuth(req, res)) return;
+
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+    const now = new Date();
+    const in14Days = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+    const { data: seats, error } = await supabaseAdmin
+      .from('instructor_seats')
+      .select('id, instructor_id, redeemed_by, pro_expires_at')
+      .not('redeemed_at', 'is', null)
+      .not('pro_expires_at', 'is', null)
+      .gt('pro_expires_at', now.toISOString())
+      .lte('pro_expires_at', in14Days.toISOString())
+      .is('expiry_reminder_sent_at', null);
+    if (error) throw error;
+
+    if (!seats || seats.length === 0) {
+      return res.json({ sent: 0, skipped: 0 });
+    }
+
+    const userIds = [...new Set(seats.flatMap((s) => [s.instructor_id, s.redeemed_by]).filter(Boolean))];
+
+    const [{ data: authData, error: authError }, { data: profileRows }] = await Promise.all([
+      supabaseAdmin.auth.admin.listUsers({ perPage: 1000 }),
+      supabaseAdmin.from('profiles').select('id, username').in('id', userIds),
+    ]);
+    if (authError) throw authError;
+
+    const emailById = Object.fromEntries((authData.users || []).map((u) => [u.id, u.email]));
+    const usernameById = Object.fromEntries((profileRows || []).map((p) => [p.id, p.username]));
+
+    let sent = 0;
+    let skipped = 0;
+
+    for (const seat of seats) {
+      // Claim before sending — see the comment above this route.
+      const { data: claimed, error: claimError } = await supabaseAdmin
+        .from('instructor_seats')
+        .update({ expiry_reminder_sent_at: new Date().toISOString() })
+        .eq('id', seat.id)
+        .is('expiry_reminder_sent_at', null)
+        .select('id')
+        .maybeSingle();
+      if (claimError) {
+        console.error('[seat-expiry-reminders] claim error for', seat.id, claimError.message);
+        continue;
+      }
+      if (!claimed) {
+        // Another invocation already claimed it — not an error.
+        skipped++;
+        continue;
+      }
+
+      const instructorEmail = emailById[seat.instructor_id];
+      const learnerEmail = seat.redeemed_by ? emailById[seat.redeemed_by] : null;
+      const learnerName = (seat.redeemed_by && usernameById[seat.redeemed_by]) || 'your learner';
+      const expiryDate = formatExpiryDate(seat.pro_expires_at);
+
+      try {
+        if (instructorEmail) {
+          await sendEmail({
+            to: instructorEmail,
+            subject: `${learnerName}'s ClearPass Pro access ends in 14 days`,
+            html: instructorExpiryReminderHtml({ learnerName, expiryDate }),
+          });
+        } else {
+          console.error('[seat-expiry-reminders] no instructor email on file for seat', seat.id);
+        }
+
+        if (learnerEmail) {
+          await sendEmail({
+            to: learnerEmail,
+            subject: 'Your ClearPass Pro access ends soon',
+            html: learnerExpiryReminderHtml({ expiryDate }),
+          });
+        } else {
+          console.error('[seat-expiry-reminders] no learner email on file for seat', seat.id);
+        }
+
+        sent++;
+      } catch (emailErr) {
+        console.error('[seat-expiry-reminders] send failed for seat', seat.id, '(already claimed, will not retry):', emailErr.message);
+      }
+    }
+
+    console.log(`[seat-expiry-reminders] sent ${sent}, skipped ${skipped} (lost claim race)`);
+    res.json({ sent, skipped });
+  } catch (err) {
+    console.error('[seat-expiry-reminders] error:', err);
+    res.status(500).json({ error: 'Seat expiry reminders failed', detail: String(err.message || err) });
   }
 });
 
