@@ -124,6 +124,10 @@ async function handleSeatPurchaseCompleted(session, supabaseAdmin) {
   const { error } = await supabaseAdmin.from('instructor_seats').insert({
     instructor_id: instructorId,
     stripe_checkout_session_id: session.id,
+    // Captured here for free (the session object already carries it) so a
+    // later charge.refunded webhook can find this seat with a plain DB
+    // lookup instead of a Stripe API call — see findSeatForRefund below.
+    stripe_payment_intent_id: session.payment_intent ?? null,
     invite_token: generateSeatToken(),
   });
 
@@ -137,6 +141,108 @@ async function handleSeatPurchaseCompleted(session, supabaseAdmin) {
   }
 
   console.log('[webhook] seat minted for instructor', instructorId, 'session', session.id);
+}
+
+// ── Refund handling ────────────────────────────────────────────────────────
+// A refunded seat purchase never touches a learner's Pro, even if the seat
+// has already been redeemed — revoking access from a learner over a
+// decision their instructor made is not something to do automatically.
+//   - Unredeemed: nobody has benefited from it yet, so the seat is simply
+//     invalidated — its invite link starts reading as an unknown token
+//     (see resolveSeatLookupOutcome in lib/seats.js).
+//   - Already redeemed: left completely untouched, and instead recorded in
+//     seat_refund_flags plus an email to ADMIN_ALERT_EMAIL, for a human to
+//     decide. The row is the durable record; the email is just the nudge —
+//     if ADMIN_ALERT_EMAIL isn't set, or Resend fails, the row still exists
+//     to be queried later.
+
+// Finds the instructor_seats row a refunded Charge belongs to, or null if
+// this charge isn't a seat purchase at all (e.g. a regular Pro purchase).
+async function findSeatForRefund(charge, supabaseAdmin, stripeClient) {
+  if (!charge.payment_intent) return null;
+
+  // Primary path: a plain DB lookup, no Stripe API call. Populated for
+  // every seat purchased after stripe_payment_intent_id shipped.
+  const { data: byPaymentIntent, error: piError } = await supabaseAdmin
+    .from('instructor_seats')
+    .select('*')
+    .eq('stripe_payment_intent_id', charge.payment_intent)
+    .maybeSingle();
+  if (piError) throw piError;
+  if (byPaymentIntent) return byPaymentIntent;
+
+  // Fallback for seats purchased before that column existed. Reverse-looks-up
+  // the Checkout Session via its payment_intent — the one Stripe API call
+  // payment_intent_data.metadata (on the purchase endpoint) exists to avoid
+  // for future purchases, kept here only as a bridge for older rows.
+  const sessions = await stripeClient.checkout.sessions.list({ payment_intent: charge.payment_intent, limit: 1 });
+  const session = sessions.data[0];
+  if (!session || session.metadata?.type !== 'seat') return null;
+
+  const { data: bySessionId, error: sessionError } = await supabaseAdmin
+    .from('instructor_seats')
+    .select('*')
+    .eq('stripe_checkout_session_id', session.id)
+    .maybeSingle();
+  if (sessionError) throw sessionError;
+  return bySessionId ?? null;
+}
+
+async function handleChargeRefunded(charge, supabaseAdmin) {
+  try {
+    const seat = await findSeatForRefund(charge, supabaseAdmin, stripe);
+    if (!seat) return; // not a seat purchase (or one we can no longer trace) — nothing to do here
+
+    if (!seat.redeemed_at) {
+      const { error } = await supabaseAdmin
+        .from('instructor_seats')
+        .update({ invalidated_at: new Date().toISOString(), invalidated_reason: 'refunded' })
+        .eq('id', seat.id)
+        .is('redeemed_at', null); // guards against a race with a redemption landing first
+      if (error) console.error('[charge-refunded] failed to invalidate seat', seat.id, error.message);
+      else console.log('[charge-refunded] invalidated unredeemed seat', seat.id);
+      return;
+    }
+
+    const { error: flagError } = await supabaseAdmin.from('seat_refund_flags').insert({
+      seat_id: seat.id,
+      instructor_id: seat.instructor_id,
+      learner_id: seat.redeemed_by,
+      stripe_charge_id: charge.id,
+      refunded_amount: charge.amount_refunded,
+    });
+    if (flagError) {
+      console.error('[charge-refunded] failed to record refund flag for seat', seat.id, flagError.message);
+    }
+
+    const adminEmail = process.env.ADMIN_ALERT_EMAIL;
+    if (!adminEmail) {
+      console.error('[charge-refunded] ADMIN_ALERT_EMAIL not set — flag recorded but no email sent for seat', seat.id);
+    } else {
+      try {
+        await sendEmail({
+          to: adminEmail,
+          subject: 'Refunded seat was already redeemed — review needed',
+          html: `
+            <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
+              <h2 style="color:#DC2626">Refunded seat already redeemed</h2>
+              <p style="color:#374151">
+                Seat <code>${seat.id}</code> (instructor <code>${seat.instructor_id}</code>) was refunded via Stripe charge
+                <code>${charge.id}</code> after the learner (<code>${seat.redeemed_by}</code>) had already redeemed it.
+              </p>
+              <p style="color:#374151"><strong>The learner's Pro access has not been touched.</strong> Review and decide manually.</p>
+            </div>
+          `,
+        });
+      } catch (emailErr) {
+        console.error('[charge-refunded] failed to send admin alert for seat', seat.id, emailErr.message);
+      }
+    }
+
+    console.log('[charge-refunded] flagged already-redeemed seat', seat.id, 'for manual review');
+  } catch (err) {
+    console.error('[charge-refunded] error:', err);
+  }
 }
 
 // ── Webhook (must be before express.json() to receive raw body) ───────────────
@@ -263,6 +369,11 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
     } catch (e) {
       console.error('[webhook] Supabase error:', e);
     }
+  }
+
+  if (event.type === 'charge.refunded') {
+    await handleChargeRefunded(event.data.object, supabaseAdmin);
+    return res.json({ received: true });
   }
 
   res.json({ received: true });
@@ -409,6 +520,15 @@ app.post('/api/instructor/seats/purchase', async (req, res) => {
       success_url: 'https://instructors.getclearpass.co.uk/purchase-success?session_id={CHECKOUT_SESSION_ID}',
       cancel_url: 'https://instructors.getclearpass.co.uk/dashboard?seat=cancelled',
       metadata: { type: 'seat', instructorId: userId },
+      // Copied onto the resulting PaymentIntent so a refund is
+      // self-describing in the Stripe dashboard without cross-referencing
+      // our DB. findSeatForRefund's actual lookup relies on
+      // instructor_seats.stripe_payment_intent_id instead (captured in
+      // handleSeatPurchaseCompleted, no Stripe API call needed) — Stripe
+      // doesn't guarantee metadata set here propagates onto the Charge
+      // object a charge.refunded webhook delivers, so this is a defensive
+      // signal and dashboard aid, not the primary correlation mechanism.
+      payment_intent_data: { metadata: { type: 'seat', instructorId: userId } },
       currency: 'gbp',
     });
     res.json({ url: session.url });
@@ -527,12 +647,15 @@ app.get('/api/seats/:token', async (req, res) => {
   try {
     const { data: seat, error: seatErr } = await supabaseAdmin
       .from('instructor_seats')
-      .select('instructor_id, redeemed_at')
+      .select('instructor_id, redeemed_at, invalidated_at')
       .eq('invite_token', token)
       .maybeSingle();
     if (seatErr) throw seatErr;
 
-    if (!seat) {
+    // An invalidated (refunded, unredeemed) seat reads as an unknown token
+    // — see resolveSeatLookupOutcome in lib/seats.js for the same rule on
+    // the actual redeem path.
+    if (!seat || seat.invalidated_at) {
       return res.status(404).json({ valid: false });
     }
 

@@ -100,6 +100,15 @@ function resolveSeatLookupOutcome(seat, userId) {
   if (!seat) {
     return { httpStatus: 404, body: { error: 'invalid_token' } };
   }
+  // An invalidated seat (its purchase was refunded before anyone redeemed
+  // it — see handleChargeRefunded in proxy.js) reads as though the token
+  // never existed. Not a distinct "this was refunded" message: nothing
+  // useful is served by telling whoever holds the link why it stopped
+  // working, and it matches the existing "invite link stops working"
+  // behaviour of an unknown token.
+  if (seat.invalidated_at) {
+    return { httpStatus: 404, body: { error: 'invalid_token' } };
+  }
   if (seat.redeemed_at) {
     if (seat.redeemed_by === userId) {
       // Idempotent retry by the rightful redeemer (double-click, network
