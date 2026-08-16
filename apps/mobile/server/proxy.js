@@ -538,15 +538,23 @@ app.get('/api/seats/:token', async (req, res) => {
 
     const { data: instructor } = await supabaseAdmin
       .from('profiles')
-      .select('username')
+      .select('username, display_name')
       .eq('id', seat.instructor_id)
       .maybeSingle();
 
+    // Deliberately returns both raw fields rather than resolving a single
+    // "the name" here — the display_name -> username -> generic fallback
+    // (with its "does this look presentable" check at each step) is display
+    // policy, not a data lookup, and already lives once in
+    // apps/instructor-web/lib/instructorName.ts. Keeping it there means both
+    // consumers (RedeemClient.tsx and generateMetadata in page.tsx) apply
+    // the exact same rule instead of two copies drifting apart.
     res.json({
       valid: true,
       redeemed: !!seat.redeemed_at,
       instructorId: seat.instructor_id,
-      instructorName: instructor?.username ?? null,
+      instructorDisplayName: instructor?.display_name ?? null,
+      instructorUsername: instructor?.username ?? null,
     });
   } catch (err) {
     console.error('[seats/status] error:', err);
