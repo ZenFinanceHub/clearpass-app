@@ -239,16 +239,19 @@ export default function SettingsScreen() {
         if (pending) setUsername(pending);
       }
 
-      // Load linked instructor count (accepted vs. pending, shown separately)
+      // Load linked instructor count (accepted vs. pending, shown separately).
+      // consent_withdrawn counts as linked, not a separate bucket — that
+      // relationship still exists, sharing is just off; the badge here is
+      // "how many instructors are you linked to", not a sharing-status report.
       if (user) {
         try {
           const { data: relRows } = await supabase
             .from('instructor_relationships')
             .select('status')
             .eq('learner_id', user.id)
-            .in('status', ['accepted', 'pending']);
+            .in('status', ['accepted', 'pending', 'consent_withdrawn']);
           const rows = (relRows as { status: string }[] | null) ?? [];
-          setLinkedInstructorCount(rows.filter(r => r.status === 'accepted').length);
+          setLinkedInstructorCount(rows.filter(r => r.status === 'accepted' || r.status === 'consent_withdrawn').length);
           setPendingInstructorCount(rows.filter(r => r.status === 'pending').length);
         } catch {}
       }

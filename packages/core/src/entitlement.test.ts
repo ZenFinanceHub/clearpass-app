@@ -160,4 +160,12 @@ describe('hasBlockingRelationships', () => {
   test('false for an empty relationship list', () => {
     expect(hasBlockingRelationships([])).toBe(false);
   });
+
+  test('true when any relationship has status consent_withdrawn — still a real pupil, sharing is just off', () => {
+    expect(hasBlockingRelationships([{ status: 'pending' }, { status: 'consent_withdrawn' }])).toBe(true);
+  });
+
+  test('true when relationships are a mix of accepted and consent_withdrawn', () => {
+    expect(hasBlockingRelationships([{ status: 'accepted' }, { status: 'consent_withdrawn' }])).toBe(true);
+  });
 });

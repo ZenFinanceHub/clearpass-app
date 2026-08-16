@@ -50,9 +50,14 @@ export function clearInstructorGrant<T extends ProGrantState>(state: T): T {
   return { ...state, isPro: false, proExpiresAt: null, proSource: null };
 }
 
-// True if any relationship is 'accepted' — an instructor switching to
-// learner must unlink every accepted learner first, so no learner is left
-// with an instructor who no longer exists as one.
+// True if any relationship is 'accepted' OR 'consent_withdrawn' — an
+// instructor switching to learner must unlink every real pupil first, so no
+// pupil is left with an instructor who no longer exists as one.
+// 'consent_withdrawn' blocks too: that pupil turned off progress sharing,
+// not the relationship itself — the instructor is still their instructor of
+// record (name, lesson notes, and the option to re-consent all still work).
+// Only 'pending' (an invite not yet accepted) and 'rejected' (already
+// unlinked) are non-blocking.
 export function hasBlockingRelationships(relationships: { status: string }[]): boolean {
-  return relationships.some(r => r.status === 'accepted');
+  return relationships.some(r => r.status === 'accepted' || r.status === 'consent_withdrawn');
 }

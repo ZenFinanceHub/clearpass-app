@@ -31,7 +31,7 @@ import { generateInstructorCode, generateReferralCode } from '@/src/accountCodes
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type RelStatus = 'pending' | 'accepted' | 'rejected';
+type RelStatus = 'pending' | 'accepted' | 'rejected' | 'consent_withdrawn';
 
 type Relationship = {
   id: string;
@@ -185,13 +185,18 @@ function LearnerCard({ data, onPress }: { data: LearnerEntry; onPress: () => voi
   const { rel, progress, username } = data;
   const name     = username ?? rel.learner_name ?? rel.learner_email ?? 'Learner';
   const initials = getInitials(name);
+  // Progress is null for this pupil either way — a brand-new pupil who
+  // hasn't studied yet, or one who turned sharing off, look identical from
+  // user_progress's RLS-blocked read alone. rel.status is what tells them
+  // apart, so the UI has to key off that rather than progress being absent.
+  const sharingOff = rel.status === 'consent_withdrawn';
   const readiness = progress?.readinessScore ?? 0;
   const color     = probColor(readiness);
   const streak    = progress?.studyStreakDays ?? 0;
   const totalQ    = progress?.totalQuestionsAnswered ?? 0;
   const best      = progress ? bestMock(progress.mockTestHistory) : 0;
   const weakTopics = progress ? calculateReadiness(progress).weakTopics.slice(0, 2) : [];
-  const lastActive = progress ? formatLastActive(progress.lastStudied) : 'No activity yet';
+  const lastActive = sharingOff ? 'Progress sharing is off' : (progress ? formatLastActive(progress.lastStudied) : 'No activity yet');
 
   return (
     <TouchableOpacity
@@ -207,20 +212,28 @@ function LearnerCard({ data, onPress }: { data: LearnerEntry; onPress: () => voi
           <Text style={[styles.learnerName, { color: theme.textColor }]} numberOfLines={1}>{name}</Text>
           <Text style={[styles.learnerSub,  { color: theme.subTextColor }]}>{lastActive}</Text>
         </View>
-        <View style={[styles.probBadge, { borderColor: color }]}>
-          <Text style={[styles.probBadgeText, { color }]}>{readiness}{'%'}</Text>
-        </View>
-      </View>
-
-      <View style={styles.learnerStats}>
-        <Text style={[styles.statChip, { color: theme.subTextColor }]}>{'🔥 '}{streak}{'d'}</Text>
-        <Text style={[styles.statChip, { color: theme.subTextColor }]}>{'📝 '}{totalQ}{' q'}</Text>
-        {best > 0 && (
-          <Text style={[styles.statChip, { color: theme.subTextColor }]}>{'🏆 '}{best}{'/50'}</Text>
+        {sharingOff ? (
+          <View style={[styles.probBadge, { borderColor: theme.subTextColor }]}>
+            <Text style={styles.probBadgeText}>{'🔒'}</Text>
+          </View>
+        ) : (
+          <View style={[styles.probBadge, { borderColor: color }]}>
+            <Text style={[styles.probBadgeText, { color }]}>{readiness}{'%'}</Text>
+          </View>
         )}
       </View>
 
-      {weakTopics.length > 0 && (
+      {!sharingOff && (
+        <View style={styles.learnerStats}>
+          <Text style={[styles.statChip, { color: theme.subTextColor }]}>{'🔥 '}{streak}{'d'}</Text>
+          <Text style={[styles.statChip, { color: theme.subTextColor }]}>{'📝 '}{totalQ}{' q'}</Text>
+          {best > 0 && (
+            <Text style={[styles.statChip, { color: theme.subTextColor }]}>{'🏆 '}{best}{'/50'}</Text>
+          )}
+        </View>
+      )}
+
+      {!sharingOff && weakTopics.length > 0 && (
         <View style={styles.weakRow}>
           {weakTopics.map(cat => (
             <View key={cat} style={styles.weakBadge}>
@@ -255,6 +268,10 @@ function LearnerDetailView({
   const { rel, progress, username } = data;
   const name     = username ?? rel.learner_name ?? rel.learner_email ?? 'Learner';
   const initials = getInitials(name);
+  // See the matching comment in LearnerCard — progress reads null either
+  // way (brand-new pupil vs. sharing turned off), so every section below
+  // that depends on it is keyed off rel.status instead.
+  const sharingOff = rel.status === 'consent_withdrawn';
   const readiness = progress?.readinessScore ?? 0;
   const color     = probColor(readiness);
   const streak    = progress?.studyStreakDays ?? 0;
@@ -285,94 +302,104 @@ function LearnerDetailView({
         </View>
         <Text style={[styles.detailName, { color: theme.textColor }]}>{name}</Text>
         <Text style={[styles.detailSub, { color: theme.subTextColor }]}>
-          {progress ? formatLastActive(progress.lastStudied) : 'No activity recorded'}
+          {sharingOff ? 'Progress sharing is off' : (progress ? formatLastActive(progress.lastStudied) : 'No activity recorded')}
         </Text>
       </View>
 
-      {/* Pass probability */}
-      <View style={[styles.probCard, { backgroundColor: theme.cardColor }]}>
-        <Text style={styles.probCardLabel}>{'PASS PROBABILITY'}</Text>
-        <View style={[styles.probCircle, { borderColor: color }]}>
-          <Text style={[styles.probCircleValue, { color }]}>{readiness}{'%'}</Text>
-          <Text style={[styles.probCircleSub, { color: theme.subTextColor }]}>
-            {readiness >= 80 ? 'Test Ready' : readiness >= 50 ? 'Getting There' : 'Needs Work'}
+      {sharingOff ? (
+        <View style={[styles.section, { backgroundColor: theme.cardColor }]}>
+          <Text style={{ fontSize: 14, color: theme.subTextColor, lineHeight: 20 }}>
+            {'🔒 '}{name}{' has turned off progress sharing. You can still see their lesson notes below, but not their scores or activity.'}
           </Text>
         </View>
-      </View>
-
-      {/* Stats grid */}
-      <View style={styles.statsGrid}>
-        {[
-          { emoji: '📝', value: String(totalQ), label: 'Questions' },
-          { emoji: '📋', value: String(mocks.length), label: 'Mocks Taken' },
-          { emoji: '🏆', value: best > 0 ? `${best}/50` : '—', label: 'Best Score' },
-          { emoji: '🔥', value: String(streak), label: 'Day Streak' },
-        ].map(s => (
-          <View key={s.label} style={[styles.statCard, { backgroundColor: theme.cardColor }]}>
-            <Text style={styles.statCardEmoji}>{s.emoji}</Text>
-            <Text style={[styles.statCardValue, { color: theme.textColor }]}>{s.value}</Text>
-            <Text style={[styles.statCardLabel, { color: theme.subTextColor }]}>{s.label}</Text>
+      ) : (
+        <>
+          {/* Pass probability */}
+          <View style={[styles.probCard, { backgroundColor: theme.cardColor }]}>
+            <Text style={styles.probCardLabel}>{'PASS PROBABILITY'}</Text>
+            <View style={[styles.probCircle, { borderColor: color }]}>
+              <Text style={[styles.probCircleValue, { color }]}>{readiness}{'%'}</Text>
+              <Text style={[styles.probCircleSub, { color: theme.subTextColor }]}>
+                {readiness >= 80 ? 'Test Ready' : readiness >= 50 ? 'Getting There' : 'Needs Work'}
+              </Text>
+            </View>
           </View>
-        ))}
-      </View>
 
-      {/* Activity dots */}
-      <View style={[styles.section, { backgroundColor: theme.cardColor }]}>
-        <Text style={styles.sectionTitle}>{'LAST 7 DAYS'}</Text>
-        <View style={styles.dotsRow}>
-          {dots.map((active, i) => {
-            const d = new Date(today);
-            d.setDate(d.getDate() - (6 - i));
-            return (
-              <View key={i} style={styles.dotCol}>
-                <View style={[styles.dot, active ? styles.dotActive : styles.dotInactive]} />
-                <Text style={[styles.dotLabel, { color: theme.subTextColor }]}>
-                  {['S','M','T','W','T','F','S'][d.getDay()]}
-                </Text>
+          {/* Stats grid */}
+          <View style={styles.statsGrid}>
+            {[
+              { emoji: '📝', value: String(totalQ), label: 'Questions' },
+              { emoji: '📋', value: String(mocks.length), label: 'Mocks Taken' },
+              { emoji: '🏆', value: best > 0 ? `${best}/50` : '—', label: 'Best Score' },
+              { emoji: '🔥', value: String(streak), label: 'Day Streak' },
+            ].map(s => (
+              <View key={s.label} style={[styles.statCard, { backgroundColor: theme.cardColor }]}>
+                <Text style={styles.statCardEmoji}>{s.emoji}</Text>
+                <Text style={[styles.statCardValue, { color: theme.textColor }]}>{s.value}</Text>
+                <Text style={[styles.statCardLabel, { color: theme.subTextColor }]}>{s.label}</Text>
               </View>
-            );
-          })}
-        </View>
-      </View>
+            ))}
+          </View>
 
-      {/* Topic breakdown */}
-      <View style={[styles.section, { backgroundColor: theme.cardColor }]}>
-        <Text style={styles.sectionTitle}>{'TOPIC MASTERY'}</Text>
-        {topics.map(cat => {
-          const pct   = progress?.topicScores[cat] ?? 0;
-          const color = barColor(pct);
-          return (
-            <View key={cat} style={styles.topicRow}>
-              <View style={styles.topicLabelRow}>
-                <Text style={[styles.topicName, { color: theme.textColor }]}>{TOPIC_LABELS[cat]}</Text>
-                <Text style={[styles.topicPct, { color }]}>{pct}{'%'}</Text>
-              </View>
-              <View style={styles.barTrack}>
-                <View style={[styles.barFill, { width: `${pct}%` as any, backgroundColor: color }]} />
-              </View>
+          {/* Activity dots */}
+          <View style={[styles.section, { backgroundColor: theme.cardColor }]}>
+            <Text style={styles.sectionTitle}>{'LAST 7 DAYS'}</Text>
+            <View style={styles.dotsRow}>
+              {dots.map((active, i) => {
+                const d = new Date(today);
+                d.setDate(d.getDate() - (6 - i));
+                return (
+                  <View key={i} style={styles.dotCol}>
+                    <View style={[styles.dot, active ? styles.dotActive : styles.dotInactive]} />
+                    <Text style={[styles.dotLabel, { color: theme.subTextColor }]}>
+                      {['S','M','T','W','T','F','S'][d.getDay()]}
+                    </Text>
+                  </View>
+                );
+              })}
             </View>
-          );
-        })}
-      </View>
+          </View>
 
-      {/* Mock test history */}
-      {recentMocks.length > 0 && (
-        <View style={[styles.section, { backgroundColor: theme.cardColor }]}>
-          <Text style={styles.sectionTitle}>{'MOCK TEST HISTORY'}</Text>
-          {recentMocks.map(r => (
-            <View key={r.id} style={styles.mockRow}>
-              <View style={styles.mockRowLeft}>
-                <Text style={[styles.mockDate, { color: theme.textColor }]}>{formatDate(r.takenAt)}</Text>
-                <Text style={[styles.mockScore, { color: theme.subTextColor }]}>{r.score}{' / 50'}</Text>
-              </View>
-              <View style={[styles.mockBadge, { backgroundColor: r.passed ? '#F0FDF4' : '#FEF2F2', borderColor: r.passed ? '#22C55E' : '#EF4444' }]}>
-                <Text style={[styles.mockBadgeText, { color: r.passed ? '#22C55E' : '#EF4444' }]}>
-                  {r.passed ? 'PASS' : 'FAIL'}
-                </Text>
-              </View>
+          {/* Topic breakdown */}
+          <View style={[styles.section, { backgroundColor: theme.cardColor }]}>
+            <Text style={styles.sectionTitle}>{'TOPIC MASTERY'}</Text>
+            {topics.map(cat => {
+              const pct   = progress?.topicScores[cat] ?? 0;
+              const color = barColor(pct);
+              return (
+                <View key={cat} style={styles.topicRow}>
+                  <View style={styles.topicLabelRow}>
+                    <Text style={[styles.topicName, { color: theme.textColor }]}>{TOPIC_LABELS[cat]}</Text>
+                    <Text style={[styles.topicPct, { color }]}>{pct}{'%'}</Text>
+                  </View>
+                  <View style={styles.barTrack}>
+                    <View style={[styles.barFill, { width: `${pct}%` as any, backgroundColor: color }]} />
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+
+          {/* Mock test history */}
+          {recentMocks.length > 0 && (
+            <View style={[styles.section, { backgroundColor: theme.cardColor }]}>
+              <Text style={styles.sectionTitle}>{'MOCK TEST HISTORY'}</Text>
+              {recentMocks.map(r => (
+                <View key={r.id} style={styles.mockRow}>
+                  <View style={styles.mockRowLeft}>
+                    <Text style={[styles.mockDate, { color: theme.textColor }]}>{formatDate(r.takenAt)}</Text>
+                    <Text style={[styles.mockScore, { color: theme.subTextColor }]}>{r.score}{' / 50'}</Text>
+                  </View>
+                  <View style={[styles.mockBadge, { backgroundColor: r.passed ? '#F0FDF4' : '#FEF2F2', borderColor: r.passed ? '#22C55E' : '#EF4444' }]}>
+                    <Text style={[styles.mockBadgeText, { color: r.passed ? '#22C55E' : '#EF4444' }]}>
+                      {r.passed ? 'PASS' : 'FAIL'}
+                    </Text>
+                  </View>
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
+          )}
+        </>
       )}
 
       {/* Actions */}
@@ -1197,10 +1224,18 @@ export default function InstructorScreen() {
         .eq('instructor_id', user.id)
         .neq('status', 'rejected');
 
-      const accepted = (rels as Relationship[] | null)?.filter(r => r.status === 'accepted' && r.learner_id) ?? [];
+      // Includes 'consent_withdrawn' alongside 'accepted' — that pupil still
+      // exists and is still a real link, they just turned progress sharing
+      // off (RLS then blocks the user_progress read below for them, so
+      // pd/progress ends up null the same way it does for a genuinely
+      // brand-new pupil who hasn't studied yet — LearnerCard/LearnerDetailView
+      // tell the two apart via rel.status, not via progress being present).
+      const visiblePupils = (rels as Relationship[] | null)?.filter(
+        r => (r.status === 'accepted' || r.status === 'consent_withdrawn') && r.learner_id
+      ) ?? [];
 
-      if (accepted.length > 0) {
-        const learnerIds = accepted.map(r => r.learner_id!);
+      if (visiblePupils.length > 0) {
+        const learnerIds = visiblePupils.map(r => r.learner_id!);
 
         const [{ data: progressRows }, { data: profileRows }] = await Promise.all([
           supabase.from('user_progress').select('id, progress').in('id', learnerIds),
@@ -1221,7 +1256,7 @@ export default function InstructorScreen() {
           }
         } catch {}
 
-        const entries: LearnerEntry[] = accepted.map(rel => {
+        const entries: LearnerEntry[] = visiblePupils.map(rel => {
           const pd  = (progressRows as { id: string; progress: unknown }[] | null)?.find(p => p.id === rel.learner_id);
           const pf  = (profileRows  as { id: string; username: string }[] | null)?.find(p => p.id === rel.learner_id);
           const raw = pd?.progress as Partial<UserProgress> | undefined;

@@ -16,7 +16,7 @@ import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 import { Pip } from '@/src/components/Pip';
 
-type RelStatus = 'pending' | 'accepted' | 'rejected';
+type RelStatus = 'pending' | 'accepted' | 'rejected' | 'consent_withdrawn';
 
 type Relationship = {
   id: string;
@@ -271,7 +271,10 @@ function LearnerModeView({
   }
 
   const pendingInvites   = instructors.filter(i => i.rel.status === 'pending');
-  const acceptedEntries  = instructors.filter(i => i.rel.status === 'accepted');
+  // Includes consent_withdrawn — that relationship still exists (sharing is
+  // just off), so it belongs here, not nowhere. Re-sharing from here isn't
+  // wired up yet; this only stops the relationship from disappearing.
+  const acceptedEntries  = instructors.filter(i => i.rel.status === 'accepted' || i.rel.status === 'consent_withdrawn');
 
   return (
     <ScrollView
@@ -349,7 +352,9 @@ function LearnerModeView({
                 {entry.instructorName ?? 'Instructor'}
               </Text>
               <Text style={[styles.learnerSub, { color: theme.subTextColor }]}>
-                {'Linked '}{formatDate(entry.rel.created_at)}
+                {entry.rel.status === 'consent_withdrawn'
+                  ? '🔒 Progress sharing off'
+                  : ('Linked ' + formatDate(entry.rel.created_at))}
               </Text>
             </View>
             <TouchableOpacity
