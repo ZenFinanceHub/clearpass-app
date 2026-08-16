@@ -298,3 +298,64 @@ CREATE POLICY "Instructors can view own seats" ON instructor_seats
 -- role key. Redemption is looked up by exact invite_token through
 -- POST /api/seats/redeem, never through a learner's own Supabase session,
 -- so there is no RLS surface for a learner to enumerate against.
+
+-- Learner's explicit decision on instructor progress-sharing, captured on
+-- the seat redemption page (instructor-paid seats phase 4). Deliberately a
+-- separate table from instructor_relationships, not a flag folded into it:
+-- this is the audit record of what the learner actually agreed to and when,
+-- independent of whatever instructor_relationships.status happens to be
+-- doing for other reasons (referral-signup linking, etc). Declining still
+-- writes a row here (consented = false) — Pro access is never conditional
+-- on this and is granted by POST /api/seats/redeem regardless of consent.
+-- The redemption page separately upserts an 'accepted' instructor_relationships
+-- row ONLY when consented = true, reusing the existing RLS-enforced gate on
+-- user_progress (see "Instructors can read linked learner progress" above)
+-- rather than adding a second enforcement path — this table is the record,
+-- that policy is the switch.
+CREATE TABLE IF NOT EXISTS progress_sharing_consent (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  learner_id    UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  instructor_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  consented     BOOLEAN NOT NULL,
+  created_at    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  UNIQUE (learner_id, instructor_id)
+);
+
+ALTER TABLE progress_sharing_consent ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Learners can view own consent" ON progress_sharing_consent
+  FOR SELECT USING (auth.uid() = learner_id);
+CREATE POLICY "Learners can insert own consent" ON progress_sharing_consent
+  FOR INSERT WITH CHECK (auth.uid() = learner_id);
+CREATE POLICY "Learners can update own consent" ON progress_sharing_consent
+  FOR UPDATE USING (auth.uid() = learner_id);
+-- No instructor-facing policy: not needed by anything in this phase, and
+-- easy to add later scoped to auth.uid() = instructor_id if a future
+-- "your learners' consent status" view needs it.
+-- No DELETE policy either — withdrawal is UPDATE consented = false, not a
+-- delete, so the row (and its created_at grant time) survives as the audit
+-- trail of both the original decision and the withdrawal.
+
+-- Every other updated_at column in this file (user_progress,
+-- instructor_connect_accounts, payouts) relies on the application
+-- remembering to set it explicitly on every write — fine for those, where a
+-- stale timestamp is cosmetic. Here it's the opposite: updated_at IS the
+-- evidence of when consent was withdrawn, and this table will eventually be
+-- written from two separate codebases (this redemption page, and a future
+-- withdrawal control in apps/mobile's Settings) — correctness must not
+-- depend on every future caller, in every app, remembering the convention.
+-- A trigger makes it structurally impossible to forget.
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS progress_sharing_consent_set_updated_at ON progress_sharing_consent;
+CREATE TRIGGER progress_sharing_consent_set_updated_at
+  BEFORE UPDATE ON progress_sharing_consent
+  FOR EACH ROW
+  EXECUTE FUNCTION set_updated_at();

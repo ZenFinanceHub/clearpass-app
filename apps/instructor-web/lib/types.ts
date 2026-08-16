@@ -16,3 +16,10 @@ export type InstructorSeat = {
 export function seatInviteLink(token: string): string {
   return `https://instructors.getclearpass.co.uk/redeem/${token}`;
 }
+
+// Response shape of GET /api/seats/:token (apps/mobile/server/proxy.js) — a
+// read-only lookup, never a write. See app/redeem/[token]/RedeemClient.tsx.
+export type SeatStatusResponse =
+  | { valid: false }
+  | { valid: true; redeemed: true; instructorId: string; instructorName: string | null }
+  | { valid: true; redeemed: false; instructorId: string; instructorName: string | null };

@@ -511,6 +511,49 @@ app.post('/api/seats/redeem', async (req, res) => {
   }
 });
 
+// ─── Seat status (read-only) ────────────────────────────────────────────────
+// GET /api/seats/:token
+// Public — no auth. This is the FIRST thing the redemption page calls,
+// before the learner has signed up or signed in, purely to show them who
+// invited them and whether the link still works. A pure SELECT, no write
+// of any kind — token consumption happens only inside POST /api/seats/redeem
+// above, on a completed redemption, never here. RLS deliberately gives
+// learners no read access to instructor_seats (see schema.sql), so this
+// has to go through the service role, same as redeem does.
+app.get('/api/seats/:token', async (req, res) => {
+  const { token } = req.params;
+  const supabaseAdmin = getSupabaseAdmin();
+
+  try {
+    const { data: seat, error: seatErr } = await supabaseAdmin
+      .from('instructor_seats')
+      .select('instructor_id, redeemed_at')
+      .eq('invite_token', token)
+      .maybeSingle();
+    if (seatErr) throw seatErr;
+
+    if (!seat) {
+      return res.status(404).json({ valid: false });
+    }
+
+    const { data: instructor } = await supabaseAdmin
+      .from('profiles')
+      .select('username')
+      .eq('id', seat.instructor_id)
+      .maybeSingle();
+
+    res.json({
+      valid: true,
+      redeemed: !!seat.redeemed_at,
+      instructorId: seat.instructor_id,
+      instructorName: instructor?.username ?? null,
+    });
+  } catch (err) {
+    console.error('[seats/status] error:', err);
+    res.status(500).json({ error: 'status_failed' });
+  }
+});
+
 // ── Instructor Stripe Connect onboarding ───────────────────────────────────────
 
 app.post('/api/instructor/connect/onboarding-link', async (req, res) => {
