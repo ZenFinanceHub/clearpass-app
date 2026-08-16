@@ -19,7 +19,7 @@ type SeatState =
 type RedemptionState =
   | { kind: "idle" }
   | { kind: "submitting" }
-  | { kind: "success"; proExpiresAt: string }
+  | { kind: "success"; proExpiresAt: string; consentChoice: boolean; consentSaved: boolean }
   | { kind: "already_has_pro" }
   | { kind: "error"; message: string };
 
@@ -34,23 +34,61 @@ function formatExpiry(iso: string): string {
 // signups can leave a 'pending' row here already), so this is a manual
 // select-then-write rather than an upsert with onConflict — there's no
 // constraint for Postgres to conflict against.
+//
+// Throws on any failed write rather than swallowing it — the caller (saveConsent
+// below) needs to know if this didn't actually happen, so it can tell the
+// learner their choice wasn't saved instead of showing a false "all set".
 async function upsertAcceptedRelationship(instructorId: string, learnerId: string, learnerEmail: string | null) {
-  const { data: existing } = await supabase
+  const { data: existing, error: selectError } = await supabase
     .from("instructor_relationships")
     .select("id")
     .eq("instructor_id", instructorId)
     .eq("learner_id", learnerId)
     .maybeSingle();
+  if (selectError) throw selectError;
 
   if (existing) {
-    await supabase.from("instructor_relationships").update({ status: "accepted" }).eq("id", (existing as { id: string }).id);
+    const { error } = await supabase
+      .from("instructor_relationships")
+      .update({ status: "accepted" })
+      .eq("id", (existing as { id: string }).id);
+    if (error) throw error;
   } else {
-    await supabase.from("instructor_relationships").insert({
+    const { error } = await supabase.from("instructor_relationships").insert({
       instructor_id: instructorId,
       learner_id: learnerId,
       learner_email: learnerEmail,
       status: "accepted",
     });
+    if (error) throw error;
+  }
+}
+
+// Records the learner's decision. Consent covers what happens to a minor's
+// data — it must never silently fail: if either write below doesn't
+// actually land, the caller shows the learner their choice wasn't saved
+// (Pro itself is unaffected either way; this runs only after redemption has
+// already succeeded). Returns false rather than throwing so the caller can
+// distinguish "Pro granted, consent failed" from a harder error.
+async function saveConsent(
+  instructorId: string,
+  learnerId: string,
+  learnerEmail: string | null,
+  consented: boolean
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("progress_sharing_consent")
+      .upsert({ learner_id: learnerId, instructor_id: instructorId, consented }, { onConflict: "learner_id,instructor_id" });
+    if (error) throw error;
+
+    if (consented) {
+      await upsertAcceptedRelationship(instructorId, learnerId, learnerEmail);
+    }
+    return true;
+  } catch (err) {
+    console.error("[redeem] failed to save progress-sharing consent:", err);
+    return false;
   }
 }
 
@@ -65,6 +103,7 @@ export default function RedeemClient({ token }: { token: string }) {
   const [authError, setAuthError] = useState("");
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
+  const [consentRetrying, setConsentRetrying] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -154,14 +193,8 @@ export default function RedeemClient({ token }: { token: string }) {
         // Consent is only recorded once the seat is actually, successfully
         // redeemed — an orphaned consent/relationship row for a redemption
         // that failed or lost a race would be worse than recording nothing.
-        await supabase.from("progress_sharing_consent").upsert(
-          { learner_id: session.userId, instructor_id: instructorId, consented },
-          { onConflict: "learner_id,instructor_id" }
-        );
-        if (consented) {
-          await upsertAcceptedRelationship(instructorId, session.userId, session.email);
-        }
-        setRedemption({ kind: "success", proExpiresAt: body.proExpiresAt });
+        const consentSaved = await saveConsent(instructorId, session.userId, session.email, consented);
+        setRedemption({ kind: "success", proExpiresAt: body.proExpiresAt, consentChoice: consented, consentSaved });
         return;
       }
 
@@ -180,6 +213,14 @@ export default function RedeemClient({ token }: { token: string }) {
     } catch {
       setRedemption({ kind: "error", message: "Something went wrong claiming your seat. Please try again." });
     }
+  }
+
+  async function handleRetryConsent() {
+    if (redemption.kind !== "success" || seatState.kind !== "ready" || session.status !== "signed-in") return;
+    setConsentRetrying(true);
+    const consentSaved = await saveConsent(seatState.instructorId, session.userId, session.email, redemption.consentChoice);
+    setConsentRetrying(false);
+    setRedemption({ ...redemption, consentSaved });
   }
 
   // margin: "0 auto" centers this standalone — .mascot-circle is a
@@ -258,6 +299,22 @@ export default function RedeemClient({ token }: { token: string }) {
           {mascot}
           <h1 style={{ marginTop: "1rem" }}>You&apos;ve got ClearPass Pro</h1>
           <p className="muted">Your Pro access runs until {formatExpiry(redemption.proExpiresAt)}.</p>
+
+          {!redemption.consentSaved && (
+            <div className="error-banner" role="alert" style={{ textAlign: "left" }}>
+              <span>
+                Your Pro access is active, but we couldn&apos;t save your progress-sharing choice.{" "}
+                <button
+                  className="btn-text"
+                  style={{ padding: 0, color: "inherit", textDecoration: "underline" }}
+                  disabled={consentRetrying}
+                  onClick={() => void handleRetryConsent()}
+                >
+                  {consentRetrying ? "Trying again…" : "Try again"}
+                </button>
+              </span>
+            </div>
+          )}
 
           <div style={{ marginTop: "1.5rem" }}>
             {STORE_LISTINGS_LIVE ? (
