@@ -137,7 +137,7 @@ export default function DashboardPage() {
         ) : seats.length === 0 ? (
           <div className="empty-state">
             <div className="mascot-circle-small">
-              <Image src="/pip-neutral.png" alt="" width={240} height={288} />
+              <Image src="/pip-instructor.png" alt="" width={621} height={793} />
             </div>
             <p style={{ margin: 0, fontWeight: 600 }}>No seats yet</p>
             <p className="muted" style={{ margin: 0 }}>

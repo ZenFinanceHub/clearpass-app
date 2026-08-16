@@ -123,11 +123,11 @@ p {
 }
 
 /* Wraps the mascot image in its own flex-centered circle rather than
-   sizing/padding the <img> itself — the source art (pip-neutral.png) is
-   240x288, a 5:6 ratio, not square. Forcing it into a square box via the
-   element's own width/height distorts it (a non-uniform stretch); the
-   image keeps its real aspect ratio (width set, height: auto) and the
-   wrapper does the centering, both horizontal and vertical, reliably. */
+   sizing/padding the <img> itself — the source art (pip-instructor.png) is
+   621x793, not square. Forcing it into a square box via the element's own
+   width/height distorts it (a non-uniform stretch); the image keeps its
+   real aspect ratio (width set, height: auto) and the wrapper does the
+   centering, both horizontal and vertical, reliably. */
 .mascot-circle {
   display: flex;
   align-items: center;

@@ -58,7 +58,7 @@ export default function LoginPage() {
       <div className="card">
         <div className="card-header">
           <div className="mascot-circle">
-            <Image src="/pip-neutral.png" alt="" width={240} height={288} priority />
+            <Image src="/pip-instructor.png" alt="" width={621} height={793} priority />
           </div>
           <div>
             <div className="wordmark" style={{ justifyContent: "center" }}>
