@@ -360,6 +360,14 @@ CREATE TRIGGER progress_sharing_consent_set_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION set_updated_at();
 
+-- Idempotency guard for POST /api/cron/seat-expiry-reminders. NULL means
+-- "not yet reminded"; the cron claims a seat with a conditional UPDATE
+-- (... WHERE expiry_reminder_sent_at IS NULL) before sending either email,
+-- so a second same-day cron run finds nothing left to claim and sends
+-- nothing twice. No RLS policy needed — like every other write on this
+-- table, only the service role ever touches it.
+ALTER TABLE instructor_seats ADD COLUMN IF NOT EXISTS expiry_reminder_sent_at TIMESTAMP WITH TIME ZONE;
+
 -- ── Refund handling ─────────────────────────────────────────────────────
 -- stripe_payment_intent_id: captured for free in handleSeatPurchaseCompleted
 -- from the checkout session's own .payment_intent field (no extra Stripe
