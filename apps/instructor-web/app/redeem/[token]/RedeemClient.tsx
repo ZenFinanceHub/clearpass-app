@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/lib/useSession";
 import { APP_STORE_URL, PLAY_STORE_URL, STORE_LISTINGS_LIVE } from "@/lib/appStore";
+import { presentableInstructorName } from "@/lib/instructorName";
 import type { SeatStatusResponse } from "@/lib/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://clearpass-app-production.up.railway.app";
@@ -16,9 +17,18 @@ type SeatState =
   | { kind: "check_failed" }
   | { kind: "ready"; instructorId: string; instructorName: string | null };
 
+// The already-has-permanent-Pro outcome can only be known by actually
+// attempting the redemption (POST /api/seats/redeem is the only thing that
+// reads the learner's current entitlement), so that attempt now runs
+// automatically the moment the learner is signed in — BEFORE the consent
+// screen renders at all, not as a side effect of clicking a consent choice.
+// A learner whose seat won't be redeemed must never be asked a question
+// about a redemption that isn't going to happen.
 type RedemptionState =
   | { kind: "idle" }
-  | { kind: "submitting" }
+  | { kind: "redeeming" }
+  | { kind: "awaiting_consent"; proExpiresAt: string }
+  | { kind: "saving_consent"; proExpiresAt: string }
   | { kind: "success"; proExpiresAt: string; consentChoice: boolean; consentSaved: boolean }
   | { kind: "already_has_pro" }
   | { kind: "error"; message: string };
@@ -104,6 +114,7 @@ export default function RedeemClient({ token }: { token: string }) {
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
   const [consentRetrying, setConsentRetrying] = useState(false);
+  const redeemAttempted = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -138,6 +149,53 @@ export default function RedeemClient({ token }: { token: string }) {
       cancelled = true;
     };
   }, [token]);
+
+  useEffect(() => {
+    if (session.status !== "signed-in" || seatState.kind !== "ready") return;
+    if (redeemAttempted.current) return;
+    redeemAttempted.current = true;
+    void attemptRedeem();
+    // attemptRedeem is defined below and closes over session/seatState/token,
+    // all already covered by this effect's own dependencies — omitting it
+    // avoids re-running on every render (it isn't itself referentially stable).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, seatState, token]);
+
+  async function attemptRedeem() {
+    if (session.status !== "signed-in" || seatState.kind !== "ready") return;
+    setRedemption({ kind: "redeeming" });
+
+    try {
+      const res = await fetch(`${API_URL}/api/seats/redeem`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` },
+        body: JSON.stringify({ token }),
+      });
+      const body = await res.json();
+
+      if (res.ok && body.redeemed) {
+        setRedemption({ kind: "awaiting_consent", proExpiresAt: body.proExpiresAt });
+        return;
+      }
+
+      if (res.ok && body.redeemed === false && body.reason === "already_has_pro") {
+        setRedemption({ kind: "already_has_pro" });
+        return;
+      }
+
+      if (res.status === 409) {
+        // Someone else claimed it between our read of the status endpoint
+        // and this attempt.
+        setSeatState({ kind: "redeemed" });
+        setRedemption({ kind: "idle" });
+        return;
+      }
+
+      setRedemption({ kind: "error", message: "Something went wrong claiming your seat. Please try again." });
+    } catch {
+      setRedemption({ kind: "error", message: "Something went wrong claiming your seat. Please try again." });
+    }
+  }
 
   async function handleAuthSubmit(e: FormEvent) {
     e.preventDefault();
@@ -177,42 +235,13 @@ export default function RedeemClient({ token }: { token: string }) {
   }
 
   async function handleConsent(consented: boolean) {
-    if (session.status !== "signed-in" || seatState.kind !== "ready") return;
+    if (session.status !== "signed-in" || seatState.kind !== "ready" || redemption.kind !== "awaiting_consent") return;
     const { instructorId } = seatState;
-    setRedemption({ kind: "submitting" });
+    const { proExpiresAt } = redemption;
+    setRedemption({ kind: "saving_consent", proExpiresAt });
 
-    try {
-      const res = await fetch(`${API_URL}/api/seats/redeem`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` },
-        body: JSON.stringify({ token }),
-      });
-      const body = await res.json();
-
-      if (res.ok && body.redeemed) {
-        // Consent is only recorded once the seat is actually, successfully
-        // redeemed — an orphaned consent/relationship row for a redemption
-        // that failed or lost a race would be worse than recording nothing.
-        const consentSaved = await saveConsent(instructorId, session.userId, session.email, consented);
-        setRedemption({ kind: "success", proExpiresAt: body.proExpiresAt, consentChoice: consented, consentSaved });
-        return;
-      }
-
-      if (res.ok && body.redeemed === false && body.reason === "already_has_pro") {
-        setRedemption({ kind: "already_has_pro" });
-        return;
-      }
-
-      if (res.status === 409) {
-        setSeatState({ kind: "redeemed" });
-        setRedemption({ kind: "idle" });
-        return;
-      }
-
-      setRedemption({ kind: "error", message: "Something went wrong claiming your seat. Please try again." });
-    } catch {
-      setRedemption({ kind: "error", message: "Something went wrong claiming your seat. Please try again." });
-    }
+    const consentSaved = await saveConsent(instructorId, session.userId, session.email, consented);
+    setRedemption({ kind: "success", proExpiresAt, consentChoice: consented, consentSaved });
   }
 
   async function handleRetryConsent() {
@@ -286,7 +315,10 @@ export default function RedeemClient({ token }: { token: string }) {
         <div className="card" style={{ textAlign: "center" }}>
           {mascot}
           <h1 style={{ marginTop: "1rem" }}>You&apos;re already set up</h1>
-          <p className="muted">Your account already has full ClearPass Pro access — there&apos;s nothing more to do.</p>
+          <p className="muted">
+            You already have full ClearPass Pro access, so this invite hasn&apos;t been used yet. It&apos;s still valid — if that
+            ever changes, come back to the same link.
+          </p>
         </div>
       </main>
     );
@@ -342,7 +374,12 @@ export default function RedeemClient({ token }: { token: string }) {
   }
 
   // seatState.kind === "ready" from here on.
-  const invitedBy = seatState.instructorName ? `${seatState.instructorName} has ` : "You've been ";
+  const invitedByName = presentableInstructorName(seatState.instructorName);
+  // Built as one complete sentence, not a prefix concatenated with a shared
+  // suffix in JSX — "You've been " + "given you ClearPass Pro" reads as
+  // "You've been given you ClearPass Pro" (caught by actually exercising
+  // the no-name fallback, not just the happy path).
+  const invitedByHeadline = invitedByName ? `${invitedByName} has given you ClearPass Pro` : "You've been given ClearPass Pro";
 
   if (session.status === "loading") {
     return (
@@ -353,45 +390,60 @@ export default function RedeemClient({ token }: { token: string }) {
   }
 
   if (session.status === "signed-in") {
+    if (redemption.kind === "error") {
+      return (
+        <main className="centered-shell">
+          <div className="card" style={{ textAlign: "center" }}>
+            {mascot}
+            <h1 style={{ marginTop: "1rem" }}>Something went wrong</h1>
+            <p className="muted">{redemption.message}</p>
+            <button className="btn btn-primary" style={{ marginTop: "1rem" }} onClick={() => void attemptRedeem()}>
+              Try again
+            </button>
+          </div>
+        </main>
+      );
+    }
+
+    if (redemption.kind === "awaiting_consent" || redemption.kind === "saving_consent") {
+      const saving = redemption.kind === "saving_consent";
+      return (
+        <main className="centered-shell">
+          <div className="card">
+            <div className="card-header">
+              {mascot}
+              <h1>Sharing your progress</h1>
+            </div>
+
+            <p style={{ color: "var(--text-dark)", lineHeight: 1.5 }}>
+              Your instructor will be able to see how you&apos;re getting on — your practice scores, mock test results, and which
+              topics you find tricky.
+            </p>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginTop: "1.25rem" }}>
+              <button className="btn btn-primary btn-block" disabled={saving} onClick={() => void handleConsent(true)}>
+                {saving ? "One moment…" : "Share my progress"}
+              </button>
+              <button className="btn btn-secondary btn-block" disabled={saving} onClick={() => void handleConsent(false)}>
+                {saving ? "One moment…" : "Don't share my progress"}
+              </button>
+            </div>
+            <p className="muted" style={{ marginTop: "1rem", marginBottom: 0, fontSize: "0.8rem", textAlign: "center" }}>
+              Your ClearPass Pro access is already active — this choice is just about progress sharing, and you can change it later.
+            </p>
+          </div>
+        </main>
+      );
+    }
+
+    // "idle" or "redeeming" — the automatic redemption call triggered by the
+    // effect above is in flight. Deliberately no button here: this happens
+    // the moment the learner is signed in, not on any further action of
+    // theirs, so declining consent (further down) is never what stands
+    // between them and Pro.
     return (
       <main className="centered-shell">
-        <div className="card">
-          <div className="card-header">
-            {mascot}
-            <h1>Sharing your progress</h1>
-          </div>
-
-          <p style={{ color: "var(--text-dark)", lineHeight: 1.5 }}>
-            Your instructor will be able to see how you&apos;re getting on — your practice scores, mock test results, and which
-            topics you find tricky.
-          </p>
-
-          {redemption.kind === "error" && (
-            <div className="error-banner" role="alert">
-              <span>{redemption.message}</span>
-            </div>
-          )}
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginTop: "1.25rem" }}>
-            <button
-              className="btn btn-primary btn-block"
-              disabled={redemption.kind === "submitting"}
-              onClick={() => void handleConsent(true)}
-            >
-              {redemption.kind === "submitting" ? "One moment…" : "Share my progress"}
-            </button>
-            <button
-              className="btn btn-secondary btn-block"
-              disabled={redemption.kind === "submitting"}
-              onClick={() => void handleConsent(false)}
-            >
-              {redemption.kind === "submitting" ? "One moment…" : "Don't share my progress"}
-            </button>
-          </div>
-          <p className="muted" style={{ marginTop: "1rem", marginBottom: 0, fontSize: "0.8rem", textAlign: "center" }}>
-            Either way, you&apos;ll get your ClearPass Pro access. You can change this later.
-          </p>
-        </div>
+        <p className="muted">Setting up your Pro access…</p>
       </main>
     );
   }
@@ -428,7 +480,7 @@ export default function RedeemClient({ token }: { token: string }) {
         <div className="card-header">
           {mascot}
           <div>
-            <h1>{invitedBy}given you ClearPass Pro</h1>
+            <h1>{invitedByHeadline}</h1>
             <p className="muted" style={{ marginTop: "0.4rem" }}>
               90 days free — hazard perception, mock tests, and more.
             </p>
