@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import RedeemClient from "./RedeemClient";
 import type { SeatStatusResponse } from "@/lib/types";
+import { presentableInstructorName } from "@/lib/instructorName";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://clearpass-app-production.up.railway.app";
 
@@ -23,8 +24,9 @@ export async function generateMetadata({ params }: PageProps<"/redeem/[token]">)
     });
     if (res.ok) {
       const data = (await res.json()) as SeatStatusResponse;
-      if (data.valid && data.instructorName) {
-        title = `${data.instructorName} has given you ClearPass Pro`;
+      const name = data.valid ? presentableInstructorName(data.instructorName) : null;
+      if (name) {
+        title = `${name} has given you ClearPass Pro`;
       }
     }
   } catch {
