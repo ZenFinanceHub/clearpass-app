@@ -31,10 +31,31 @@ type Relationship = {
 
 type InstructorEntry = {
   rel: Relationship;
-  instructorUsername: string | null;
+  instructorName: string | null;
 };
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// Mirrors apps/instructor-web/lib/instructorName.ts's presentability check —
+// duplicated rather than imported, matching that file's own note about not
+// crossing the apps/mobile <-> apps/instructor-web boundary. profiles.username
+// (and now profiles.display_name) are free-text fields with no format
+// validation, so a raw email address is a real possibility either way.
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function presentableInstructorName(name: string | null | undefined): string | null {
+  const trimmed = name?.trim();
+  if (!trimmed) return null;
+  if (EMAIL_SHAPE.test(trimmed)) return null;
+  return trimmed;
+}
+
+function resolveInstructorDisplayName(
+  displayName: string | null | undefined,
+  username: string | null | undefined
+): string | null {
+  return presentableInstructorName(displayName) ?? presentableInstructorName(username);
+}
 
 function getInitials(name: string): string {
   const p = name.trim().split(/\s+/);
@@ -69,19 +90,22 @@ export default function LinkedInstructorsScreen() {
       const relationships = (rels as Relationship[] | null) ?? [];
       const instructorIds = [...new Set(relationships.map(r => r.instructor_id))];
 
-      let instructorProfiles: { id: string; username: string | null }[] = [];
+      let instructorProfiles: { id: string; username: string | null; display_name: string | null }[] = [];
       if (instructorIds.length > 0) {
         const { data: profileRows } = await supabase
           .from('profiles')
-          .select('id, username')
+          .select('id, username, display_name')
           .in('id', instructorIds);
-        instructorProfiles = (profileRows as { id: string; username: string | null }[] | null) ?? [];
+        instructorProfiles = (profileRows as { id: string; username: string | null; display_name: string | null }[] | null) ?? [];
       }
 
-      setInstructors(relationships.map(rel => ({
-        rel,
-        instructorUsername: instructorProfiles.find(p => p.id === rel.instructor_id)?.username ?? null,
-      })));
+      setInstructors(relationships.map(rel => {
+        const profile = instructorProfiles.find(p => p.id === rel.instructor_id);
+        return {
+          rel,
+          instructorName: resolveInstructorDisplayName(profile?.display_name, profile?.username),
+        };
+      }));
     } catch {
       // Table likely doesn't exist yet — show empty state
     } finally {
@@ -165,7 +189,7 @@ function LearnerModeView({
 
       const { data: instructorProfile, error } = await supabase
         .from('profiles')
-        .select('id, username')
+        .select('id, username, display_name')
         .eq('instructor_code', code)
         .single();
 
@@ -205,7 +229,8 @@ function LearnerModeView({
         invite_code: code,
       });
 
-      const iname = (instructorProfile as { username?: string }).username ?? 'your instructor';
+      const { display_name, username } = instructorProfile as { display_name?: string | null; username?: string | null };
+      const iname = resolveInstructorDisplayName(display_name, username) ?? 'your instructor';
       Alert.alert('Linked!', `You are now linked to ${iname}.`);
       setEnteredCode('');
       setShowCodeModal(false);
@@ -264,12 +289,12 @@ function LearnerModeView({
             <View key={entry.rel.id} style={[styles.instructorCard, { backgroundColor: theme.cardColor }]}>
               <View style={[styles.avatarCircle, { backgroundColor: Colors.indigo }]}>
                 <Text style={styles.avatarText}>
-                  {getInitials(entry.instructorUsername ?? 'IN')}
+                  {getInitials(entry.instructorName ?? 'IN')}
                 </Text>
               </View>
               <View style={styles.learnerMeta}>
                 <Text style={[styles.learnerName, { color: theme.textColor }]}>
-                  {entry.instructorUsername ?? 'An instructor'}
+                  {entry.instructorName ?? 'An instructor'}
                 </Text>
                 <Text style={[styles.learnerSub, { color: theme.subTextColor }]}>
                   {'Requested '}{formatDate(entry.rel.created_at)}
@@ -316,12 +341,12 @@ function LearnerModeView({
           <View key={entry.rel.id} style={[styles.instructorCard, { backgroundColor: theme.cardColor }]}>
             <View style={[styles.avatarCircle, { backgroundColor: Colors.indigo }]}>
               <Text style={styles.avatarText}>
-                {getInitials(entry.instructorUsername ?? 'IN')}
+                {getInitials(entry.instructorName ?? 'IN')}
               </Text>
             </View>
             <View style={styles.learnerMeta}>
               <Text style={[styles.learnerName, { color: theme.textColor }]}>
-                {entry.instructorUsername ?? 'Instructor'}
+                {entry.instructorName ?? 'Instructor'}
               </Text>
               <Text style={[styles.learnerSub, { color: theme.subTextColor }]}>
                 {'Linked '}{formatDate(entry.rel.created_at)}
@@ -329,7 +354,7 @@ function LearnerModeView({
             </View>
             <TouchableOpacity
               style={styles.removeBtn}
-              onPress={() => void handleRemove(entry.rel.id, entry.instructorUsername ?? 'Instructor')}
+              onPress={() => void handleRemove(entry.rel.id, entry.instructorName ?? 'Instructor')}
               activeOpacity={0.75}
             >
               <Text style={styles.removeBtnText}>{'Remove'}</Text>

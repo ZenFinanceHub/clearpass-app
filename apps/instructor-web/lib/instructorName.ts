@@ -15,3 +15,16 @@ export function presentableInstructorName(name: string | null | undefined): stri
   if (EMAIL_SHAPE.test(trimmed)) return null;
   return trimmed;
 }
+
+// display_name (profiles.display_name) is what an instructor deliberately
+// set on the dashboard specifically to be shown to learners — preferred
+// whenever it passes the same presentability check as username below.
+// username is the pre-existing fallback for instructors who haven't set
+// one yet. Each step is checked independently: a present-but-email-shaped
+// display_name still falls through to username, not straight to generic.
+export function resolveInstructorDisplayName(
+  displayName: string | null | undefined,
+  username: string | null | undefined
+): string | null {
+  return presentableInstructorName(displayName) ?? presentableInstructorName(username);
+}

@@ -5,7 +5,7 @@ import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/lib/useSession";
 import { APP_STORE_URL, PLAY_STORE_URL, STORE_LISTINGS_LIVE } from "@/lib/appStore";
-import { presentableInstructorName } from "@/lib/instructorName";
+import { resolveInstructorDisplayName } from "@/lib/instructorName";
 import type { SeatStatusResponse } from "@/lib/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://clearpass-app-production.up.railway.app";
@@ -140,7 +140,11 @@ export default function RedeemClient({ token }: { token: string }) {
           setSeatState({ kind: "redeemed" });
           return;
         }
-        setSeatState({ kind: "ready", instructorId: data.instructorId, instructorName: data.instructorName });
+        setSeatState({
+          kind: "ready",
+          instructorId: data.instructorId,
+          instructorName: resolveInstructorDisplayName(data.instructorDisplayName, data.instructorUsername),
+        });
       } catch {
         if (!cancelled) setSeatState({ kind: "check_failed" });
       }
@@ -374,7 +378,9 @@ export default function RedeemClient({ token }: { token: string }) {
   }
 
   // seatState.kind === "ready" from here on.
-  const invitedByName = presentableInstructorName(seatState.instructorName);
+  // Already resolved (display_name -> username -> null) when seatState was
+  // set, above — no need to re-check presentability here.
+  const invitedByName = seatState.instructorName;
   // Built as one complete sentence, not a prefix concatenated with a shared
   // suffix in JSX — "You've been " + "given you ClearPass Pro" reads as
   // "You've been given you ClearPass Pro" (caught by actually exercising

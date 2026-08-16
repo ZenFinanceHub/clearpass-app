@@ -21,5 +21,5 @@ export function seatInviteLink(token: string): string {
 // read-only lookup, never a write. See app/redeem/[token]/RedeemClient.tsx.
 export type SeatStatusResponse =
   | { valid: false }
-  | { valid: true; redeemed: true; instructorId: string; instructorName: string | null }
-  | { valid: true; redeemed: false; instructorId: string; instructorName: string | null };
+  | { valid: true; redeemed: true; instructorId: string; instructorDisplayName: string | null; instructorUsername: string | null }
+  | { valid: true; redeemed: false; instructorId: string; instructorDisplayName: string | null; instructorUsername: string | null };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useInstructorAuth } from "@/lib/useInstructorAuth";
@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { seatInviteLink, type InstructorSeat } from "@/lib/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://clearpass-app-production.up.railway.app";
+const MAX_DISPLAY_NAME_LENGTH = 60;
 
 export default function DashboardPage() {
   const auth = useInstructorAuth();
@@ -17,6 +18,12 @@ export default function DashboardPage() {
   const [buying, setBuying] = useState(false);
   const [buyError, setBuyError] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const [displayName, setDisplayName] = useState("");
+  const [displayNameLoaded, setDisplayNameLoaded] = useState(false);
+  const [displayNameSaving, setDisplayNameSaving] = useState(false);
+  const [displayNameSaved, setDisplayNameSaved] = useState(false);
+  const [displayNameError, setDisplayNameError] = useState("");
 
   useEffect(() => {
     if (auth.status === "unauthenticated") {
@@ -49,6 +56,59 @@ export default function DashboardPage() {
       cancelled = true;
     };
   }, [auth.status, router]);
+
+  const instructorId = auth.status === "instructor" ? auth.userId : null;
+
+  useEffect(() => {
+    if (!instructorId) return;
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase.from("profiles").select("display_name").eq("id", instructorId).maybeSingle();
+      if (cancelled) return;
+      if (!error) {
+        setDisplayName((data as { display_name?: string | null } | null)?.display_name ?? "");
+      }
+      setDisplayNameLoaded(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [instructorId]);
+
+  async function handleSaveDisplayName(e: FormEvent) {
+    e.preventDefault();
+    if (auth.status !== "instructor") return;
+    setDisplayNameError("");
+    setDisplayNameSaved(false);
+
+    // Trimmed client-side, and an all-whitespace value is saved as null
+    // (falls through to username/generic) rather than as an empty string,
+    // which would otherwise render as a blank business name.
+    const trimmed = displayName.trim();
+    if (trimmed.length > MAX_DISPLAY_NAME_LENGTH) {
+      setDisplayNameError(
+        `Business name must be ${MAX_DISPLAY_NAME_LENGTH} characters or fewer (currently ${trimmed.length}).`
+      );
+      return;
+    }
+
+    setDisplayNameSaving(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ display_name: trimmed || null })
+        .eq("id", auth.userId);
+      if (error) {
+        setDisplayNameError("Could not save. Please try again.");
+        return;
+      }
+      setDisplayName(trimmed);
+      setDisplayNameSaved(true);
+      setTimeout(() => setDisplayNameSaved(false), 2000);
+    } finally {
+      setDisplayNameSaving(false);
+    }
+  }
 
   async function handleBuy() {
     setBuyError("");
@@ -114,6 +174,39 @@ export default function DashboardPage() {
       </header>
 
       <main>
+        <div className="section-card">
+          <form onSubmit={(e) => void handleSaveDisplayName(e)}>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label htmlFor="displayName">Business name</label>
+              <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", alignItems: "center" }}>
+                <input
+                  id="displayName"
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => {
+                    setDisplayName(e.target.value);
+                    setDisplayNameError("");
+                  }}
+                  placeholder="e.g. Dave's Driving School"
+                  disabled={!displayNameLoaded}
+                  style={{ flex: "1 1 240px" }}
+                />
+                <button className="btn btn-primary" type="submit" disabled={displayNameSaving || !displayNameLoaded}>
+                  {displayNameSaving ? "Saving…" : displayNameSaved ? "Saved ✓" : "Save"}
+                </button>
+              </div>
+              <p className="muted" style={{ marginTop: "0.5rem", marginBottom: 0, fontSize: "0.82rem" }}>
+                This is what learners see when you send them a Pro invite.
+              </p>
+            </div>
+          </form>
+          {displayNameError && (
+            <div className="error-banner" role="alert" style={{ marginTop: "0.75rem", marginBottom: 0 }}>
+              <span>{displayNameError}</span>
+            </div>
+          )}
+        </div>
+
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", marginBottom: "1.25rem", flexWrap: "wrap" }}>
           <h1>Learner seats</h1>
           <button className="btn btn-primary" onClick={() => void handleBuy()} disabled={buying}>
