@@ -148,7 +148,18 @@ async function main() {
   console.log(`\nApplying ${toStamp.length} stamp(s)...`);
   let stamped = 0;
   for (const row of toStamp) {
-    const updatedProgress = { ...row.progress, proSource: row.targetSource };
+    // isPro: true is already guaranteed by the candidate filter above, set
+    // again here for a self-contained record. proExpiresAt: null is the
+    // real fix — both target sources this script ever stamps ('instructor'
+    // and 'comp') are expiry-exempt (isExemptFromProExpiry), but the
+    // original version of this script left proExpiresAt whatever it already
+    // was (spreading row.progress and only setting proSource), which is
+    // exactly what caused grant-instructor-pro's idempotency check to miss
+    // three already-correct instructor accounts and re-write them, logging
+    // a misleading "granted: 3". Writing the same shape that cron itself
+    // writes means any future idempotency check on this record — that one
+    // or another — matches on the first read, not just after a rewrite.
+    const updatedProgress = { ...row.progress, isPro: true, proExpiresAt: null, proSource: row.targetSource };
     const { error: updateError } = await supabaseAdmin
       .from('user_progress')
       .update({ progress: updatedProgress, updated_at: new Date().toISOString() })

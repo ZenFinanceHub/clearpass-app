@@ -8,6 +8,7 @@ const {
   shouldApplyProGrant,
   isEligibleForProExpiry,
   clearInstructorGrant,
+  isInstructorGrantAlreadyCorrect,
   hasBlockingRelationships,
 } = require('./lib/entitlement');
 const { INSTRUCTOR_PAYOUT_STRIPE_MINOR } = require('./lib/earnings');
@@ -1541,7 +1542,7 @@ app.post('/api/cron/grant-instructor-pro', async (req, res) => {
 
     const instructorIds = (instructors || []).map(i => i.id);
     if (instructorIds.length === 0) {
-      return res.json({ granted: 0, skipped: 0 });
+      return res.json({ granted: 0, alreadyCorrect: 0, skipped: 0, total: 0 });
     }
 
     const { data: rows, error: progressErr } = await supabaseAdmin
@@ -1553,14 +1554,15 @@ app.post('/api/cron/grant-instructor-pro', async (req, res) => {
     const progressById = Object.fromEntries((rows || []).map(r => [r.id, r.progress || {}]));
 
     let granted = 0;
+    let alreadyCorrect = 0;
     let skipped = 0;
     for (const id of instructorIds) {
       const currentProgress = progressById[id] || {};
-      const alreadyGranted =
-        currentProgress.isPro === true &&
-        currentProgress.proSource === 'instructor' &&
-        currentProgress.proExpiresAt === null;
-      if (alreadyGranted) continue;
+
+      if (isInstructorGrantAlreadyCorrect(currentProgress)) {
+        alreadyCorrect++;
+        continue;
+      }
 
       if (!shouldApplyProGrant(currentProgress.proSource, 'instructor')) {
         skipped++;
@@ -1578,8 +1580,22 @@ app.post('/api/cron/grant-instructor-pro', async (req, res) => {
       granted++;
     }
 
-    console.log(`[grant-instructor-pro] granted ${granted}, skipped ${skipped} (blocked by an existing stripe grant)`);
-    res.json({ granted, skipped });
+    // Every instructor checked must land in exactly one bucket. A mismatch
+    // means something fell through uncounted (e.g. an update error above,
+    // or a future bug in this function) — logged loudly rather than left
+    // silent, since a silent gap here is exactly what let three
+    // already-correct accounts get miscounted as freshly "granted" before.
+    const accountedFor = granted + alreadyCorrect + skipped;
+    if (accountedFor !== instructorIds.length) {
+      console.error(
+        `[grant-instructor-pro] count mismatch: granted(${granted}) + alreadyCorrect(${alreadyCorrect}) + skipped(${skipped}) = ${accountedFor}, expected ${instructorIds.length}`
+      );
+    }
+
+    console.log(
+      `[grant-instructor-pro] granted ${granted}, alreadyCorrect ${alreadyCorrect}, skipped ${skipped} (blocked by an existing stripe grant), total ${instructorIds.length}`
+    );
+    res.json({ granted, alreadyCorrect, skipped, total: instructorIds.length });
   } catch (err) {
     console.error('[grant-instructor-pro] error:', err);
     res.status(500).json({ error: 'Grant instructor pro failed', detail: String(err) });

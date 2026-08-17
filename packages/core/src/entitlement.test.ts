@@ -4,6 +4,7 @@ import {
   hasBlockingRelationships,
   isEligibleForProExpiry,
   isExemptFromProExpiry,
+  isInstructorGrantAlreadyCorrect,
   shouldApplyProGrant,
 } from './entitlement';
 
@@ -145,6 +146,32 @@ describe('clearInstructorGrant', () => {
   test('leaves a user with no proSource at all untouched (nothing to clear)', () => {
     const state = { isPro: false, proExpiresAt: null };
     expect(clearInstructorGrant(state)).toEqual(state);
+  });
+});
+
+describe('isInstructorGrantAlreadyCorrect', () => {
+  test('true for proExpiresAt: null — the shape grant-instructor-pro itself writes', () => {
+    expect(isInstructorGrantAlreadyCorrect({ isPro: true, proExpiresAt: null, proSource: 'instructor' })).toBe(true);
+  });
+
+  test('true for proExpiresAt absent entirely — the exact production bug this fixes', () => {
+    expect(isInstructorGrantAlreadyCorrect({ isPro: true, proSource: 'instructor' })).toBe(true);
+  });
+
+  test('true for a stale non-null proExpiresAt — irrelevant, instructor is expiry-exempt regardless', () => {
+    expect(
+      isInstructorGrantAlreadyCorrect({ isPro: true, proExpiresAt: '2020-01-01T00:00:00.000Z', proSource: 'instructor' })
+    ).toBe(true);
+  });
+
+  test('false when proSource is not instructor, regardless of isPro', () => {
+    expect(isInstructorGrantAlreadyCorrect({ isPro: true, proExpiresAt: null, proSource: 'stripe' })).toBe(false);
+    expect(isInstructorGrantAlreadyCorrect({ isPro: true, proExpiresAt: null, proSource: 'comp' })).toBe(false);
+    expect(isInstructorGrantAlreadyCorrect({ isPro: true, proExpiresAt: null })).toBe(false);
+  });
+
+  test('false when isPro is not true, even with proSource instructor', () => {
+    expect(isInstructorGrantAlreadyCorrect({ isPro: false, proExpiresAt: null, proSource: 'instructor' })).toBe(false);
   });
 });
 
