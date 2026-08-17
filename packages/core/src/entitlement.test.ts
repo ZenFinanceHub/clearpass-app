@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
+  clearIapGrant,
   clearInstructorGrant,
   hasBlockingRelationships,
   isEligibleForProExpiry,
@@ -192,6 +193,33 @@ describe('clearInstructorGrant', () => {
   test('leaves a user with no proSource at all untouched (nothing to clear)', () => {
     const state = { isPro: false, proExpiresAt: null };
     expect(clearInstructorGrant(state)).toEqual(state);
+  });
+});
+
+describe('clearIapGrant', () => {
+  test('clears isPro, proExpiresAt, and proSource when the grant is iap-sourced', () => {
+    const result = clearIapGrant({
+      isPro: true,
+      proExpiresAt: '2026-11-14T00:00:00.000Z',
+      proSource: 'iap',
+      xp: 500,
+    });
+    expect(result).toEqual({ isPro: false, proExpiresAt: null, proSource: null, xp: 500 });
+  });
+
+  test('leaves a stripe-sourced grant completely untouched', () => {
+    const state = { isPro: true, proExpiresAt: '2027-01-01T00:00:00.000Z', proSource: 'stripe' as const, xp: 10 };
+    expect(clearIapGrant(state)).toEqual(state);
+  });
+
+  test('leaves a comp-sourced grant completely untouched — a late/stale iap EXPIRATION must never clobber a manual comp applied since', () => {
+    const state = { isPro: true, proExpiresAt: null, proSource: 'comp' as const };
+    expect(clearIapGrant(state)).toEqual(state);
+  });
+
+  test('leaves a user with no proSource at all untouched (nothing to clear)', () => {
+    const state = { isPro: false, proExpiresAt: null };
+    expect(clearIapGrant(state)).toEqual(state);
   });
 });
 

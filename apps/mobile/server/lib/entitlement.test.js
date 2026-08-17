@@ -5,6 +5,7 @@ const {
   isExemptFromProExpiry,
   isEligibleForProExpiry,
   clearInstructorGrant,
+  clearIapGrant,
   isInstructorGrantAlreadyCorrect,
   hasBlockingRelationships,
 } = require('./entitlement');
@@ -134,6 +135,23 @@ test('clearInstructorGrant leaves a stripe-sourced grant untouched', () => {
 test('clearInstructorGrant leaves a comp-sourced grant untouched', () => {
   const state = { isPro: true, proExpiresAt: null, proSource: 'comp' };
   assert.deepEqual(clearInstructorGrant(state), state);
+});
+
+test('clearIapGrant clears an iap-sourced grant', () => {
+  assert.deepEqual(
+    clearIapGrant({ isPro: true, proExpiresAt: '2026-11-14T00:00:00.000Z', proSource: 'iap', xp: 500 }),
+    { isPro: false, proExpiresAt: null, proSource: null, xp: 500 }
+  );
+});
+
+test('clearIapGrant leaves a stripe-sourced grant untouched', () => {
+  const state = { isPro: true, proExpiresAt: '2027-01-01T00:00:00.000Z', proSource: 'stripe' };
+  assert.deepEqual(clearIapGrant(state), state);
+});
+
+test('clearIapGrant leaves a comp-sourced grant untouched — a late/stale iap EXPIRATION must never clobber a manual comp applied since', () => {
+  const state = { isPro: true, proExpiresAt: null, proSource: 'comp' };
+  assert.deepEqual(clearIapGrant(state), state);
 });
 
 test('isInstructorGrantAlreadyCorrect: true for proExpiresAt null — the shape grant-instructor-pro itself writes', () => {

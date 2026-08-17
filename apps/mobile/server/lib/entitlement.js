@@ -61,6 +61,17 @@ function clearInstructorGrant(state) {
   return { ...state, isPro: false, proExpiresAt: null, proSource: null };
 }
 
+// Used when a RevenueCat EXPIRATION event confirms an iap-sourced
+// subscription's paid period has actually ended (see
+// POST /api/revenuecat-webhook below). Mirrors clearInstructorGrant's guard
+// exactly: only clears if the grant is still iap-sourced, so a late-arriving
+// or out-of-order EXPIRATION for a grant that's since been superseded (e.g.
+// manually comp'd) can never clobber it.
+function clearIapGrant(state) {
+  if (state.proSource !== 'iap') return state;
+  return { ...state, isPro: false, proExpiresAt: null, proSource: null };
+}
+
 // True if this progress state already reflects a correct, unconditional
 // instructor-sourced Pro grant. Deliberately does NOT check proExpiresAt —
 // 'instructor' is exempt from expiry (isExemptFromProExpiry above), so its
@@ -93,6 +104,7 @@ module.exports = {
   isExemptFromProExpiry,
   isEligibleForProExpiry,
   clearInstructorGrant,
+  clearIapGrant,
   isInstructorGrantAlreadyCorrect,
   hasBlockingRelationships,
 };
