@@ -50,6 +50,21 @@ export function clearInstructorGrant<T extends ProGrantState>(state: T): T {
   return { ...state, isPro: false, proExpiresAt: null, proSource: null };
 }
 
+// True if this progress state already reflects a correct, unconditional
+// instructor-sourced Pro grant. Deliberately does NOT check proExpiresAt —
+// 'instructor' is exempt from expiry (isExemptFromProExpiry above), so its
+// value is entitlement-irrelevant. Checking it used to make
+// grant-instructor-pro's idempotency check brittle against any record that
+// reached { isPro: true, proSource: 'instructor' } by a path other than
+// that cron (e.g. a hand backfill) without also explicitly nulling
+// proExpiresAt — exactly what happened in production: a backfill script
+// set proSource alone, leaving a stale/absent proExpiresAt behind, so the
+// cron re-wrote three already-correct accounts and reported them as freshly
+// "granted" instead of recognizing them as already done.
+export function isInstructorGrantAlreadyCorrect(state: { isPro: boolean; proSource?: ProSource | null }): boolean {
+  return state.isPro === true && state.proSource === 'instructor';
+}
+
 // True if any relationship is 'accepted' OR 'consent_withdrawn' — an
 // instructor switching to learner must unlink every real pupil first, so no
 // pupil is left with an instructor who no longer exists as one.

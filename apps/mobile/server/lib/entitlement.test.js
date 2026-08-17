@@ -5,6 +5,7 @@ const {
   isExemptFromProExpiry,
   isEligibleForProExpiry,
   clearInstructorGrant,
+  isInstructorGrantAlreadyCorrect,
   hasBlockingRelationships,
 } = require('./entitlement');
 
@@ -90,6 +91,31 @@ test('clearInstructorGrant leaves a stripe-sourced grant untouched', () => {
 test('clearInstructorGrant leaves a comp-sourced grant untouched', () => {
   const state = { isPro: true, proExpiresAt: null, proSource: 'comp' };
   assert.deepEqual(clearInstructorGrant(state), state);
+});
+
+test('isInstructorGrantAlreadyCorrect: true for proExpiresAt null — the shape grant-instructor-pro itself writes', () => {
+  assert.equal(isInstructorGrantAlreadyCorrect({ isPro: true, proExpiresAt: null, proSource: 'instructor' }), true);
+});
+
+test('isInstructorGrantAlreadyCorrect: true for proExpiresAt absent entirely — the exact production bug this fixes', () => {
+  assert.equal(isInstructorGrantAlreadyCorrect({ isPro: true, proSource: 'instructor' }), true);
+});
+
+test('isInstructorGrantAlreadyCorrect: true for a stale non-null proExpiresAt — irrelevant, instructor is expiry-exempt regardless', () => {
+  assert.equal(
+    isInstructorGrantAlreadyCorrect({ isPro: true, proExpiresAt: '2020-01-01T00:00:00.000Z', proSource: 'instructor' }),
+    true
+  );
+});
+
+test('isInstructorGrantAlreadyCorrect: false when proSource is not instructor, regardless of isPro', () => {
+  assert.equal(isInstructorGrantAlreadyCorrect({ isPro: true, proExpiresAt: null, proSource: 'stripe' }), false);
+  assert.equal(isInstructorGrantAlreadyCorrect({ isPro: true, proExpiresAt: null, proSource: 'comp' }), false);
+  assert.equal(isInstructorGrantAlreadyCorrect({ isPro: true, proExpiresAt: null }), false);
+});
+
+test('isInstructorGrantAlreadyCorrect: false when isPro is not true, even with proSource instructor', () => {
+  assert.equal(isInstructorGrantAlreadyCorrect({ isPro: false, proExpiresAt: null, proSource: 'instructor' }), false);
 });
 
 test('hasBlockingRelationships is true when any relationship is accepted', () => {
