@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
+  clearIapGrant,
   clearInstructorGrant,
   hasBlockingRelationships,
   isEligibleForProExpiry,
@@ -53,6 +54,52 @@ describe('shouldApplyProGrant', () => {
 
   test('a comp grant can reapply over itself (idempotent reconciliation)', () => {
     expect(shouldApplyProGrant('comp', 'comp')).toBe(true);
+  });
+
+  test('an iap grant behaves like stripe against every other source', () => {
+    expect(shouldApplyProGrant('instructor', 'iap')).toBe(true);
+    expect(shouldApplyProGrant('seat', 'iap')).toBe(true);
+    // iap outranks comp, same as stripe already does (PRO_SOURCE_PRIORITY: stripe/iap 4 > comp 3).
+    expect(shouldApplyProGrant('comp', 'iap')).toBe(true);
+    expect(shouldApplyProGrant('iap', 'instructor')).toBe(false);
+    expect(shouldApplyProGrant('iap', 'seat')).toBe(false);
+    expect(shouldApplyProGrant('iap', 'comp')).toBe(false);
+  });
+
+  test('an iap grant can reapply/renew over itself regardless of expiry order (renewal always applies)', () => {
+    expect(
+      shouldApplyProGrant('iap', 'iap', '2027-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')
+    ).toBe(true);
+  });
+
+  test('stripe vs iap, no expiry args given: same tier, different source, treated as not-later (false) — callers must pass expiry to break the tie', () => {
+    expect(shouldApplyProGrant('stripe', 'iap')).toBe(false);
+    expect(shouldApplyProGrant('iap', 'stripe')).toBe(false);
+  });
+
+  test('stripe vs iap: the grant with the later proExpiresAt wins, regardless of which source is incoming', () => {
+    const earlier = '2026-01-01T00:00:00.000Z';
+    const later = '2026-06-01T00:00:00.000Z';
+    // Existing stripe expires later than the incoming iap grant would -> keep stripe.
+    expect(shouldApplyProGrant('stripe', 'iap', later, earlier)).toBe(false);
+    // Existing stripe expires earlier than the incoming iap grant would -> switch to iap.
+    expect(shouldApplyProGrant('stripe', 'iap', earlier, later)).toBe(true);
+    // Symmetric: existing iap vs incoming stripe.
+    expect(shouldApplyProGrant('iap', 'stripe', later, earlier)).toBe(false);
+    expect(shouldApplyProGrant('iap', 'stripe', earlier, later)).toBe(true);
+  });
+
+  test('stripe vs iap tie on an equal expiry date: incoming does not win a tie', () => {
+    const same = '2026-06-01T00:00:00.000Z';
+    expect(shouldApplyProGrant('stripe', 'iap', same, same)).toBe(false);
+  });
+
+  test('stripe vs iap: a missing current expiry loses to any incoming expiry', () => {
+    expect(shouldApplyProGrant('stripe', 'iap', null, '2026-06-01T00:00:00.000Z')).toBe(true);
+  });
+
+  test('stripe vs iap: a missing incoming expiry never wins', () => {
+    expect(shouldApplyProGrant('stripe', 'iap', '2026-06-01T00:00:00.000Z', null)).toBe(false);
   });
 });
 
@@ -146,6 +193,33 @@ describe('clearInstructorGrant', () => {
   test('leaves a user with no proSource at all untouched (nothing to clear)', () => {
     const state = { isPro: false, proExpiresAt: null };
     expect(clearInstructorGrant(state)).toEqual(state);
+  });
+});
+
+describe('clearIapGrant', () => {
+  test('clears isPro, proExpiresAt, and proSource when the grant is iap-sourced', () => {
+    const result = clearIapGrant({
+      isPro: true,
+      proExpiresAt: '2026-11-14T00:00:00.000Z',
+      proSource: 'iap',
+      xp: 500,
+    });
+    expect(result).toEqual({ isPro: false, proExpiresAt: null, proSource: null, xp: 500 });
+  });
+
+  test('leaves a stripe-sourced grant completely untouched', () => {
+    const state = { isPro: true, proExpiresAt: '2027-01-01T00:00:00.000Z', proSource: 'stripe' as const, xp: 10 };
+    expect(clearIapGrant(state)).toEqual(state);
+  });
+
+  test('leaves a comp-sourced grant completely untouched — a late/stale iap EXPIRATION must never clobber a manual comp applied since', () => {
+    const state = { isPro: true, proExpiresAt: null, proSource: 'comp' as const };
+    expect(clearIapGrant(state)).toEqual(state);
+  });
+
+  test('leaves a user with no proSource at all untouched (nothing to clear)', () => {
+    const state = { isPro: false, proExpiresAt: null };
+    expect(clearIapGrant(state)).toEqual(state);
   });
 });
 

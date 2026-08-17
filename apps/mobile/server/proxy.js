@@ -11,6 +11,7 @@ const {
   isInstructorGrantAlreadyCorrect,
   hasBlockingRelationships,
 } = require('./lib/entitlement');
+const { resolveRevenueCatUpdate } = require('./lib/revenuecatWebhook');
 const { INSTRUCTOR_PAYOUT_STRIPE_MINOR } = require('./lib/earnings');
 const {
   generateSeatToken,
@@ -35,6 +36,11 @@ const PORT = 3001;
 //   RESEND_API_KEY
 //   CRON_SECRET  — shared secret for /api/cron/* endpoints (set in Railway dashboard)
 //     Suggested value: r8Kp3Nq7Zm2Xt5Yb4Vw9As1Dc6Ef0Gh
+//   REVENUECAT_WEBHOOK_SECRET  — shared secret for POST /api/revenuecat-webhook.
+//     Set the exact same value as the "Authorization header value" field in
+//     the RevenueCat dashboard's webhook configuration (app.revenuecat.com >
+//     Project > Integrations > Webhooks) — RC sends it back verbatim on
+//     every delivery, there is no HMAC signature scheme like Stripe's.
 
 const corsOptions = {
   origin: function (origin, callback) {
@@ -418,6 +424,103 @@ app.post('/api/stripe/connect-webhook', express.raw({ type: 'application/json' }
     } catch (e) {
       console.error('[connect-webhook] Supabase update error:', e);
     }
+  }
+
+  res.json({ received: true });
+});
+
+// ─── POST /api/revenuecat-webhook ─────────────────────────────────────────────
+// RevenueCat's server-side notification for App Store/Play Store IAP events —
+// the client's own purchasePackage() call proves nothing server-side (see
+// src/purchases.ts); this is what actually grants Pro. Auth is a static
+// bearer token (REVENUECAT_WEBHOOK_SECRET), not an HMAC signature — RC has no
+// signing scheme like Stripe's, just whatever string you configure as the
+// "Authorization header value" in its dashboard, sent back verbatim.
+//
+// All the actual decision logic (which event types are handled, how
+// expiration_at_ms maps to proExpiresAt, what a CANCELLATION vs an
+// EXPIRATION does) lives in the pure, unit-tested resolveRevenueCatUpdate —
+// this route is just auth + dedup + fetch/upsert wiring around it.
+app.post('/api/revenuecat-webhook', express.json(), async (req, res) => {
+  const webhookSecret = process.env.REVENUECAT_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    return res.status(500).json({ error: 'RevenueCat webhook not configured' });
+  }
+  if (req.headers['authorization'] !== webhookSecret) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const event = req.body && req.body.event;
+  if (!event || !event.id || !event.type) {
+    console.error('[revenuecat-webhook] malformed payload:', JSON.stringify(req.body));
+    return res.status(400).json({ error: 'Malformed payload' });
+  }
+
+  const supabaseAdmin = getSupabaseAdmin();
+
+  // Same dedup pattern as the Stripe webhook above: insert on RC's own
+  // event id before doing anything else, treat a unique-constraint conflict
+  // as "already processed, skip". RC retries on any non-2xx response, same
+  // as Stripe.
+  const { error: dedupError } = await supabaseAdmin
+    .from('revenuecat_webhook_events')
+    .insert({ event_id: event.id, event_type: event.type });
+
+  if (dedupError) {
+    if (dedupError.code === '23505') {
+      console.log('[revenuecat-webhook] duplicate event, skipping:', event.id);
+      return res.json({ received: true, duplicate: true });
+    }
+    console.error('[revenuecat-webhook] dedup insert error:', dedupError);
+    return res.status(500).json({ error: 'Webhook dedup failed' });
+  }
+
+  // app_user_id is the Supabase user id — set as appUserID when the app
+  // calls Purchases.configure() (see src/purchases.ts), so this maps
+  // straight back to user_progress.id with no separate lookup table.
+  const userId = event.app_user_id;
+  if (!userId) {
+    console.error('[revenuecat-webhook] missing app_user_id on event:', event.id, event.type);
+    return res.json({ received: true });
+  }
+
+  try {
+    const { data: existing } = await supabaseAdmin
+      .from('user_progress')
+      .select('progress')
+      .eq('id', userId)
+      .single();
+
+    const currentProgress = existing?.progress || {};
+    // resolveRevenueCatUpdate trusts RC's own expiration_at_ms over any
+    // locally-computed guess — see lib/revenuecatWebhook.js for the full
+    // per-event-type reasoning (INITIAL_PURCHASE/RENEWAL/CANCELLATION/
+    // EXPIRATION), including the fixed-duration fallback used only when
+    // that field is unexpectedly absent from the payload.
+    const { progress: patch, warning } = resolveRevenueCatUpdate(event.type, event.expiration_at_ms, currentProgress);
+
+    if (warning) {
+      console.warn(`[revenuecat-webhook] ${warning} (event ${event.id}, user ${userId})`);
+    }
+
+    if (!patch) {
+      console.log(`[revenuecat-webhook] ${event.type}: no update applied for user`, userId);
+      return res.json({ received: true });
+    }
+
+    const updatedProgress = { ...currentProgress, ...patch };
+    const { error } = await supabaseAdmin
+      .from('user_progress')
+      .upsert({ id: userId, progress: updatedProgress, updated_at: new Date().toISOString() })
+      .eq('id', userId);
+
+    if (error) {
+      console.error('[revenuecat-webhook] Supabase update error:', error.message);
+    } else {
+      console.log(`[revenuecat-webhook] ${event.type} applied for user`, userId);
+    }
+  } catch (e) {
+    console.error('[revenuecat-webhook] Supabase error:', e);
   }
 
   res.json({ received: true });

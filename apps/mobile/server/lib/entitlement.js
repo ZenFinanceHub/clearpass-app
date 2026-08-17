@@ -5,18 +5,39 @@
 // CommonJS with no build step and no @clearpass/core dependency — it can't
 // require() TypeScript. Keep the two in sync by hand.
 
-// Higher wins. A paid Stripe grant is never silently downgraded by any free
-// grant. 'comp' (manually granted, e.g. reviewers/partners/beta testers) sits
-// above 'instructor' so the automated instructor-grant cron can never
-// silently overwrite a deliberate manual comp — comp is a one-off human
-// decision, instructor is a recurring automated reconciliation. Equal
-// priority still applies (e.g. a Stripe renewal, or the instructor cron
-// re-confirming an existing instructor grant).
-const PRO_SOURCE_PRIORITY = { stripe: 4, comp: 3, instructor: 2, seat: 1 };
+// Higher wins. A paid Stripe or IAP grant is never silently downgraded by
+// any free grant. 'iap' (RevenueCat-mediated App Store/Play Store purchases)
+// sits at the same tier as 'stripe' — both mean "the user paid us directly",
+// just through a different rail; see shouldApplyProGrant below for how a tie
+// between the two is actually broken. 'comp' (manually granted, e.g.
+// reviewers/partners/beta testers) sits above 'instructor' so the automated
+// instructor-grant cron can never silently overwrite a deliberate manual
+// comp — comp is a one-off human decision, instructor is a recurring
+// automated reconciliation. Equal priority still applies for same-source
+// pairs (e.g. a Stripe renewal, or the instructor cron re-confirming an
+// existing instructor grant).
+const PRO_SOURCE_PRIORITY = { stripe: 4, iap: 4, comp: 3, instructor: 2, seat: 1 };
 
-function shouldApplyProGrant(currentSource, incomingSource) {
+function shouldApplyProGrant(currentSource, incomingSource, currentExpiresAt, incomingExpiresAt) {
   if (!currentSource) return true;
-  return PRO_SOURCE_PRIORITY[incomingSource] >= PRO_SOURCE_PRIORITY[currentSource];
+
+  const currentPriority = PRO_SOURCE_PRIORITY[currentSource];
+  const incomingPriority = PRO_SOURCE_PRIORITY[incomingSource];
+  if (incomingPriority !== currentPriority) return incomingPriority > currentPriority;
+
+  // Equal priority. A source reapplying/renewing over itself always goes
+  // through, same as before 'iap' existed — trust the payment processor's
+  // own renewal semantics without second-guessing dates.
+  if (currentSource === incomingSource) return true;
+
+  // Equal priority, different source — today that only means stripe <-> iap
+  // (the only tie in the table). Whichever grant actually lasts longer
+  // wins, so a real purchase on one platform never gets silently clobbered
+  // by a shorter-lived grant from the other. No incoming expiry, or a tie,
+  // never wins — callers must pass both dates to break this tie at all.
+  if (!incomingExpiresAt) return false;
+  if (!currentExpiresAt) return true;
+  return incomingExpiresAt > currentExpiresAt;
 }
 
 // Instructor-sourced and comp-sourced Pro are both granted unconditionally
@@ -37,6 +58,17 @@ function isEligibleForProExpiry(state, nowIso) {
 // it has nothing to do with their now-former instructor status.
 function clearInstructorGrant(state) {
   if (state.proSource !== 'instructor') return state;
+  return { ...state, isPro: false, proExpiresAt: null, proSource: null };
+}
+
+// Used when a RevenueCat EXPIRATION event confirms an iap-sourced
+// subscription's paid period has actually ended (see
+// POST /api/revenuecat-webhook below). Mirrors clearInstructorGrant's guard
+// exactly: only clears if the grant is still iap-sourced, so a late-arriving
+// or out-of-order EXPIRATION for a grant that's since been superseded (e.g.
+// manually comp'd) can never clobber it.
+function clearIapGrant(state) {
+  if (state.proSource !== 'iap') return state;
   return { ...state, isPro: false, proExpiresAt: null, proSource: null };
 }
 
@@ -72,6 +104,7 @@ module.exports = {
   isExemptFromProExpiry,
   isEligibleForProExpiry,
   clearInstructorGrant,
+  clearIapGrant,
   isInstructorGrantAlreadyCorrect,
   hasBlockingRelationships,
 };

@@ -13,10 +13,15 @@ interface PaywallPromptProps {
 export function PaywallPrompt({ onUpgrade, onDismiss, dismissLabel = 'Maybe later' }: PaywallPromptProps) {
   const route = getPurchaseRoute();
 
-  // iOS today: nothing to upgrade to yet (IAP isn't implemented), so there's
-  // no purchase CTA at all — just the coming-soon message with a single
-  // acknowledge button. Every caller of PaywallPrompt gets this for free.
-  if (route !== 'stripe_checkout') {
+  // No purchase route available yet on this platform (iOS and Android
+  // both, until their respective store products exist) — no purchase CTA
+  // at all, just the coming-soon message with a single acknowledge button.
+  // Deliberately checks === 'coming_soon', not !== 'stripe_checkout': the
+  // latter used to also catch 'iap' and show this same message even once a
+  // real purchase was available, which would have silently hidden the
+  // upgrade CTA on the one platform it should work. Every caller of
+  // PaywallPrompt gets this for free.
+  if (route === 'coming_soon') {
     return (
       <View style={styles.card}>
         <Pip size={72} mood="sympathetic" />

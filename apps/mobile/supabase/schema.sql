@@ -267,6 +267,21 @@ CREATE TABLE IF NOT EXISTS stripe_webhook_events (
 ALTER TABLE stripe_webhook_events ENABLE ROW LEVEL SECURITY;
 -- No policies: no client-side access of any kind, service role only.
 
+-- RevenueCat webhook event dedup — same purpose and shape as
+-- stripe_webhook_events, kept as a separate table rather than a shared one:
+-- RC's event ids are a different namespace from Stripe's, and a table
+-- literally named stripe_webhook_events holding RC rows would be confusing
+-- even though the PK wouldn't actually collide. See POST
+-- /api/revenuecat-webhook in server/proxy.js.
+CREATE TABLE IF NOT EXISTS revenuecat_webhook_events (
+  event_id     TEXT PRIMARY KEY,
+  event_type   TEXT NOT NULL,
+  processed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE revenuecat_webhook_events ENABLE ROW LEVEL SECURITY;
+-- No policies: no client-side access of any kind, service role only.
+
 -- Instructor-purchased seats for the learner-Pro-gifting flow (instructor-
 -- paid seats phase 2). Minted unredeemed by the Stripe webhook on purchase
 -- (POST /api/instructor/seats/purchase); redeemed exactly once by a

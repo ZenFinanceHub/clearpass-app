@@ -5,6 +5,7 @@ const {
   isExemptFromProExpiry,
   isEligibleForProExpiry,
   clearInstructorGrant,
+  clearIapGrant,
   isInstructorGrantAlreadyCorrect,
   hasBlockingRelationships,
 } = require('./entitlement');
@@ -36,6 +37,49 @@ test('shouldApplyProGrant: an existing comp grant is never overwritten by instru
 test('shouldApplyProGrant: a comp grant can upgrade an existing instructor grant, but not stripe', () => {
   assert.equal(shouldApplyProGrant('instructor', 'comp'), true);
   assert.equal(shouldApplyProGrant('stripe', 'comp'), false);
+});
+
+test('shouldApplyProGrant: an iap grant behaves like stripe against every other source', () => {
+  assert.equal(shouldApplyProGrant('instructor', 'iap'), true);
+  assert.equal(shouldApplyProGrant('seat', 'iap'), true);
+  assert.equal(shouldApplyProGrant('comp', 'iap'), true);
+  assert.equal(shouldApplyProGrant('iap', 'instructor'), false);
+  assert.equal(shouldApplyProGrant('iap', 'seat'), false);
+  assert.equal(shouldApplyProGrant('iap', 'comp'), false);
+});
+
+test('shouldApplyProGrant: an iap grant can reapply/renew over itself regardless of expiry order', () => {
+  assert.equal(
+    shouldApplyProGrant('iap', 'iap', '2027-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z'),
+    true
+  );
+});
+
+test('shouldApplyProGrant: stripe vs iap with no expiry args given never applies — callers must pass expiry to break the tie', () => {
+  assert.equal(shouldApplyProGrant('stripe', 'iap'), false);
+  assert.equal(shouldApplyProGrant('iap', 'stripe'), false);
+});
+
+test('shouldApplyProGrant: stripe vs iap — the grant with the later proExpiresAt wins', () => {
+  const earlier = '2026-01-01T00:00:00.000Z';
+  const later = '2026-06-01T00:00:00.000Z';
+  assert.equal(shouldApplyProGrant('stripe', 'iap', later, earlier), false);
+  assert.equal(shouldApplyProGrant('stripe', 'iap', earlier, later), true);
+  assert.equal(shouldApplyProGrant('iap', 'stripe', later, earlier), false);
+  assert.equal(shouldApplyProGrant('iap', 'stripe', earlier, later), true);
+});
+
+test('shouldApplyProGrant: stripe vs iap tie on an equal expiry date does not apply', () => {
+  const same = '2026-06-01T00:00:00.000Z';
+  assert.equal(shouldApplyProGrant('stripe', 'iap', same, same), false);
+});
+
+test('shouldApplyProGrant: stripe vs iap — a missing current expiry loses to any incoming expiry', () => {
+  assert.equal(shouldApplyProGrant('stripe', 'iap', null, '2026-06-01T00:00:00.000Z'), true);
+});
+
+test('shouldApplyProGrant: stripe vs iap — a missing incoming expiry never wins', () => {
+  assert.equal(shouldApplyProGrant('stripe', 'iap', '2026-06-01T00:00:00.000Z', null), false);
 });
 
 test('isExemptFromProExpiry is true for instructor- and comp-sourced grants only', () => {
@@ -91,6 +135,23 @@ test('clearInstructorGrant leaves a stripe-sourced grant untouched', () => {
 test('clearInstructorGrant leaves a comp-sourced grant untouched', () => {
   const state = { isPro: true, proExpiresAt: null, proSource: 'comp' };
   assert.deepEqual(clearInstructorGrant(state), state);
+});
+
+test('clearIapGrant clears an iap-sourced grant', () => {
+  assert.deepEqual(
+    clearIapGrant({ isPro: true, proExpiresAt: '2026-11-14T00:00:00.000Z', proSource: 'iap', xp: 500 }),
+    { isPro: false, proExpiresAt: null, proSource: null, xp: 500 }
+  );
+});
+
+test('clearIapGrant leaves a stripe-sourced grant untouched', () => {
+  const state = { isPro: true, proExpiresAt: '2027-01-01T00:00:00.000Z', proSource: 'stripe' };
+  assert.deepEqual(clearIapGrant(state), state);
+});
+
+test('clearIapGrant leaves a comp-sourced grant untouched — a late/stale iap EXPIRATION must never clobber a manual comp applied since', () => {
+  const state = { isPro: true, proExpiresAt: null, proSource: 'comp' };
+  assert.deepEqual(clearIapGrant(state), state);
 });
 
 test('isInstructorGrantAlreadyCorrect: true for proExpiresAt null — the shape grant-instructor-pro itself writes', () => {
