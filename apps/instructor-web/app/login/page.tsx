@@ -57,7 +57,11 @@ export default function LoginPage() {
         // A mistyped address must not silently create a fresh, empty
         // account — it must tell the instructor no account exists.
         shouldCreateUser: false,
-        emailRedirectTo: `${window.location.origin}/login`,
+        // Hardcoded, not window.location.origin — this app has exactly one
+        // production domain, and deriving it from the requesting origin
+        // silently breaks the link whenever that origin isn't it (a Vercel
+        // preview, localhost, a bookmark to the wrong domain).
+        emailRedirectTo: "https://instructors.getclearpass.co.uk/login",
       },
     });
     setSubmitting(false);
