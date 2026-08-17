@@ -14,6 +14,13 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   );
 }
 
+// Captured before createClient() below, whose constructor kicks off an
+// async init that reads *and clears* location.hash itself when it's a magic
+// link callback (success or error). A page's own useEffect always loses that
+// race, so this is the only reliable way to see the raw params — e.g. to
+// detect an expired/already-used link (see lib/authErrors.ts).
+export const authRedirectHash = typeof window !== "undefined" ? window.location.hash : "";
+
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true },
 });
