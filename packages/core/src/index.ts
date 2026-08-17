@@ -5,6 +5,7 @@ export * from './types/DailyChallenge';
 export * from './types/HazardClip';
 export * from './types/UserProgress';
 export * from './entitlement';
+export * from './purchaseRoute';
 export * from './spacedRepetition';
 export * from './calculateReadiness';
 export * from './xp';

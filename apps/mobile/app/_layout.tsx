@@ -17,6 +17,7 @@ import { PipVisibilityProvider, usePipVisibility } from '@/src/PipVisibilityCont
 import { handleIncomingUrl } from '@/src/deepLinks';
 import { supabase } from '@/src/supabase';
 import { configureNotificationHandler } from '@/src/notifications';
+import { configurePurchases } from '@/src/purchases';
 import { resolvePostAuthRoute } from '@/src/postAuthRouting';
 import { Colors } from '@/src/constants/theme';
 import {
@@ -240,6 +241,13 @@ function RootLayout() {
               }
             } catch {}
           })();
+
+          // Configure RevenueCat with the Supabase user id as appUserID, so
+          // its webhook payloads match straight back to user_progress.id.
+          // Fire-and-forget: getPurchaseRoute() defaults to 'coming_soon'
+          // until this resolves, which is the correct state anyway while no
+          // store product exists — see src/purchaseGate.ts.
+          void configurePurchases(session.user.id);
         }
 
         navigated.current = true;

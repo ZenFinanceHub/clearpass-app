@@ -2,7 +2,7 @@ require('dotenv').config({ path: __dirname + '/.env' });
 
 const express = require('express');
 const cors = require('cors');
-const { computeProExpiresAt } = require('./lib/proExpiry');
+const { computeProExpiresAt, computeIapExpiresAt } = require('./lib/proExpiry');
 const { deriveConnectStatus } = require('./lib/connectStatus');
 const {
   shouldApplyProGrant,
@@ -35,6 +35,11 @@ const PORT = 3001;
 //   RESEND_API_KEY
 //   CRON_SECRET  — shared secret for /api/cron/* endpoints (set in Railway dashboard)
 //     Suggested value: r8Kp3Nq7Zm2Xt5Yb4Vw9As1Dc6Ef0Gh
+//   REVENUECAT_WEBHOOK_SECRET  — shared secret for POST /api/revenuecat-webhook.
+//     Set the exact same value as the "Authorization header value" field in
+//     the RevenueCat dashboard's webhook configuration (app.revenuecat.com >
+//     Project > Integrations > Webhooks) — RC sends it back verbatim on
+//     every delivery, there is no HMAC signature scheme like Stripe's.
 
 const corsOptions = {
   origin: function (origin, callback) {
@@ -420,6 +425,101 @@ app.post('/api/stripe/connect-webhook', express.raw({ type: 'application/json' }
     }
   }
 
+  res.json({ received: true });
+});
+
+// ─── POST /api/revenuecat-webhook ─────────────────────────────────────────────
+// RevenueCat's server-side notification for App Store/Play Store IAP events —
+// the client's own purchasePackage() call proves nothing server-side (see
+// src/purchases.ts); this is what actually grants Pro. Auth is a static
+// bearer token (REVENUECAT_WEBHOOK_SECRET), not an HMAC signature — RC has no
+// signing scheme like Stripe's, just whatever string you configure as the
+// "Authorization header value" in its dashboard, sent back verbatim.
+app.post('/api/revenuecat-webhook', express.json(), async (req, res) => {
+  const webhookSecret = process.env.REVENUECAT_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    return res.status(500).json({ error: 'RevenueCat webhook not configured' });
+  }
+  if (req.headers['authorization'] !== webhookSecret) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const event = req.body && req.body.event;
+  if (!event || !event.id || !event.type) {
+    console.error('[revenuecat-webhook] malformed payload:', JSON.stringify(req.body));
+    return res.status(400).json({ error: 'Malformed payload' });
+  }
+
+  const supabaseAdmin = getSupabaseAdmin();
+
+  // Same dedup pattern as the Stripe webhook above: insert on RC's own
+  // event id before doing anything else, treat a unique-constraint conflict
+  // as "already processed, skip". RC retries on any non-2xx response, same
+  // as Stripe.
+  const { error: dedupError } = await supabaseAdmin
+    .from('revenuecat_webhook_events')
+    .insert({ event_id: event.id, event_type: event.type });
+
+  if (dedupError) {
+    if (dedupError.code === '23505') {
+      console.log('[revenuecat-webhook] duplicate event, skipping:', event.id);
+      return res.json({ received: true, duplicate: true });
+    }
+    console.error('[revenuecat-webhook] dedup insert error:', dedupError);
+    return res.status(500).json({ error: 'Webhook dedup failed' });
+  }
+
+  if (event.type === 'INITIAL_PURCHASE' || event.type === 'RENEWAL') {
+    // app_user_id is the Supabase user id — set as appUserID when the app
+    // calls Purchases.configure() (see src/purchases.ts), so this maps
+    // straight back to user_progress.id with no separate lookup table.
+    const userId = event.app_user_id;
+    if (!userId) {
+      console.error('[revenuecat-webhook] missing app_user_id on event:', event.id);
+      return res.json({ received: true });
+    }
+
+    try {
+      const { data: existing } = await supabaseAdmin
+        .from('user_progress')
+        .select('progress')
+        .eq('id', userId)
+        .single();
+
+      const updatedProgress = { ...(existing?.progress || {}) };
+      // Fixed 90-day grant computed at processing time (see proExpiry.js),
+      // not read from the event's own expiration timestamp — deliberately
+      // simple for now; revisit once real purchases can be tested end to
+      // end, since RC's own expiration_at_ms would be the more precise
+      // source once product durations vary.
+      const incomingExpiresAt = computeIapExpiresAt();
+      if (
+        shouldApplyProGrant(updatedProgress.proSource, 'iap', updatedProgress.proExpiresAt, incomingExpiresAt)
+      ) {
+        updatedProgress.isPro = true;
+        updatedProgress.proExpiresAt = incomingExpiresAt;
+        updatedProgress.proSource = 'iap';
+      }
+
+      const { error } = await supabaseAdmin
+        .from('user_progress')
+        .upsert({ id: userId, progress: updatedProgress, updated_at: new Date().toISOString() })
+        .eq('id', userId);
+
+      if (error) {
+        console.error('[revenuecat-webhook] Supabase update error:', error.message);
+      } else {
+        console.log(`[revenuecat-webhook] ${event.type} applied for user`, userId);
+      }
+    } catch (e) {
+      console.error('[revenuecat-webhook] Supabase error:', e);
+    }
+  }
+
+  // Every other event type (CANCELLATION, EXPIRATION, BILLING_ISSUE,
+  // PRODUCT_CHANGE, ...) is acknowledged but not acted on yet — dedup above
+  // still recorded it, so a handler can be added later without RC ever
+  // needing to resend it.
   res.json({ received: true });
 });
 

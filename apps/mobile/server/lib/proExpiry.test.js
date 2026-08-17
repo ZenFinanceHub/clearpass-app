@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { computeProExpiresAt, PRO_DURATION_MONTHS } = require('./proExpiry');
+const { computeProExpiresAt, PRO_DURATION_MONTHS, computeIapExpiresAt, IAP_DURATION_DAYS } = require('./proExpiry');
 
 test('PRO_DURATION_MONTHS is 3, matching the quarterly product', () => {
   assert.equal(PRO_DURATION_MONTHS, 3);
@@ -29,4 +29,28 @@ test('computeProExpiresAt returns an ISO 8601 string', () => {
 test('computeProExpiresAt rolls over correctly across a month-end (Nov 30 -> Feb 28)', () => {
   const result = computeProExpiresAt(new Date('2026-11-30T00:00:00.000Z'));
   assert.equal(result, '2027-03-02T00:00:00.000Z');
+});
+
+test('IAP_DURATION_DAYS is 90 — a fixed duration, not a calendar-month one like Stripe', () => {
+  assert.equal(IAP_DURATION_DAYS, 90);
+});
+
+test('computeIapExpiresAt adds exactly 90 days to the given date', () => {
+  const result = computeIapExpiresAt(new Date('2026-07-09T12:34:56.000Z'));
+  assert.equal(result, '2026-10-07T12:34:56.000Z');
+});
+
+test('computeIapExpiresAt defaults to 90 days from now when called with no args', () => {
+  const before = Date.now();
+  const result = new Date(computeIapExpiresAt()).getTime();
+  const after = Date.now();
+  const ninetyDaysMs = 1000 * 60 * 60 * 24 * 90;
+  assert.ok(result - before >= ninetyDaysMs - 1000);
+  assert.ok(result - after <= ninetyDaysMs + 1000);
+});
+
+test('computeIapExpiresAt returns an ISO 8601 string', () => {
+  const result = computeIapExpiresAt(new Date('2026-01-15T00:00:00.000Z'));
+  assert.match(result, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  assert.equal(new Date(result).toISOString(), result);
 });

@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,6 +17,7 @@ import { ScaleButton } from '@/src/components/ScaleButton';
 import { loadUserProgress, isTrialActive } from '@/src/storage';
 import { Pip } from '@/src/components/Pip';
 import { getPurchaseRoute, COMING_SOON_COPY } from '@/src/purchaseGate';
+import { getProPackage, purchaseProPackage } from '@/src/purchases';
 
 const FEATURES = [
   'Unlimited practice questions',
@@ -81,6 +81,30 @@ export default function PaywallScreen() {
     }
   }
 
+  // On success this does NOT flag isPro locally — the RevenueCat webhook
+  // updating user_progress server-side is the source of truth, same as
+  // Stripe. payment-success.tsx already handles the "optimistic local flag,
+  // then re-sync from Supabase" pattern for any purchase rail, not just
+  // Stripe, so IAP success routes there too rather than duplicating it.
+  async function handleIapPurchase() {
+    setError('');
+    setLoading(true);
+    const pkg = await getProPackage();
+    if (!pkg) {
+      setLoading(false);
+      setError('No offer available right now. Please try again shortly.');
+      return;
+    }
+    const outcome = await purchaseProPackage(pkg);
+    setLoading(false);
+    if (outcome.status === 'success') {
+      router.replace('/payment-success');
+    } else if (outcome.status === 'error') {
+      setError(outcome.message);
+    }
+    // 'cancelled': no-op — the user backed out of the native purchase sheet.
+  }
+
   function handleMaybeLater() {
     if (router.canGoBack()) {
       router.back();
@@ -126,9 +150,10 @@ export default function PaywallScreen() {
         ))}
       </View>
 
-      {/* Pricing — hidden entirely in the iOS coming-soon state: no price
-          should be shown for something that can't be purchased yet. */}
-      {(Platform.OS === 'android' || route === 'stripe_checkout') && (
+      {/* Stripe's own price — hidden for 'iap' too, not just 'coming_soon':
+          the real IAP price comes from the store/RevenueCat, not this
+          hardcoded Stripe figure, and the native purchase sheet shows it. */}
+      {route === 'stripe_checkout' && (
         <View style={styles.pricingBox}>
           {!trialExpired && (
             <View style={styles.trialPill}>
@@ -145,24 +170,7 @@ export default function PaywallScreen() {
         </View>
       )}
 
-      {/* TODO: replace with Google Play IAP once policy decision is made */}
-      {Platform.OS === 'android' ? (
-        <>
-          <View style={styles.androidBanner}>
-            <Text style={styles.androidBannerTitle}>{'[!] Android payments coming soon'}</Text>
-            <Text style={styles.androidBannerBody}>
-              {'Pro is not yet available for direct purchase on Android. You can subscribe via our website.'}
-            </Text>
-          </View>
-          <ScaleButton
-            style={styles.ctaBtn}
-            onPress={() => void Linking.openURL('https://getclearpass.co.uk')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.ctaBtnText}>{'Visit getclearpass.co.uk'}</Text>
-          </ScaleButton>
-        </>
-      ) : route === 'stripe_checkout' ? (
+      {route === 'stripe_checkout' ? (
         <>
           {error.length > 0 && <Text style={styles.errorText}>{error}</Text>}
           <ScaleButton
@@ -179,9 +187,27 @@ export default function PaywallScreen() {
             }
           </ScaleButton>
         </>
+      ) : route === 'iap' ? (
+        <>
+          {error.length > 0 && <Text style={styles.errorText}>{error}</Text>}
+          <ScaleButton
+            style={[styles.ctaBtn, loading && styles.ctaBtnDisabled]}
+            onPress={() => void handleIapPurchase()}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            {loading
+              ? <ActivityIndicator color="#FFFFFF" />
+              : <Text style={styles.ctaBtnText}>{'Subscribe to Pro'}</Text>
+            }
+          </ScaleButton>
+        </>
       ) : (
-        // iOS, IAP not implemented yet: no price, no external link, no
-        // mention of an alternate purchase route — just the honest state.
+        // Coming-soon state, iOS and Android alike: no price, no external
+        // link, no mention of an alternate purchase route — just the
+        // honest state. Apple and Google both forbid routing a purchase
+        // anywhere but their own IAP once it's available, and there's no
+        // purchase route to offer before then.
         <View style={styles.comingSoonBanner}>
           <Text style={styles.comingSoonTitle}>{COMING_SOON_COPY.title}</Text>
           <Text style={styles.comingSoonBody}>{COMING_SOON_COPY.body}</Text>
@@ -285,18 +311,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   testBannerText: { fontSize: 13, fontWeight: '700', color: '#D97706' },
-
-  androidBanner: {
-    backgroundColor: '#F0F9FF',
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#0891B2',
-    padding: 16,
-    alignSelf: 'stretch',
-    gap: 6,
-  },
-  androidBannerTitle: { fontSize: 14, fontWeight: '800', color: '#0891B2' },
-  androidBannerBody:  { fontSize: 13, color: '#374151', lineHeight: 20 },
 
   comingSoonBanner: {
     backgroundColor: Colors.indigoBg ?? '#EEF2FF',

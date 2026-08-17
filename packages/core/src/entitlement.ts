@@ -1,4 +1,4 @@
-export type ProSource = 'stripe' | 'instructor' | 'comp' | 'seat';
+export type ProSource = 'stripe' | 'iap' | 'instructor' | 'comp' | 'seat';
 
 export interface ProGrantState {
   isPro: boolean;
@@ -6,16 +6,21 @@ export interface ProGrantState {
   proSource?: ProSource | null;
 }
 
-// Higher wins. A paid Stripe grant is never silently downgraded by any free
-// grant. 'comp' (manually granted, e.g. reviewers/partners/beta testers) sits
-// above 'instructor' so the automated instructor-grant cron can never
-// silently overwrite a deliberate manual comp — comp is a one-off human
-// decision, instructor is a recurring automated reconciliation. Equal
-// priority still applies, so e.g. a Stripe renewal for an already-'stripe'
-// user, or the instructor cron re-confirming an existing instructor grant,
-// both go through.
+// Higher wins. A paid Stripe or IAP grant is never silently downgraded by
+// any free grant. 'iap' (RevenueCat-mediated App Store/Play Store purchases)
+// sits at the same tier as 'stripe' — both mean "the user paid us directly",
+// just through a different rail; see shouldApplyProGrant below for how a tie
+// between the two is actually broken. 'comp' (manually granted, e.g.
+// reviewers/partners/beta testers) sits above 'instructor' so the automated
+// instructor-grant cron can never silently overwrite a deliberate manual
+// comp — comp is a one-off human decision, instructor is a recurring
+// automated reconciliation. Equal priority still applies for same-source
+// pairs, so e.g. a Stripe renewal for an already-'stripe' user, or the
+// instructor cron re-confirming an existing instructor grant, both go
+// through.
 const PRO_SOURCE_PRIORITY: Record<ProSource, number> = {
   stripe: 4,
+  iap: 4,
   comp: 3,
   instructor: 2,
   seat: 1,
@@ -23,10 +28,29 @@ const PRO_SOURCE_PRIORITY: Record<ProSource, number> = {
 
 export function shouldApplyProGrant(
   currentSource: ProSource | null | undefined,
-  incomingSource: ProSource
+  incomingSource: ProSource,
+  currentExpiresAt?: string | null,
+  incomingExpiresAt?: string | null
 ): boolean {
   if (!currentSource) return true;
-  return PRO_SOURCE_PRIORITY[incomingSource] >= PRO_SOURCE_PRIORITY[currentSource];
+
+  const currentPriority = PRO_SOURCE_PRIORITY[currentSource];
+  const incomingPriority = PRO_SOURCE_PRIORITY[incomingSource];
+  if (incomingPriority !== currentPriority) return incomingPriority > currentPriority;
+
+  // Equal priority. A source reapplying/renewing over itself always goes
+  // through, same as before 'iap' existed — trust the payment processor's
+  // own renewal semantics without second-guessing dates.
+  if (currentSource === incomingSource) return true;
+
+  // Equal priority, different source — today that only means stripe <-> iap
+  // (the only tie in the table). Whichever grant actually lasts longer
+  // wins, so a real purchase on one platform never gets silently clobbered
+  // by a shorter-lived grant from the other. No incoming expiry, or a tie,
+  // never wins — callers must pass both dates to break this tie at all.
+  if (!incomingExpiresAt) return false;
+  if (!currentExpiresAt) return true;
+  return incomingExpiresAt > currentExpiresAt;
 }
 
 // Instructor-sourced and comp-sourced Pro are both granted unconditionally
