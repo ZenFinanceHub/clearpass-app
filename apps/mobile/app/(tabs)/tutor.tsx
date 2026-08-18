@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Sentry from '@sentry/react-native';
 import { Pip } from '@/src/components/Pip';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { getTutorQuestionsUsed, incrementTutorQuestionsUsed } from '@/src/storage';
@@ -177,20 +178,35 @@ export default function TutorScreen() {
       messages: apiMessages,
     };
 
+    // Hoisted out of the try block so the catch below can still report
+    // whatever was actually captured before the failure — e.g. fetch()
+    // itself throwing leaves both undefined, but a bad status or an
+    // unparseable body still leaves res/rawText populated for diagnosis.
+    let res: Response | undefined;
+    let rawText: string | undefined;
+
     try {
-      const res = await fetch(url, {
+      res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
 
-      const rawText = await res.text();
+      rawText = await res.text();
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const data = JSON.parse(rawText) as { content: Array<{ type: string; text: string }> };
       const reply = data.content[0]?.text?.trim() ?? "Sorry, I couldn't connect. Please try again.";
       updateMsgs([...messagesRef.current, { id: String(Date.now() + 1), role: 'assistant', content: reply, time: nowTime() }]);
-    } catch {
+    } catch (err) {
+      // The catch-all above was silent — nothing here to diagnose a real
+      // failure with. Same user-facing string, but now the actual error,
+      // HTTP status, and raw body are captured before it's discarded.
+      const status = res?.status;
+      console.error('[Ask Pip] request failed', { status, rawText, error: err });
+      Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+        extra: { status, rawText },
+      });
       updateMsgs([...messagesRef.current, { id: String(Date.now() + 1), role: 'assistant', content: "Sorry, I couldn't connect. Please try again.", time: nowTime() }]);
     } finally {
       setIsLoading(false);

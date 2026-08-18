@@ -532,7 +532,12 @@ app.use(express.json());
 
 app.post('/api/explain', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
+  // Model and message count only — never the API key, never the full
+  // request body (which carries the system prompt and conversation text).
+  console.log(`[explain] request received: model=${req.body?.model}, messages=${req.body?.messages?.length ?? 0}`);
+
   if (!apiKey) {
+    console.error('[explain] ANTHROPIC_API_KEY not set');
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set in server/.env' });
   }
 
@@ -548,9 +553,16 @@ app.post('/api/explain', async (req, res) => {
     });
 
     const data = await response.json();
+    if (!response.ok) {
+      // Anthropic's error bodies are small ({type, error: {type, message}})
+      // and contain no secrets — safe to log in full for diagnosis.
+      console.error(`[explain] Anthropic returned ${response.status}:`, JSON.stringify(data));
+    } else {
+      console.log(`[explain] Anthropic responded ${response.status}`);
+    }
     res.status(response.status).json(data);
   } catch (err) {
-    console.error('Proxy error:', err);
+    console.error('[explain] Proxy error:', err);
     res.status(502).json({ error: 'Failed to reach Anthropic API', detail: String(err) });
   }
 });
