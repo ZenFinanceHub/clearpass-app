@@ -530,16 +530,54 @@ app.use(express.json());
 
 // ── AI explain proxy ──────────────────────────────────────────────────────────
 
+// Pinned server-side, not client-controlled — see the two callers this
+// serves (apps/mobile/app/(tabs)/tutor.tsx and
+// packages/ai/src/tutor.ts's explainAnswer()). Previously the entire
+// request body was forwarded to Anthropic unmodified, meaning the client
+// controlled model, max_tokens, and everything else.
+const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
+const ANTHROPIC_MAX_TOKENS = 1024;
+const MAX_SYSTEM_CHARS = 8000;
+const MAX_MESSAGES = 40;
+
 app.post('/api/explain', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  // Model and message count only — never the API key, never the full
-  // request body (which carries the system prompt and conversation text).
-  console.log(`[explain] request received: model=${req.body?.model}, messages=${req.body?.messages?.length ?? 0}`);
+  const { system, messages } = req.body || {};
+
+  if (system !== undefined && (typeof system !== 'string' || system.length > MAX_SYSTEM_CHARS)) {
+    console.warn(
+      `[explain] rejected: system must be a string of at most ${MAX_SYSTEM_CHARS} characters (got ${
+        typeof system === 'string' ? `${system.length} chars` : typeof system
+      })`
+    );
+    return res.status(400).json({ error: `system must be a string of at most ${MAX_SYSTEM_CHARS} characters` });
+  }
+
+  if (!Array.isArray(messages) || messages.length > MAX_MESSAGES) {
+    console.warn(
+      `[explain] rejected: messages must be an array of at most ${MAX_MESSAGES} items (isArray=${Array.isArray(
+        messages
+      )}, length=${Array.isArray(messages) ? messages.length : 'n/a'})`
+    );
+    return res.status(400).json({ error: `messages must be an array of at most ${MAX_MESSAGES} items` });
+  }
 
   if (!apiKey) {
     console.error('[explain] ANTHROPIC_API_KEY not set');
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set in server/.env' });
   }
+
+  // Only these fields are ever sent to Anthropic — everything else in
+  // req.body (temperature, top_p, a client-supplied model or max_tokens,
+  // anything) is dropped, not just overridden.
+  const anthropicBody = {
+    model: ANTHROPIC_MODEL,
+    max_tokens: ANTHROPIC_MAX_TOKENS,
+    ...(system !== undefined ? { system } : {}),
+    messages,
+  };
+
+  console.log(`[explain] request received: messages=${messages.length}`);
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -549,7 +587,7 @@ app.post('/api/explain', async (req, res) => {
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
       },
-      body: JSON.stringify(req.body),
+      body: JSON.stringify(anthropicBody),
     });
 
     const data = await response.json();
