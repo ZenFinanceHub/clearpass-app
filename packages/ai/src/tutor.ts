@@ -22,9 +22,21 @@ export async function explainAnswer(
     `Please explain why "${correctOption}" is the correct answer, and why the learner's choice was incorrect.\n\n` +
     `Keep your response under 60 words. Do not use markdown formatting - no asterisks, no bold, no bullet points. Write in plain conversational sentences only.`;
 
-  const PROXY_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-    ? 'https://clearpass-app-production.up.railway.app'
-    : 'http://localhost:3001';
+  // __DEV__ is a Metro-injected global, no import needed — matches the
+  // pattern already used in apps/mobile/app/(tabs)/tutor.tsx:23-27. The
+  // window-based check this replaces always fell through to the
+  // localhost branch on native (window is undefined there), which is
+  // exactly the hang this fixes.
+  //
+  // This is a fifth independent copy of this same logic (see also
+  // apps/mobile/app/(tabs)/tutor.tsx, apps/mobile/app/instructor.tsx,
+  // apps/mobile/app/confirm-parent.tsx, apps/mobile/src/proxyUrl.ts).
+  // Consolidating all of them into packages/core is the right fix but is
+  // separate work, not done here — this is deliberately the minimal,
+  // targeted fix for the hang.
+  const PROXY_URL = __DEV__
+    ? 'http://localhost:3001'
+    : 'https://clearpass-app-production.up.railway.app';
 
   try {
     const response = await fetch(`${PROXY_URL}/api/explain`, {
