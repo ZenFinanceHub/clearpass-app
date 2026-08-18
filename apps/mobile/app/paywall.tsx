@@ -14,7 +14,7 @@ import { supabase } from '@/src/supabase';
 import { getProxyUrl } from '@/src/proxyUrl';
 import { Colors } from '@/src/constants/theme';
 import { ScaleButton } from '@/src/components/ScaleButton';
-import { loadUserProgress, isTrialActive } from '@/src/storage';
+import { loadUserProgress, saveUserProgress, isTrialActive } from '@/src/storage';
 import { Pip } from '@/src/components/Pip';
 import { getPurchaseRoute, COMING_SOON_COPY } from '@/src/purchaseGate';
 import { getProPackage, purchaseProPackage } from '@/src/purchases';
@@ -92,17 +92,29 @@ export default function PaywallScreen() {
     const pkg = await getProPackage();
     if (!pkg) {
       setLoading(false);
-      setError('No offer available right now. Please try again shortly.');
+      setError('In-app purchases are unavailable right now. Please try again shortly.');
       return;
     }
     const outcome = await purchaseProPackage(pkg);
     setLoading(false);
     if (outcome.status === 'success') {
+      if (outcome.proEntitlementActive) {
+        // Unlock the UI immediately from RC's own confirmation, without
+        // waiting for the RevenueCat webhook to reach Supabase — that
+        // still happens in the background and remains the source of
+        // truth on next app load; this is purely for instant feedback,
+        // same role payment-success.tsx's own optimistic flip already
+        // plays for Stripe (which still runs too, harmlessly, right
+        // after this).
+        const local = await loadUserProgress();
+        if (local) await saveUserProgress({ ...local, isPro: true });
+      }
       router.replace('/payment-success');
     } else if (outcome.status === 'error') {
       setError(outcome.message);
     }
-    // 'cancelled': no-op — the user backed out of the native purchase sheet.
+    // 'cancelled': dismiss silently — no error shown, the user backed out
+    // of the native purchase sheet.
   }
 
   function handleMaybeLater() {

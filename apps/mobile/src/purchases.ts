@@ -30,7 +30,11 @@ export async function configurePurchases(userId: string): Promise<void> {
     Purchases.configure({ apiKey, appUserID: userId });
     configured = true;
     const offerings = await Purchases.getOfferings();
-    setIapReady(!!offerings.current && offerings.current.availablePackages.length > 0);
+    // Readiness is specifically "the quarterly package is available", not
+    // just "some package exists" — that's the one getProPackage() below
+    // actually buys, so the gate shouldn't claim readiness for a product
+    // mix that doesn't include it.
+    setIapReady(!!offerings.current?.threeMonth);
   } catch {
     // Any failure here (network, misconfigured product, ...) must leave the
     // app in the safe coming-soon state, not a half-configured one that
@@ -39,38 +43,54 @@ export async function configurePurchases(userId: string): Promise<void> {
   }
 }
 
-// The package to buy for the 'pro' entitlement, or null if none is
-// available. Callers should only reach this once getPurchaseRoute() is
-// 'iap', but returning null rather than throwing keeps this safe to call
-// defensively regardless.
+// The quarterly package to buy for the 'pro' entitlement — matches the
+// existing Stripe subscription (£7.99/3 months, PRO_DURATION_MONTHS in
+// server/lib/proExpiry.js), not just whatever happens to be first in
+// availablePackages (an offering could have other package types
+// configured too). Returns null if it isn't available. Callers should
+// only reach this once getPurchaseRoute() is 'iap', but returning null
+// rather than throwing keeps this safe to call defensively regardless.
 export async function getProPackage(): Promise<PurchasesPackage | null> {
   if (!configured) return null;
   try {
     const offerings = await Purchases.getOfferings();
-    return offerings.current?.availablePackages[0] ?? null;
+    return offerings.current?.threeMonth ?? null;
   } catch {
     return null;
   }
 }
 
 export type PurchaseOutcome =
-  | { status: 'success' }
+  | { status: 'success'; proEntitlementActive: boolean }
   | { status: 'cancelled' }
   | { status: 'error'; message: string };
 
-// Triggers the native purchase sheet. On success this does NOT set isPro
-// locally — the RevenueCat webhook updating user_progress server-side is
-// the source of truth (same as Stripe Checkout never trusting the client
-// either). Callers should show a "completing your purchase" state and then
-// refresh progress from Supabase, the same pattern payment-success.tsx
-// already uses after a Stripe redirect.
+// Triggers the native purchase sheet. On success, checks RevenueCat's own
+// CustomerInfo immediately rather than trusting the purchase call alone —
+// RC's local record of entitlement state is available instantly, with no
+// webhook round-trip, and is what actually lets a caller unlock the UI
+// without waiting on (or guessing at) when the RevenueCat webhook reaches
+// Supabase. Supabase (via that webhook) remains the source of truth for
+// anything persistent — this is purely for immediate feedback, the same
+// role payment-success.tsx's own optimistic local flip already plays for
+// Stripe.
 export async function purchaseProPackage(pkg: PurchasesPackage): Promise<PurchaseOutcome> {
   try {
     await Purchases.purchasePackage(pkg);
-    return { status: 'success' };
   } catch (e) {
     const err = e as PurchasesError;
     if (err.userCancelled) return { status: 'cancelled' };
     return { status: 'error', message: err.message || 'Something went wrong. Please try again.' };
+  }
+
+  // The purchase itself succeeded — the money's spent. From here, any
+  // failure checking RC's own state must not be reported as a purchase
+  // failure; fall back to proEntitlementActive: false and let the webhook
+  // + payment-success.tsx's own Supabase resync be the safety net.
+  try {
+    const customerInfo = await Purchases.getCustomerInfo();
+    return { status: 'success', proEntitlementActive: customerInfo.entitlements.active['pro'] !== undefined };
+  } catch {
+    return { status: 'success', proEntitlementActive: false };
   }
 }
