@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -102,6 +103,7 @@ export default function TutorScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [dotCount, setDotCount] = useState(1);
+  const [androidKeyboardHeight, setAndroidKeyboardHeight] = useState(0);
 
   const messagesRef    = useRef<Msg[]>([]);
   const scrollRef      = useRef<ScrollView>(null);
@@ -124,6 +126,25 @@ export default function TutorScreen() {
     const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
     return () => clearTimeout(t);
   }, [messages, isLoading]);
+
+  // Android only — bypasses KeyboardAvoidingView's internal overlap math
+  // entirely (which depends on the keyboard's screenY, unreliable under
+  // edgeToEdgeEnabled) by reading the IME inset height directly off the
+  // keyboard event and applying it as padding ourselves. See the
+  // KeyboardAvoidingView comment below for why iOS doesn't need this.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
+      setAndroidKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      setAndroidKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -223,23 +244,30 @@ export default function TutorScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={[styles.flex, { backgroundColor: theme.backgroundColor }]}
+      style={[
+        styles.flex,
+        { backgroundColor: theme.backgroundColor },
+        // Android only. The tab bar is still rendered under this screen
+        // (hidden: true in _layout.tsx only removes its button, not the
+        // bar itself) and doesn't shrink away on its own on this device —
+        // manual compensation needs to be the keyboard's real height minus
+        // however much of that region the tab bar already occupies, not
+        // the full keyboard height (which overshoots by tabBarHeight).
+        Platform.OS === 'android' && { paddingBottom: Math.max(0, androidKeyboardHeight - tabBarHeight) },
+      ]}
       // iOS: no native equivalent of adjustResize, so KeyboardAvoidingView
       // does the whole job — offset by the real, live tab bar height
       // (useBottomTabBarHeight) instead of a hand-guessed constant.
-      // Android: windowSoftInputMode defaults to adjustResize here (no
-      // android.softwareKeyboardLayoutMode override in app.json), which is
-      // supposed to let the OS resize the window above the keyboard on its
-      // own — but edgeToEdgeEnabled (also set in app.json) is a known
-      // adjustResize-breaker, matching the reported on-device symptom.
-      // behavior="height" is a reasoned attempt, not a confirmed fix: RN's
-      // Android keyboard-visibility/height detection (ReactRootView.java)
-      // uses the modern, edge-to-edge-aware WindowInsets IME API on recent
-      // SDKs, but the keyboard's screenY still falls back to the older
-      // getWindowVisibleDisplayFrame() for the adjustResize case we're in,
-      // which is the one part I can't verify without an actual device.
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={tabBarHeight}
+      // Android: behavior is back to undefined — KeyboardAvoidingView's own
+      // overlap math depends on the keyboard's screenY, which falls back to
+      // the (edge-to-edge-unreliable) getWindowVisibleDisplayFrame() for
+      // the adjustResize case this app is in. The androidKeyboardHeight
+      // state above bypasses that entirely, reading endCoordinates.height
+      // from the raw keyboard event instead — a separate computation
+      // (WindowInsets.Type.ime(), edge-to-edge-aware) that doesn't touch
+      // screenY at all — and applies it as paddingBottom directly.
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? tabBarHeight : 0}
     >
       {/* Pip header */}
       <View style={styles.scopeBanner}>
