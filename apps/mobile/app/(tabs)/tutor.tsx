@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import * as Sentry from '@sentry/react-native';
 import { Pip } from '@/src/components/Pip';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -87,6 +88,7 @@ function nowTime(): string {
 
 export default function TutorScreen() {
   const theme = useTheme();
+  const tabBarHeight = useBottomTabBarHeight();
   const params = useLocalSearchParams<{
     questionText?: string;
     userAnswerText?: string;
@@ -222,8 +224,22 @@ export default function TutorScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.flex, { backgroundColor: theme.backgroundColor }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+      // iOS: no native equivalent of adjustResize, so KeyboardAvoidingView
+      // does the whole job — offset by the real, live tab bar height
+      // (useBottomTabBarHeight) instead of a hand-guessed constant.
+      // Android: windowSoftInputMode defaults to adjustResize here (no
+      // android.softwareKeyboardLayoutMode override in app.json), which is
+      // supposed to let the OS resize the window above the keyboard on its
+      // own — but edgeToEdgeEnabled (also set in app.json) is a known
+      // adjustResize-breaker, matching the reported on-device symptom.
+      // behavior="height" is a reasoned attempt, not a confirmed fix: RN's
+      // Android keyboard-visibility/height detection (ReactRootView.java)
+      // uses the modern, edge-to-edge-aware WindowInsets IME API on recent
+      // SDKs, but the keyboard's screenY still falls back to the older
+      // getWindowVisibleDisplayFrame() for the adjustResize case we're in,
+      // which is the one part I can't verify without an actual device.
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={tabBarHeight}
     >
       {/* Pip header */}
       <View style={styles.scopeBanner}>
