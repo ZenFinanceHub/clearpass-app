@@ -7,15 +7,12 @@ describe('resolvePurchaseRoute', () => {
     expect(resolvePurchaseRoute('web', true)).toBe('stripe_checkout');
   });
 
-  test('iOS falls back to coming_soon when IAP is not ready — no App Store product yet', () => {
+  test('iOS always stays coming_soon, regardless of IAP readiness — no App Store product yet, blocked on account migration; this is a deliberate decision, not a fallback', () => {
     expect(resolvePurchaseRoute('ios', false)).toBe('coming_soon');
+    expect(resolvePurchaseRoute('ios', true)).toBe('coming_soon');
   });
 
-  test('iOS routes to iap once IAP is ready', () => {
-    expect(resolvePurchaseRoute('ios', true)).toBe('iap');
-  });
-
-  test('Android falls back to coming_soon when IAP is not ready — the fix for the live 3.1.1-equivalent issue: no more silent Stripe/website fallback', () => {
+  test('Android falls back to coming_soon when IAP is not ready — offerings failed to load or no quarterly package exists yet', () => {
     expect(resolvePurchaseRoute('android', false)).toBe('coming_soon');
   });
 
