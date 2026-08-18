@@ -530,13 +530,21 @@ app.use(express.json());
 
 // ── AI explain proxy ──────────────────────────────────────────────────────────
 
-// Pinned server-side, not client-controlled — see the two callers this
-// serves (apps/mobile/app/(tabs)/tutor.tsx and
-// packages/ai/src/tutor.ts's explainAnswer()). Previously the entire
-// request body was forwarded to Anthropic unmodified, meaning the client
-// controlled model, max_tokens, and everything else.
+// Pinned server-side, not client-controlled — see the three callers this
+// serves (apps/mobile/app/(tabs)/tutor.tsx, packages/ai/src/tutor.ts's
+// explainAnswer(), and apps/mobile/src/studyPlan.ts's generateStudyPlan()).
+// Previously the entire request body was forwarded to Anthropic
+// unmodified, meaning the client controlled model, max_tokens, and
+// everything else.
 const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
-const ANTHROPIC_MAX_TOKENS = 1024;
+// A ceiling, not a target — Ask Pip's and explainAnswer()'s prompts both
+// self-limit well below this, so raising it doesn't lengthen their
+// responses. Pinned at generateStudyPlan()'s own requirement (4000,
+// JSON array output that must not be truncated mid-response) since that's
+// the largest legitimate need among all three callers; it still bounds
+// the cost of an abusive direct request, which is the actual point of
+// pinning this server-side at all.
+const ANTHROPIC_MAX_TOKENS = 4000;
 const MAX_SYSTEM_CHARS = 8000;
 const MAX_MESSAGES = 40;
 
