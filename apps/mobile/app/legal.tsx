@@ -6,6 +6,7 @@ import { Colors } from '@/src/constants/theme';
 
 const OGL_URL = 'https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/';
 const DVSA_PERMISSION_REF = '639UJ6EF';
+const LAST_UPDATED = '18 August 2026';
 
 export default function LegalScreen() {
   const theme = useTheme();
@@ -24,6 +25,7 @@ export default function LegalScreen() {
       <View style={styles.brand}>
         <Text style={styles.brandName}>{'ClearPass'}</Text>
         <Text style={[styles.brandSub, { color: theme.textColor }]}>{'Legal & Licences'}</Text>
+        <Text style={[styles.updated, { color: theme.subTextColor }]}>{'Last updated: '}{LAST_UPDATED}</Text>
       </View>
 
       <Section title="DVSA Question Bank" theme={theme}>
@@ -81,6 +83,7 @@ const styles = StyleSheet.create({
   brand: { alignItems: 'center', marginBottom: 28, gap: 4 },
   brandName: { fontSize: 28, fontWeight: '900', color: Colors.indigo },
   brandSub:  { fontSize: 20, fontWeight: '700' },
+  updated:   { fontSize: 13, marginTop: 4 },
 
   section: { marginBottom: 24 },
   sectionTitle: { fontSize: 16, fontWeight: '800', marginBottom: 8 },
