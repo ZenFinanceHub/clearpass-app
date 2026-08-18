@@ -50,6 +50,7 @@ import { cancelStreakProtectionNotification } from '@/src/notifications';
 import { FREE_QUESTION_LIMIT, isPremium } from '@/src/subscription';
 import { isTrialActive } from '@/src/storage';
 import { explainAnswer } from '@clearpass/ai';
+import { getAccessToken } from '@/src/getAccessToken';
 import { TOPIC_LABELS } from '@/src/tutorNudges';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
 import { Pip } from '@/src/components/Pip';
@@ -771,12 +772,14 @@ export default function PracticeScreen() {
     const q = questions[currentIndex];
     if (selectedIndex === null) return;
     setAiLoading(true);
+    const accessToken = await getAccessToken();
     const result = await explainAnswer(
       q.questionText,
       q.options,
       q.correctIndex,
       selectedIndex,
       ANTHROPIC_API_KEY,
+      accessToken,
     );
     setAiExplanation(result);
     setAiLoading(false);

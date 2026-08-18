@@ -18,6 +18,7 @@ import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/src/supabase';
+import { getAccessToken } from '@/src/getAccessToken';
 import { useAccessibility } from '@/src/AccessibilityContext';
 import type { AccessibilitySettings } from '@/src/AccessibilityContext';
 import { useTheme } from '@/src/theme';
@@ -355,8 +356,7 @@ export default function SettingsScreen() {
 
   async function doDeleteAccount() {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const token = await getAccessToken();
 
       // Wipe local storage
       await AsyncStorage.multiRemove([

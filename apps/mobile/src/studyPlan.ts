@@ -41,6 +41,7 @@ export async function generateStudyPlan(
   testDate: string,
   progress: UserProgress,
   dailyMinutes: number,
+  accessToken: string | null,
 ): Promise<StudyPlan> {
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];
@@ -90,7 +91,13 @@ export async function generateStudyPlan(
   console.log('[generateStudyPlan] POST', url);
   const resp = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      // Server doesn't require this yet (step 1 of rolling out auth on
+      // /api/explain) — sent now so making it mandatory later doesn't
+      // need a client change too.
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 4000,

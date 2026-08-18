@@ -16,6 +16,7 @@ import {
 import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
+import { getAccessToken } from '@/src/getAccessToken';
 import { createFreshUserProgress } from '@/src/storage';
 import {
   calculateReadiness,
@@ -769,8 +770,7 @@ function EarningsSection({
     }
     setRequesting(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const token = await getAccessToken();
       if (!token) {
         Alert.alert('Error', 'Please sign in again.');
         return;
@@ -926,8 +926,7 @@ function AccountSection({ acceptedLearnerCount }: { acceptedLearnerCount: number
   async function handleConfirmSwitch() {
     setSwitching(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const token = await getAccessToken();
       if (!token) {
         Alert.alert('Error', 'Please sign in again.');
         return;

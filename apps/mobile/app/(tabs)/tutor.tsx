@@ -18,6 +18,7 @@ import { Pip } from '@/src/components/Pip';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { getTutorQuestionsUsed, incrementTutorQuestionsUsed } from '@/src/storage';
 import { isPremium } from '@/src/subscription';
+import { getAccessToken } from '@/src/getAccessToken';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 
@@ -200,6 +201,11 @@ export default function TutorScreen() {
       system: SYSTEM_PROMPT,
       messages: apiMessages,
     };
+    // Server doesn't require this yet (step 1 of rolling out auth on
+    // /api/explain) — sent now so step 2 (making it mandatory) doesn't
+    // need a client change too. Omitted rather than sent as "Bearer null"
+    // if there's no session for some reason.
+    const accessToken = await getAccessToken();
 
     // Hoisted out of the try block so the catch below can still report
     // whatever was actually captured before the failure — e.g. fetch()
@@ -211,7 +217,10 @@ export default function TutorScreen() {
     try {
       res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify(body),
       });
 

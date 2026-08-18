@@ -20,6 +20,7 @@ import {
   StudyTaskType,
 } from '@/src/studyPlan';
 import { supabase } from '@/src/supabase';
+import { getAccessToken } from '@/src/getAccessToken';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 
@@ -218,7 +219,8 @@ export default function StudyPlanScreen() {
     setError(null);
     try {
       const progress = await loadUserProgress() ?? createFreshUserProgress();
-      const newPlan  = await generateStudyPlan(date, progress, dailyMinutes);
+      const accessToken = await getAccessToken();
+      const newPlan  = await generateStudyPlan(date, progress, dailyMinutes, accessToken);
       setPlan(newPlan);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to generate plan. Please try again.');

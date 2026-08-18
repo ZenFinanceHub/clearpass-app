@@ -6,6 +6,7 @@ export async function explainAnswer(
   correctIndex: number,
   selectedIndex: number,
   apiKey: string,
+  accessToken: string | null,
 ): Promise<string> {
   const correctOption = options[correctIndex];
   const selectedOption = options[selectedIndex];
@@ -43,6 +44,10 @@ export async function explainAnswer(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        // Server doesn't require this yet (step 1 of rolling out auth on
+        // /api/explain) — sent now so making it mandatory later doesn't
+        // need a client change too.
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
