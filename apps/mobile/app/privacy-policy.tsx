@@ -24,7 +24,7 @@ export default function PrivacyPolicyScreen() {
       </View>
 
       <Section title="Who we are" theme={theme}>
-        {'ClearPass is a UK driving theory test preparation app operated by ZenFinanceHub. Our registered contact email is privacy@getclearpass.co.uk.'}
+        {'ClearPass is a UK driving theory test preparation app operated by Zengus Ventures Ltd, a company registered in Scotland (company number SC824924), registered office 28 Barbieston Road, Dalrymple, Ayr, KA6 6DZ. Our registered contact email is privacy@getclearpass.co.uk.'}
       </Section>
 
       <Section title="Information we collect" theme={theme}>

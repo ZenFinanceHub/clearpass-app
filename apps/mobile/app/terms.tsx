@@ -63,7 +63,7 @@ export default function TermsScreen() {
       </Section>
 
       <Section title="8. Content and intellectual property" theme={theme}>
-        {'ClearPass’s own explanations, design elements and other original content are owned by or licensed to ZenFinanceHub. You may not reproduce, distribute or create derivative works from this content without our written permission.\n\n'}
+        {'ClearPass’s own explanations, design elements and other original content are owned by or licensed to Zengus Ventures Ltd. You may not reproduce, distribute or create derivative works from this content without our written permission.\n\n'}
         {'The DVSA theory test question bank is reproduced under permission from the Driver and Vehicle Standards Agency (DVSA); DVSA does not accept responsibility for the accuracy of the reproduction. The Highway Code and road sign content are Crown copyright, reproduced under the Open Government Licence. See Legal & Licences for full details.'}
       </Section>
 
@@ -78,7 +78,7 @@ export default function TermsScreen() {
 
       <Section title="11. Disclaimers and limitation of liability" theme={theme}>
         {'ClearPass is provided "as is" without warranties of any kind, express or implied. We do not guarantee that the service will be uninterrupted, error-free or free from viruses.\n\n'}
-        {'To the fullest extent permitted by law, ZenFinanceHub shall not be liable for any indirect, incidental, special or consequential damages arising from your use of ClearPass.'}
+        {'To the fullest extent permitted by law, Zengus Ventures Ltd shall not be liable for any indirect, incidental, special or consequential damages arising from your use of ClearPass.'}
       </Section>
 
       <Section title="12. Changes to the service" theme={theme}>
