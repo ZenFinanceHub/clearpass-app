@@ -35,7 +35,7 @@ export default function LegalScreen() {
       </Section>
 
       <Section title="What each licence permits" theme={theme}>
-        {'The Open Government Licence above covers the Highway Code and road sign content only. It allows copying, publishing, distributing, transmitting, adapting and exploiting that information commercially or non-commercially, as long as the source is acknowledged.\n\nThe DVSA question bank is reproduced under separate written permission from DVSA, not the Open Government Licence.\n\nClearPass has made original adaptations to this material — explanations, examples and formatting written for theory test preparation. These adaptations are owned by ZenFinanceHub.'}
+        {'The Open Government Licence above covers the Highway Code and road sign content only. It allows copying, publishing, distributing, transmitting, adapting and exploiting that information commercially or non-commercially, as long as the source is acknowledged.\n\nThe DVSA question bank is reproduced under separate written permission from DVSA, not the Open Government Licence.\n\nClearPass has made original adaptations to this material — explanations, examples and formatting written for theory test preparation. These adaptations are owned by Zengus Ventures Ltd.'}
       </Section>
 
       <Section title="Licence text" theme={theme}>
@@ -51,7 +51,7 @@ export default function LegalScreen() {
       </TouchableOpacity>
 
       <Section title="Other content" theme={theme}>
-        {'ClearPass’s own explanations, app design, gamification and other original written content are © ZenFinanceHub. All rights reserved. This does not extend to the DVSA question bank text or Highway Code / road sign content described above, which remain Crown copyright.'}
+        {'ClearPass’s own explanations, app design, gamification and other original written content are © Zengus Ventures Ltd. All rights reserved. This does not extend to the DVSA question bank text or Highway Code / road sign content described above, which remain Crown copyright.'}
       </Section>
 
       <View style={styles.footer}>

@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 
-const LAST_UPDATED = '4 June 2026';
+const LAST_UPDATED = '18 August 2026';
 
 export default function TermsScreen() {
   const theme = useTheme();
