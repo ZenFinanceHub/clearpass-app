@@ -11,7 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { allQuestions } from '@clearpass/content';
 import { TopicCategory } from '@clearpass/core';
 import type { UserProgress, MockTestResult } from '@clearpass/core';
-import type { SessionHistoryEntry } from '@/src/storage';
+import { USER_SPECIFIC_KEYS, type SessionHistoryEntry } from '@/src/storage';
 import { Colors } from '@/src/constants/theme';
 
 // ── Demo data ─────────────────────────────────────────────────────────────────
@@ -72,18 +72,6 @@ function makeDemoSessions(): SessionHistoryEntry[] {
   ];
 }
 
-const KEYS_TO_CLEAR = [
-  '@clearpass/user_progress',
-  '@clearpass/question_states',
-  '@clearpass/bookmarks',
-  '@clearpass/session_history',
-  '@clearpass/pending_username',
-  '@clearpass/sync_pending',
-  '@clearpass/wrong_counts',
-  '@clearpass/test_result',
-  '@clearpass/has_submitted_result',
-];
-
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function ScreenshotModeScreen() {
@@ -117,7 +105,7 @@ export default function ScreenshotModeScreen() {
         text: 'Clear',
         style: 'destructive',
         onPress: async () => {
-          await AsyncStorage.multiRemove(KEYS_TO_CLEAR);
+          await AsyncStorage.multiRemove(USER_SPECIFIC_KEYS);
           setStatus('Cleared.');
         },
       },

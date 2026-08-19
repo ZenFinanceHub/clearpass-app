@@ -25,7 +25,7 @@ import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 import { calculateReadiness } from '@clearpass/core';
 import { allQuestions, highwayCodeChapters, roadSigns } from '@clearpass/content';
-import { loadUserProgress, getMasteredTopics } from '@/src/storage';
+import { loadUserProgress, getMasteredTopics, USER_SPECIFIC_KEYS } from '@/src/storage';
 import { getProxyUrl } from '@/src/proxyUrl';
 import { TOPIC_BADGES } from '@/src/badges';
 import {
@@ -359,21 +359,7 @@ export default function SettingsScreen() {
       const token = await getAccessToken();
 
       // Wipe local storage
-      await AsyncStorage.multiRemove([
-        '@clearpass/user_progress',
-        '@clearpass/question_states',
-        '@clearpass/bookmarks',
-        '@clearpass/session_history',
-        '@clearpass/pending_username',
-        '@clearpass/sync_pending',
-        '@clearpass/wrong_counts',
-        '@clearpass/notification_settings',
-        '@clearpass/hasSeenOnboarding',
-        '@clearpass/has_submitted_result',
-        '@clearpass/test_result',
-        '@clearpass/scheduled_mock_tests',
-        '@clearpass/free_questions_answered',
-      ]);
+      await AsyncStorage.multiRemove(USER_SPECIFIC_KEYS);
 
       if (token) {
         await fetch(`${getProxyUrl()}/api/delete-account`, {
@@ -391,6 +377,9 @@ export default function SettingsScreen() {
   }
 
   async function handleSignOut() {
+    const allKeys = await AsyncStorage.getAllKeys();
+    const qotdKeys = allKeys.filter((key) => key.startsWith('@clearpass/qotd_'));
+    await AsyncStorage.multiRemove([...USER_SPECIFIC_KEYS, ...qotdKeys]);
     await supabase.auth.signOut();
     router.replace('/onboarding');
   }

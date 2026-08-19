@@ -12,6 +12,55 @@ const KEYS = {
   SESSION_HISTORY:  '@clearpass/session_history',
 } as const;
 
+// Every AsyncStorage key that holds data tied to one signed-in account.
+// This is the single source of truth for handleSignOut() and
+// doDeleteAccount() (settings.tsx) and the clear-storage button in
+// screenshot-mode.tsx — all three used to maintain their own copy of this
+// list, and the copies had already drifted out of sync with each other
+// and with the actual set of keys in use, which is how state ended up
+// bleeding between accounts signed into the same device.
+//
+// Any new user-specific AsyncStorage key MUST be added here, or it will
+// silently survive a sign-out and leak into the next account that signs
+// in on the same device.
+//
+// Deliberately NOT included — these are device-global and should survive
+// a sign-out: hasSeenOnboarding, accessibility_settings, the offline
+// content caches (cache_status / offline_questions / offline_highway_code
+// / offline_road_signs), clearpass_support_dismissed, referral_code.
+//
+// Also not included: the dynamic per-day '@clearpass/qotd_' keys — they
+// can't be enumerated by a fixed key name, so callers that need to clear
+// them sweep AsyncStorage.getAllKeys() for that prefix separately.
+export const USER_SPECIFIC_KEYS: string[] = [
+  KEYS.USER_PROGRESS,
+  KEYS.QUESTION_STATES,
+  KEYS.PENDING_USERNAME,
+  KEYS.SYNC_PENDING,
+  KEYS.BOOKMARKS,
+  KEYS.SESSION_HISTORY,
+  '@clearpass/pending_test_date',
+  '@clearpass/wrong_counts',
+  '@clearpass/scheduled_mock_tests',
+  '@clearpass/has_submitted_result',
+  '@clearpass/test_result',
+  '@clearpass/testday_checklist',
+  '@clearpass/signs_quiz_passed',
+  '@clearpass/tutor_nudges',
+  '@clearpass/celebrated_events',
+  '@clearpass/streak_toasts_shown',
+  '@clearpass/spaced_repetition_state',
+  '@clearpass/pass_probability',
+  '@clearpass/study_plan',
+  '@clearpass/notification_settings',
+  '@clearpass/notif_study_reminder',
+  '@clearpass/notif_streak_protection',
+  '@clearpass/notif_streak_today',
+  '@clearpass/notif_test_countdown',
+  '@clearpass/notif_test_countdown_v2',
+  '@clearpass/notif_weekly_progress',
+];
+
 export async function syncPendingUsername(): Promise<void> {
   try {
     const username = await AsyncStorage.getItem(KEYS.PENDING_USERNAME);
