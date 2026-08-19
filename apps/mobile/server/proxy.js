@@ -554,7 +554,11 @@ const MAX_MESSAGES = 40;
 // (never resets); Pro is a per-day cap (resets at UTC midnight) — the
 // server owns the free tier now, not any client-side counter.
 const FREE_EXPLAIN_LIFETIME_LIMIT = 10;
-const PRO_EXPLAIN_DAILY_LIMIT = 50;
+// At ~$0.0092/question measured cost, 50/day put the worst-case quarterly
+// cost per subscriber well above the ~$7 net revenue it's funded by. 20/day
+// caps that worst case at ~$16/quarter — still above revenue, but only for
+// a pathological user, and invisible to normal usage.
+const PRO_EXPLAIN_DAILY_LIMIT = 20;
 
 // Reads isPro, then reads-and-increments the caller's usage in
 // explain_daily_usage. Fails OPEN on any Supabase error at any step — log
@@ -589,7 +593,7 @@ async function checkAndIncrementExplainQuota(userId, supabaseAdmin) {
     return { blocked: false, failedOpen: true };
   }
 
-  // Pro: 50/day — a single row read/write against today's date, same
+  // Pro: 20/day — a single row read/write against today's date, same
   // shape as the original daily-only implementation.
   if (isPro) {
     try {
