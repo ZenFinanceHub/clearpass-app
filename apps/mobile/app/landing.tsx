@@ -45,7 +45,7 @@ const FEATURES = [
 ];
 
 const FREE_FEATURES = ['10 questions per day', 'Highway Code & road signs', '5 AI tutor questions/day'];
-const PRO_FEATURES = ['Unlimited questions', 'Full mock tests', 'Hazard perception', 'Unlimited AI tutor', 'Personalised study plan', 'Offline mode'];
+const PRO_FEATURES = ['Unlimited questions', 'Full mock tests', 'Hazard perception', 'Unlimited AI tutor', 'Offline mode'];
 
 // Routes to the paywall screen, which is the single place that decides
 // (via src/purchaseGate) whether that means Stripe Checkout or an iOS
