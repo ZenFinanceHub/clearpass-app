@@ -716,6 +716,10 @@ app.post('/api/explain', async (req, res) => {
   console.log(
     `[explain] request received: userId=${userId}, messages=${messages.length}, authHeaderPresent=${authHeaderPresent}, authHeaderIsBearer=${authHeaderIsBearer}`
   );
+  // TEMPORARY — verifying the step 1 client rollout (caller field added to
+  // all three /api/explain callers) reached production before step 2
+  // (routing on it) lands. Remove once verified.
+  console.log(`[explain] caller=${req.body?.caller ?? 'absent'}`);
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
