@@ -54,7 +54,6 @@ import { supabase } from '@/src/supabase';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 import { useNetwork } from '@/src/NetworkContext';
-import { isTrialActive, daysLeftInTrial } from '@/src/storage';
 
 // ─── NudgesSection ────────────────────────────────────────────────────────────
 
@@ -514,10 +513,6 @@ export default function HomeScreen() {
   const xpData  = getXpLevel(xp);
   const streak  = progress?.studyStreakDays ?? 0;
   const freezeCount = (progress?.isPro ? progress.streakFreezeCount : 0) ?? 0;
-  const trialActive = progress ? isTrialActive(progress) : false;
-  const trialDaysLeft = progress ? daysLeftInTrial(progress) : 0;
-  const trialExpired = !!(progress && !progress.isPro && progress.trialStartDate && !trialActive);
-  const showTrialBanner = trialActive && trialDaysLeft <= 3;
   const tip     = DAILY_TIPS[new Date().getDay() % 3];
   const readinessPct = progress ? calculateReadiness(progress).score : 0;
 
@@ -646,26 +641,18 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Trial banner */}
-      {!isLoading && (showTrialBanner || trialExpired) && (
+      {/* Go Pro banner — shown to any non-Pro user, no trial framing */}
+      {!isLoading && progress && !progress.isPro && (
         <TouchableOpacity
-          style={[styles.trialBanner, trialExpired && styles.trialBannerExpired]}
+          style={styles.proBanner}
           onPress={() => router.push('/paywall')}
           activeOpacity={0.85}
         >
-          <View style={styles.trialBannerLeft}>
-            <Text style={styles.trialBannerTitle}>
-              {trialExpired
-                ? 'Your free trial has ended'
-                : trialDaysLeft === 1
-                  ? 'Last day of your free trial!'
-                  : `${trialDaysLeft} days left in your free trial`}
-            </Text>
-            <Text style={styles.trialBannerSub}>
-              {trialExpired ? 'Subscribe to keep all Pro features' : 'Unlock Pro to keep your progress going'}
-            </Text>
+          <View style={styles.proBannerLeft}>
+            <Text style={styles.proBannerTitle}>{'Go Pro'}</Text>
+            <Text style={styles.proBannerSub}>{'Unlock mock tests, hazard perception & more'}</Text>
           </View>
-          <Text style={styles.trialBannerCta}>{trialExpired ? 'Subscribe →' : 'Upgrade →'}</Text>
+          <Text style={styles.proBannerCta}>{'Upgrade →'}</Text>
         </TouchableOpacity>
       )}
 
@@ -1148,7 +1135,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 8,
   },
-  trialBanner: {
+  proBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#EFF6FF',
@@ -1160,14 +1147,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 12,
   },
-  trialBannerExpired: {
-    backgroundColor: '#FEF3C7',
-    borderColor: '#FCD34D',
-  },
-  trialBannerLeft: { flex: 1, gap: 2 },
-  trialBannerTitle: { fontSize: 13, fontWeight: '700', color: '#1E40AF' },
-  trialBannerSub: { fontSize: 11, color: '#3B82F6' },
-  trialBannerCta: { fontSize: 13, fontWeight: '700', color: '#1D4ED8', flexShrink: 0 },
+  proBannerLeft: { flex: 1, gap: 2 },
+  proBannerTitle: { fontSize: 13, fontWeight: '700', color: '#1E40AF' },
+  proBannerSub: { fontSize: 11, color: '#3B82F6' },
+  proBannerCta: { fontSize: 13, fontWeight: '700', color: '#1D4ED8', flexShrink: 0 },
 
   focusCard: {
     backgroundColor: Colors.indigoBg,

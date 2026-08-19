@@ -14,7 +14,7 @@ import { supabase } from '@/src/supabase';
 import { getProxyUrl } from '@/src/proxyUrl';
 import { Colors } from '@/src/constants/theme';
 import { ScaleButton } from '@/src/components/ScaleButton';
-import { loadUserProgress, saveUserProgress, isTrialActive } from '@/src/storage';
+import { loadUserProgress, saveUserProgress } from '@/src/storage';
 import { Pip } from '@/src/components/Pip';
 import { getPurchaseRoute, COMING_SOON_COPY } from '@/src/purchaseGate';
 import { getProPackage, purchaseProPackage } from '@/src/purchases';
@@ -35,7 +35,6 @@ export default function PaywallScreen() {
   const [error,        setError]        = useState('');
   const [referredBy,   setReferredBy]   = useState<string | null>(null);
   const [isTestMode,   setIsTestMode]   = useState(false);
-  const [trialExpired, setTrialExpired] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem('referral_code').then(code => {
@@ -46,12 +45,6 @@ export default function PaywallScreen() {
       .then(r => r.json() as Promise<{ stripeTestMode?: boolean }>)
       .then(d => { if (d.stripeTestMode) setIsTestMode(true); })
       .catch(() => {});
-
-    loadUserProgress().then(p => {
-      if (p && p.trialStartDate && !p.isPro && !isTrialActive(p)) {
-        setTrialExpired(true);
-      }
-    }).catch(() => {});
   }, []);
 
   async function handleSubscribe() {
@@ -143,12 +136,10 @@ export default function PaywallScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <Pip size={84} mood={trialExpired ? 'sympathetic' : 'celebrate'} />
-        <Text style={styles.headerTitle}>{trialExpired ? 'Your Trial Has Ended' : 'Go Pro'}</Text>
+        <Pip size={84} mood={'celebrate'} />
+        <Text style={styles.headerTitle}>{'Go Pro'}</Text>
         <Text style={styles.headerSub}>
-          {trialExpired
-            ? 'Subscribe to keep all your Pro features and progress'
-            : 'Try free for 7 days, then everything you need to pass first time'}
+          {'Try free for 7 days, then everything you need to pass first time'}
         </Text>
       </View>
 
@@ -167,17 +158,15 @@ export default function PaywallScreen() {
           hardcoded Stripe figure, and the native purchase sheet shows it. */}
       {route === 'stripe_checkout' && (
         <View style={styles.pricingBox}>
-          {!trialExpired && (
-            <View style={styles.trialPill}>
-              <Text style={styles.trialPillText}>{'7 days free'}</Text>
-            </View>
-          )}
+          <View style={styles.trialPill}>
+            <Text style={styles.trialPillText}>{'7 days free'}</Text>
+          </View>
           <View style={styles.priceRow}>
             <Text style={styles.priceAmount}>{'£7.99'}</Text>
             <Text style={styles.pricePeriod}>{' / 3 months'}</Text>
           </View>
           <Text style={styles.priceSub}>
-            {trialExpired ? "That's less than £2.67/month" : "Free for 7 days, then just £2.67/month"}
+            {'Free for 7 days, then just £2.67/month'}
           </Text>
         </View>
       )}
@@ -193,9 +182,7 @@ export default function PaywallScreen() {
           >
             {loading
               ? <ActivityIndicator color="#FFFFFF" />
-              : <Text style={styles.ctaBtnText}>
-                  {trialExpired ? 'Subscribe Now — £7.99/3 months' : 'Start Free Trial'}
-                </Text>
+              : <Text style={styles.ctaBtnText}>{'Start Free Trial'}</Text>
             }
           </ScaleButton>
         </>

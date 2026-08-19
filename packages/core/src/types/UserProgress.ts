@@ -22,5 +22,4 @@ export interface UserProgress {
   hazardPerceptionHistory: HazardSessionResult[];
   streakFreezeCount?: number;
   streakFreezeLastReplenished?: string;
-  trialStartDate?: string;
 }

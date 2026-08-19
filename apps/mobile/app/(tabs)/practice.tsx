@@ -48,7 +48,6 @@ import { submitSessionStats, getComparativeStats, type ComparativeStats } from '
 import { playCorrect, playWrong } from '@/src/sounds';
 import { cancelStreakProtectionNotification } from '@/src/notifications';
 import { FREE_QUESTION_LIMIT, isPremium } from '@/src/subscription';
-import { isTrialActive } from '@/src/storage';
 import { explainAnswer } from '@clearpass/ai';
 import { getAccessToken } from '@/src/getAccessToken';
 import { handleSessionExpired } from '@/src/handleSessionExpired';
@@ -301,7 +300,7 @@ export default function PracticeScreen() {
     setDailyChallengeDisplay(progress.dailyChallenge ?? null);
     setChallengeJustCompletedFlash(false);
 
-    if (!(progress.isPro ?? false) && !isTrialActive(progress) && dailyCountRef.current >= FREE_QUESTION_LIMIT) {
+    if (!(progress.isPro ?? false) && dailyCountRef.current >= FREE_QUESTION_LIMIT) {
       setPhase('dailyLimit');
       return;
     }
