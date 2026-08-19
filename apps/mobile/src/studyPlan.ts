@@ -2,6 +2,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserProgress, TopicCategory } from '@clearpass/core';
 import { getProxyUrl } from './proxyUrl';
 
+// Distinguishable from a generic Error so callers (studyplan.tsx) can show
+// "sign in again" instead of a generic failure message.
+export class UnauthorizedError extends Error {
+  constructor() {
+    super('Unauthorized');
+    this.name = 'UnauthorizedError';
+  }
+}
+
 export type StudyTaskType =
   | 'questions'
   | 'mock'
@@ -108,6 +117,9 @@ export async function generateStudyPlan(
     }),
   });
 
+  if (resp.status === 401) {
+    throw new UnauthorizedError();
+  }
   if (!resp.ok) {
     throw new Error(`Plan generation failed (${resp.status})`);
   }

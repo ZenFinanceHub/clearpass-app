@@ -15,12 +15,14 @@ import {
   generateStudyPlan,
   loadStudyPlan,
   clearStudyPlan,
+  UnauthorizedError,
   StudyPlan,
   StudyDay,
   StudyTaskType,
 } from '@/src/studyPlan';
 import { supabase } from '@/src/supabase';
 import { getAccessToken } from '@/src/getAccessToken';
+import { handleSessionExpired } from '@/src/handleSessionExpired';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 
@@ -156,6 +158,7 @@ export default function StudyPlanScreen() {
   const [dailyMinutes,     setDailyMinutes]     = useState<number>(20);
   const [generating,       setGenerating]       = useState(false);
   const [error,            setError]            = useState<string | null>(null);
+  const [sessionExpired,   setSessionExpired]   = useState(false);
   const [loaded,           setLoaded]           = useState(false);
   const [showDateModal,    setShowDateModal]    = useState(false);
   const [dateInput,        setDateInput]        = useState('');
@@ -217,13 +220,18 @@ export default function StudyPlanScreen() {
     if (!date) return;
     setGenerating(true);
     setError(null);
+    setSessionExpired(false);
     try {
       const progress = await loadUserProgress() ?? createFreshUserProgress();
       const accessToken = await getAccessToken();
       const newPlan  = await generateStudyPlan(date, progress, dailyMinutes, accessToken);
       setPlan(newPlan);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to generate plan. Please try again.');
+      if (e instanceof UnauthorizedError) {
+        setSessionExpired(true);
+      } else {
+        setError(e instanceof Error ? e.message : 'Failed to generate plan. Please try again.');
+      }
     } finally {
       setGenerating(false);
     }
@@ -342,7 +350,16 @@ export default function StudyPlanScreen() {
             <Text style={styles.testDayCardChevron}>{'›'}</Text>
           </TouchableOpacity>
 
-          {error && <View style={styles.errorCard}><Text style={styles.errorText}>{error}</Text></View>}
+          {sessionExpired ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorText}>{'Your session has expired. Sign in again to generate a plan.'}</Text>
+              <TouchableOpacity style={styles.errorCardBtn} onPress={() => void handleSessionExpired()} activeOpacity={0.85}>
+                <Text style={styles.errorCardBtnText}>{'Sign In'}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : error ? (
+            <View style={styles.errorCard}><Text style={styles.errorText}>{error}</Text></View>
+          ) : null}
 
           {plan.days.map((day) => (
             <DayCard
@@ -386,7 +403,16 @@ export default function StudyPlanScreen() {
               : 'Intensive revision — ideal if your test is soon'}
           </Text>
 
-          {error && <View style={styles.errorCard}><Text style={styles.errorText}>{error}</Text></View>}
+          {sessionExpired ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorText}>{'Your session has expired. Sign in again to generate a plan.'}</Text>
+              <TouchableOpacity style={styles.errorCardBtn} onPress={() => void handleSessionExpired()} activeOpacity={0.85}>
+                <Text style={styles.errorCardBtnText}>{'Sign In'}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : error ? (
+            <View style={styles.errorCard}><Text style={styles.errorText}>{error}</Text></View>
+          ) : null}
 
           <TouchableOpacity
             style={[styles.generateBtn, !testDate && styles.generateBtnDisabled]}
@@ -672,6 +698,15 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   errorText: { fontSize: 13, color: '#B91C1C', fontWeight: '500', lineHeight: 18 },
+  errorCardBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.indigo,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginTop: 10,
+  },
+  errorCardBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
 
   // ── Modals ────────────────────────────────────────────────────────────────
   modalOverlay: {

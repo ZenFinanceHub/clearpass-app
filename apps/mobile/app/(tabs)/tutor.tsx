@@ -19,6 +19,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { getTutorQuestionsUsed, incrementTutorQuestionsUsed } from '@/src/storage';
 import { isPremium } from '@/src/subscription';
 import { getAccessToken } from '@/src/getAccessToken';
+import { handleSessionExpired } from '@/src/handleSessionExpired';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 
@@ -105,6 +106,7 @@ export default function TutorScreen() {
   const [showPaywall, setShowPaywall] = useState(false);
   const [dotCount, setDotCount] = useState(1);
   const [androidKeyboardHeight, setAndroidKeyboardHeight] = useState(0);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   const messagesRef    = useRef<Msg[]>([]);
   const scrollRef      = useRef<ScrollView>(null);
@@ -223,6 +225,15 @@ export default function TutorScreen() {
         },
         body: JSON.stringify(body),
       });
+
+      // Distinct from the generic failure path below — an expired session
+      // isn't a bug worth a Sentry capture or a fake assistant reply, it
+      // needs its own UI (see the sessionExpired-gated render below).
+      if (res.status === 401) {
+        console.log('[Ask Pip] session expired (401)');
+        setSessionExpired(true);
+        return;
+      }
 
       rawText = await res.text();
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -360,29 +371,46 @@ export default function TutorScreen() {
         </View>
       )}
 
-      {/* Input bar */}
-      <View style={styles.inputBar}>
-        <TextInput
-          style={[styles.textInput, { color: theme.textColor, fontFamily: theme.fontFamily, fontSize: theme.fontSize(14) }]}
-          value={input}
-          onChangeText={setInput}
-          placeholder="Ask Pip anything..."
-          placeholderTextColor="#9CA3AF"
-          multiline
-          maxLength={500}
-          returnKeyType="send"
-          blurOnSubmit={false}
-          onSubmitEditing={() => { if (canSend) void sendText(input); }}
-        />
-        <TouchableOpacity
-          style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
-          onPress={() => void sendText(input)}
-          disabled={!canSend}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="arrow-up-circle" size={36} color={canSend ? Colors.indigo : Colors.border} />
-        </TouchableOpacity>
-      </View>
+      {/* Input bar — replaced by a sign-in prompt on an expired session.
+          The conversation above stays exactly as it was; nothing is
+          cleared or navigated away from until the user taps Sign In. */}
+      {sessionExpired ? (
+        <View style={styles.sessionExpiredBar}>
+          <Text style={styles.sessionExpiredText}>
+            {'Your session has expired. Sign in again to keep chatting with Pip.'}
+          </Text>
+          <TouchableOpacity
+            style={styles.sessionExpiredBtn}
+            onPress={() => void handleSessionExpired()}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.sessionExpiredBtnText}>{'Sign In'}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.inputBar}>
+          <TextInput
+            style={[styles.textInput, { color: theme.textColor, fontFamily: theme.fontFamily, fontSize: theme.fontSize(14) }]}
+            value={input}
+            onChangeText={setInput}
+            placeholder="Ask Pip anything..."
+            placeholderTextColor="#9CA3AF"
+            multiline
+            maxLength={500}
+            returnKeyType="send"
+            blurOnSubmit={false}
+            onSubmitEditing={() => { if (canSend) void sendText(input); }}
+          />
+          <TouchableOpacity
+            style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
+            onPress={() => void sendText(input)}
+            disabled={!canSend}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="arrow-up-circle" size={36} color={canSend ? Colors.indigo : Colors.border} />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Free tier paywall modal */}
       <Modal visible={showPaywall} transparent animationType="fade" onRequestClose={() => setShowPaywall(false)}>
@@ -486,6 +514,25 @@ const styles = StyleSheet.create({
   },
   sendBtn: { paddingBottom: 2 },
   sendBtnDisabled: { opacity: 0.4 },
+
+  sessionExpiredBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 0.5,
+    borderTopColor: Colors.border,
+    gap: 12,
+  },
+  sessionExpiredText: { flex: 1, fontSize: 13, color: Colors.mutedText, lineHeight: 18 },
+  sessionExpiredBtn: {
+    backgroundColor: Colors.indigo,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  sessionExpiredBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
 
   thinkingBar: {
     paddingHorizontal: 16,
