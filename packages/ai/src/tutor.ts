@@ -1,5 +1,15 @@
 import { TUTOR_SYSTEM_PROMPT } from './systemPrompt';
 
+// 'unauthorized' is distinct from 'error' so callers (practice.tsx) can
+// show "sign in again" instead of quietly rendering the generic fallback
+// as if it were a real explanation — an expired session isn't the same
+// kind of failure as a network hiccup or a 5xx, and looked identical to
+// the user before this.
+export type ExplainResult =
+  | { status: 'ok'; text: string }
+  | { status: 'unauthorized' }
+  | { status: 'error'; text: string };
+
 export async function explainAnswer(
   question: string,
   options: string[],
@@ -7,7 +17,7 @@ export async function explainAnswer(
   selectedIndex: number,
   apiKey: string,
   accessToken: string | null,
-): Promise<string> {
+): Promise<ExplainResult> {
   const correctOption = options[correctIndex];
   const selectedOption = options[selectedIndex];
 
@@ -57,15 +67,19 @@ export async function explainAnswer(
       }),
     });
 
+    if (response.status === 401) {
+      return { status: 'unauthorized' };
+    }
+
     if (!response.ok) {
       await response.text();
-      return fallback(correctOption);
+      return { status: 'error', text: fallback(correctOption) };
     }
 
     const data = await response.json() as { content: Array<{ type: string; text: string }> };
-    return data.content[0].text.trim();
+    return { status: 'ok', text: data.content[0].text.trim() };
   } catch {
-    return fallback(correctOption);
+    return { status: 'error', text: fallback(correctOption) };
   }
 }
 

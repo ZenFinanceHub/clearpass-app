@@ -51,6 +51,7 @@ import { FREE_QUESTION_LIMIT, isPremium } from '@/src/subscription';
 import { isTrialActive } from '@/src/storage';
 import { explainAnswer } from '@clearpass/ai';
 import { getAccessToken } from '@/src/getAccessToken';
+import { handleSessionExpired } from '@/src/handleSessionExpired';
 import { TOPIC_LABELS } from '@/src/tutorNudges';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
 import { Pip } from '@/src/components/Pip';
@@ -148,6 +149,7 @@ export default function PracticeScreen() {
   const [sessionResults, setSessionResults] = useState<SessionResult[]>([]);
   const [aiExplanation, setAiExplanation] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiSessionExpired, setAiSessionExpired] = useState(false);
   const [showSRButtons, setShowSRButtons] = useState(false);
   const srRecordedRef = useRef(false);
 
@@ -332,6 +334,7 @@ export default function PracticeScreen() {
     setCurrentIndex(0);
     setSelectedIndex(null);
     setAiExplanation(null);
+    setAiSessionExpired(false);
     setAiLoading(false);
     setXpGained(0);
     setNewAchievements([]);
@@ -763,6 +766,7 @@ export default function PracticeScreen() {
       setCurrentIndex((i) => i + 1);
       setSelectedIndex(null);
       setAiExplanation(null);
+      setAiSessionExpired(false);
       setAiLoading(false);
     }
   }, [currentIndex, questions, questions.length, selectedIndex]);
@@ -781,7 +785,11 @@ export default function PracticeScreen() {
       ANTHROPIC_API_KEY,
       accessToken,
     );
-    setAiExplanation(result);
+    if (result.status === 'unauthorized') {
+      setAiSessionExpired(true);
+    } else {
+      setAiExplanation(result.text);
+    }
     setAiLoading(false);
   }, [aiLoading, aiExplanation, questions, currentIndex, selectedIndex]);
 
@@ -1186,7 +1194,15 @@ export default function PracticeScreen() {
 
       {isAnswered && !answeredCorrectly && (
         <>
-          {aiExplanation !== null ? (
+          {aiSessionExpired ? (
+            <View style={styles.aiCard}>
+              <Text style={styles.aiCardTitle}>AI TUTOR</Text>
+              <Text style={styles.aiCardBody}>{'Your session has expired. Sign in again to get an explanation.'}</Text>
+              <TouchableOpacity style={styles.aiSignInBtn} onPress={() => void handleSessionExpired()} activeOpacity={0.85}>
+                <Text style={styles.aiSignInBtnText}>{'Sign In'}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : aiExplanation !== null ? (
             <View style={styles.aiCard}>
               <Text style={styles.aiCardTitle}>AI TUTOR</Text>
               <Text style={styles.aiCardBody}>{aiExplanation}</Text>
@@ -2343,6 +2359,15 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   aiCardBody: { fontSize: 14, color: Colors.textDark, lineHeight: 22 },
+  aiSignInBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.indigo,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginTop: 10,
+  },
+  aiSignInBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
 
   // Achievement banner
   achievementBanner: {
