@@ -458,3 +458,26 @@ CREATE TABLE IF NOT EXISTS seat_refund_flags (
 ALTER TABLE seat_refund_flags ENABLE ROW LEVEL SECURITY;
 -- No policies: service-role only, same convention as stripe_webhook_events
 -- — an internal ops record, not user-facing data.
+
+-- Per-user daily quota counter for POST /api/explain — one shared quota
+-- across all three callers that hit that endpoint (Ask Pip in
+-- app/(tabs)/tutor.tsx, the wrong-answer explainer in
+-- packages/ai/src/tutor.ts, and the orphaned generateStudyPlan in
+-- src/studyPlan.ts). One row per user per UTC calendar day; proxy.js
+-- reads and increments `count` server-side before proxying to Anthropic.
+-- Column named usage_date, not `date` — `date` is a legal identifier in
+-- Postgres but shadows the built-in DATE type, which every other table
+-- in this file avoids by using a descriptive name instead (attempted_at,
+-- redeemed_at, etc).
+-- Service-role only, same convention as stripe_webhook_events above: no
+-- policies at all, so a learner can neither read their own remaining
+-- quota nor forge extra headroom by writing this table directly.
+CREATE TABLE IF NOT EXISTS explain_daily_usage (
+  user_id    UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  usage_date DATE NOT NULL,
+  count      INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, usage_date)
+);
+
+ALTER TABLE explain_daily_usage ENABLE ROW LEVEL SECURITY;
+-- No policies: service-role only, same convention as stripe_webhook_events.

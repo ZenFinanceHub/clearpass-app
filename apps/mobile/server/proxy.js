@@ -548,13 +548,88 @@ const ANTHROPIC_MAX_TOKENS = 4000;
 const MAX_SYSTEM_CHARS = 8000;
 const MAX_MESSAGES = 40;
 
+// Shared daily quota on POST /api/explain, one counter across all three
+// callers (Ask Pip, the wrong-answer explainer, and the orphaned study
+// plan generator) since they all hit this one endpoint.
+const FREE_EXPLAIN_DAILY_LIMIT = 5;
+const PRO_EXPLAIN_DAILY_LIMIT = 50;
+
+// Reads isPro, then reads-and-increments today's counter in
+// explain_daily_usage. Fails OPEN on any Supabase error at either step —
+// log it, return not-blocked — because Ask Pip is a headline paid
+// feature and a DB hiccup here must not turn into a hard outage for it.
+// Note: the read-then-write below is not atomic, so two concurrent
+// requests from the same user landing in the same instant could both
+// read the same pre-increment count and both be admitted — acceptable
+// for a soft anti-abuse quota, not something this guards against.
+async function checkAndIncrementExplainQuota(userId, supabaseAdmin) {
+  const today = new Date().toISOString().slice(0, 10);
+
+  let isPro = false;
+  try {
+    const { data: progressRow, error: progressErr } = await supabaseAdmin
+      .from('user_progress')
+      .select('progress')
+      .eq('id', userId)
+      .maybeSingle();
+    if (progressErr) throw progressErr;
+
+    const progress = progressRow?.progress || {};
+    // isPro alone isn't trustworthy — expire-pro (POST /api/cron/expire-pro)
+    // runs on a schedule, not instantly, so a lapsed stripe/iap/seat grant
+    // can sit at isPro:true with a past proExpiresAt for up to a day (same
+    // reasoning as lib/seats.js's classifyExistingPro). Re-derive it here
+    // with the already-imported isEligibleForProExpiry rather than trust
+    // the raw flag.
+    isPro = progress.isPro === true && !isEligibleForProExpiry(progress, new Date().toISOString());
+  } catch (err) {
+    console.error('[explain] quota check failed reading isPro, failing open:', err);
+    return { blocked: false, failedOpen: true };
+  }
+
+  const limit = isPro ? PRO_EXPLAIN_DAILY_LIMIT : FREE_EXPLAIN_DAILY_LIMIT;
+
+  try {
+    const { data: usageRow, error: usageErr } = await supabaseAdmin
+      .from('explain_daily_usage')
+      .select('count')
+      .eq('user_id', userId)
+      .eq('usage_date', today)
+      .maybeSingle();
+    if (usageErr) throw usageErr;
+
+    const currentCount = usageRow?.count ?? 0;
+    if (currentCount >= limit) {
+      return { blocked: true, count: currentCount, limit, isPro };
+    }
+
+    const { error: upsertErr } = await supabaseAdmin
+      .from('explain_daily_usage')
+      .upsert({ user_id: userId, usage_date: today, count: currentCount + 1 }, { onConflict: 'user_id,usage_date' });
+    if (upsertErr) throw upsertErr;
+
+    return { blocked: false, count: currentCount + 1, limit, isPro };
+  } catch (err) {
+    console.error('[explain] quota counter failed, failing open:', err);
+    return { blocked: false, failedOpen: true };
+  }
+}
+
 app.post('/api/explain', async (req, res) => {
   // Step 2 of rolling out auth here: enforced now. verifyAuth sends its
   // own 401 on failure — same pattern as every other authenticated
   // endpoint in this file.
   const auth = await verifyAuth(req, res);
   if (!auth) return;
-  const { userId } = auth;
+  const { userId, supabaseAdmin } = auth;
+
+  const quota = await checkAndIncrementExplainQuota(userId, supabaseAdmin);
+  if (quota.blocked) {
+    console.warn(
+      `[explain] rejected: daily quota exceeded for userId=${userId} (${quota.count}/${quota.limit}, isPro=${quota.isPro})`
+    );
+    return res.status(429).json({ error: `Daily limit reached (${quota.limit} explanations/day). Try again tomorrow.` });
+  }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const { system, messages } = req.body || {};
