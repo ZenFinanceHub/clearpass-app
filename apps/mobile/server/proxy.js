@@ -549,12 +549,20 @@ const MAX_SYSTEM_CHARS = 8000;
 const MAX_MESSAGES = 40;
 
 app.post('/api/explain', async (req, res) => {
+  // Step 2 of rolling out auth here: enforced now. verifyAuth sends its
+  // own 401 on failure — same pattern as every other authenticated
+  // endpoint in this file.
+  const auth = await verifyAuth(req, res);
+  if (!auth) return;
+  const { userId } = auth;
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const { system, messages } = req.body || {};
 
-  // Presence and format only — never the token itself. Step 1 of rolling
-  // out auth here: the server doesn't check this yet, this is purely to
-  // observe what clients are actually sending before enforcement lands.
+  // Presence and format only — never the token itself. Kept alongside
+  // enforcement above while it beds in — by construction these are now
+  // always true for any request that reaches this point, but still worth
+  // having in the log line for now.
   const authHeader = req.headers['authorization'];
   const authHeaderPresent = authHeader !== undefined;
   const authHeaderIsBearer = typeof authHeader === 'string' && authHeader.startsWith('Bearer ');
@@ -593,7 +601,7 @@ app.post('/api/explain', async (req, res) => {
   };
 
   console.log(
-    `[explain] request received: messages=${messages.length}, authHeaderPresent=${authHeaderPresent}, authHeaderIsBearer=${authHeaderIsBearer}`
+    `[explain] request received: userId=${userId}, messages=${messages.length}, authHeaderPresent=${authHeaderPresent}, authHeaderIsBearer=${authHeaderIsBearer}`
   );
 
   try {
