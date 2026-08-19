@@ -44,7 +44,7 @@ const FEATURES = [
   { icon: '♿', title: 'Accessibility Mode', desc: 'OpenDyslexic font, text-to-speech, cream background and more.' },
 ];
 
-const FREE_FEATURES = ['10 questions per day', 'Highway Code & road signs', '5 AI tutor questions/day'];
+const FREE_FEATURES = ['10 questions per day', 'Highway Code & road signs', '10 free AI tutor questions'];
 const PRO_FEATURES = ['Unlimited questions', 'Full mock tests', 'Hazard perception', 'Unlimited AI tutor', 'Offline mode'];
 
 // Routes to the paywall screen, which is the single place that decides
