@@ -39,13 +39,13 @@ const FEATURES = [
   { icon: '🦔', title: 'Ask Pip', desc: 'Ask anything. Get clear explanations from real conversational AI.' },
   { icon: '📊', title: 'Pass Probability', desc: 'Live prediction of your pass chance, updated after every session.' },
   { icon: '📝', title: 'Full Mock Tests', desc: '50 questions, 57 minutes, full DVSA format.' },
-  { icon: '📅', title: 'Smart Study Plan', desc: 'AI builds a personalised day-by-day plan around your test date.' },
+  { icon: '📅', title: 'Smart Study Plan', desc: 'A personalised day-by-day plan built around your test date.' },
   { icon: '⚠️', title: 'Hazard Perception', desc: 'Video clips with real scoring — just like the actual test.' },
   { icon: '♿', title: 'Accessibility Mode', desc: 'OpenDyslexic font, text-to-speech, cream background and more.' },
 ];
 
 const FREE_FEATURES = ['10 questions per day', 'Highway Code & road signs', '5 AI tutor questions/day'];
-const PRO_FEATURES = ['Unlimited questions', 'Full mock tests', 'Hazard perception', 'Unlimited AI tutor', 'AI study plan', 'Offline mode'];
+const PRO_FEATURES = ['Unlimited questions', 'Full mock tests', 'Hazard perception', 'Unlimited AI tutor', 'Personalised study plan', 'Offline mode'];
 
 // Routes to the paywall screen, which is the single place that decides
 // (via src/purchaseGate) whether that means Stripe Checkout or an iOS
@@ -91,10 +91,6 @@ export default function LandingPage() {
 
         {/* Hero */}
         <View style={styles.hero}>
-          <View style={styles.heroBadge}>
-            <View style={styles.heroBadgePill}><Text style={styles.heroBadgePillText}>{'NEW'}</Text></View>
-            <Text style={styles.heroBadgeText}>{'AI Study Plans now live'}</Text>
-          </View>
           <Text style={styles.heroH1}>{'Pass Your Theory Test'}</Text>
           <Text style={styles.heroH1Accent}>{'First Time'}</Text>
           <Text style={styles.heroSub}>{'The UK\'s smartest revision app. AI tutor, personalised study plan, and the only app built for dyslexic learners.'}</Text>
@@ -147,7 +143,7 @@ export default function LandingPage() {
           <Text style={styles.sectionTitle}>{'Get test ready in 3 steps'}</Text>
           {[
             { n: '1', t: 'Create your free account', d: 'Set your test date and we\'ll build your personalised plan instantly.' },
-            { n: '2', t: 'Follow your AI study plan', d: 'Your plan adapts as you learn, focusing time where it matters most.' },
+            { n: '2', t: 'Follow your study plan', d: 'Your plan adapts as you learn, focusing time where it matters most.' },
             { n: '3', t: 'Pass first time', d: 'When your pass probability hits 85%+ you\'re ready to book.' },
           ].map((step) => (
             <View key={step.n} style={styles.stepRow}>
@@ -312,14 +308,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0FDF9',
     paddingHorizontal: 24, paddingTop: 48, paddingBottom: 56, alignItems: 'center',
   },
-  heroBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: '#FFFFFF', borderRadius: 100, borderWidth: 1, borderColor: '#E5E7EB',
-    paddingHorizontal: 14, paddingVertical: 6, marginBottom: 24,
-  },
-  heroBadgePill: { backgroundColor: TEAL, borderRadius: 100, paddingHorizontal: 8, paddingVertical: 2 },
-  heroBadgePillText: { fontSize: 10, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 },
-  heroBadgeText: { fontSize: 13, fontWeight: '600', color: '#374151' },
   heroH1: { fontSize: 40, fontWeight: '900', color: '#111827', textAlign: 'center', letterSpacing: -1, lineHeight: 48 },
   heroH1Accent: { fontSize: 40, fontWeight: '900', color: TEAL, textAlign: 'center', letterSpacing: -1, lineHeight: 52, marginBottom: 20 },
   heroSub: { fontSize: 16, color: '#6B7280', textAlign: 'center', lineHeight: 26, maxWidth: 360, marginBottom: 32 },
