@@ -30,6 +30,16 @@ export async function configurePurchases(userId: string): Promise<void> {
     Purchases.configure({ apiKey, appUserID: userId });
     configured = true;
     const offerings = await Purchases.getOfferings();
+    // No keys or user data — just enough to diagnose a misconfigured
+    // RevenueCat dashboard (missing current offering, or a current
+    // offering whose packages don't include a threeMonth one) without a
+    // debugger attached to a device.
+    console.log('[purchases] offerings loaded', {
+      platform: Platform.OS,
+      hasCurrentOffering: !!offerings.current,
+      currentOfferingId: offerings.current?.identifier ?? null,
+      packageIdentifiers: offerings.current?.availablePackages.map(p => p.identifier) ?? [],
+    });
     // Readiness is specifically "the quarterly package is available", not
     // just "some package exists" — that's the one getProPackage() below
     // actually buys, so the gate shouldn't claim readiness for a product
