@@ -536,7 +536,21 @@ app.use(express.json());
 // Previously the entire request body was forwarded to Anthropic
 // unmodified, meaning the client controlled model, max_tokens, and
 // everything else.
-const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
+//
+// caller selects a model from this allowlist rather than letting the
+// client name a model directly — same trust boundary as before, just
+// keyed by caller identity instead of collapsed to one fixed model. The
+// explainer's prompts are short, single-shot, and low-stakes wording
+// (explaining one already-known right/wrong answer), so Haiku is the
+// right cost/quality tradeoff there; Ask Pip is open-ended multi-turn
+// tutoring and the study plan generator must produce a large, strictly
+// valid JSON array — both stay on Sonnet.
+const CALLER_MODELS = {
+  ask_pip: 'claude-sonnet-4-6',
+  explainer: 'claude-haiku-4-5-20251001',
+  study_plan: 'claude-sonnet-4-6',
+};
+const DEFAULT_CALLER = 'ask_pip';
 // A ceiling, not a target — Ask Pip's and explainAnswer()'s prompts both
 // self-limit well below this, so raising it doesn't lengthen their
 // responses. Pinned at generateStudyPlan()'s own requirement (4000,
@@ -672,6 +686,16 @@ app.post('/api/explain', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const { system, messages } = req.body || {};
 
+  // Not client-controlled beyond which allowlisted model it selects — an
+  // absent or unrecognised value falls back to ask_pip's model rather than
+  // 400ing, so an old client (or a caller typo) degrades to the default
+  // instead of breaking.
+  const requestedCaller = req.body?.caller;
+  const caller = Object.prototype.hasOwnProperty.call(CALLER_MODELS, requestedCaller)
+    ? requestedCaller
+    : DEFAULT_CALLER;
+  const model = CALLER_MODELS[caller];
+
   // Presence and format only — never the token itself. Kept alongside
   // enforcement above while it beds in — by construction these are now
   // always true for any request that reaches this point, but still worth
@@ -707,19 +731,15 @@ app.post('/api/explain', async (req, res) => {
   // req.body (temperature, top_p, a client-supplied model or max_tokens,
   // anything) is dropped, not just overridden.
   const anthropicBody = {
-    model: ANTHROPIC_MODEL,
+    model,
     max_tokens: ANTHROPIC_MAX_TOKENS,
     ...(system !== undefined ? { system } : {}),
     messages,
   };
 
   console.log(
-    `[explain] request received: userId=${userId}, messages=${messages.length}, authHeaderPresent=${authHeaderPresent}, authHeaderIsBearer=${authHeaderIsBearer}`
+    `[explain] request received: userId=${userId}, caller=${caller}, messages=${messages.length}, authHeaderPresent=${authHeaderPresent}, authHeaderIsBearer=${authHeaderIsBearer}`
   );
-  // TEMPORARY — verifying the step 1 client rollout (caller field added to
-  // all three /api/explain callers) reached production before step 2
-  // (routing on it) lands. Remove once verified.
-  console.log(`[explain] caller=${req.body?.caller ?? 'absent'}`);
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
