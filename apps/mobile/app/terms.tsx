@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 
-const LAST_UPDATED = '18 August 2026';
+const LAST_UPDATED = '19 August 2026';
 
 export default function TermsScreen() {
   const theme = useTheme();
@@ -40,11 +40,15 @@ export default function TermsScreen() {
         {'ClearPass offers a one-off Pro access purchase of GBP 7.99 for three months of full access. This is a one-time payment, not a recurring subscription.\n\n'}
         {'All payments are processed securely by Stripe. ClearPass does not store your card details.\n\n'}
         {'Pro access includes: unlimited practice questions, full timed mock tests, AI tutor explanations, progress tracking, and all future features released during your access period.\n\n'}
-        {'Refunds: if you experience a technical issue that prevents you from using the Pro features, contact support@getclearpass.co.uk within 14 days of purchase.'}
+        {'Refunds: if you experience a technical issue that prevents you from using the Pro features, contact support@getclearpass.co.uk within 14 days of purchase.\n\n'}
+        {'Where Pro access is purchased as a subscription through the Apple App Store or Google Play, rather than the one-time Stripe payment described above, the store may offer a free trial period as an introductory offer on that subscription. Trial eligibility and length are set by the App Store or Google Play, not by ClearPass, and are shown to you before you subscribe.'}
       </Section>
 
       <Section title="5. Free tier limitations" theme={theme}>
-        {'Free users may access up to 10 practice questions per day. Mock tests, AI tutor, and certain features require a Pro account. We reserve the right to adjust free tier limits at any time with reasonable notice.'}
+        {'Free accounts may practise up to 10 questions per day. This limit is checked when a practice session starts, so a session already in progress can be finished even if it takes you past the daily limit.\n\n'}
+        {'Free accounts also include a limited number of AI tutor questions in total (currently 10), shared across Ask Pip, answer explanations, and study plan generation. Once this allowance is used, a Pro account is required to continue using the AI tutor; Pro accounts receive a renewed daily allowance instead.\n\n'}
+        {'Mock tests and hazard perception videos require a Pro account. The Highway Code and road signs are available to everyone, free or Pro.\n\n'}
+        {'We reserve the right to adjust free tier and Pro allowances at any time with reasonable notice.'}
       </Section>
 
       <Section title="6. Acceptable use" theme={theme}>
