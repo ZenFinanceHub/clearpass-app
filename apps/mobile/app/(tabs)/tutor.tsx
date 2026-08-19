@@ -84,6 +84,48 @@ function nowTime(): string {
   return new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
+// The server rejects any /api/explain request over 40 messages
+// (proxy.js's MAX_MESSAGES) and every turn resends the full history, so
+// payload size and cost grow unbounded over a long session. Window what's
+// sent, but always pin the opening message — for the "explain a wrong
+// answer" entry point (see useFocusEffect below) it carries the question,
+// correct answer, and the user's answer that the rest of the conversation
+// is grounded in, so dropping it makes later replies incoherent even
+// though the recent turns are still in the window.
+const MAX_API_MESSAGES = 20;
+
+// Builds [anchor, ...tail] and defensively re-establishes strict
+// user/assistant alternation rather than trusting it holds. The known way
+// it can break: sendText appends the user's message to local state before
+// the fetch, then returns early on a 401/429 without appending a reply
+// (see the session-expired/rate-limited branches below), leaving a
+// dangling unanswered user turn. Today the UI has no path back to the
+// input bar after that — sessionExpired/rateLimited only ever get set,
+// never cleared — so it can't currently be followed by another user
+// message, but that's incidental to this function and not something it
+// should assume stays true.
+//
+// The anchor (all[0]) is always role 'user' — it's unconditionally the
+// first thing sendText ever pushes to local state. Walking forward from
+// it, any message that would repeat the previously kept message's role
+// replaces it instead of being appended, so a same-role collision
+// resolves in favour of the more recent message instead of silently
+// producing two consecutive same-role entries in the payload.
+function windowMessages(all: Msg[]): Msg[] {
+  const anchor = all[0];
+  const rest = all.length <= MAX_API_MESSAGES ? all.slice(1) : all.slice(-(MAX_API_MESSAGES - 1));
+
+  const out: Msg[] = [anchor];
+  for (const m of rest) {
+    if (m.role !== out[out.length - 1].role) {
+      out.push(m);
+    } else {
+      out[out.length - 1] = m;
+    }
+  }
+  return out;
+}
+
 export default function TutorScreen() {
   const theme = useTheme();
   const tabBarHeight = useBottomTabBarHeight();
@@ -181,7 +223,7 @@ export default function TutorScreen() {
     setInput('');
     setIsLoading(true);
 
-    const apiMessages = next.map((m) => ({ role: m.role, content: m.content }));
+    const apiMessages = windowMessages(next).map((m) => ({ role: m.role, content: m.content }));
 
     const url = `${getProxyUrl()}/api/explain`;
     const body = {
