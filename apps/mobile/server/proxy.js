@@ -552,6 +552,13 @@ app.post('/api/explain', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const { system, messages } = req.body || {};
 
+  // Presence and format only — never the token itself. Step 1 of rolling
+  // out auth here: the server doesn't check this yet, this is purely to
+  // observe what clients are actually sending before enforcement lands.
+  const authHeader = req.headers['authorization'];
+  const authHeaderPresent = authHeader !== undefined;
+  const authHeaderIsBearer = typeof authHeader === 'string' && authHeader.startsWith('Bearer ');
+
   if (system !== undefined && (typeof system !== 'string' || system.length > MAX_SYSTEM_CHARS)) {
     console.warn(
       `[explain] rejected: system must be a string of at most ${MAX_SYSTEM_CHARS} characters (got ${
@@ -585,7 +592,9 @@ app.post('/api/explain', async (req, res) => {
     messages,
   };
 
-  console.log(`[explain] request received: messages=${messages.length}`);
+  console.log(
+    `[explain] request received: messages=${messages.length}, authHeaderPresent=${authHeaderPresent}, authHeaderIsBearer=${authHeaderIsBearer}`
+  );
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
