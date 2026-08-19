@@ -548,20 +548,22 @@ const ANTHROPIC_MAX_TOKENS = 4000;
 const MAX_SYSTEM_CHARS = 8000;
 const MAX_MESSAGES = 40;
 
-// Shared daily quota on POST /api/explain, one counter across all three
-// callers (Ask Pip, the wrong-answer explainer, and the orphaned study
-// plan generator) since they all hit this one endpoint.
-const FREE_EXPLAIN_DAILY_LIMIT = 5;
+// Shared quota on POST /api/explain, one counter across all three callers
+// (Ask Pip, the wrong-answer explainer, and the orphaned study plan
+// generator) since they all hit this one endpoint. Free is a LIFETIME cap
+// (never resets); Pro is a per-day cap (resets at UTC midnight) — the
+// server owns the free tier now, not any client-side counter.
+const FREE_EXPLAIN_LIFETIME_LIMIT = 10;
 const PRO_EXPLAIN_DAILY_LIMIT = 50;
 
-// Reads isPro, then reads-and-increments today's counter in
-// explain_daily_usage. Fails OPEN on any Supabase error at either step —
-// log it, return not-blocked — because Ask Pip is a headline paid
-// feature and a DB hiccup here must not turn into a hard outage for it.
-// Note: the read-then-write below is not atomic, so two concurrent
-// requests from the same user landing in the same instant could both
-// read the same pre-increment count and both be admitted — acceptable
-// for a soft anti-abuse quota, not something this guards against.
+// Reads isPro, then reads-and-increments the caller's usage in
+// explain_daily_usage. Fails OPEN on any Supabase error at any step — log
+// it, return not-blocked — because Ask Pip is a headline paid feature and
+// a DB hiccup here must not turn into a hard outage for it.
+// Note: each branch's read-then-write is not atomic, so two concurrent
+// requests from the same user landing in the same instant could both read
+// the same pre-increment count and both be admitted — acceptable for a
+// soft anti-abuse quota, not something this guards against.
 async function checkAndIncrementExplainQuota(userId, supabaseAdmin) {
   const today = new Date().toISOString().slice(0, 10);
 
@@ -587,28 +589,60 @@ async function checkAndIncrementExplainQuota(userId, supabaseAdmin) {
     return { blocked: false, failedOpen: true };
   }
 
-  const limit = isPro ? PRO_EXPLAIN_DAILY_LIMIT : FREE_EXPLAIN_DAILY_LIMIT;
+  // Pro: 50/day — a single row read/write against today's date, same
+  // shape as the original daily-only implementation.
+  if (isPro) {
+    try {
+      const { data: usageRow, error: usageErr } = await supabaseAdmin
+        .from('explain_daily_usage')
+        .select('count')
+        .eq('user_id', userId)
+        .eq('usage_date', today)
+        .maybeSingle();
+      if (usageErr) throw usageErr;
 
+      const currentCount = usageRow?.count ?? 0;
+      if (currentCount >= PRO_EXPLAIN_DAILY_LIMIT) {
+        return { blocked: true, count: currentCount, limit: PRO_EXPLAIN_DAILY_LIMIT, isPro };
+      }
+
+      const { error: upsertErr } = await supabaseAdmin
+        .from('explain_daily_usage')
+        .upsert({ user_id: userId, usage_date: today, count: currentCount + 1 }, { onConflict: 'user_id,usage_date' });
+      if (upsertErr) throw upsertErr;
+
+      return { blocked: false, count: currentCount + 1, limit: PRO_EXPLAIN_DAILY_LIMIT, isPro };
+    } catch (err) {
+      console.error('[explain] quota counter failed, failing open:', err);
+      return { blocked: false, failedOpen: true };
+    }
+  }
+
+  // Free: 10 LIFETIME, summed across every usage_date row this user has.
+  // The table still buckets by day (so the Pro branch above can share it),
+  // but a free user's cap is on the running total, not any single day —
+  // summed in JS rather than via a Postgres aggregate, since nothing else
+  // in this file relies on PostgREST's aggregate-function support and a
+  // free user's row count is inherently small (capped at the limit itself).
   try {
-    const { data: usageRow, error: usageErr } = await supabaseAdmin
+    const { data: rows, error: rowsErr } = await supabaseAdmin
       .from('explain_daily_usage')
-      .select('count')
-      .eq('user_id', userId)
-      .eq('usage_date', today)
-      .maybeSingle();
-    if (usageErr) throw usageErr;
+      .select('usage_date, count')
+      .eq('user_id', userId);
+    if (rowsErr) throw rowsErr;
 
-    const currentCount = usageRow?.count ?? 0;
-    if (currentCount >= limit) {
-      return { blocked: true, count: currentCount, limit, isPro };
+    const lifetimeCount = (rows || []).reduce((sum, r) => sum + r.count, 0);
+    if (lifetimeCount >= FREE_EXPLAIN_LIFETIME_LIMIT) {
+      return { blocked: true, count: lifetimeCount, limit: FREE_EXPLAIN_LIFETIME_LIMIT, isPro };
     }
 
+    const todayCount = rows?.find(r => r.usage_date === today)?.count ?? 0;
     const { error: upsertErr } = await supabaseAdmin
       .from('explain_daily_usage')
-      .upsert({ user_id: userId, usage_date: today, count: currentCount + 1 }, { onConflict: 'user_id,usage_date' });
+      .upsert({ user_id: userId, usage_date: today, count: todayCount + 1 }, { onConflict: 'user_id,usage_date' });
     if (upsertErr) throw upsertErr;
 
-    return { blocked: false, count: currentCount + 1, limit, isPro };
+    return { blocked: false, count: lifetimeCount + 1, limit: FREE_EXPLAIN_LIFETIME_LIMIT, isPro };
   } catch (err) {
     console.error('[explain] quota counter failed, failing open:', err);
     return { blocked: false, failedOpen: true };
@@ -626,9 +660,9 @@ app.post('/api/explain', async (req, res) => {
   const quota = await checkAndIncrementExplainQuota(userId, supabaseAdmin);
   if (quota.blocked) {
     console.warn(
-      `[explain] rejected: daily quota exceeded for userId=${userId} (${quota.count}/${quota.limit}, isPro=${quota.isPro})`
+      `[explain] rejected: quota exceeded for userId=${userId} (${quota.count}/${quota.limit}, isPro=${quota.isPro})`
     );
-    return res.status(429).json({ error: `Daily limit reached (${quota.limit} explanations/day). Try again tomorrow.` });
+    return res.status(429).json({ error: 'rate_limited', isPro: quota.isPro, limit: quota.limit, count: quota.count });
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;

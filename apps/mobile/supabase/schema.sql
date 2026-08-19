@@ -459,12 +459,16 @@ ALTER TABLE seat_refund_flags ENABLE ROW LEVEL SECURITY;
 -- No policies: service-role only, same convention as stripe_webhook_events
 -- — an internal ops record, not user-facing data.
 
--- Per-user daily quota counter for POST /api/explain — one shared quota
--- across all three callers that hit that endpoint (Ask Pip in
+-- Per-user usage counter for POST /api/explain — one shared quota across
+-- all three callers that hit that endpoint (Ask Pip in
 -- app/(tabs)/tutor.tsx, the wrong-answer explainer in
 -- packages/ai/src/tutor.ts, and the orphaned generateStudyPlan in
 -- src/studyPlan.ts). One row per user per UTC calendar day; proxy.js
 -- reads and increments `count` server-side before proxying to Anthropic.
+-- Free users are capped LIFETIME (proxy.js sums `count` across every row
+-- for the user); Pro users are capped per day (proxy.js reads/writes only
+-- today's row) — the day-bucketed shape is kept for both tiers so the Pro
+-- path stays a single-row check without needing a second table.
 -- Column named usage_date, not `date` — `date` is a legal identifier in
 -- Postgres but shadows the built-in DATE type, which every other table
 -- in this file avoids by using a descriptive name instead (attempted_at,
