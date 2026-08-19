@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Keyboard,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -16,14 +15,10 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import * as Sentry from '@sentry/react-native';
 import { Pip } from '@/src/components/Pip';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { getTutorQuestionsUsed, incrementTutorQuestionsUsed } from '@/src/storage';
-import { isPremium } from '@/src/subscription';
 import { getAccessToken } from '@/src/getAccessToken';
 import { handleSessionExpired } from '@/src/handleSessionExpired';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
-
-const FREE_LIMIT = 2;
 
 function getProxyUrl(): string {
   return __DEV__
@@ -103,10 +98,10 @@ export default function TutorScreen() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [showPaywall, setShowPaywall] = useState(false);
   const [dotCount, setDotCount] = useState(1);
   const [androidKeyboardHeight, setAndroidKeyboardHeight] = useState(0);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [rateLimited, setRateLimited] = useState<{ isPro: boolean } | null>(null);
 
   const messagesRef    = useRef<Msg[]>([]);
   const scrollRef      = useRef<ScrollView>(null);
@@ -179,20 +174,12 @@ export default function TutorScreen() {
     const trimmed = text.trim();
     if (!trimmed || isSending.current) return;
 
-    const [used, premium] = await Promise.all([getTutorQuestionsUsed(), isPremium()]);
-    if (used >= FREE_LIMIT && !premium) {
-      setShowPaywall(true);
-      return;
-    }
-
     isSending.current = true;
     const userMsg: Msg = { id: String(Date.now()), role: 'user', content: trimmed, time: nowTime() };
     const next = [...messagesRef.current, userMsg];
     updateMsgs(next);
     setInput('');
     setIsLoading(true);
-
-    await incrementTutorQuestionsUsed();
 
     const apiMessages = next.map((m) => ({ role: m.role, content: m.content }));
 
@@ -232,6 +219,15 @@ export default function TutorScreen() {
       if (res.status === 401) {
         console.log('[Ask Pip] session expired (401)');
         setSessionExpired(true);
+        return;
+      }
+
+      // Same treatment as 401 above — a quota hit isn't a bug, it needs
+      // its own UI (see the rateLimited-gated render below).
+      if (res.status === 429) {
+        const quotaBody = await res.json().catch(() => null) as { isPro?: boolean } | null;
+        console.log('[Ask Pip] rate limited (429)', quotaBody);
+        setRateLimited({ isPro: quotaBody?.isPro === true });
         return;
       }
 
@@ -371,9 +367,10 @@ export default function TutorScreen() {
         </View>
       )}
 
-      {/* Input bar — replaced by a sign-in prompt on an expired session.
-          The conversation above stays exactly as it was; nothing is
-          cleared or navigated away from until the user taps Sign In. */}
+      {/* Input bar — replaced by a sign-in prompt on an expired session, or
+          a quota message on a 429. The conversation above stays exactly as
+          it was in both cases; nothing is cleared or navigated away from
+          until the user acts on the banner. */}
       {sessionExpired ? (
         <View style={styles.sessionExpiredBar}>
           <Text style={styles.sessionExpiredText}>
@@ -386,6 +383,23 @@ export default function TutorScreen() {
           >
             <Text style={styles.sessionExpiredBtnText}>{'Sign In'}</Text>
           </TouchableOpacity>
+        </View>
+      ) : rateLimited ? (
+        <View style={styles.sessionExpiredBar}>
+          <Text style={styles.sessionExpiredText}>
+            {rateLimited.isPro
+              ? "You've reached today's limit for Ask Pip. It resets tomorrow."
+              : "You've used all 10 free questions with Ask Pip. Upgrade to Pro to keep chatting with Pip."}
+          </Text>
+          {!rateLimited.isPro && (
+            <TouchableOpacity
+              style={styles.sessionExpiredBtn}
+              onPress={() => router.push('/paywall')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.sessionExpiredBtnText}>{'Upgrade'}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       ) : (
         <View style={styles.inputBar}>
@@ -411,29 +425,6 @@ export default function TutorScreen() {
           </TouchableOpacity>
         </View>
       )}
-
-      {/* Free tier paywall modal */}
-      <Modal visible={showPaywall} transparent animationType="fade" onRequestClose={() => setShowPaywall(false)}>
-        <View style={styles.paywallOverlay}>
-          <View style={styles.paywallCard}>
-            <Pip size={72} mood="sympathetic" />
-            <Text style={styles.paywallTitle}>{"You've used your 5 free Ask Pip questions"}</Text>
-            <Text style={styles.paywallBody}>
-              {'Upgrade to Pro for unlimited sessions with Pip.'}
-            </Text>
-            <TouchableOpacity
-              style={styles.upgradeBtn}
-              onPress={() => { setShowPaywall(false); router.push('/paywall'); }}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.upgradeBtnText}>{'Upgrade Now'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.dismissBtn} onPress={() => setShowPaywall(false)} activeOpacity={0.7}>
-              <Text style={styles.dismissText}>{'Maybe Later'}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -515,6 +506,9 @@ const styles = StyleSheet.create({
   sendBtn: { paddingBottom: 2 },
   sendBtnDisabled: { opacity: 0.4 },
 
+  // Reused by both the session-expired and rate-limited banners — same
+  // compact bottom-bar shape for an inline message with an optional CTA,
+  // replacing the input bar in place.
   sessionExpiredBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -549,39 +543,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.indigo,
   },
   thinkingBarText: { fontSize: 12, color: Colors.indigo, fontWeight: '600' },
-
-  paywallOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  paywallCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 28,
-    alignItems: 'center',
-    gap: 12,
-    width: '100%',
-    maxWidth: 380,
-    borderWidth: 1.5,
-    borderColor: Colors.indigo,
-  },
-  paywallEmoji: { fontSize: 48, marginBottom: 4 },
-  paywallTitle: { fontSize: 18, fontWeight: '800', color: '#111827', textAlign: 'center' },
-  paywallBody: { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 21 },
-  upgradeBtn: {
-    backgroundColor: Colors.indigo,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-    width: '100%',
-    marginTop: 4,
-  },
-  upgradeBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
-  dismissBtn: { paddingVertical: 8 },
-  dismissText: { fontSize: 14, color: '#6B7280' },
 
   // Pip header banner
   scopeBanner: {

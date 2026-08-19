@@ -11,6 +11,18 @@ export class UnauthorizedError extends Error {
   }
 }
 
+// Distinguishable from a generic Error so callers (studyplan.tsx) can show
+// a rate-limit message instead of a generic failure — isPro decides
+// whether that message offers an upgrade or just says to come back later.
+export class RateLimitedError extends Error {
+  isPro: boolean;
+  constructor(isPro: boolean) {
+    super('RateLimited');
+    this.name = 'RateLimitedError';
+    this.isPro = isPro;
+  }
+}
+
 export type StudyTaskType =
   | 'questions'
   | 'mock'
@@ -119,6 +131,10 @@ export async function generateStudyPlan(
 
   if (resp.status === 401) {
     throw new UnauthorizedError();
+  }
+  if (resp.status === 429) {
+    const body = await resp.json().catch(() => null) as { isPro?: boolean } | null;
+    throw new RateLimitedError(body?.isPro === true);
   }
   if (!resp.ok) {
     throw new Error(`Plan generation failed (${resp.status})`);

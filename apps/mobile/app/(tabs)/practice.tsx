@@ -150,6 +150,7 @@ export default function PracticeScreen() {
   const [aiExplanation, setAiExplanation] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSessionExpired, setAiSessionExpired] = useState(false);
+  const [aiRateLimited, setAiRateLimited] = useState<{ isPro: boolean } | null>(null);
   const [showSRButtons, setShowSRButtons] = useState(false);
   const srRecordedRef = useRef(false);
 
@@ -335,6 +336,7 @@ export default function PracticeScreen() {
     setSelectedIndex(null);
     setAiExplanation(null);
     setAiSessionExpired(false);
+    setAiRateLimited(null);
     setAiLoading(false);
     setXpGained(0);
     setNewAchievements([]);
@@ -767,6 +769,7 @@ export default function PracticeScreen() {
       setSelectedIndex(null);
       setAiExplanation(null);
       setAiSessionExpired(false);
+      setAiRateLimited(null);
       setAiLoading(false);
     }
   }, [currentIndex, questions, questions.length, selectedIndex]);
@@ -787,6 +790,8 @@ export default function PracticeScreen() {
     );
     if (result.status === 'unauthorized') {
       setAiSessionExpired(true);
+    } else if (result.status === 'rate_limited') {
+      setAiRateLimited({ isPro: result.isPro });
     } else {
       setAiExplanation(result.text);
     }
@@ -1201,6 +1206,20 @@ export default function PracticeScreen() {
               <TouchableOpacity style={styles.aiSignInBtn} onPress={() => void handleSessionExpired()} activeOpacity={0.85}>
                 <Text style={styles.aiSignInBtnText}>{'Sign In'}</Text>
               </TouchableOpacity>
+            </View>
+          ) : aiRateLimited ? (
+            <View style={styles.aiCard}>
+              <Text style={styles.aiCardTitle}>AI TUTOR</Text>
+              <Text style={styles.aiCardBody}>
+                {aiRateLimited.isPro
+                  ? "You've reached today's limit for explanations. It resets tomorrow."
+                  : "You've used all 10 free explanations. Upgrade to Pro to get more."}
+              </Text>
+              {!aiRateLimited.isPro && (
+                <TouchableOpacity style={styles.aiSignInBtn} onPress={() => router.push('/paywall')} activeOpacity={0.85}>
+                  <Text style={styles.aiSignInBtnText}>{'Upgrade'}</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : aiExplanation !== null ? (
             <View style={styles.aiCard}>

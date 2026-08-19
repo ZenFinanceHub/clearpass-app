@@ -16,6 +16,7 @@ import {
   loadStudyPlan,
   clearStudyPlan,
   UnauthorizedError,
+  RateLimitedError,
   StudyPlan,
   StudyDay,
   StudyTaskType,
@@ -159,6 +160,7 @@ export default function StudyPlanScreen() {
   const [generating,       setGenerating]       = useState(false);
   const [error,            setError]            = useState<string | null>(null);
   const [sessionExpired,   setSessionExpired]   = useState(false);
+  const [rateLimited,      setRateLimited]      = useState<{ isPro: boolean } | null>(null);
   const [loaded,           setLoaded]           = useState(false);
   const [showDateModal,    setShowDateModal]    = useState(false);
   const [dateInput,        setDateInput]        = useState('');
@@ -221,6 +223,7 @@ export default function StudyPlanScreen() {
     setGenerating(true);
     setError(null);
     setSessionExpired(false);
+    setRateLimited(null);
     try {
       const progress = await loadUserProgress() ?? createFreshUserProgress();
       const accessToken = await getAccessToken();
@@ -229,6 +232,8 @@ export default function StudyPlanScreen() {
     } catch (e: unknown) {
       if (e instanceof UnauthorizedError) {
         setSessionExpired(true);
+      } else if (e instanceof RateLimitedError) {
+        setRateLimited({ isPro: e.isPro });
       } else {
         setError(e instanceof Error ? e.message : 'Failed to generate plan. Please try again.');
       }
@@ -357,6 +362,19 @@ export default function StudyPlanScreen() {
                 <Text style={styles.errorCardBtnText}>{'Sign In'}</Text>
               </TouchableOpacity>
             </View>
+          ) : rateLimited ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorText}>
+                {rateLimited.isPro
+                  ? "You've reached today's limit for study plan generation. It resets tomorrow."
+                  : "You've used all 10 free study plan generations. Upgrade to Pro to generate more."}
+              </Text>
+              {!rateLimited.isPro && (
+                <TouchableOpacity style={styles.errorCardBtn} onPress={() => router.push('/paywall')} activeOpacity={0.85}>
+                  <Text style={styles.errorCardBtnText}>{'Upgrade'}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           ) : error ? (
             <View style={styles.errorCard}><Text style={styles.errorText}>{error}</Text></View>
           ) : null}
@@ -409,6 +427,19 @@ export default function StudyPlanScreen() {
               <TouchableOpacity style={styles.errorCardBtn} onPress={() => void handleSessionExpired()} activeOpacity={0.85}>
                 <Text style={styles.errorCardBtnText}>{'Sign In'}</Text>
               </TouchableOpacity>
+            </View>
+          ) : rateLimited ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorText}>
+                {rateLimited.isPro
+                  ? "You've reached today's limit for study plan generation. It resets tomorrow."
+                  : "You've used all 10 free study plan generations. Upgrade to Pro to generate more."}
+              </Text>
+              {!rateLimited.isPro && (
+                <TouchableOpacity style={styles.errorCardBtn} onPress={() => router.push('/paywall')} activeOpacity={0.85}>
+                  <Text style={styles.errorCardBtnText}>{'Upgrade'}</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : error ? (
             <View style={styles.errorCard}><Text style={styles.errorText}>{error}</Text></View>

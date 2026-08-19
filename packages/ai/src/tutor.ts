@@ -8,6 +8,7 @@ import { TUTOR_SYSTEM_PROMPT } from './systemPrompt';
 export type ExplainResult =
   | { status: 'ok'; text: string }
   | { status: 'unauthorized' }
+  | { status: 'rate_limited'; isPro: boolean }
   | { status: 'error'; text: string };
 
 export async function explainAnswer(
@@ -69,6 +70,11 @@ export async function explainAnswer(
 
     if (response.status === 401) {
       return { status: 'unauthorized' };
+    }
+
+    if (response.status === 429) {
+      const body = await response.json().catch(() => null) as { isPro?: boolean } | null;
+      return { status: 'rate_limited', isPro: body?.isPro === true };
     }
 
     if (!response.ok) {

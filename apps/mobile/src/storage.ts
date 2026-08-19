@@ -192,24 +192,6 @@ export async function getSessionHistory(): Promise<SessionHistoryEntry[]> {
   return raw ? (JSON.parse(raw) as SessionHistoryEntry[]) : [];
 }
 
-// ─── Tutor usage ──────────────────────────────────────────────────────────────
-
-const TUTOR_QUESTIONS_KEY = '@clearpass/tutor_questions_used';
-
-export async function getTutorQuestionsUsed(): Promise<number> {
-  try {
-    const raw = await AsyncStorage.getItem(TUTOR_QUESTIONS_KEY);
-    return raw ? parseInt(raw, 10) : 0;
-  } catch { return 0; }
-}
-
-export async function incrementTutorQuestionsUsed(): Promise<number> {
-  const current = await getTutorQuestionsUsed();
-  const next = current + 1;
-  await AsyncStorage.setItem(TUTOR_QUESTIONS_KEY, String(next));
-  return next;
-}
-
 // ─── Onboarding ───────────────────────────────────────────────────────────────
 
 const ONBOARDING_KEY = '@clearpass/hasSeenOnboarding';
