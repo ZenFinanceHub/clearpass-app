@@ -126,6 +126,10 @@ export async function generateStudyPlan(
         'You are a study plan generator for a UK driving theory test app. ' +
         'Output ONLY a raw valid JSON array — no prose, no markdown fences, no commentary.',
       messages: [{ role: 'user', content: prompt }],
+      // Server doesn't read this yet (step 1 of rolling out per-caller
+      // model routing on /api/explain) — sent now so step 2 (routing on
+      // it) doesn't need a client change too.
+      caller: 'study_plan',
     }),
   });
 

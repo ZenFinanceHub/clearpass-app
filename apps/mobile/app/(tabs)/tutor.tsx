@@ -230,6 +230,10 @@ export default function TutorScreen() {
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
       messages: apiMessages,
+      // Server doesn't read this yet (step 1 of rolling out per-caller
+      // model routing on /api/explain) — sent now so step 2 (routing on
+      // it) doesn't need a client change too.
+      caller: 'ask_pip',
     };
     // Server doesn't require this yet (step 1 of rolling out auth on
     // /api/explain) — sent now so step 2 (making it mandatory) doesn't

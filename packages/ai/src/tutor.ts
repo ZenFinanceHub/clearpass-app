@@ -65,6 +65,10 @@ export async function explainAnswer(
         max_tokens: 300,
         system: TUTOR_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userMessage }],
+        // Server doesn't read this yet (step 1 of rolling out per-caller
+        // model routing on /api/explain) — sent now so step 2 (routing on
+        // it) doesn't need a client change too.
+        caller: 'explainer',
       }),
     });
 
