@@ -680,13 +680,15 @@ export default function HomeScreen() {
       ) : (
         <View style={styles.roadmapSection}>
           <Text style={styles.roadmapTitle}>{'YOUR PROGRESS'}</Text>
-          <RoadmapPath
-            progress={progress}
-            passProbability={prob}
-            pipMood={pipMood}
-            width={(dims?.width ?? 375) - 32}
-            height={280}
-          />
+          <View style={{ alignItems: 'center' }}>
+            <RoadmapPath
+              progress={progress}
+              passProbability={prob}
+              pipMood={pipMood}
+              width={Math.min((dims?.width ?? 375) - 32, 420)}
+              height={280}
+            />
+          </View>
         </View>
       )}
 
