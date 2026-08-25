@@ -485,3 +485,98 @@ CREATE TABLE IF NOT EXISTS explain_daily_usage (
 
 ALTER TABLE explain_daily_usage ENABLE ROW LEVEL SECURITY;
 -- No policies: service-role only, same convention as stripe_webhook_events.
+
+-- ─────────────────────────────────────────────────────────────────
+-- DRIFT RECONCILIATION — NOT a migration this file has ever applied.
+--
+-- profiles.display_name already exists in the live database. It was
+-- added by hand, directly against the project, without being recorded
+-- here — confirmed 2026-08-25 by probing the live REST API (the column
+-- returns 200; a known-bad column name returns 42703). It is read and
+-- written in production by apps/instructor-web (the dashboard Business
+-- name field), server/proxy.js's GET /api/seats/:token, and
+-- app/linked-instructors.tsx via resolveInstructorDisplayName().
+--
+-- This line exists so a reader of this file sees the true shape of
+-- `profiles`. Running it is a harmless no-op against the live project;
+-- it is NOT the statement that created the column. Do not treat this
+-- block as evidence the live schema was ever applied from this file.
+-- ─────────────────────────────────────────────────────────────────
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS display_name TEXT;
+
+-- ─────────────────────────────────────────────────────────────────
+-- Signup attribution: which marketing channel an account came from.
+--
+-- Set once, server-side, at account creation by
+-- POST /api/instructor/signup — never written by a client, and never
+-- updated afterwards. Free-text, nullable: accounts created before this
+-- column existed, and any created outside a campaign, are legitimately
+-- NULL. First use is the 27 Sep 2026 trade show, whose QR encodes
+-- getclearpass.co.uk/instructors?ref=adinjc26.
+--
+-- Deliberately NOT profiles.referred_by. That column is the pupil ->
+-- instructor referral code and is load-bearing for instructor_earnings
+-- attribution; overloading it with campaign tags would corrupt payout
+-- calculations. Different meaning, different column.
+-- ─────────────────────────────────────────────────────────────────
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS signup_ref TEXT;
+CREATE INDEX IF NOT EXISTS profiles_signup_ref_idx ON profiles(signup_ref)
+  WHERE signup_ref IS NOT NULL;
+-- (existing profile RLS policies already cover both columns)
+
+-- ─────────────────────────────────────────────────────────────────
+-- KNOWN UNRECONCILED DRIFT — READ BEFORE TRUSTING THIS FILE
+--
+-- THIS FILE CANNOT RECREATE THE LIVE DATABASE. A full
+-- information_schema dump on 2026-08-25 found live objects that are
+-- not declared anywhere above. They are recorded here as a map, NOT as
+-- runnable DDL: only column *names* were captured, so the types,
+-- defaults, constraints, indexes and RLS policies are unknown. Writing
+-- speculative CREATE TABLE statements would produce a schema that
+-- silently disagrees with production, which is worse than an
+-- acknowledged gap.
+--
+-- Live, actively used by application code, NOT declared above:
+--   aggregate_stats            (id topic total_correct total_answered
+--                               updated_at)
+--                               -- src/analytics.ts
+--   challenges                 (18 cols: id challenger_id
+--                               challenger_name challenged_id
+--                               challenged_email status topic_category
+--                               question_ids challenger_score
+--                               challenger_time challenger_answers
+--                               challenged_score challenged_time
+--                               challenged_answers winner_id
+--                               created_at expires_at share_code)
+--                               -- app/challenge.tsx, (tabs)/home.tsx
+--   parent_email_subscriptions (id learner_id parent_email confirmed
+--                               confirmation_token created_at)
+--                               -- (tabs)/settings.tsx, proxy.js
+--   pass_stories               (id user_id username score test_date
+--                               story shared created_at)
+--                               -- app/ipassed.tsx, (tabs)/progress.tsx
+--   waitlist                   (id email created_at)
+--                               -- proxy.js POST /api/waitlist
+--
+-- Live but unused by any code — residue from the Stripe Connect payout
+-- work that was blocked partway:
+--   instructor_earnings.paid_at   (referenced in zero source files;
+--                                  payout_id + status carry the payout
+--                                  state that is actually read)
+--
+-- Declared above but NOT live — never applied, and referenced by no
+-- code. Do not assume hazard attempts are being persisted:
+--   hazard_attempts            (declared at the CREATE TABLE above,
+--                               absent from the live database)
+--
+-- To close this properly, dump column types/defaults/constraints and
+-- RLS for the tables listed above and replace this comment with real
+-- declarations. Tracked as follow-up work, deliberately not attempted
+-- from column names alone.
+--
+-- Also note: this Supabase project is SHARED with Zen Footy. The live
+-- schema additionally contains matches, players, lineups and
+-- attendance, which belong to that product and are correctly absent
+-- from this file. Service-role code here can reach them — keep writes
+-- narrowly scoped.
+-- ─────────────────────────────────────────────────────────────────
