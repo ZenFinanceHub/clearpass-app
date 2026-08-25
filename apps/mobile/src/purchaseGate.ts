@@ -19,11 +19,9 @@ export type { PurchaseRoute };
  * supplies the real Platform.OS and the IAP-readiness flag.
  *
  *  - 'stripe_checkout': web only. Open Stripe Checkout via Linking.openURL.
- *  - 'coming_soon': iOS unconditionally (see resolvePurchaseRoute's comment
- *    — no App Store product yet, blocked on an account migration, and
- *    deliberately not driven by iapReady). Android too, until IAP is ready
- *    there — no price, no external link, no alternate purchase route.
- *  - 'iap': Android only, once setIapReady(true) has been called —
+ *  - 'coming_soon': either platform, until IAP is ready there — no price,
+ *    no external link, no alternate purchase route.
+ *  - 'iap': either platform, once setIapReady(true) has been called —
  *    RevenueCat is configured and a real quarterly offering exists. See
  *    src/purchases.ts, called once at app boot.
  */
@@ -33,10 +31,9 @@ let iapReady = false;
  *  and its offerings have been fetched. Defaults to false: the safe
  *  fallback is coming-soon, not letting someone attempt a purchase that
  *  isn't actually wired up yet — same fails-closed philosophy as the
- *  instructor route guard in app/_layout.tsx. Only ever affects the route
- *  on Android in practice — resolvePurchaseRoute ignores this value on iOS
- *  entirely, so setting it true there (e.g. from a stray sandbox config)
- *  cannot prematurely expose 'iap'. */
+ *  instructor route guard in app/_layout.tsx. Now drives the route on both
+ *  iOS and Android identically — resolvePurchaseRoute no longer
+ *  special-cases either platform. */
 export function setIapReady(ready: boolean): void {
   iapReady = ready;
 }

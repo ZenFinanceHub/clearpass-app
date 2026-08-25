@@ -6,22 +6,25 @@ export type AppPlatform = 'ios' | 'android' | 'web';
 // at app boot) — kept here, not in the app, so it's unit-testable without
 // mocking react-native.
 //
-// Web always has Stripe Checkout. Android goes to native IAP once it's
-// ready (RevenueCat configured, a real quarterly offering loaded), and to
-// the honest coming-soon state otherwise — no external link, no "visit our
-// website", since Google forbids routing a purchase anywhere but Play
-// Billing once it's available, and there is no purchase route to offer
-// before then.
+// Web always has Stripe Checkout. iOS and Android both go to native IAP
+// once it's ready (RevenueCat configured, a real quarterly offering
+// loaded), and to the honest coming-soon state otherwise — no external
+// link, no "visit our website", since routing a purchase anywhere but the
+// platform's own IAP once it's available breaks App Store/Play Store
+// guidelines, and there is no purchase route to offer before then.
 //
-// iOS is a deliberate, unconditional exception: it always stays
-// coming_soon regardless of iapReady. There is no App Store product yet
-// (blocked on an Apple account migration), and unlike Android this isn't
-// just "not configured yet" — iOS must not flip to 'iap' as a side effect
-// of RevenueCat happening to report readiness (e.g. sandbox/test
-// configuration) before that migration is actually done. Revisit this
-// explicitly once a real App Store product exists.
+// iOS used to be a deliberate, unconditional exception, always
+// coming_soon regardless of iapReady — there was no App Store product and
+// it was blocked on an Apple account migration, so iOS couldn't be
+// allowed to flip to 'iap' as a side effect of RevenueCat happening to
+// report readiness (e.g. sandbox/test configuration) before that
+// migration was actually done. That block was lifted on 25 Aug 2026 once
+// the Paid Apps Agreement went active: clearpass_pro_quarterly exists in
+// App Store Connect (all storefronts, availability set), is attached to
+// the "pro" entitlement in RevenueCat, and is in the $rc_three_month
+// package of the "default" offering. iOS now behaves like Android, driven
+// purely by iapReady.
 export function resolvePurchaseRoute(platform: AppPlatform, iapReady: boolean): PurchaseRoute {
   if (platform === 'web') return 'stripe_checkout';
-  if (platform === 'ios') return 'coming_soon';
   return iapReady ? 'iap' : 'coming_soon';
 }
