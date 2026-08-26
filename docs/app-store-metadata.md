@@ -88,7 +88,7 @@ No violence, no adult content, no user-generated public chat
 
 ## WHAT'S NEW (v1.0.1 / versionCode 3)
 
-Quick Mock: 25 questions in 28 minutes. Road Signs flashcard mode. Streak Freeze for Pro users (2 tokens/week). 7-day free trial for new accounts. Pip the hedgehog mascot. Road sign name corrections. Web accessibility improvements.
+Quick Mock: 25 questions in 28 minutes. Road Signs flashcard mode. Streak Freeze for Pro users (2 tokens/week). Pip the hedgehog mascot. Road sign name corrections. Web accessibility improvements.
 
 ---
 

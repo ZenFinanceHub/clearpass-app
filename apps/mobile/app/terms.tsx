@@ -41,7 +41,7 @@ export default function TermsScreen() {
         {'All payments are processed securely by Stripe. ClearPass does not store your card details.\n\n'}
         {'Pro access includes: unlimited practice questions, full timed mock tests, AI tutor explanations, progress tracking, and all future features released during your access period.\n\n'}
         {'Refunds: if you experience a technical issue that prevents you from using the Pro features, contact support@getclearpass.co.uk within 14 days of purchase.\n\n'}
-        {'Where Pro access is purchased as a subscription through the Apple App Store or Google Play, rather than the one-time Stripe payment described above, the store may offer a free trial period as an introductory offer on that subscription. Trial eligibility and length are set by the App Store or Google Play, not by ClearPass, and are shown to you before you subscribe.'}
+        {'Where Pro access is purchased through the Apple App Store or Google Play, rather than the one-time Stripe payment described above, it is an auto-renewing subscription: GBP 7.99 for three months, renewing automatically at the same price unless cancelled at least 24 hours before the end of the current period. There is no free trial or introductory offer on this subscription. Payment is charged to your App Store or Google Play account at confirmation of purchase, and you can manage or cancel it at any time in that account’s subscription settings.'}
       </Section>
 
       <Section title="5. Free tier limitations" theme={theme}>

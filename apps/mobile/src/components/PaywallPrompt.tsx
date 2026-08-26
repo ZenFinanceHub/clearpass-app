@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Pip } from './Pip';
 import { Colors } from '@/src/constants/theme';
-import { getPurchaseRoute, COMING_SOON_COPY_COMPACT } from '@/src/purchaseGate';
+import { usePurchaseRoute, IAP_UNAVAILABLE_COPY_COMPACT } from '@/src/purchaseGate';
 
 interface PaywallPromptProps {
   onUpgrade: () => void;
@@ -11,11 +11,12 @@ interface PaywallPromptProps {
 }
 
 export function PaywallPrompt({ onUpgrade, onDismiss, dismissLabel = 'Maybe later' }: PaywallPromptProps) {
-  const route = getPurchaseRoute();
+  const route = usePurchaseRoute();
 
-  // No purchase route available yet on this platform (iOS and Android
-  // both, until their respective store products exist) — no purchase CTA
-  // at all, just the coming-soon message with a single acknowledge button.
+  // No purchase route available on this platform — no purchase CTA at
+  // all, just the unavailable message with a single acknowledge button.
+  // Reactive, so a prompt already on screen when readiness resolves flips
+  // to the real upgrade CTA instead of staying stuck.
   // Deliberately checks === 'coming_soon', not !== 'stripe_checkout': the
   // latter used to also catch 'iap' and show this same message even once a
   // real purchase was available, which would have silently hidden the
@@ -25,10 +26,10 @@ export function PaywallPrompt({ onUpgrade, onDismiss, dismissLabel = 'Maybe late
     return (
       <View style={styles.card}>
         <Pip size={72} mood="sympathetic" />
-        <Text style={styles.title}>{COMING_SOON_COPY_COMPACT.title}</Text>
-        <Text style={styles.body}>{COMING_SOON_COPY_COMPACT.body}</Text>
+        <Text style={styles.title}>{IAP_UNAVAILABLE_COPY_COMPACT.title}</Text>
+        <Text style={styles.body}>{IAP_UNAVAILABLE_COPY_COMPACT.body}</Text>
         <TouchableOpacity style={styles.upgradeBtn} onPress={onDismiss ?? onUpgrade} activeOpacity={0.85}>
-          <Text style={styles.upgradeBtnText}>{COMING_SOON_COPY_COMPACT.buttonLabel}</Text>
+          <Text style={styles.upgradeBtnText}>{IAP_UNAVAILABLE_COPY_COMPACT.buttonLabel}</Text>
         </TouchableOpacity>
       </View>
     );

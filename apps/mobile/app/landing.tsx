@@ -185,7 +185,7 @@ export default function LandingPage() {
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>{'GET NOTIFIED'}</Text>
           <Text style={styles.sectionTitle}>{'Be first to know when we launch'}</Text>
-          <Text style={styles.waitlistSub}>{'Sign up for early access and a free extended trial.'}</Text>
+          <Text style={styles.waitlistSub}>{'Sign up for early access. Practise 10 questions a day free, no card needed.'}</Text>
           {waitlistStatus === 'done' ? (
             <View style={styles.waitlistSuccess}>
               <Text style={styles.waitlistSuccessText}>{'[OK] You are on the list!'}</Text>

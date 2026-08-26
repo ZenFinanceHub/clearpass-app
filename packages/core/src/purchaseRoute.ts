@@ -24,6 +24,13 @@ export type AppPlatform = 'ios' | 'android' | 'web';
 // the "pro" entitlement in RevenueCat, and is in the $rc_three_month
 // package of the "default" offering. iOS now behaves like Android, driven
 // purely by iapReady.
+//
+// Note this makes iapReady load-bearing on iOS: it is set from a live
+// RevenueCat getOfferings() call at app boot (src/purchases.ts), so a
+// missing API key or a failed fetch drops the user — an App Store
+// reviewer included — back to coming_soon, where there is no purchase to
+// review. That failure mode is why the flag stays fail-closed rather than
+// defaulting to 'iap' optimistically.
 export function resolvePurchaseRoute(platform: AppPlatform, iapReady: boolean): PurchaseRoute {
   if (platform === 'web') return 'stripe_checkout';
   return iapReady ? 'iap' : 'coming_soon';

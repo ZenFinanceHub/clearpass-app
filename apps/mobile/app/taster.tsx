@@ -137,7 +137,7 @@ export default function TasterScreen() {
         <View style={[styles.progressFill, { width: `${((index + (answered ? 1 : 0)) / TASTER_COUNT) * 100}%` as `${number}%` }]} />
       </View>
 
-      <Text style={styles.trialBadge}>{'✦ Free trial — no account needed'}</Text>
+      <Text style={styles.trialBadge}>{'✦ Free sample — no account needed'}</Text>
 
       {/* Question */}
       <Text style={styles.questionText}>{question.questionText}</Text>
