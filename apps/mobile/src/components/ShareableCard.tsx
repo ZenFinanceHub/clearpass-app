@@ -203,7 +203,7 @@ export function ShareCardModal({
       }
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const MediaLibrary = require('expo-media-library') as typeof import('expo-media-library');
-      const { status } = await MediaLibrary.requestPermissionsAsync();
+      const { status } = await MediaLibrary.requestPermissionsAsync(true);
       if (status !== 'granted') {
         Alert.alert('Permission needed', 'Please allow access to your photo library to save the card.');
         return;
