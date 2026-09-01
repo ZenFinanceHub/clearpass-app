@@ -11,7 +11,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
 import { router } from 'expo-router';
-import { supabase } from '@/src/supabase';
+import { getAccessToken } from '@/src/getAccessToken';
 import { getProxyUrl } from '@/src/proxyUrl';
 import { Colors } from '@/src/constants/theme';
 import { ScaleButton } from '@/src/components/ScaleButton';
@@ -70,15 +70,14 @@ export default function PaywallScreen() {
     setNotice('');
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      const token = await getAccessToken();
+      if (!token) {
         router.replace('/auth/signin');
         return;
       }
       const res = await fetch(`${getProxyUrl()}/api/create-checkout-session`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       });
       const data = await res.json() as { url?: string; error?: string };
       if (data.url) {

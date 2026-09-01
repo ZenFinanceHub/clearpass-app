@@ -824,8 +824,9 @@ app.post('/api/create-checkout-session', async (req, res) => {
     return res.status(500).json({ error: 'STRIPE_SECRET_KEY not set' });
   }
 
-  const { userId } = req.body;
-  console.log('Creating checkout session for userId:', userId);
+  const auth = await verifyAuth(req, res);
+  if (!auth) return;
+  const { userId } = auth;
 
   try {
     const session = await stripe.checkout.sessions.create({
@@ -834,7 +835,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
       mode: 'payment',
       success_url: 'https://clearpass-app.vercel.app/payment-success?session_id={CHECKOUT_SESSION_ID}',
       cancel_url: 'https://clearpass-app.vercel.app/landing',
-      metadata: { userId: userId ?? '' },
+      metadata: { userId },
       currency: 'gbp',
     });
     res.json({ url: session.url });
