@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ClearPass for Instructors — Track Every Pupil, Free Pro Access</title>
-  <meta name="description" content="See every pupil's pass probability and weak topics in one dashboard. Get free ClearPass Pro access and earn from every pupil you refer.">
+  <meta name="description" content="See every pupil's pass probability and weak topics in one dashboard, and get free ClearPass Pro access as an instructor.">
   <meta property="og:title" content="ClearPass for Instructors">
-  <meta property="og:description" content="See every pupil's progress in one dashboard. Free Pro access for instructors, plus referral earnings.">
+  <meta property="og:description" content="See every pupil's progress in one dashboard. Free Pro access for instructors.">
   <meta property="og:image" content="https://getclearpass.co.uk/og-image.png">
   <meta property="og:url" content="https://getclearpass.co.uk/instructors">
   <meta property="og:type" content="website">
@@ -55,6 +55,7 @@
         <span class="section-label">For driving instructors</span>
         <h1>See every pupil&#8217;s progress. Help them pass first time.</h1>
         <p class="inst-hero-sub">ClearPass gives you a live dashboard for every pupil using the app &#8212; their pass probability, weak topics, and streaks &#8212; so you know exactly what to cover in your next lesson.</p>
+        <p class="inst-hero-note">Your pupil dashboard lives in the ClearPass app &#8212; sign up here and it&#8217;s ready when you install it.</p>
         <div class="hero-btns">
           <a href="https://instructors.getclearpass.co.uk/signup" class="btn btn-primary">Get Free Instructor Access &#8594;</a>
           <a href="#dashboard" class="btn btn-outline">See the Dashboard</a>
@@ -109,38 +110,9 @@
       </div>
       <div class="inst-access-grid">
         <div class="inst-access-card highlight fade-up">
-          <div class="inst-access-num">1</div>
-          <h3 class="inst-access-title">Your first 3 months are free</h3>
-          <p class="inst-access-desc">Sign up as an instructor and get <strong>unconditional</strong> full Pro access for your first quarter &#8212; no strings attached.</p>
+          <h3 class="inst-access-title">Free Pro access for instructors</h3>
+          <p class="inst-access-desc">Sign up and get full ClearPass Pro access, free. You&#8217;ll see every pupil&#8217;s progress, weak topics and readiness in your dashboard.</p>
         </div>
-        <div class="inst-access-card fade-up delay-1">
-          <div class="inst-access-num">2</div>
-          <h3 class="inst-access-title">Keep it by supporting a couple of pupils a month</h3>
-          <p class="inst-access-desc">After that, your access stays free as long as you help just <strong>2 new pupils go Pro each month</strong> &#8212; or have <strong>10 active Pro pupils</strong> using ClearPass overall.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- EARNINGS -->
-  <section class="section inst-earn">
-    <div class="container">
-      <div class="inst-earn-content fade-up">
-        <span class="section-label">Referral earnings</span>
-        <h2 class="section-title">Earn from every pupil you bring on board</h2>
-        <p class="section-sub">Share your unique referral link with pupils. When they go Pro, you earn a share of what they pay &#8212; paid out monthly, on top of your free access.</p>
-      </div>
-      <div class="inst-earn-calc fade-up delay-1">
-        <p class="inst-earn-calc-label">Earnings calculator</p>
-        <div class="inst-earn-calc-row">
-          <input id="calc-pupils" class="inst-earn-calc-input" type="number" min="1" max="200" value="10" oninput="updateCalc()">
-          <span class="inst-earn-calc-unit">Pro pupils referred</span>
-        </div>
-        <div class="inst-earn-calc-result">
-          Estimated earnings per quarter
-          <strong id="calc-result">&#8776; &#163;20.40</strong>
-        </div>
-        <p class="inst-earn-calc-note">Based on 30% of net revenue after app store fees. Web signups earn slightly more.</p>
       </div>
     </div>
   </section>
@@ -161,14 +133,6 @@
           <p class="inst-faq-q">Do my pupils need to be Pro for me to see their progress?</p>
           <p class="inst-faq-a">No &#8212; you can see basic progress for any pupil connected to your dashboard, whether they&#8217;re on the free plan or Pro.</p>
         </div>
-        <div class="inst-faq-item fade-up delay-2">
-          <p class="inst-faq-q">What happens after my first 3 months?</p>
-          <p class="inst-faq-a">Your Pro access stays free as long as you&#8217;re actively helping pupils &#8212; either 2 new Pro conversions a month, or 10 active Pro pupils overall. We&#8217;ll let you know well in advance if that&#8217;s at risk.</p>
-        </div>
-        <div class="inst-faq-item fade-up delay-3">
-          <p class="inst-faq-q">How and when do I get paid?</p>
-          <p class="inst-faq-a">Referral earnings are calculated monthly based on your pupils&#8217; active Pro subscriptions and paid out directly.</p>
-        </div>
       </div>
     </div>
   </section>
@@ -177,7 +141,7 @@
   <section class="final-cta">
     <div class="container fade-up">
       <h2>Ready to coach smarter?</h2>
-      <p>Get your dashboard, free Pro access, and start earning from every pupil you help pass.</p>
+      <p>Get your free dashboard and see exactly what each pupil needs before their next lesson.</p>
       <a href="https://instructors.getclearpass.co.uk/signup" class="btn btn-white">Get Free Instructor Access &#8594;</a>
       <a href="https://instructors.getclearpass.co.uk/signup" class="final-cta-url">instructors.getclearpass.co.uk/signup</a>
     </div>
@@ -289,19 +253,6 @@
       document.getElementById('navbar').style.boxShadow =
         window.scrollY > 10 ? '0 2px 24px rgba(0,0,0,0.07)' : 'none';
     }, { passive: true });
-
-    // Instructor payout per learner per quarter (GBP), worst case across purchase
-    // channels. Keep in sync with apps/mobile/server/lib/earnings.js -
-    // INSTRUCTOR_PAYOUT_WORST_CASE_MINOR (30% of net receipts after the App
-    // Store/Google Play 15% commission: GBP 7.99 -> GBP 6.79 net -> GBP 2.04).
-    const INSTRUCTOR_PAYOUT_PER_PUPIL_PER_QUARTER = 2.04;
-
-    function updateCalc() {
-      const pupils = Math.max(0, parseInt(document.getElementById('calc-pupils').value) || 0);
-      const total = (pupils * INSTRUCTOR_PAYOUT_PER_PUPIL_PER_QUARTER).toFixed(2);
-      document.getElementById('calc-result').textContent = '\u2248 \u00A3' + total;
-    }
-    updateCalc(); // Ensure displayed value always matches the formula, even before user interaction
 
     document.addEventListener('click', (e) => {
       const menu = document.getElementById('mobile-menu');

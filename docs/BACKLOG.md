@@ -5,68 +5,37 @@ rather than folding unrelated work into an unrelated commit.
 
 ---
 
-## The instructor-web gate signs out new instructors mid-signup
+## `instructor.tsx` has a complete-looking referral/earnings/payout flow — in tension with "Stripe Connect is blocked"
 
-**Found:** 2026-09-01, during the two-step signup checkpoint. **This blocks the
-conference signup flow** — it is not a latent nicety.
+**Found:** 2026-09-01, while checking whether `apps/web/instructors.html`'s
+claims matched what the product actually does (they did, against the mobile
+app's `/instructor` screen, not the web dashboard — see git history for that
+review).
 
-`apps/instructor-web/app/page.tsx:20` signs the user out when
-`account_type !== 'instructor'`:
+`apps/mobile/app/instructor.tsx`'s `ReferralSection`, `EarningsSection`, and
+`PayoutHistorySection` (roughly lines 710–913) are not residue — they're a
+complete-looking wired feature: a referral link, running earnings totals
+(total/pending/converted), a "Request Payout" button with a £10 minimum, and
+Stripe Connect onboarding handling. The backend side is equally complete, not
+stubbed: `POST /api/instructor/connect/onboarding-link`
+(`apps/mobile/server/proxy.js:1056`) and `POST /api/instructor/payout-request`
+(`:1120`), plus a signed Connect webhook handler (`:441`,
+`STRIPE_CONNECT_WEBHOOK_SECRET`) with real Stripe transfer logic and
+`instructor_connect_accounts` bookkeeping.
 
-```js
-} else if (auth.status === "not-instructor") {
-  void supabase.auth.signOut();
-}
-```
+This sits in tension with the working assumption used this session to remove
+the EARNINGS section and calculator from `apps/web/instructors.html` — that
+Stripe Connect payout is blocked and undeliverable before the conference.
 
-That is correct for a learner who wanders in. It is wrong for a **brand-new
-instructor mid-signup**, and it breaks the flow the QR code leads to:
+**Needs investigating, not yet resolved.** Two possibilities, not
+distinguished yet:
+- The payout rail actually works end-to-end and "blocked" was wrong, or
+- Stripe Connect account approval (a Stripe-side business step, separate from
+  this code) is what's actually blocked, and an instructor who taps "Request
+  Payout" today hits a failure the code can't prevent.
 
-1. Step 1 (`/api/instructor/signup`) creates a powerless auth user — no profile,
-   by design, so nothing privileged exists before the address is verified.
-2. They click the magic link and land on `/`.
-3. They have no profile yet, so the gate reads `not-instructor` and signs them
-   out **before** `/api/instructor/complete-signup` can create it.
-4. Their session is now revoked. `verifyAuth` -> `supabase.auth.getUser()` asks
-   GoTrue, which reports the session gone, and returns `401 unauthorized` — even
-   though the JWT itself is well-formed, correctly signed and unexpired.
-
-The account is left stranded: auth user exists, no profile, no way through.
-
-**Fix in Phase 3 — the gate must do one of:**
-- call `/api/instructor/complete-signup` first when
-  `user_metadata.instructor_signup_intent` is set, and only sign out if that
-  fails; or
-- tolerate the intent flag and route to the dashboard, letting step 2 run there.
-
-The first is preferable — it keeps the sign-out as the default for genuinely
-wrong-role sessions.
-
-### Second problem: `signOut()` defaults to global scope
-
-Confirmed in the installed `@supabase/auth-js`:
-
-```js
-async signOut(options = { scope: 'global' }) { ... }
-```
-
-Global scope calls `POST /logout?scope=global`, which revokes **every refresh
-token for that user across every device**. So an instructor signed into the
-ClearPass mobile app who opens a magic link on their phone has that gate kill
-their app session too — the access token survives until it expires (~1h), but
-the refresh token is revoked, so the app logs them out at the next refresh.
-
-All four `signOut()` calls in `apps/instructor-web` use the default:
-`app/page.tsx:20`, `app/dashboard/page.tsx:34` and `:152`,
-`app/purchase-success/page.tsx:28`. The deliberate "Sign out" button
-(`dashboard/page.tsx:152`) is arguably fine as global; the three *defensive*
-sign-outs should almost certainly be `{ scope: 'local' }` — they mean "not this
-session", not "log this person out everywhere".
-
-**Checkpoint workaround (not a fix):** the checkpoint mints a session directly via
-`admin.generateLink()` + `verifyOtp()`, bypassing the browser entirely, so the
-gate never runs. That unblocks verification of the endpoints; it does nothing for
-real users.
+**Not a conference blocker** — conference signups go through the seat-purchase
+model, not referral earnings.
 
 ---
 
@@ -114,7 +83,7 @@ either.
 
 ---
 
-## `proxy.js` has no rate limiting, and seven endpoints take no auth at all
+## `proxy.js` has no rate limiting, and six endpoints take no auth at all
 
 **Found:** 2026-08-25, while reviewing the new instructor signup endpoint.
 
@@ -134,9 +103,8 @@ Endpoints reachable with no authentication, secret, or signature of any kind:
 
 | Endpoint | Note |
 |---|---|
-| `POST /api/send-weekly-parent-emails` | **Worth looking at first** — triggers bulk outbound email |
-| `POST /api/create-checkout-session` | Creates Stripe sessions |
-| `POST /api/send-challenge-notification` | Sends push notifications to other users |
+| `POST /api/create-checkout-session` | **Most severe** — creates Stripe sessions, trusts `req.body.userId` with no verification the caller controls that account |
+| `POST /api/send-challenge-notification` | Sends push notifications to other users; trusts `challenger_username` as free text |
 | `POST /api/waitlist` | Inserts rows |
 | `POST /api/instructor/signup` | Intentionally public; powerless by design (step 1 of 2) |
 | `GET /api/config` | Read-only |
@@ -145,8 +113,11 @@ Endpoints reachable with no authentication, secret, or signature of any kind:
 For the avoidance of doubt, these were checked and **are** guarded, despite not
 using `verifyAuth`: `/api/delete-account` (verifies a token from the body via
 `auth.getUser`), `/api/seats/:token` and `/api/confirm-parent` (bearer-token
-style — the secret is the token in the URL), the Stripe and RevenueCat webhooks
-(signature / shared secret), and every `/api/cron/*` route (`CRON_SECRET`).
+style — the secret is the token in the URL), `/api/send-weekly-parent-emails`
+(checks `x-cron-secret` against `CRON_SECRET` inline, same secret the
+`/api/cron/*` routes use via `requireCronAuth`, just not through that shared
+helper), the Stripe and RevenueCat webhooks (signature / shared secret), and
+every `/api/cron/*` route (`CRON_SECRET`).
 
 Not fixed now: only the two instructor endpoints were in scope for the
 conference work, and changing the auth posture of the others needs its own
