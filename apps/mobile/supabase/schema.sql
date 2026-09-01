@@ -525,6 +525,38 @@ CREATE INDEX IF NOT EXISTS profiles_signup_ref_idx ON profiles(signup_ref)
 -- (existing profile RLS policies already cover both columns)
 
 -- ─────────────────────────────────────────────────────────────────
+-- Analytics exclusion flag.
+--
+-- Marks accounts that exist but should not count towards funnel
+-- metrics: the fixtures created by server/scripts/seed-test-learners.js,
+-- the founder's own plus-addressed accounts, demo accounts made at a
+-- trade show stand, and friends-and-family signups. Read by
+-- server/lib/dailyStats.js.
+--
+-- Named for what it does rather than what the account is. "is_test"
+-- would be wrong for most of the above — a demo account or a friend's
+-- account is not a test account, but none of them should sit in a
+-- conversion rate.
+--
+-- Excluded accounts are still counted in the total account figure and
+-- in campaign (signup_ref) counts — they exist, and a conference scan
+-- is a scan. They are removed from the conversion numerator and
+-- denominator, from the Pro/free breakdown, and from the new-in-24h
+-- figure, with the excluded count reported alongside so the gap
+-- between the total and the conversion base is always visible.
+--
+-- NOT NULL DEFAULT false so the analytics code never has to handle a
+-- null, matching how account_type was added above. Deliberately not
+-- folded into signup_ref: that column records where an account came
+-- from, and an account can legitimately be both a campaign signup and
+-- an excluded demo.
+--
+-- This one IS a migration applied from this file — unlike the drift
+-- block that follows.
+-- ─────────────────────────────────────────────────────────────────
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS exclude_from_stats BOOLEAN NOT NULL DEFAULT false;
+
+-- ─────────────────────────────────────────────────────────────────
 -- KNOWN UNRECONCILED DRIFT — READ BEFORE TRUSTING THIS FILE
 --
 -- THIS FILE CANNOT RECREATE THE LIVE DATABASE. A full

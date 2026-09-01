@@ -31,7 +31,7 @@ export default function DashboardPage() {
       return;
     }
     if (auth.status === "not-instructor") {
-      void supabase.auth.signOut();
+      void supabase.auth.signOut({ scope: "local" });
       router.replace("/");
       return;
     }
