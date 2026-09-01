@@ -61,6 +61,20 @@ const stripe = process.env.STRIPE_SECRET_KEY
   : null;
 
 const app = express();
+
+// Without this, Express's req.ip is the raw TCP peer address — Railway's own
+// edge, not the caller — for every request, which silently turns any
+// per-IP limiter into a global one. `1` matches Railway's single edge hop
+// (client -> Railway edge -> this container, no CDN in front here) and is
+// the value Railway's own staff cite most often for this. Treat it as
+// defence in depth, not a verified-safe value: Railway's own support forum
+// has staff replies that flatly disagree with each other on whether
+// X-Forwarded-For/X-Real-IP can be spoofed by the client at all, so nothing
+// here should be trusted for an authorization decision — only for the
+// signup rate limiter below, which the endpoint's own docs already say is
+// not what makes it safe.
+app.set('trust proxy', 1);
+
 const PORT = 3001;
 
 // Required env vars:
@@ -1385,6 +1399,10 @@ function deriveUsername(email) {
 //   - per-process, so it does not hold across multiple Railway instances
 //   - resets on deploy/restart
 //   - keyed on req.ip, which behind Railway's proxy is the forwarded client
+//     (see app.set('trust proxy', ...) above) — but many legitimate callers
+//     can still share one IP, e.g. everyone on a conference venue's WiFi NAT,
+//     so the signup limit below is set generously rather than tightly; it
+//     only needs to blunt a scripted flood, not fence in a busy stand
 // If this ever becomes the primary control, replace it with something
 // backed by shared state.
 const rateBuckets = new Map();
@@ -1411,7 +1429,7 @@ setInterval(() => {
 }, 10 * 60 * 1000).unref();
 
 app.post('/api/instructor/signup', async (req, res) => {
-  if (!rateLimit(res, `signup:${req.ip}`, 5, 15 * 60 * 1000)) return;
+  if (!rateLimit(res, `signup:${req.ip}`, 30, 15 * 60 * 1000)) return;
 
   const rawEmail = req.body?.email;
   const rawRef = req.body?.ref;
