@@ -25,7 +25,7 @@ export default function PurchaseSuccessPage() {
     if (auth.status === "unauthenticated") {
       router.replace("/login");
     } else if (auth.status === "not-instructor") {
-      void supabase.auth.signOut();
+      void supabase.auth.signOut({ scope: "local" });
       router.replace("/");
     }
   }, [auth.status, router]);

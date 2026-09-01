@@ -7,7 +7,7 @@ import { supabase } from "./supabase";
 export type InstructorAuthState =
   | { status: "loading" }
   | { status: "unauthenticated" }
-  | { status: "not-instructor" }
+  | { status: "not-instructor"; accessToken: string; instructorSignupIntent: boolean }
   | { status: "instructor"; userId: string; email: string | null };
 
 // Checks session + profiles.account_type, used by every page that needs an
@@ -47,7 +47,17 @@ export function useInstructorAuth(): InstructorAuthState {
       if (cancelled) return;
 
       if ((profile as { account_type?: string } | null)?.account_type !== "instructor") {
-        setState({ status: "not-instructor" });
+        // instructor_signup_intent is set server-side at account creation
+        // (proxy.js's /api/instructor/signup) and rides in the JWT's
+        // user_metadata claim, so it's already on the session — no extra
+        // round trip needed to know whether a signup is in progress.
+        setState({
+          status: "not-instructor",
+          accessToken: session.access_token,
+          instructorSignupIntent:
+            (session.user.user_metadata as { instructor_signup_intent?: boolean } | undefined)
+              ?.instructor_signup_intent === true,
+        });
         return;
       }
 
