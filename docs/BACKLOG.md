@@ -70,6 +70,40 @@ real users.
 
 ---
 
+## `instructor.tsx` has a complete-looking referral/earnings/payout flow — in tension with "Stripe Connect is blocked"
+
+**Found:** 2026-09-01, while checking whether `apps/web/instructors.html`'s
+claims matched what the product actually does (they did, against the mobile
+app's `/instructor` screen, not the web dashboard — see git history for that
+review).
+
+`apps/mobile/app/instructor.tsx`'s `ReferralSection`, `EarningsSection`, and
+`PayoutHistorySection` (roughly lines 710–913) are not residue — they're a
+complete-looking wired feature: a referral link, running earnings totals
+(total/pending/converted), a "Request Payout" button with a £10 minimum, and
+Stripe Connect onboarding handling. The backend side is equally complete, not
+stubbed: `POST /api/instructor/connect/onboarding-link`
+(`apps/mobile/server/proxy.js:1056`) and `POST /api/instructor/payout-request`
+(`:1120`), plus a signed Connect webhook handler (`:441`,
+`STRIPE_CONNECT_WEBHOOK_SECRET`) with real Stripe transfer logic and
+`instructor_connect_accounts` bookkeeping.
+
+This sits in tension with the working assumption used this session to remove
+the EARNINGS section and calculator from `apps/web/instructors.html` — that
+Stripe Connect payout is blocked and undeliverable before the conference.
+
+**Needs investigating, not yet resolved.** Two possibilities, not
+distinguished yet:
+- The payout rail actually works end-to-end and "blocked" was wrong, or
+- Stripe Connect account approval (a Stripe-side business step, separate from
+  this code) is what's actually blocked, and an instructor who taps "Request
+  Payout" today hits a failure the code can't prevent.
+
+**Not a conference blocker** — conference signups go through the seat-purchase
+model, not referral earnings.
+
+---
+
 ## Instructor status is self-declared and unverified
 
 **Found:** 2026-08-25, while reviewing the new instructor signup endpoint.
