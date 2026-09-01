@@ -30,7 +30,7 @@
       </div>
       <div class="nav-right">
         <a href="https://clearpass-app.vercel.app" class="nav-signin">Sign In</a>
-        <a href="https://clearpass-app.vercel.app" class="nav-cta">Start Free</a>
+        <a href="https://instructors.getclearpass.co.uk/signup" class="nav-cta">Start Free</a>
       </div>
       <button class="hamburger" onclick="toggleMenu()" aria-label="Open menu">
         <span></span><span></span><span></span>
@@ -45,7 +45,7 @@
     <a href="/#stories" onclick="closeMenu()">Stories</a>
     <a href="/instructors" onclick="closeMenu()">Instructors</a>
     <a href="https://clearpass-app.vercel.app" onclick="closeMenu()">Sign In</a>
-    <a href="https://clearpass-app.vercel.app" class="mobile-cta">Start Free Today &#8594;</a>
+    <a href="https://instructors.getclearpass.co.uk/signup" class="mobile-cta">Start Free Today &#8594;</a>
   </div>
 
   <!-- HERO -->
@@ -56,7 +56,7 @@
         <h1>See every pupil&#8217;s progress. Help them pass first time.</h1>
         <p class="inst-hero-sub">ClearPass gives you a live dashboard for every pupil using the app &#8212; their pass probability, weak topics, and streaks &#8212; so you know exactly what to cover in your next lesson.</p>
         <div class="hero-btns">
-          <a href="https://clearpass-app.vercel.app" class="btn btn-primary">Get Free Instructor Access &#8594;</a>
+          <a href="https://instructors.getclearpass.co.uk/signup" class="btn btn-primary">Get Free Instructor Access &#8594;</a>
           <a href="#dashboard" class="btn btn-outline">See the Dashboard</a>
         </div>
       </div>
@@ -155,7 +155,7 @@
       <div class="inst-faq-list">
         <div class="inst-faq-item fade-up">
           <p class="inst-faq-q">How do I get set up?</p>
-          <p class="inst-faq-a">Sign up for a free account, then request instructor access from your profile. We&#8217;ll get you set up with your dashboard and referral link.</p>
+          <p class="inst-faq-a">Use one of the instructor sign-up buttons on this page and enter your email &#8212; we&#8217;ll send you a link to finish setting up. No approval step or separate request; you&#8217;ll land straight on your dashboard with your referral link ready.</p>
         </div>
         <div class="inst-faq-item fade-up delay-1">
           <p class="inst-faq-q">Do my pupils need to be Pro for me to see their progress?</p>
@@ -178,8 +178,8 @@
     <div class="container fade-up">
       <h2>Ready to coach smarter?</h2>
       <p>Get your dashboard, free Pro access, and start earning from every pupil you help pass.</p>
-      <a href="https://clearpass-app.vercel.app" class="btn btn-white">Get Free Instructor Access &#8594;</a>
-      <a href="https://clearpass-app.vercel.app" class="final-cta-url">clearpass-app.vercel.app</a>
+      <a href="https://instructors.getclearpass.co.uk/signup" class="btn btn-white">Get Free Instructor Access &#8594;</a>
+      <a href="https://instructors.getclearpass.co.uk/signup" class="final-cta-url">instructors.getclearpass.co.uk/signup</a>
     </div>
   </section>
 
@@ -249,19 +249,29 @@
         try { ref = sessionStorage.getItem('clearpass_ref'); } catch (e) {}
       }
       if (ref) {
-        document.querySelectorAll('a[href^="https://clearpass-app.vercel.app"]').forEach((link) => {
-          const url = new URL(link.href);
-          const isBareRoot = url.pathname === '/' || url.pathname === '';
-          const isSignIn = link.textContent.trim() === 'Sign In';
-          if (isBareRoot && !isSignIn) {
-            const startUrl = new URL('https://getclearpass.co.uk/start');
-            startUrl.searchParams.set('ref', ref);
-            link.href = startUrl.toString();
-          } else {
-            url.searchParams.set('ref', ref);
-            link.href = url.toString();
-          }
-        });
+        document
+          .querySelectorAll('a[href^="https://clearpass-app.vercel.app"], a[href^="https://instructors.getclearpass.co.uk"]')
+          .forEach((link) => {
+            const url = new URL(link.href);
+            // Instructor signup already reads ?ref= itself (see
+            // apps/instructor-web/app/signup/page.tsx) — it never goes through
+            // /start's app-download redirect, so this is excluded by domain
+            // rather than by path, in case that page ever moves off /signup.
+            const isInstructorSignup = url.hostname === 'instructors.getclearpass.co.uk';
+            const isBareRoot = url.pathname === '/' || url.pathname === '';
+            const isSignIn = link.textContent.trim() === 'Sign In';
+            if (isInstructorSignup) {
+              url.searchParams.set('ref', ref);
+              link.href = url.toString();
+            } else if (isBareRoot && !isSignIn) {
+              const startUrl = new URL('https://getclearpass.co.uk/start');
+              startUrl.searchParams.set('ref', ref);
+              link.href = startUrl.toString();
+            } else {
+              url.searchParams.set('ref', ref);
+              link.href = url.toString();
+            }
+          });
       }
     })();
 
