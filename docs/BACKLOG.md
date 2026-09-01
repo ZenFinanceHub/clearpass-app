@@ -5,6 +5,40 @@ rather than folding unrelated work into an unrelated commit.
 
 ---
 
+## Refunding a direct Stripe purchase never revokes Pro
+
+**Found:** 2026-09-01, while verifying the `create-checkout-session` auth
+fix (PR #47) — Craig was about to refund a real test purchase and asked
+what actually happens to the grant.
+
+`handleChargeRefunded` (`apps/mobile/server/proxy.js:248`) only handles
+instructor **seat** refunds — it looks up the charge via `findSeatForRefund`
+and, if no matching seat is found, does nothing. A direct subscription
+purchase (`/api/create-checkout-session`, `mode: 'payment'`) has no seat to
+find, so refunding one of those charges leaves `user_progress.progress`
+untouched: `isPro` stays `true`, `proSource` stays `'stripe'`,
+`proExpiresAt` stays set to the original grant date. Stripe shows the money
+gone; the account keeps full Pro access until that date regardless.
+
+**Not urgent at today's volume** (direct Stripe purchases are a small slice
+of paying users next to IAP and seats), **but it fails open, not closed**:
+every refund is free Pro for whatever's left of the grant period, with
+nothing to notice or flag it. The `charge.refunded` webhook already fires
+and already has a seat-shaped handler right next to where this would live —
+extending it to also handle the no-matching-seat case (a direct purchase)
+by revoking the grant is the natural fix, not a redesign.
+
+**Interim mitigation:** manually clear Pro after any refund —
+
+```sql
+update public.user_progress
+set progress = progress
+  || jsonb_build_object('isPro', false, 'proSource', null, 'proExpiresAt', null)
+where id = (select id from auth.users where email = '<refunded account email>');
+```
+
+---
+
 ## `instructor.tsx` has a complete-looking referral/earnings/payout flow — in tension with "Stripe Connect is blocked"
 
 **Found:** 2026-09-01, while checking whether `apps/web/instructors.html`'s
