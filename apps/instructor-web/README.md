@@ -8,15 +8,22 @@ app imports nothing from the rest of the monorepo.
 
 ## What's here
 
-- `/login` — email/password via Supabase auth (same project as the mobile app)
-- `/` — after sign-in, checks `profiles.account_type`; anything but
-  `'instructor'` gets signed out with an explanation, not silently let through
+- `/signup` — email-only two-step signup (`POST /api/instructor/signup` then
+  a magic link); reads `?ref=` for campaign attribution
+- `/login` — email link or password via Supabase auth (same project as the
+  mobile app); reads `?ref=` too, for a returning-instructor session that
+  still needs to carry attribution through to `/signup`
+- `/` — after sign-in, checks `profiles.account_type`. A session with an
+  in-progress signup (`user_metadata.instructor_signup_intent`) calls
+  `POST /api/instructor/complete-signup` to finish it; anything else that
+  isn't `'instructor'` gets signed out with an explanation, not silently
+  let through
 - `/dashboard` — buy a seat, see existing seats and their redemption status
 - `/purchase-success` — lands here after Stripe checkout, shows the new
   invite link once the webhook has minted it
 
 Not here, on purpose: the learner redemption page, learner progress views,
-instructor signup, seat management beyond viewing, email. Later phases.
+seat management beyond viewing, email. Later phases.
 
 ## Local development
 

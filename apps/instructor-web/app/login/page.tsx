@@ -1,20 +1,35 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
-import { authRedirectHash, supabase } from "@/lib/supabase";
+import { useRouter, useSearchParams } from "next/navigation";
+import { AUTH_REDIRECT_URL, authRedirectHash, supabase } from "@/lib/supabase";
 import { useSession } from "@/lib/useSession";
 import { getOtpErrorMessage, parseAuthRedirectError } from "@/lib/authErrors";
-
-const RESEND_COOLDOWN_SECONDS = 30;
+import CheckYourEmail from "@/components/CheckYourEmail";
 
 type Mode = "link" | "password";
 type View = "form" | "sent";
 
 export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="centered-shell">
+          <p className="muted">Loading…</p>
+        </main>
+      }
+    >
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
   const session = useSession();
+  const searchParams = useSearchParams();
+  const ref = searchParams.get("ref");
 
   const [mode, setMode] = useState<Mode>("link");
   const [view, setView] = useState<View>("form");
@@ -26,7 +41,6 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(() => parseAuthRedirectError(authRedirectHash));
   const [submitting, setSubmitting] = useState(false);
   const [sentToEmail, setSentToEmail] = useState("");
-  const [resendCooldown, setResendCooldown] = useState(0);
 
   // Signed in already (fresh page load with a persisted session, or the
   // full-page navigation a clicked magic link causes) — hand off to / to
@@ -42,12 +56,6 @@ export default function LoginPage() {
     }
   }, [session.status, router]);
 
-  useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const id = setInterval(() => setResendCooldown((s) => Math.max(0, s - 1)), 1000);
-    return () => clearInterval(id);
-  }, [resendCooldown]);
-
   async function sendMagicLink(targetEmail: string) {
     setError(null);
     setSubmitting(true);
@@ -57,11 +65,7 @@ export default function LoginPage() {
         // A mistyped address must not silently create a fresh, empty
         // account — it must tell the instructor no account exists.
         shouldCreateUser: false,
-        // Hardcoded, not window.location.origin — this app has exactly one
-        // production domain, and deriving it from the requesting origin
-        // silently breaks the link whenever that origin isn't it (a Vercel
-        // preview, localhost, a bookmark to the wrong domain).
-        emailRedirectTo: "https://instructors.getclearpass.co.uk/login",
+        emailRedirectTo: AUTH_REDIRECT_URL,
       },
     });
     setSubmitting(false);
@@ -71,7 +75,6 @@ export default function LoginPage() {
     }
     setSentToEmail(targetEmail);
     setView("sent");
-    setResendCooldown(RESEND_COOLDOWN_SECONDS);
   }
 
   async function handleLinkSubmit(e: FormEvent) {
@@ -101,7 +104,6 @@ export default function LoginPage() {
     setView("form");
     setMode("link");
     setError(null);
-    setResendCooldown(0);
   }
 
   if (session.status === "loading" || session.status === "signed-in") {
@@ -131,34 +133,7 @@ export default function LoginPage() {
         </div>
 
         {view === "sent" ? (
-          <>
-            <div className="success-banner" role="status">
-              <span>
-                We sent a sign-in link to <strong>{sentToEmail}</strong>. Open it on this device to continue —
-                you can close this tab afterwards.
-              </span>
-            </div>
-
-            {error && (
-              <div className="error-banner" role="alert">
-                <span>{error}</span>
-              </div>
-            )}
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginTop: "1rem" }}>
-              <button
-                type="button"
-                className="btn btn-secondary btn-block"
-                disabled={submitting || resendCooldown > 0}
-                onClick={() => sendMagicLink(sentToEmail)}
-              >
-                {resendCooldown > 0 ? `Resend link (${resendCooldown}s)` : "Resend link"}
-              </button>
-              <button type="button" className="btn-text" onClick={useDifferentEmail}>
-                Use a different email
-              </button>
-            </div>
-          </>
+          <CheckYourEmail email={sentToEmail} onUseDifferentEmail={useDifferentEmail} />
         ) : (
           <>
             <div className="mode-toggle" role="tablist" aria-label="Sign-in method">
@@ -243,6 +218,10 @@ export default function LoginPage() {
 
             <p className="muted" style={{ marginTop: "1.25rem", marginBottom: 0, textAlign: "center" }}>
               Use the same email as your ClearPass mobile app account.
+            </p>
+            <p className="muted" style={{ marginTop: "0.5rem", marginBottom: 0, textAlign: "center" }}>
+              New here?{" "}
+              <a href={ref ? `/signup?ref=${encodeURIComponent(ref)}` : "/signup"}>Create an instructor account</a>
             </p>
           </>
         )}

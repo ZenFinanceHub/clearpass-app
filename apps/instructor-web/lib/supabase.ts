@@ -24,3 +24,12 @@ export const authRedirectHash = typeof window !== "undefined" ? window.location.
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true },
 });
+
+// Hardcoded, not window.location.origin — this app has exactly one
+// production domain, and deriving it from the requesting origin silently
+// breaks the link whenever that origin isn't it (a Vercel preview,
+// localhost, a bookmark to the wrong domain). Cost of that: a magic link
+// sent from a Vercel preview always lands the user back on production, so
+// the full send-link -> click -> land flow can never be exercised end to
+// end from a preview deployment — only against production itself.
+export const AUTH_REDIRECT_URL = "https://instructors.getclearpass.co.uk/login";
