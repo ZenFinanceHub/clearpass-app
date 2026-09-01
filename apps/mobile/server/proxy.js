@@ -19,6 +19,42 @@ const {
   resolveSeatGrant,
   resolveSeatLookupOutcome,
 } = require('./lib/seats');
+const {
+  MAX_STATS_ROWS,
+  computeDailyStats,
+  formatDailyStatsMessage,
+} = require('./lib/dailyStats');
+
+// Conference campaign tag reported in the daily stats post. Matches the QR
+// at getclearpass.co.uk/instructors?ref=adinjc26 (27 Sep 2026).
+const CONFERENCE_REF_CODE = 'adinjc26';
+
+// Posts to #clearpass-updates via an incoming webhook (SLACK_WEBHOOK_UPDATES,
+// set in Railway). Never throws and never rejects: every caller treats a
+// Slack outage as irrelevant to whether its own work succeeded. A missing
+// env var is a debug-level fact, not an error — local dev has no webhook.
+async function postToSlack(text) {
+  const url = process.env.SLACK_WEBHOOK_UPDATES;
+  if (!url) {
+    console.log('[slack] SLACK_WEBHOOK_UPDATES not set, skipping post');
+    return false;
+  }
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    if (!resp.ok) {
+      console.error('[slack] post failed:', resp.status, (await resp.text()).slice(0, 200));
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[slack] post error:', err.message || err);
+    return false;
+  }
+}
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? require('stripe')(process.env.STRIPE_SECRET_KEY)
@@ -1293,6 +1329,289 @@ app.post('/api/instructor/switch-to-learner', async (req, res) => {
   }
 });
 
+// ─── POST /api/instructor/signup ──────────────────────────────────────────────
+//
+// Step 1 of 2 for web instructor signup. Public (no auth) by necessity —
+// the caller has no session yet — and therefore deliberately powerless:
+// it creates an auth user and records the campaign tag, and nothing else.
+// No profile row, no account_type, nothing the rest of the system treats
+// as privileged. Step 2 (/api/instructor/complete-signup) does that, and
+// only after the magic link proves the address is really theirs.
+//
+// The split exists because account_type = 'instructor' is not a label, it
+// is an entitlement: /api/cron/grant-instructor-pro hands every instructor
+// non-expiring Pro with no further check. Granting it from an
+// unauthenticated endpoint, before any verification, would let anyone mint
+// free Pro for addresses they do not control.
+//
+// Why the writes live server-side rather than in apps/instructor-web:
+//   1. profiles' RLS is `FOR INSERT WITH CHECK (auth.uid() = id)` with no
+//      column-level restriction, so a client-side signup would let any
+//      authenticated user self-mint account_type = 'instructor'. Minting
+//      behind the service role keeps one authoritative writer.
+//   2. signup_ref must be captured at account creation and survive to the
+//      profile. The magic-link round trip cannot carry it in the URL:
+//      emailRedirectTo is a fixed URL with no query string, and the link is
+//      often opened on a different device, so neither the URL nor
+//      sessionStorage survives. It rides on the auth user's user_metadata
+//      instead — see step 1's createUser call.
+//
+// This endpoint deliberately does NOT send the email. The client calls the
+// existing supabase.auth.signInWithOtp({ shouldCreateUser: false }) path
+// afterwards, which is the same already-debugged flow /login uses — same
+// template, same sender, same emailRedirectTo. Splitting the email out to
+// Resend here would give instructors two different-looking emails for
+// signup vs sign-in.
+//
+// NOTE: this Supabase project is shared with Zen Footy, so the service role
+// reaches another product's tables. Every query below is explicitly scoped
+// to profiles and to this one user id — no wildcard selects, no incidental
+// reads. Keep it that way.
+
+const MAX_SIGNUP_REF_LENGTH = 64;
+
+// profiles.username is UNIQUE. Derive something readable from the email's
+// local part, then add entropy; the caller retries on collision.
+function deriveUsername(email) {
+  const base = String(email).split('@')[0].replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 16);
+  const suffix = Math.floor(1000 + Math.random() * 9000);
+  return (base || 'instructor') + suffix;
+}
+
+// Minimal fixed-window limiter. Deliberately in-memory and dependency-free:
+// this is defence in depth, not the control that makes the endpoint safe
+// (that is the verified-email split below). Consequences of the simple
+// implementation, accepted knowingly:
+//   - per-process, so it does not hold across multiple Railway instances
+//   - resets on deploy/restart
+//   - keyed on req.ip, which behind Railway's proxy is the forwarded client
+// If this ever becomes the primary control, replace it with something
+// backed by shared state.
+const rateBuckets = new Map();
+function rateLimit(res, key, max, windowMs) {
+  const now = Date.now();
+  const entry = rateBuckets.get(key);
+  if (!entry || now >= entry.resetAt) {
+    rateBuckets.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (entry.count >= max) {
+    res.status(429).json({ error: 'rate_limited' });
+    return false;
+  }
+  entry.count++;
+  return true;
+}
+
+// Opportunistic sweep so the Map cannot grow without bound on a long-lived
+// process. Cheap: only runs on writes, only walks expired keys.
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of rateBuckets) if (now >= v.resetAt) rateBuckets.delete(k);
+}, 10 * 60 * 1000).unref();
+
+app.post('/api/instructor/signup', async (req, res) => {
+  if (!rateLimit(res, `signup:${req.ip}`, 5, 15 * 60 * 1000)) return;
+
+  const rawEmail = req.body?.email;
+  const rawRef = req.body?.ref;
+
+  if (!rawEmail || typeof rawEmail !== 'string' || !rawEmail.includes('@')) {
+    return res.status(400).json({ error: 'invalid_email' });
+  }
+  const email = rawEmail.trim().toLowerCase();
+
+  // ref is attacker-controllable (it arrives from a URL). It is only ever
+  // stored and later compared for equality, never interpolated into SQL or
+  // HTML, but bound the charset and length anyway so a junk QR cannot write
+  // arbitrary blobs into the column. An unusable ref is dropped, not
+  // rejected — losing attribution is much better than blocking a signup at
+  // a conference stand.
+  let signupRef = null;
+  if (typeof rawRef === 'string') {
+    const trimmed = rawRef.trim();
+    if (trimmed && trimmed.length <= MAX_SIGNUP_REF_LENGTH && /^[A-Za-z0-9_-]+$/.test(trimmed)) {
+      signupRef = trimmed;
+    } else if (trimmed) {
+      console.warn('[instructor-signup] dropped unusable ref');
+    }
+  }
+
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+
+    // Create the auth user and stash the campaign tag on it. That is the
+    // whole of step 1 — no profile, no account_type, nothing privileged.
+    //
+    // user_metadata is the right carrier for signup_ref between the two
+    // steps: it is written server-side here, it survives the magic-link
+    // round trip regardless of which device opens the email, and it is not
+    // client-writable afterwards. It still satisfies "stamp the ref at
+    // account creation" — just onto the auth user rather than the profile.
+    const { error: createError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      email_confirm: false,
+      user_metadata: {
+        instructor_signup_intent: true,
+        signup_ref: signupRef,
+      },
+    });
+
+    // Uniform response, deliberately. Distinguishing new / existing
+    // instructor / existing learner here would turn this endpoint into an
+    // account-existence-and-type oracle for any address someone cares to
+    // try. The caller always gets the same body, and always goes on to
+    // request a magic link; whoever actually controls the mailbox finds out
+    // what their account is when they click it. An already-registered
+    // address simply gets a sign-in link instead of a first one.
+    //
+    // A genuine failure is swallowed into the same response for the same
+    // reason. It is logged below with no identifiers so it is still
+    // diagnosable from the Railway logs.
+    if (createError) {
+      const alreadyRegistered =
+        createError.code === 'email_exists' ||
+        createError.status === 422 ||
+        /already.*registered|already.*exists/i.test(createError.message || '');
+      if (!alreadyRegistered) {
+        console.error('[instructor-signup] createUser failed:', createError.message);
+      } else {
+        console.log('[instructor-signup] step1 existing address');
+      }
+    } else {
+      console.log('[instructor-signup] step1 created', signupRef ? 'with ref' : 'no ref');
+    }
+
+    return res.json({ ok: true });
+  } catch (err) {
+    // Same reasoning as above: never let the failure mode reveal anything
+    // about the address. Log without identifiers.
+    console.error('[instructor-signup] step1 error:', err.message || err);
+    return res.json({ ok: true });
+  }
+});
+
+// ─── POST /api/instructor/complete-signup ─────────────────────────────────────
+//
+// Step 2, and the only place an instructor profile is created. Requires a
+// real session, which for this flow means the magic link was clicked — so
+// the account_type is only ever granted to someone who has demonstrably
+// received mail at that address.
+//
+// This ordering is the point of the split. Setting account_type before
+// verification would let an unauthenticated caller mint instructor accounts
+// for addresses they do not control, and /api/cron/grant-instructor-pro
+// grants every instructor non-expiring Pro with no further check — so an
+// unverified grant is a free-Pro faucet, not just junk rows.
+
+app.post('/api/instructor/complete-signup', async (req, res) => {
+  const auth = await verifyAuth(req, res);
+  if (!auth) return;
+  const { userId, supabaseAdmin } = auth;
+
+  if (!rateLimit(res, `complete:${userId}`, 10, 15 * 60 * 1000)) return;
+
+  try {
+    const { data: userData, error: userErr } = await supabaseAdmin.auth.admin.getUserById(userId);
+    if (userErr || !userData?.user) throw userErr || new Error('user not found');
+    const authUser = userData.user;
+
+    // verifyAuth proves a valid session; this proves the address itself was
+    // confirmed. Belt and braces — a session obtained by any other means
+    // still cannot mint an instructor account on an unconfirmed address.
+    if (!authUser.email_confirmed_at) {
+      return res.status(403).json({ error: 'email_not_confirmed' });
+    }
+
+    const metadata = authUser.user_metadata || {};
+    const { data: existingProfile, error: readErr } = await supabaseAdmin
+      .from('profiles')
+      .select('account_type')
+      .eq('id', userId)
+      .maybeSingle();
+    if (readErr) throw readErr;
+
+    if (existingProfile) {
+      // Safe to be specific now: the caller is authenticated as this very
+      // account, so nothing is disclosed that they do not already know.
+      // A learner is still never promoted — converting an existing account
+      // is out of scope (see the account-split plan, decision 7).
+      if (existingProfile.account_type !== 'instructor') {
+        return res.status(409).json({ error: 'account_is_learner' });
+      }
+      // signup_ref is not rewritten: attribution belongs to the campaign
+      // that created the account, so a later re-scan cannot reassign it.
+      return res.json({ ok: true, status: 'already_instructor' });
+    }
+
+    // Only accounts that came through step 1 carry this flag, so an
+    // unrelated profile-less session cannot use this endpoint to self-promote.
+    if (metadata.instructor_signup_intent !== true) {
+      return res.status(403).json({ error: 'no_instructor_intent' });
+    }
+
+    const signupRef = typeof metadata.signup_ref === 'string' ? metadata.signup_ref : null;
+
+    let insertError = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { error } = await supabaseAdmin.from('profiles').insert({
+        id: userId,
+        username: deriveUsername(authUser.email || 'instructor'),
+        account_type: 'instructor',
+        signup_ref: signupRef,
+      });
+      if (!error) { insertError = null; break; }
+      insertError = error;
+      // 23505 is almost always the UNIQUE username colliding — retry with
+      // fresh entropy. A primary-key collision means a concurrent request
+      // won; the re-read below settles that case.
+      if (error.code !== '23505') break;
+    }
+
+    if (insertError) {
+      const { data: raced } = await supabaseAdmin
+        .from('profiles')
+        .select('account_type')
+        .eq('id', userId)
+        .maybeSingle();
+      if (raced?.account_type === 'instructor') {
+        return res.json({ ok: true, status: 'already_instructor' });
+      }
+      console.error('[instructor-complete] profile insert failed:', insertError.message);
+      return res.status(500).json({ error: 'signup_failed' });
+    }
+
+    console.log('[instructor-complete] profile created', signupRef ? 'with ref' : 'no ref');
+
+    // Fired here rather than in step 1 on purpose: an unverified auth row is
+    // not a signup, and notifying on one would report accounts that may never
+    // be confirmed. This point is the first moment a real instructor account
+    // exists.
+    //
+    // Awaited but never allowed to fail the request — the account is already
+    // created and committed by this line, so a Slack outage must not turn a
+    // successful signup into an error the instructor sees. postToSlack()
+    // swallows its own failures; this is belt and braces around that.
+    try {
+      await postToSlack(
+        [
+          ':mortar_board: *New instructor signup*',
+          `*Email:* ${authUser.email || '(unknown)'}`,
+          signupRef ? `*Ref:* \`${signupRef}\`` : '*Ref:* none',
+          `*When:* ${new Date().toISOString()}`,
+        ].join('\n')
+      );
+    } catch (err) {
+      console.error('[instructor-complete] slack notify failed:', err.message || err);
+    }
+
+    return res.json({ ok: true, status: 'created' });
+  } catch (err) {
+    console.error('[instructor-complete] error:', err.message || err);
+    return res.status(500).json({ error: 'signup_failed' });
+  }
+});
+
 // ─── Resend email helper ──────────────────────────────────────────────────────
 
 async function sendEmail({ to, subject, html }) {
@@ -2091,6 +2410,86 @@ app.post('/api/cron/seat-expiry-reminders', async (req, res) => {
   } catch (err) {
     console.error('[seat-expiry-reminders] error:', err);
     res.status(500).json({ error: 'Seat expiry reminders failed', detail: String(err.message || err) });
+  }
+});
+
+// ─── POST /api/cron/daily-stats ───────────────────────────────────────────────
+//
+// Posts the daily numbers to #clearpass-updates. Same shape as every other
+// cron route here: POST, x-cron-secret header, driven by cron-job.org.
+// Schedule it for 08:00 Europe/London.
+//
+// The Pro figures are computed in JS (lib/dailyStats.js) rather than as
+// database filters, on purpose: entitlement lives in lib/entitlement.js and
+// "is this person Pro" must have exactly one definition. Expressing it a
+// second time as PostgREST JSONB filters would drift from the rule the
+// expire-pro cron actually applies.
+//
+// The cost of that choice is reading two tables per run. Both selects are
+// explicitly column-scoped, and the row-count guard below refuses to run at
+// all above MAX_STATS_ROWS rather than quietly turning into a daily full
+// scan of a large table.
+
+app.post('/api/cron/daily-stats', async (req, res) => {
+  if (!requireCronAuth(req, res)) return;
+
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+
+    // head:true — counts only, no rows transferred, purely to decide whether
+    // the real reads below are safe to attempt.
+    const [{ count: profileCount }, { count: progressCount }] = await Promise.all([
+      supabaseAdmin.from('profiles').select('id', { count: 'exact', head: true }),
+      supabaseAdmin.from('user_progress').select('id', { count: 'exact', head: true }),
+    ]);
+
+    if ((profileCount || 0) > MAX_STATS_ROWS || (progressCount || 0) > MAX_STATS_ROWS) {
+      // Loud, not silent: a stats job that stops posting without saying so is
+      // worse than one that fails visibly, because nobody notices a message
+      // that never arrives.
+      const msg =
+        `:rotating_light: *Daily stats skipped* — table size exceeded the safety limit ` +
+        `(profiles: ${profileCount}, user_progress: ${progressCount}, limit: ${MAX_STATS_ROWS}). ` +
+        `These counts scan a JSONB column with no index; this needs an indexed or aggregated ` +
+        `implementation before it can run again.`;
+      console.error('[daily-stats] ABORTED — row count over limit:', profileCount, progressCount);
+      await postToSlack(msg);
+      return res.status(500).json({
+        error: 'row_count_over_limit',
+        profiles: profileCount,
+        user_progress: progressCount,
+        limit: MAX_STATS_ROWS,
+      });
+    }
+
+    // Column-scoped: only the four fields the stats actually need, and only
+    // the progress blob itself. No select('*'), nothing incidental — this
+    // service role reaches another product's tables in the same project.
+    const [{ data: profiles, error: profilesErr }, { data: progressRows, error: progressErr }] =
+      await Promise.all([
+        supabaseAdmin.from('profiles').select('id, account_type, signup_ref, created_at, exclude_from_stats'),
+        supabaseAdmin.from('user_progress').select('id, progress'),
+      ]);
+    if (profilesErr) throw profilesErr;
+    if (progressErr) throw progressErr;
+
+    const stats = computeDailyStats({
+      profiles: profiles || [],
+      progressRows: progressRows || [],
+      nowIso: new Date().toISOString(),
+      refCode: CONFERENCE_REF_CODE,
+    });
+
+    const posted = await postToSlack(formatDailyStatsMessage(stats, CONFERENCE_REF_CODE));
+    console.log('[daily-stats]', JSON.stringify(stats), 'posted:', posted);
+
+    // posted:false is reported rather than thrown — the numbers were computed
+    // correctly and the caller (cron-job.org) should see a success with the
+    // detail, not a retry storm because Slack was briefly down.
+    res.json({ ok: true, posted, stats });
+  } catch (err) {
+    console.error('[daily-stats] error:', err);
+    res.status(500).json({ error: 'daily_stats_failed', detail: String(err.message || err) });
   }
 });
 

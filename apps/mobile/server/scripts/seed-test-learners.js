@@ -291,7 +291,14 @@ async function main() {
       console.log(`Reusing existing auth user ${l.email}`);
     }
 
-    await supabaseAdmin.from('profiles').upsert({ id: user.id, username: l.name });
+    // exclude_from_stats is set here, at creation, rather than flagged by
+    // hand afterwards. These accounts are recreated with fresh uuids every
+    // time this script runs, so any manual flagging would silently decay on
+    // the next re-seed and quietly re-pollute the conversion rate in
+    // lib/dailyStats.js. Setting it here keeps the flag true by construction.
+    await supabaseAdmin
+      .from('profiles')
+      .upsert({ id: user.id, username: l.name, exclude_from_stats: true });
 
     const mockTestHistory = l.mocks.map(([score, daysAgo], idx) =>
       mockResult(`${user.id}-mock-${idx}`, score, daysAgo, l.topicScores));
