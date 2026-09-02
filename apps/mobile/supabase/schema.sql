@@ -81,6 +81,14 @@ CREATE TABLE IF NOT EXISTS instructor_relationships (
 
 ALTER TABLE instructor_relationships ENABLE ROW LEVEL SECURITY;
 
+-- A second, short-named generation of these same four policies
+-- (ir_delete/ir_insert/ir_instructor_select/ir_learner_select/ir_update,
+-- 5 policies since the SELECT case was split in two) existed live only,
+-- never declared here, and was dropped 2026-09-02 (RLS policy cleanup,
+-- see BACKLOG.md) — every condition was commutatively identical to its
+-- counterpart below (auth.uid() = x vs x = auth.uid()), and the two split
+-- SELECT halves together were exactly the union "Participants can view
+-- own relationships" already expresses in one clause.
 DROP POLICY IF EXISTS "Participants can view own relationships" ON instructor_relationships;
 DROP POLICY IF EXISTS "Participants can insert relationships" ON instructor_relationships;
 DROP POLICY IF EXISTS "Participants can delete own relationships" ON instructor_relationships;
@@ -103,12 +111,16 @@ CREATE TABLE IF NOT EXISTS instructor_lesson_notes (
 
 ALTER TABLE instructor_lesson_notes ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Instructors can view own notes" ON instructor_lesson_notes;
-DROP POLICY IF EXISTS "Instructors can insert own notes" ON instructor_lesson_notes;
-CREATE POLICY "Instructors can view own notes" ON instructor_lesson_notes
-  FOR SELECT USING (auth.uid() = instructor_id);
-CREATE POLICY "Instructors can insert own notes" ON instructor_lesson_notes
-  FOR INSERT WITH CHECK (auth.uid() = instructor_id);
+-- Consolidated 2026-09-02 (RLS policy cleanup, see BACKLOG.md): this used to
+-- be two separate policies (view + insert, both keyed on
+-- auth.uid() = instructor_id) declared here, plus a third, "Instructors
+-- manage own notes" (FOR ALL, identical condition), that existed live only
+-- and was never recorded in this file. FOR ALL already covered the other
+-- two with the exact same clause, so they were pure redundancy — dropped,
+-- keeping the one that actually covers every action.
+DROP POLICY IF EXISTS "Instructors manage own notes" ON instructor_lesson_notes;
+CREATE POLICY "Instructors manage own notes" ON instructor_lesson_notes
+  FOR ALL USING (auth.uid() = instructor_id) WITH CHECK (auth.uid() = instructor_id);
 
 -- Instructor referral earnings (written server-side only)
 --
@@ -133,6 +145,9 @@ CREATE TABLE IF NOT EXISTS instructor_earnings (
 
 ALTER TABLE instructor_earnings ENABLE ROW LEVEL SECURITY;
 
+-- Live also had an exact duplicate under a second name ("Instructors can
+-- read own earnings", identical USING clause) — dropped 2026-09-02 (RLS
+-- policy cleanup, see BACKLOG.md).
 DROP POLICY IF EXISTS "Instructors can view own earnings" ON instructor_earnings;
 CREATE POLICY "Instructors can view own earnings" ON instructor_earnings
   FOR SELECT USING (auth.uid() = instructor_id);
@@ -238,6 +253,46 @@ CREATE POLICY "Instructors can read linked learner progress" ON user_progress
         AND ir.status = 'accepted'
     )
   );
+
+-- ─────────────────────────────────────────────────────────────────
+-- Two policies below, live-only until 2026-09-02, deliberately kept
+-- redundant during the RLS policy consolidation pass (see BACKLOG.md) —
+-- NOT an oversight. Recorded here so schema.sql actually describes them.
+--
+-- instructor_can_read_learner_progress duplicates the combined effect of
+-- "Users can read own progress" + "Instructors can read linked learner
+-- progress" above in one clause. Those two exist because of a real
+-- incident: "Anyone can read leaderboard" (dropped above) leaked every
+-- user's full progress JSON to anyone, unauthenticated. Replacing that
+-- documented two-policy design with this undocumented combined one, just
+-- to shrink a policy count, was judged the wrong trade — kept as is.
+CREATE POLICY "instructor_can_read_learner_progress" ON user_progress
+  FOR SELECT USING (
+    id = auth.uid() OR EXISTS (
+      SELECT 1 FROM instructor_relationships
+      WHERE instructor_relationships.instructor_id = auth.uid()
+        AND instructor_relationships.learner_id = user_progress.id
+        AND instructor_relationships.status = 'accepted'
+    )
+  );
+
+-- instructor_can_read_learner_profile is fully subsumed by "Users can read
+-- all profiles" (USING (true), top of this file) — that policy alone
+-- already lets anyone read any profile, so this one changes nothing about
+-- access today. Kept anyway: it documents the narrower access instructors
+-- specifically should retain if the broad public-read policy is ever
+-- tightened. Dropping it would lose that intent for the sake of a tidier
+-- count.
+CREATE POLICY "instructor_can_read_learner_profile" ON profiles
+  FOR SELECT USING (
+    id = auth.uid() OR EXISTS (
+      SELECT 1 FROM instructor_relationships
+      WHERE instructor_relationships.instructor_id = auth.uid()
+        AND instructor_relationships.learner_id = profiles.id
+        AND instructor_relationships.status = 'accepted'
+    )
+  );
+-- ─────────────────────────────────────────────────────────────────
 
 -- instructor_relationships previously had no UPDATE policy at all, so no one
 -- (not even the row's own participants) could update it via the anon/
@@ -650,10 +705,11 @@ ALTER TABLE challenges ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "ch_insert" ON challenges;
 CREATE POLICY "ch_insert" ON challenges FOR INSERT WITH CHECK (challenger_id = auth.uid());
-DROP POLICY IF EXISTS "ch_challenger_select" ON challenges;
-CREATE POLICY "ch_challenger_select" ON challenges FOR SELECT USING (challenger_id = auth.uid());
-DROP POLICY IF EXISTS "ch_challenged_select" ON challenges;
-CREATE POLICY "ch_challenged_select" ON challenges FOR SELECT USING (challenged_id = auth.uid());
+
+-- Consolidated 2026-09-02 (RLS policy cleanup, see BACKLOG.md): two
+-- narrower SELECT policies (challenger-owns-row, challenged-owns-row)
+-- were dropped — ch_sharecode_select's USING (true) already made them
+-- inert, so this changes nothing about who could already read what.
 DROP POLICY IF EXISTS "ch_sharecode_select" ON challenges;
 CREATE POLICY "ch_sharecode_select" ON challenges FOR SELECT USING (true);
 -- Deliberately public read — joining by share_code needs to look up a row
@@ -696,14 +752,19 @@ ALTER TABLE pass_stories ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can insert own stories" ON pass_stories;
 CREATE POLICY "Users can insert own stories" ON pass_stories FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- Consolidated 2026-09-02 (RLS policy cleanup, see BACKLOG.md): this used
+-- to be three SELECT policies — "Users can read own stories" (auth.uid()
+-- = user_id), "Public can read shared stories" (shared = true), and a
+-- live-only exact duplicate of the latter under a second name ("Public
+-- read shared stories"). Merged into one; the two genuinely different
+-- conditions are just OR'd together, changing nothing about who can read
+-- what.
 DROP POLICY IF EXISTS "Users can read own stories" ON pass_stories;
-CREATE POLICY "Users can read own stories" ON pass_stories FOR SELECT USING (auth.uid() = user_id);
 DROP POLICY IF EXISTS "Public can read shared stories" ON pass_stories;
-CREATE POLICY "Public can read shared stories" ON pass_stories FOR SELECT USING (shared = true);
--- Live also has a second, functionally-identical policy under a different
--- name ("Public read shared stories") — a duplicate, not two real rules.
--- Matches BACKLOG.md's "Duplicate permissive policies" advisor item;
--- recorded here, not reproduced or fixed.
+DROP POLICY IF EXISTS "Public read shared stories" ON pass_stories;
+CREATE POLICY "Users can read own or shared stories" ON pass_stories
+  FOR SELECT USING (auth.uid() = user_id OR shared = true);
 
 -- Pre-launch email capture (server/proxy.js POST /api/waitlist).
 CREATE TABLE IF NOT EXISTS waitlist (
