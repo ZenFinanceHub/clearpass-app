@@ -5,6 +5,40 @@ rather than folding unrelated work into an unrelated commit.
 
 ---
 
+## Refunding a direct Stripe purchase never revokes Pro
+
+**Found:** 2026-09-01, while verifying the `create-checkout-session` auth
+fix (PR #47) — Craig was about to refund a real test purchase and asked
+what actually happens to the grant.
+
+`handleChargeRefunded` (`apps/mobile/server/proxy.js:248`) only handles
+instructor **seat** refunds — it looks up the charge via `findSeatForRefund`
+and, if no matching seat is found, does nothing. A direct subscription
+purchase (`/api/create-checkout-session`, `mode: 'payment'`) has no seat to
+find, so refunding one of those charges leaves `user_progress.progress`
+untouched: `isPro` stays `true`, `proSource` stays `'stripe'`,
+`proExpiresAt` stays set to the original grant date. Stripe shows the money
+gone; the account keeps full Pro access until that date regardless.
+
+**Not urgent at today's volume** (direct Stripe purchases are a small slice
+of paying users next to IAP and seats), **but it fails open, not closed**:
+every refund is free Pro for whatever's left of the grant period, with
+nothing to notice or flag it. The `charge.refunded` webhook already fires
+and already has a seat-shaped handler right next to where this would live —
+extending it to also handle the no-matching-seat case (a direct purchase)
+by revoking the grant is the natural fix, not a redesign.
+
+**Interim mitigation:** manually clear Pro after any refund —
+
+```sql
+update public.user_progress
+set progress = progress
+  || jsonb_build_object('isPro', false, 'proSource', null, 'proExpiresAt', null)
+where id = (select id from auth.users where email = '<refunded account email>');
+```
+
+---
+
 ## `instructor.tsx` has a complete-looking referral/earnings/payout flow — in tension with "Stripe Connect is blocked"
 
 **Found:** 2026-09-01, while checking whether `apps/web/instructors.html`'s
@@ -208,25 +242,59 @@ conference.** Revisit after the event.
 
 #### `update_aggregate_stats` callable by anon (SECURITY DEFINER)
 
-Any unauthenticated caller can `POST /rest/v1/rpc/update_aggregate_stats` with
-arbitrary `p_topic, p_correct, p_total` values. The function runs as its
-definer, bypassing RLS. This lets someone stuff fake aggregate stats but does
-not leak PII or touch financial data.
+**Fixed 2026-09-02.**
 
-**Fix options (pick one when revisiting):**
-- Revoke `EXECUTE` from `anon` (stats are only written from authenticated quiz
-  submissions anyway).
-- Switch the function to `SECURITY INVOKER` and let the RLS on `aggregate_stats`
-  handle access (currently has RLS enabled but no policies — would need one).
+Any unauthenticated caller could `POST /rest/v1/rpc/update_aggregate_stats`
+with arbitrary `p_topic, p_correct, p_total` values. The function runs as its
+definer, bypassing RLS. This let someone stuff fake aggregate stats but never
+leaked PII or touched financial data.
 
-Also has mutable `search_path` (minor).
+First attempt (`revoke execute ... from public; grant ... to authenticated;`,
+based on `information_schema.routine_privileges` showing a single `PUBLIC`
+grant) was incomplete: `anon` also held a **separate, explicit** `EXECUTE`
+grant invisible through `information_schema.routine_privileges` in this
+project (returned empty for this function after the change — don't trust
+that view here). `pg_proc.proacl` is the reliable source and is what caught
+it, corroborated by a fresh `get_advisors` run still flagging both
+`anon_security_definer_function_executable` and
+`authenticated_security_definer_function_executable` after the first fix.
+
+Closed with `revoke execute on function
+public.update_aggregate_stats(text, integer, integer) from anon;`. Confirmed
+via `pg_proc.proacl`, now `{postgres=X/postgres,authenticated=X/postgres,
+service_role=X/postgres}` — no `anon` entry — and `anon_security_definer_
+function_executable` no longer appears in `get_advisors` at all.
+
+`authenticated_security_definer_function_executable` still appears, and
+that's correct, not a residual gap: `aggregate_stats` has RLS enabled with
+**no policies at all** (see below), so `SECURITY DEFINER` is the only reason
+`authenticated` (the real caller — `analytics.ts`'s `submitSessionStats`) can
+write to it at all. Switching to `SECURITY INVOKER` + a real policy to
+silence this lint would mean opening direct, arbitrary write access to
+`aggregate_stats` for every signed-in client instead of the one narrow,
+parameterized function — a larger surface, not a smaller one. Leave it
+flagged.
 
 #### `leaderboard` view is SECURITY DEFINER (ERROR)
 
-Runs as the view creator, not the querying user. Leaderboard data is
-intentionally public, so the practical risk is low. To silence the lint, convert
-to `SECURITY INVOKER` and add a permissive SELECT policy on the underlying
-tables.
+**Decided 2026-09-02: leave as is.** Investigated converting to `SECURITY
+INVOKER` + a permissive SELECT policy, as the lint suggests. `user_progress`
+has RLS but only "own row" and "own row or accepted-instructor's learner"
+SELECT policies — no broad read policy. Under `security_invoker`, a normal
+learner querying `leaderboard` would have the join filtered to just their own
+row, breaking the top-50 feature outright. Making it work would require a new
+policy broad enough to let one user's query see others' `user_progress` rows
+— but RLS is row-level, not column-level, so that same policy would also let
+anyone query `user_progress` directly and read every other user's full raw
+`progress` JSON (mock test history, topic scores, everything), not just the
+four columns the view exposes today. Either breaks the feature or leaks
+substantially more than the view currently does. Leaderboard data being
+intentionally public makes the underlying lint low-risk to leave as is.
+
+**Real fix, if this ever matters:** a dedicated `leaderboard_cache` table —
+just `username`/`xp`/`streak`/`readiness_score`, refreshed periodically, with
+its own permissive policy — decoupled from the sensitive table entirely. A
+build task, not a SQL-editor statement.
 
 #### 6 tables with RLS enabled but no policies
 
@@ -238,8 +306,16 @@ correct. No action needed unless client-side access is ever added.
 
 #### Mutable `search_path` on 3 functions
 
-`set_updated_at`, `set_progress_sharing_consent`, `update_aggregate_stats`.
-Fix by adding `SET search_path = ''` to each function definition.
+**Fixed 2026-09-02.** `set_updated_at`, `set_progress_sharing_consent`,
+`update_aggregate_stats`. Used `SET search_path = 'public'`, **not** the
+empty string this entry originally suggested — none of the three bodies
+schema-qualify their table references (`aggregate_stats`,
+`progress_sharing_consent`, `instructor_relationships` all appear bare), so
+an empty search path would have broken all three outright. A fixed
+non-empty path closes the lint just as well, since the point is removing
+*mutability*, not emptying it. Confirmed via `pg_proc.proconfig` and a fresh
+`get_advisors` run — the `function_search_path_mutable` lint no longer
+appears at all.
 
 #### Leaked password protection disabled
 
@@ -275,11 +351,18 @@ single policies per action.
 
 #### Unused indexes (7)
 
-`challenges_share_code_idx`, `players_coach_id_idx`, `matches_coach_id_idx`,
-`lineups_match_id_idx`, `attendance_player_id_idx`, `attendance_session_idx`,
-`profiles_signup_ref_idx`. Drop after confirming they are genuinely unused
-(note: `profiles_signup_ref_idx` was just added — may simply not have been
-queried yet).
+**Decided 2026-09-02: not dropping any of them, including
+`challenges_share_code_idx`** (the one genuinely ClearPass-only, zero-risk
+candidate). `pg_stat_user_indexes` showing `idx_scan = 0` only proves unused
+*since the last stats reset* — not unused forever — and there's no benefit
+at current scale that justifies acting on that weak a signal. The other five
+(`players_coach_id_idx`, `matches_coach_id_idx`, `lineups_match_id_idx`,
+`attendance_player_id_idx`, `attendance_session_idx`) are on tables that
+belong to Zen Footy, not ClearPass, sharing this Supabase project — not a
+call to make from ClearPass's side alone regardless of scan counts.
+`profiles_signup_ref_idx` stays for the same original reason: too new to
+judge, and the one event that would exercise it (the conference) hasn't
+happened yet.
 
 #### Auth DB connection limit
 
