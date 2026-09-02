@@ -242,37 +242,38 @@ conference.** Revisit after the event.
 
 #### `update_aggregate_stats` callable by anon (SECURITY DEFINER)
 
-**Partially fixed 2026-09-02 — not actually closed yet, see below.**
+**Fixed 2026-09-02.**
 
-Any unauthenticated caller can `POST /rest/v1/rpc/update_aggregate_stats` with
-arbitrary `p_topic, p_correct, p_total` values. The function runs as its
-definer, bypassing RLS. This lets someone stuff fake aggregate stats but does
-not leak PII or touch financial data.
+Any unauthenticated caller could `POST /rest/v1/rpc/update_aggregate_stats`
+with arbitrary `p_topic, p_correct, p_total` values. The function runs as its
+definer, bypassing RLS. This let someone stuff fake aggregate stats but never
+leaked PII or touched financial data.
 
-Ran `revoke execute on function public.update_aggregate_stats(text, integer,
-integer) from public; grant ... to authenticated;`, based on
-`information_schema.routine_privileges` showing a single `PUBLIC` grant.
-That revoke did land, but `anon` turned out to also hold a **separate,
-explicit** `EXECUTE` grant that was never visible through
-`information_schema.routine_privileges` in this project (it returned an
-empty result for this function after the change — don't trust that view here).
-`pg_proc.proacl` is the reliable source:
-
-```sql
-select p.proname, p.proacl
-from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-where n.nspname = 'public' and p.proname = 'update_aggregate_stats';
--- {postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
-```
-
-Confirmed independently by a fresh `get_advisors` run still flagging both
+First attempt (`revoke execute ... from public; grant ... to authenticated;`,
+based on `information_schema.routine_privileges` showing a single `PUBLIC`
+grant) was incomplete: `anon` also held a **separate, explicit** `EXECUTE`
+grant invisible through `information_schema.routine_privileges` in this
+project (returned empty for this function after the change — don't trust
+that view here). `pg_proc.proacl` is the reliable source and is what caught
+it, corroborated by a fresh `get_advisors` run still flagging both
 `anon_security_definer_function_executable` and
 `authenticated_security_definer_function_executable` after the first fix.
 
-**Actual fix, not yet run:**
-```sql
-revoke execute on function public.update_aggregate_stats(text, integer, integer) from anon;
-```
+Closed with `revoke execute on function
+public.update_aggregate_stats(text, integer, integer) from anon;`. Confirmed
+via `pg_proc.proacl`, now `{postgres=X/postgres,authenticated=X/postgres,
+service_role=X/postgres}` — no `anon` entry — and `anon_security_definer_
+function_executable` no longer appears in `get_advisors` at all.
+
+`authenticated_security_definer_function_executable` still appears, and
+that's correct, not a residual gap: `aggregate_stats` has RLS enabled with
+**no policies at all** (see below), so `SECURITY DEFINER` is the only reason
+`authenticated` (the real caller — `analytics.ts`'s `submitSessionStats`) can
+write to it at all. Switching to `SECURITY INVOKER` + a real policy to
+silence this lint would mean opening direct, arbitrary write access to
+`aggregate_stats` for every signed-in client instead of the one narrow,
+parameterized function — a larger surface, not a smaller one. Leave it
+flagged.
 
 #### `leaderboard` view is SECURITY DEFINER (ERROR)
 
