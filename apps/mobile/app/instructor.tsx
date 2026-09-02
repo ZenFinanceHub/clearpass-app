@@ -179,6 +179,14 @@ const PROXY_URL = __DEV__
   ? 'http://localhost:3001'
   : 'https://clearpass-app-production.up.railway.app';
 
+// Stripe Connect setup is partway: business model set to Marketplace, but
+// the platform profile and identity verification (both live-mode steps)
+// aren't done yet. The backend endpoints
+// (/api/instructor/connect/onboarding-link, /api/instructor/payout-request)
+// stay as they are; this just keeps the UI that assumes they work out of
+// reach until Connect is actually approved. Flip to true when it is.
+const PAYOUT_FEATURES_LIVE = false;
+
 // ─── LearnerCard ──────────────────────────────────────────────────────────────
 
 function LearnerCard({ data, onPress }: { data: LearnerEntry; onPress: () => void }) {
@@ -1079,15 +1087,17 @@ function InstructorDashboard({
         >
           <Text style={styles.addLearnerBtnText}>{'Add Learner by Email'}</Text>
         </TouchableOpacity>
-        {referralCode && (
+        {PAYOUT_FEATURES_LIVE && referralCode && (
           <ReferralSection
             referralCode={referralCode}
             onCopy={() => void handleCopyLink()}
             onShare={() => void handleShareLink()}
           />
         )}
-        <EarningsSection earnings={earnings} connectStatus={connectStatus} onRefresh={onRefresh} />
-        <PayoutHistorySection payouts={payouts} />
+        {PAYOUT_FEATURES_LIVE && (
+          <EarningsSection earnings={earnings} connectStatus={connectStatus} onRefresh={onRefresh} />
+        )}
+        {PAYOUT_FEATURES_LIVE && <PayoutHistorySection payouts={payouts} />}
         <AccountSection acceptedLearnerCount={learners.length} />
         <AddLearnerModal
           visible={showAdd}
@@ -1120,15 +1130,17 @@ function InstructorDashboard({
         <LearnerCard key={entry.rel.id} data={entry} onPress={() => setSelectedLearner(entry)} />
       ))}
 
-      {referralCode && (
+      {PAYOUT_FEATURES_LIVE && referralCode && (
         <ReferralSection
           referralCode={referralCode}
           onCopy={() => void handleCopyLink()}
           onShare={() => void handleShareLink()}
         />
       )}
-      <EarningsSection earnings={earnings} connectStatus={connectStatus} onRefresh={onRefresh} />
-      <PayoutHistorySection payouts={payouts} />
+      {PAYOUT_FEATURES_LIVE && (
+        <EarningsSection earnings={earnings} connectStatus={connectStatus} onRefresh={onRefresh} />
+      )}
+      {PAYOUT_FEATURES_LIVE && <PayoutHistorySection payouts={payouts} />}
       <AccountSection acceptedLearnerCount={learners.length} />
 
       <AddLearnerModal

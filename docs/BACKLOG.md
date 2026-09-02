@@ -130,16 +130,28 @@ stubbed: `POST /api/instructor/connect/onboarding-link`
 `STRIPE_CONNECT_WEBHOOK_SECRET`) with real Stripe transfer logic and
 `instructor_connect_accounts` bookkeeping.
 
-This sits in tension with the working assumption used this session to remove
+This sat in tension with the working assumption used this session to remove
 the EARNINGS section and calculator from `apps/web/instructors.html` — that
 Stripe Connect payout is blocked and undeliverable before the conference.
 
-**Needs investigating, not yet resolved.** Two possibilities, not
-distinguished yet:
-- The payout rail actually works end-to-end and "blocked" was wrong, or
-- Stripe Connect account approval (a Stripe-side business step, separate from
-  this code) is what's actually blocked, and an instructor who taps "Request
-  Payout" today hits a failure the code can't prevent.
+**Resolved 2026-09-02: the second possibility was right.** Real status,
+from Craig directly: Connect setup is genuinely partway. The business
+model is set to Marketplace, but the platform profile and identity
+verification — both live-mode steps — haven't been done. Connect won't be
+live for a while. The payout rail isn't broken code; it's an unfinished
+Stripe account, a business step this code can't do anything about.
+
+**Fixed:** the UI that assumes Connect works is now hidden behind a
+feature flag, `PAYOUT_FEATURES_LIVE` (`apps/mobile/app/instructor.tsx`,
+next to the existing `PROXY_URL` constant) — a plain `const ... = false`,
+not an env var, so flipping it back on the day Connect is actually
+approved is one line. Gates `ReferralSection`, `EarningsSection`, and
+`PayoutHistorySection` (both places `InstructorDashboard` renders them);
+`AccountSection` (the learner/instructor switch, unrelated to payouts)
+still renders unconditionally. The backend endpoints
+(`/api/instructor/connect/onboarding-link`, `/api/instructor/payout-request`)
+are untouched — still there, just unreachable from the UI while they'd
+fail.
 
 **Not a conference blocker** — conference signups go through the seat-purchase
 model, not referral earnings.
