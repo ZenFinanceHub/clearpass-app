@@ -190,7 +190,49 @@ either.
 
 ---
 
-## `proxy.js` has no rate limiting, and six endpoints take no auth at all
+## The in-memory rate limiter's configured numbers don't reliably describe its behavior
+
+**Found:** 2026-09-02, while verifying the `/api/waitlist` rate limit
+(5 per 15 minutes) actually landed on production.
+
+16 sequential `POST` requests to `/api/waitlist` within a single 15-minute
+window all returned `200` — no `429` anywhere, despite the configured limit
+of 5. A follow-up burst of 8 requests fired as concurrently as possible got
+exactly 5 `200`s and 3 `429`s, matching the configured limit precisely.
+
+Confirmed via `railway status --json`: only one replica is running
+(`numReplicas: 1`), so this is not the already-documented "does not hold
+across multiple Railway instances" caveat below — there is one instance,
+one process, one `rateBuckets` Map.
+
+**Cause unknown, not confirmed.** Best guess: Railway's edge may resolve
+the forwarded client IP differently depending on connection timing/reuse —
+ties into the `trust proxy` hop-count uncertainty already noted when that
+was added (Railway's own docs and staff contradict each other on this).
+Not investigated further given the stakes on the endpoint that surfaced
+it — worst case there is junk rows, not a security exposure.
+
+**Consequence, which is why this needs its own entry rather than a
+footnote on `/api/waitlist`:** the same `rateLimit()` helper, keyed the
+same way (`` `<label>:${req.ip}` ``), guards `POST /api/instructor/signup`
+— the actual conference-facing endpoint. Its configured 30-per-15-minutes
+should not be treated as an accurate description of its real-world
+behavior any more than `/api/waitlist`'s 5-per-15-minutes can be, based on
+this evidence. Neither number is provably wrong, but neither is provably
+right either — this is now demonstrated to be unreliable, not just
+theoretically imperfect in the ways already written into the helper's own
+comment.
+
+**Real fix, if this ever becomes load-bearing for either endpoint:** shared
+state (Redis or equivalent) instead of an in-memory per-process `Map`. Not
+proposed as work now — the verified-email split is what actually makes
+`/api/instructor/signup` safe (per its own existing documentation), and
+junk waitlist rows are low-stakes. Recorded so nobody later assumes this
+limiter is holding a real line it isn't.
+
+---
+
+## `proxy.js` has no rate limiting, and four endpoints take no auth at all
 
 **Found:** 2026-08-25, while reviewing the new instructor signup endpoint.
 
@@ -200,19 +242,24 @@ There is no rate limiting anywhere in the proxy. CORS is not a substitute — th
 `corsOptions` allowlist only constrains browsers; `curl` and any server-side
 caller ignore it.
 
-`POST /api/instructor/signup` and `POST /api/instructor/complete-signup` now
-carry a small in-memory limiter (`rateLimit()` in `proxy.js`), added as defence
-in depth. It is per-process, resets on deploy, and does not hold across multiple
-Railway instances. It is **not** what makes those endpoints safe — the
-verified-email split is. Nothing else in the file is limited at all.
+`POST /api/instructor/signup`, `POST /api/instructor/complete-signup`, and
+`POST /api/waitlist` now carry a small in-memory limiter (`rateLimit()` in
+`proxy.js`), added as defence in depth. It is per-process, resets on
+deploy, and — per the entry directly above — has now been observed to not
+reliably enforce its configured numbers even on a single instance, for a
+reason that isn't yet understood. It is **not** what makes the instructor
+endpoints safe — the verified-email split is.
 
-Endpoints reachable with no authentication, secret, or signature of any kind:
+**Fixed since this was written:** `create-checkout-session` and
+`send-challenge-notification` both now require `verifyAuth` (see their own
+commit history) and are no longer in the unauthenticated set below.
+
+Endpoints still reachable with no authentication, secret, or signature of
+any kind:
 
 | Endpoint | Note |
 |---|---|
-| `POST /api/create-checkout-session` | **Most severe** — creates Stripe sessions, trusts `req.body.userId` with no verification the caller controls that account |
-| `POST /api/send-challenge-notification` | Sends push notifications to other users; trusts `challenger_username` as free text |
-| `POST /api/waitlist` | Inserts rows |
+| `POST /api/waitlist` | Inserts rows; now rate-limited (see above) |
 | `POST /api/instructor/signup` | Intentionally public; powerless by design (step 1 of 2) |
 | `GET /api/config` | Read-only |
 | `GET /api/stats` | Read-only |
