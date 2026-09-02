@@ -2,11 +2,25 @@ import { Platform } from 'react-native';
 import * as Sentry from '@sentry/react-native';
 import Purchases, { type PurchasesError, type PurchasesPackage } from 'react-native-purchases';
 import { setIapReady } from './purchaseGate';
+import { supabase } from './supabase';
 
 const REVENUECAT_API_KEY_IOS = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_IOS;
 const REVENUECAT_API_KEY_ANDROID = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID;
 
-let configured = false;
+/** The appUserID the SDK is currently configured/logged in for, or null if
+ *  configure() has never succeeded. Tracking the id (not just a boolean)
+ *  is what makes configurePurchases() idempotent and user-switch-aware —
+ *  see configurePurchases() below. */
+let configuredUserId: string | null = null;
+
+/** Tracks a configure/logIn attempt in progress for a given userId, so two
+ *  callers that both see configuredUserId === null at the same time (e.g.
+ *  the boot-time auth listener and a paywall refresh landing in the same
+ *  window) await the one attempt already running instead of both calling
+ *  Purchases.configure()/logIn() concurrently. Cleared once that attempt
+ *  settles — success or failure — so a failed attempt doesn't permanently
+ *  block a later retry. */
+let inFlightConfigure: { userId: string; promise: Promise<void> } | null = null;
 
 /** Backoff between offerings attempts at boot. A transient network failure
  *  on a cold start used to latch readiness to false for the whole session. */
@@ -84,16 +98,49 @@ async function probeIapReadiness(): Promise<ReadinessProbe> {
   }
 }
 
-// Called once at app boot (see app/_layout.tsx), after we know who's signed
-// in. appUserID is the Supabase user id, not RevenueCat's own anonymous id —
-// so a RevenueCat webhook's app_user_id can be matched straight back to
-// user_progress.id with no separate mapping table (see
-// POST /api/revenuecat-webhook in server/proxy.js). Never called on web —
-// react-native-purchases wraps native StoreKit/Play Billing, and web already
-// has its own route (Stripe Checkout).
+// Called on every transition into an authenticated state — see the
+// supabase.auth.onAuthStateChange subscription in app/_layout.tsx, which
+// covers SIGNED_IN, INITIAL_SESSION and TOKEN_REFRESHED. That's a single
+// choke point rather than a call in every sign-in/sign-up screen, so no
+// future auth entry point (email, Apple, Google, ...) can miss it — the
+// previous version only ran once at cold boot if a session already
+// existed, so signing up fresh within the same app session never
+// configured RevenueCat at all. appUserID is the Supabase user id, not
+// RevenueCat's own anonymous id — so a RevenueCat webhook's app_user_id
+// can be matched straight back to user_progress.id with no separate
+// mapping table (see POST /api/revenuecat-webhook in server/proxy.js).
+// Never called on web — react-native-purchases wraps native
+// StoreKit/Play Billing, and web already has its own route (Stripe
+// Checkout).
+//
+// Idempotent: called repeatedly for the same signed-in user (SIGNED_IN,
+// INITIAL_SESSION and TOKEN_REFRESHED can all fire for one session) is a
+// no-op past the first successful call. Called for a *different* user
+// than the one currently configured logs that user in via RevenueCat's
+// own identity switch rather than re-running configure() — configure()
+// is meant to be called once per process lifetime.
 export async function configurePurchases(userId: string): Promise<void> {
   if (Platform.OS === 'web') return;
+  if (configuredUserId === userId) return;
 
+  if (inFlightConfigure?.userId === userId) {
+    await inFlightConfigure.promise;
+    return;
+  }
+
+  const promise = runConfigurePurchases(userId);
+  inFlightConfigure = { userId, promise };
+  try {
+    await promise;
+  } finally {
+    if (inFlightConfigure?.userId === userId) inFlightConfigure = null;
+  }
+}
+
+// The actual configure/probe work, extracted so configurePurchases() above
+// can wrap it in the in-flight guard without duplicating that logic at
+// every early return below.
+async function runConfigurePurchases(userId: string): Promise<void> {
   const apiKey = Platform.OS === 'ios' ? REVENUECAT_API_KEY_IOS : REVENUECAT_API_KEY_ANDROID;
   if (!apiKey) {
     // No RevenueCat key baked into this build. Nothing to retry — this is
@@ -110,13 +157,19 @@ export async function configurePurchases(userId: string): Promise<void> {
   }
 
   try {
-    Purchases.configure({ apiKey, appUserID: userId });
-    configured = true;
+    if (configuredUserId === null) {
+      Purchases.configure({ apiKey, appUserID: userId });
+    } else {
+      // The SDK is already configured for a different user — switch
+      // identity rather than calling configure() a second time.
+      await Purchases.logIn(userId);
+    }
+    configuredUserId = userId;
   } catch (e) {
     // Split from the offerings fetch below so the two are distinguishable
-    // in Sentry: this one means the SDK itself rejected the key, which no
-    // amount of retrying will fix.
-    configured = false;
+    // in Sentry: this one means the SDK itself rejected the key (or the
+    // logIn call failed), which no amount of retrying will fix.
+    configuredUserId = null;
     setIapReady(false);
     reportIapUnavailable('configure_threw', {
       source: 'boot',
@@ -171,9 +224,25 @@ export async function configurePurchases(userId: string): Promise<void> {
  */
 export async function refreshIapReady(): Promise<void> {
   if (Platform.OS === 'web') return;
-  // configure() never succeeded (no key, or the SDK rejected it) — there's
-  // nothing to re-probe, and the boot path already reported why.
-  if (!configured) return;
+
+  if (configuredUserId === null) {
+    // Not configured yet. This used to be a dead end — the caller just
+    // gave up, and a user whose sign-in completed after the boot-time
+    // configure attempt (see app/_layout.tsx) had no way back short of
+    // restarting the app. Recover by finding out who's signed in now and
+    // configuring for them, instead of assuming the earlier failure is
+    // permanent.
+    Sentry.addBreadcrumb({
+      category: 'purchases',
+      level: 'info',
+      message: 'Paywall opened with RevenueCat not yet configured',
+      data: { platform: Platform.OS },
+    });
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return; // genuinely no one signed in — nothing to configure for
+    await configurePurchases(session.user.id);
+    return;
+  }
 
   const probe = await probeIapReadiness();
   if (probe.ready) {
@@ -198,7 +267,7 @@ export async function refreshIapReady(): Promise<void> {
 // only reach this once getPurchaseRoute() is 'iap', but returning null
 // rather than throwing keeps this safe to call defensively regardless.
 export async function getProPackage(): Promise<PurchasesPackage | null> {
-  if (!configured) return null;
+  if (configuredUserId === null) return null;
   try {
     const offerings = await Purchases.getOfferings();
     return offerings.current?.threeMonth ?? null;

@@ -241,13 +241,6 @@ function RootLayout() {
               }
             } catch {}
           })();
-
-          // Configure RevenueCat with the Supabase user id as appUserID, so
-          // its webhook payloads match straight back to user_progress.id.
-          // Fire-and-forget: getPurchaseRoute() defaults to 'coming_soon'
-          // until this resolves, which is the correct state anyway while no
-          // store product exists — see src/purchaseGate.ts.
-          void configurePurchases(session.user.id);
         }
 
         navigated.current = true;
@@ -283,6 +276,33 @@ function RootLayout() {
 
     void bootstrap();
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Configure RevenueCat with the Supabase user id as appUserID, so its
+  // webhook payloads match straight back to user_progress.id. A dedicated
+  // subscription rather than a call in the bootstrap effect above (which
+  // only ever runs once) or in individual sign-in/sign-up screens: this
+  // fires for every transition into an authenticated state — cold boot
+  // with a persisted session (INITIAL_SESSION), a fresh sign-in or
+  // sign-up completing in the same app session (SIGNED_IN, previously
+  // missed entirely), and token refreshes — so no current or future auth
+  // entry point (email, Apple, Google, ...) can skip it. Fire-and-forget:
+  // getPurchaseRoute() defaults to 'coming_soon' until this resolves,
+  // which is the correct state anyway while it hasn't — see
+  // src/purchaseGate.ts. configurePurchases() itself is a no-op on web.
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session) return;
+      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
+        void configurePurchases(session.user.id);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   // Deep link handler
