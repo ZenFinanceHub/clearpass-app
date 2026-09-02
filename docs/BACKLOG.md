@@ -163,72 +163,55 @@ review of who calls them.
 
 **Found:** 2026-08-25, while verifying `profiles.signup_ref` (commit `c197b53`)
 against the live project via a full `information_schema.columns` dump.
+**Reconciled 2026-09-02.**
 
-`apps/mobile/supabase/schema.sql` is not a faithful description of the live
-database. It has drifted in both directions, so a fresh environment built from
-it would differ materially from production.
+`apps/mobile/supabase/schema.sql` was not a faithful description of the live
+database — drifted in both directions, so a fresh environment built from it
+would have differed materially from production. Closed by dumping the real
+shape (types, defaults, constraints, indexes, RLS) for every affected object
+via `pg_constraint`, `information_schema.columns`, `pg_indexes` and
+`pg_policies` directly, and replacing the old names-only drift block with
+real declarations.
 
-**Live and actively used by application code, but not declared in `schema.sql`:**
+**One lesson learned doing this, worth remembering for next time:**
+`information_schema.table_constraints` came back completely empty for all 6
+affected tables on the first pass — which would have meant "no foreign keys
+anywhere," clearly wrong. `pg_constraint` gave the real, complete picture.
+Same class of trap as `update_aggregate_stats`'s grants earlier the same day
+(`information_schema.routine_privileges` vs `pg_proc.proacl`) — don't trust
+one system view unverified when reconciling live shape against a file.
 
-| Table | Used by |
-|---|---|
-| `aggregate_stats` | `src/analytics.ts` |
-| `challenges` (18 cols) | `app/challenge.tsx`, `app/(tabs)/home.tsx` |
-| `parent_email_subscriptions` | `app/(tabs)/settings.tsx`, `server/proxy.js` |
-| `pass_stories` | `app/ipassed.tsx`, `app/(tabs)/progress.tsx` |
-| `waitlist` | `server/proxy.js` `POST /api/waitlist` |
+**Also caught mid-reconciliation:** the first draft of this fix wrongly
+claimed `instructor_earnings.payout_id` and its `status` CHECK constraint
+were undeclared — they aren't. `schema.sql` already adds both via `ALTER
+TABLE` statements placed after `payouts` exists (lines ~196-198), which the
+2026-08-25 note's own wording ("payout_id and status carry the payout state
+that is actually read") was hinting at without saying outright. Caught by
+reading the whole file before editing rather than trusting the plan drafted
+from a partial read — the actual remaining drift on that table was smaller:
+missing `NOT NULL` on `instructor_id`/`learner_id`, a false `ON DELETE
+CASCADE` claim on `instructor_id` (live has no delete action), and an
+undocumented live `amount DEFAULT 2.50` (the old flat commission figure,
+superseded by `earnings.js`'s dynamic calculation — every real insert passes
+`amount` explicitly, so this likely never fires, but it's a live footgun).
 
-**Live but undeclared, and unused by any code:**
+**Still open, on purpose:** `instructor_earnings.paid_at` stays undeclared,
+deferred pending the Stripe Connect payout-flow investigation (see that
+item below) — document-or-drop is easier to call once that resolves.
+`hazard_attempts` stays declared as a documented, unapplied blueprint (not
+deleted) with a comment at its declaration saying so plainly.
 
-- `instructor_earnings.paid_at` — residue from the Stripe Connect payout work
-  that was blocked partway. Referenced in zero source files; `payout_id` and
-  `status` carry the payout state that is actually read. Decide whether to
-  document it or drop it.
+**New finding from doing this properly:** `aggregate_stats` has RLS enabled
+with zero policies, and `src/analytics.ts`'s `getComparativeStats` reads it
+directly from the regular client — with no SELECT policy, that call has no
+legitimate way to ever return a row for a real user. Looks like the
+"compare yourself to the platform average" feature is silently
+non-functional. Not fixed as part of reconciliation (a behavior question,
+not a documentation one) — flagging here as a candidate for its own look.
 
-**Declared in `schema.sql` but absent from the live database:**
-
-- `hazard_attempts` — declared with two RLS policies, never applied, and
-  referenced by no code. Hazard attempts are not being persisted to this table.
-  Decide whether to apply it or delete the declaration.
-
-**Already reconciled** (in `c197b53`, documented in the file itself):
-`profiles.display_name` was live-only drift; it is now recorded as such, marked
-explicitly as *not* a migration that file ever applied.
-
-### Why this is not closed yet
-
-Closing it needs the real shape of each object — types, defaults, constraints,
-indexes and RLS policies — not just column names. Only names were captured, and
-writing speculative `CREATE TABLE` statements from names alone would produce a
-file that looks authoritative while silently disagreeing with production. That
-is worse than an acknowledged gap, so `schema.sql` carries a
-`KNOWN UNRECONCILED DRIFT` block recording what is missing as a map rather than
-as runnable DDL.
-
-It was kept out of the `signup_ref` commit on purpose: it is a separate piece of
-work deserving its own review, and it is not on the 27 Sep 2026 conference
-critical path.
-
-### To close
-
-Dump the full shape for the affected objects, then replace the drift block in
-`schema.sql` with real declarations:
-
-```sql
-SELECT table_name, column_name, data_type, is_nullable, column_default
-FROM information_schema.columns
-WHERE table_schema = 'public'
-  AND table_name IN ('aggregate_stats','challenges','parent_email_subscriptions',
-                     'pass_stories','waitlist','instructor_earnings')
-ORDER BY table_name, ordinal_position;
-```
-
-Plus constraints, indexes and `pg_policies` for the same tables.
-
-**Caveat:** this Supabase project is shared with Zen Footy. `matches`, `players`,
-`lineups` and `attendance` live in the same `public` schema and belong to that
-product — they are correctly absent from `schema.sql` and must not be added.
-Filter them out of any introspection diff.
+**Caveat retained:** this Supabase project is shared with Zen Footy.
+`matches`, `players`, `lineups` and `attendance` live in the same `public`
+schema and belong to that product — correctly absent from `schema.sql`.
 
 ---
 
@@ -295,6 +278,18 @@ intentionally public makes the underlying lint low-risk to leave as is.
 just `username`/`xp`/`streak`/`readiness_score`, refreshed periodically, with
 its own permissive policy — decoupled from the sensitive table entirely. A
 build task, not a SQL-editor statement.
+
+**Historical precedent for this exact call, found during `schema.sql`
+reconciliation (below):** `schema.sql` itself documents that a broad
+`"Anyone can read leaderboard" ON user_progress FOR SELECT USING (true)`
+policy existed once, and was deliberately dropped as a security fix —
+Postgres ORs permissive policies together, so it silently made every user's
+full `progress` JSON readable by anyone, unauthenticated, not just the
+leaderboard-safe columns (see `schema.sql` lines ~200-209 for the original
+fix's own explanation). Converting the view to `SECURITY INVOKER` with a new
+permissive policy would be re-introducing close to the same mistake this
+codebase already made once and fixed. Strengthens, doesn't change, the
+decision above.
 
 #### 6 tables with RLS enabled but no policies
 
