@@ -5,6 +5,61 @@ rather than folding unrelated work into an unrelated commit.
 
 ---
 
+## Comparative stats feature is silently dead
+
+**Found:** 2026-09-02, while reconciling `schema.sql` (`aggregate_stats` has
+RLS enabled with zero policies). **Confirmed, not just inferred**, by
+minting a real session for a test account and hitting the actual REST
+endpoint the app uses:
+
+```
+GET /rest/v1/aggregate_stats?topic=eq.Alertness&select=total_correct,total_answered
+Authorization: Bearer <real authenticated user's access token>
+→ 200 []
+```
+
+Empty result for a topic that has real data underneath (`Alertness`:
+114 answered, confirmed via a direct service-role query) — RLS silently
+filters the row out for every non-service-role caller, authenticated or
+not, because the table has no SELECT policy at all.
+
+**What it's supposed to do:** `src/analytics.ts`'s `getComparativeStats(topic,
+userPct)` reads the platform-wide correct/answered totals for a topic and
+returns `{ userPct, platformAvgPct, betterThan, totalAnswers }` — "you scored
+better than X% of ClearPass users" — but only once a topic has 50+ answers
+recorded platform-wide (`if (row.total_answered < 50) return null`).
+
+**Where it's supposed to appear, and what a real user actually sees instead:**
+- `app/(tabs)/practice.tsx:1480` — a card on the session-results screen after
+  finishing a single-topic practice session: *"You scored better than X% of
+  ClearPass users on {topic} / Platform average: Y%"*. Since `getComparativeStats`
+  returns `null` (the empty REST result makes `.single()` throw, caught by
+  the function's own try/catch), the card's containing `{comparative && ...}`
+  condition is false — **the entire card doesn't render**. Not a blank
+  placeholder, not a zero, not a loading spinner stuck forever — nothing.
+  The rest of the results screen (achievement banners, motivational message,
+  tutor nudge) renders completely normally around the missing card, so
+  there's no visual gap a user would notice as "something's wrong here."
+- `app/(tabs)/progress.tsx:667` — tapping a topic mastery badge shows an
+  `Alert` popup with the pupil's own accuracy; a `\nPlatform average: X%`
+  line is meant to be appended when stats are available. Same failure mode:
+  the line is just silently omitted from the alert text.
+
+**Not fixed here** — this is a behavior/RLS-policy decision, not a
+documentation one (see `schema.sql` reconciliation entry above, which is
+where this was found). `aggregate_stats` only holds aggregate, non-personal
+counts (per-topic totals, no user identifiers), so a public SELECT policy
+is very likely safe — but that's a call for whoever picks this up, not
+assumed here.
+
+**Also worth knowing, separate from the RLS bug:** even with RLS fixed,
+most topics don't have enough volume to clear the 50-answer threshold yet —
+of the two topics with any data at all, `Alertness` has 114 (would show) and
+`Attitude` has 12 (would still return `null`). Fixing RLS makes the feature
+*able* to work; it doesn't guarantee it shows up for every topic yet.
+
+---
+
 ## Refunding a direct Stripe purchase never revokes Pro
 
 **Found:** 2026-09-01, while verifying the `create-checkout-session` auth
@@ -202,12 +257,9 @@ item below) — document-or-drop is easier to call once that resolves.
 deleted) with a comment at its declaration saying so plainly.
 
 **New finding from doing this properly:** `aggregate_stats` has RLS enabled
-with zero policies, and `src/analytics.ts`'s `getComparativeStats` reads it
-directly from the regular client — with no SELECT policy, that call has no
-legitimate way to ever return a row for a real user. Looks like the
-"compare yourself to the platform average" feature is silently
-non-functional. Not fixed as part of reconciliation (a behavior question,
-not a documentation one) — flagging here as a candidate for its own look.
+with zero policies, which turned out to make a real feature silently dead —
+confirmed, not fixed, as its own entry below ("Comparative stats feature is
+silently dead").
 
 **Caveat retained:** this Supabase project is shared with Zen Footy.
 `matches`, `players`, `lineups` and `attendance` live in the same `public`
