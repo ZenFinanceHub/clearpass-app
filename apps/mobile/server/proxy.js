@@ -1831,6 +1831,8 @@ app.post('/api/delete-account', async (req, res) => {
 // ─── POST /api/waitlist ───────────────────────────────────────────────────────
 
 app.post('/api/waitlist', async (req, res) => {
+  if (!rateLimit(res, `waitlist:${req.ip}`, 5, 15 * 60 * 1000)) return;
+
   const { email } = req.body;
   if (!email || !String(email).includes('@')) {
     return res.status(400).json({ error: 'Invalid email' });
