@@ -1855,12 +1855,38 @@ app.post('/api/waitlist', async (req, res) => {
 // 2. Sends the notification via Expo Push API
 
 app.post('/api/send-challenge-notification', async (req, res) => {
-  const { challenged_user_id, challenger_username } = req.body;
-  if (!challenged_user_id || !challenger_username) {
+  const auth = await verifyAuth(req, res);
+  if (!auth) return;
+  const { userId, supabaseAdmin } = auth;
+
+  const { challenged_user_id } = req.body;
+  if (!challenged_user_id) {
     return res.status(400).json({ error: 'Missing fields' });
   }
   try {
-    const supabaseAdmin = getSupabaseAdmin();
+    // Caller must actually be party to a real challenge with this target —
+    // otherwise an authenticated user could still push a notification to any
+    // known user id with no relationship between them. Checked both ways
+    // since the caller may be either side of the row (the original
+    // challenger, or someone reminding the person who challenged them).
+    // Two parameterized .eq() lookups rather than one .or() filter string
+    // built from challenged_user_id — that value is caller-controlled input,
+    // and a raw PostgREST filter string is not a safe place to interpolate it.
+    const [{ data: asChallenger }, { data: asChallenged }] = await Promise.all([
+      supabaseAdmin.from('challenges').select('id').eq('challenger_id', userId).eq('challenged_id', challenged_user_id).limit(1).maybeSingle(),
+      supabaseAdmin.from('challenges').select('id').eq('challenger_id', challenged_user_id).eq('challenged_id', userId).limit(1).maybeSingle(),
+    ]);
+    if (!asChallenger && !asChallenged) {
+      return res.status(403).json({ error: 'no_challenge_relationship' });
+    }
+
+    const { data: callerProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('username')
+      .eq('id', userId)
+      .single();
+    const challenger_username = callerProfile?.username ?? 'Someone';
+
     const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('expo_push_token')
