@@ -452,14 +452,83 @@ Affects `profiles`, `user_progress`, `instructor_relationships`,
 `progress_sharing_consent`. Fix by wrapping `auth.uid()` in a subselect so
 Postgres evaluates it once per statement.
 
-#### Duplicate permissive policies (~50)
+#### Duplicate permissive policies — **fixed 2026-09-02, partially**
 
 Multiple permissive SELECT/INSERT/UPDATE/DELETE policies on the same
-table+role. Affected tables: `challenges`, `instructor_earnings`,
-`instructor_lesson_notes`, `instructor_relationships`, `pass_stories`,
-`profiles`, `user_progress`. These OR together, so access is the union of all
-policies — functionally correct but wasteful and confusing. Consolidate into
-single policies per action.
+table+role. The advisor's "~50" count doesn't match `pg_policies` queried
+directly — same lesson as `update_aggregate_stats`'s grants and the
+`schema.sql` reconciliation earlier today: trust the live catalog, not an
+aggregate number. **31 real policies across the 7 affected tables**, not
+~50 (the advisor likely counts each policy against multiple roles
+internally).
+
+Two different problems were both called "duplicates" by the advisor and
+needed different handling: **true duplicates** (two policies, identical
+`USING`/`WITH CHECK`, different names — safe to drop one outright) and
+**subsumption** (a broad policy, usually `USING (true)` or one combining
+two conditions with `OR`, already makes narrower policies on the same
+action completely inert — dropping them changes nothing about access
+*today*, but it's a provable-equivalence claim, not a byte-identical one).
+
+**Fixed, 5 of 7 tables, all provable equivalences (identical clause or
+proven subsumption/union), zero intended access change:**
+- `instructor_earnings`: SELECT 2 → 1 (true duplicate).
+- `instructor_lesson_notes`: 3 → 1 (`FOR ALL` already covered the other
+  two with the identical condition; the `FOR ALL` policy itself was
+  live-only drift, now added to `schema.sql`).
+- `instructor_relationships`: 9 → 4 (a whole second, short-named
+  generation — `ir_delete`/`ir_insert`/`ir_instructor_select`/
+  `ir_learner_select`/`ir_update` — existed live only, never recorded
+  anywhere, every condition commutatively identical to its counterpart).
+- `pass_stories`: SELECT 3 → 1 (deduped an exact duplicate, then merged
+  the remaining two distinct conditions with `OR`).
+- `challenges`: SELECT 3 → 1 (the `USING (true)` sharecode policy already
+  subsumed the other two).
+
+**Verified before calling this done** — the priority was proving nothing
+got *wider*, not just that nothing broke:
+- Minted real sessions for an instructor, a linked learner (a real
+  accepted `instructor_relationships` row — `enquiries@zen-finance.co.uk`
+  / `test-learner-1@zen-finance.co.uk`, both Craig's own test accounts),
+  and an unrelated stranger with no relationship to either.
+- **Negative cases** (the ones that actually prove nothing widened): the
+  stranger reading the learner's `user_progress` row → `200 []`. The
+  stranger reading the instructor/learner's `instructor_relationships`
+  row → `200 []`. Both correctly denied.
+- **Positive cases**: learner reads own `user_progress` row → data.
+  Instructor reads the linked learner's `user_progress` row → data. Both
+  participants read their own `instructor_relationships` row → data.
+  Instructor reads own `instructor_earnings` (3 rows, matching a direct
+  count) → data. A stranger reads a `shared = true` `pass_stories` row
+  (public) → data. A full insert → select → delete round trip on
+  `instructor_lesson_notes` via the consolidated `FOR ALL` policy →
+  succeeded, test row cleaned up.
+- Re-ran `get_advisors`: the `multiple_permissive_policies` finding no
+  longer mentions any of the 5 consolidated tables at all — only
+  `profiles` and `user_progress` still appear, which is exactly the two
+  deliberate holds below, not an oversight.
+
+**Deliberately NOT consolidated, 2 of 7 tables — both judgment calls,
+not oversights:**
+- **`user_progress`** (SELECT, still 3 policies): a combined policy
+  (`instructor_can_read_learner_progress`) exists live that duplicates
+  the effect of two separate, documented policies
+  (`"Users can read own progress"` + `"Instructors can read linked
+  learner progress"`). Those two exist *because of a real incident* — a
+  previous policy leaked every user's full progress JSON to anyone,
+  unauthenticated (see `schema.sql`'s own comment on `"Anyone can read
+  leaderboard"`). Swapping that documented, deliberate two-policy design
+  for an undocumented drifted-in one, purely to shrink a policy count,
+  was judged the wrong trade.
+- **`profiles`** (SELECT, still 2 policies): `instructor_can_read_learner_profile`
+  is fully subsumed by `"Users can read all profiles"` (`USING (true)`)
+  today, but documents the *narrower* access instructors should retain if
+  that broad public-read policy is ever tightened. Dropping it loses that
+  intent for the sake of a tidier count.
+
+Both now recorded properly in `schema.sql` (previously undeclared in
+either case) with comments explaining why they're kept, not just that they
+exist — so a future reader doesn't mistake either for an oversight.
 
 #### Unused indexes (7)
 
