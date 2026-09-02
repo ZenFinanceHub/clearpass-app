@@ -16,6 +16,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TopicCategory, awardXp } from '@clearpass/core';
 import { getProxyUrl } from '@/src/proxyUrl';
+import { getAccessToken } from '@/src/getAccessToken';
 import type { Question } from '@clearpass/core';
 import { allQuestions } from '@clearpass/content';
 import { supabase } from '@/src/supabase';
@@ -508,13 +509,17 @@ function ResultsView({
             style={styles.remindBtn}
             onPress={() => {
               const targetId = latest.challenger_id === myUserId ? latest.challenged_id : latest.challenger_id;
-              const senderName = latest.challenger_id === myUserId ? opponentName : latest.challenger_name;
               if (targetId) {
-                void fetch(`${getProxyUrl()}/api/send-challenge-notification`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ challenged_user_id: targetId, challenger_username: senderName }),
-                }).then(() => Alert.alert('Reminder sent!', `${opponentName} has been notified.`));
+                void (async () => {
+                  const token = await getAccessToken();
+                  if (!token) return;
+                  await fetch(`${getProxyUrl()}/api/send-challenge-notification`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ challenged_user_id: targetId }),
+                  });
+                  Alert.alert('Reminder sent!', `${opponentName} has been notified.`);
+                })();
               }
             }}
             activeOpacity={0.8}
@@ -712,11 +717,15 @@ function LobbyView({
 
     // Notify the challenged user if they have a push token
     if (challengedId) {
-      void fetch(`${getProxyUrl()}/api/send-challenge-notification`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ challenged_user_id: challengedId, challenger_username: myUsername }),
-      });
+      void (async () => {
+        const token = await getAccessToken();
+        if (!token) return;
+        await fetch(`${getProxyUrl()}/api/send-challenge-notification`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ challenged_user_id: challengedId }),
+        });
+      })();
     }
 
     setShowStartModal(false);
