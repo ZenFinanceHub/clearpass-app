@@ -111,11 +111,22 @@ CREATE POLICY "Instructors can insert own notes" ON instructor_lesson_notes
   FOR INSERT WITH CHECK (auth.uid() = instructor_id);
 
 -- Instructor referral earnings (written server-side only)
+--
+-- Reconciled against live shape 2026-09-02 (see BACKLOG.md's schema.sql
+-- entry): instructor_id/learner_id are NOT NULL live; instructor_id's FK
+-- has NO delete action live (this previously claimed ON DELETE CASCADE,
+-- which was never actually applied — describes an intent, not reality).
+-- amount's DEFAULT 2.50 is live — the old flat commission figure,
+-- superseded by earnings.js's dynamic per-channel calculation
+-- (£2.04-2.27). Every real insert passes amount explicitly, so this
+-- likely never fires, but it's a live footgun worth knowing about.
+-- (payout_id and the status CHECK are already handled below, once
+-- `payouts` exists — not duplicated here.)
 CREATE TABLE IF NOT EXISTS instructor_earnings (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  instructor_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  learner_id    UUID REFERENCES auth.users(id),
-  amount        DECIMAL(10,2),
+  instructor_id UUID NOT NULL REFERENCES auth.users(id),
+  learner_id    UUID NOT NULL REFERENCES auth.users(id),
+  amount        DECIMAL(10,2) DEFAULT 2.50,
   status        TEXT DEFAULT 'pending',
   created_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -134,6 +145,12 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS referred_by     TEXT;
 -- (existing profile RLS policies already cover these columns)
 
 -- Per-user hazard perception attempt log
+--
+-- Declared here but NOT applied to the live database, and no code writes to
+-- it — confirmed 2026-09-02 (see BACKLOG.md's schema.sql entry). Kept as a
+-- documented, unapplied blueprint rather than deleted: it's real design
+-- work, not describing anything real today. Do not assume hazard attempts
+-- are being persisted.
 CREATE TABLE IF NOT EXISTS hazard_attempts (
   id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id    UUID REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -557,58 +574,144 @@ CREATE INDEX IF NOT EXISTS profiles_signup_ref_idx ON profiles(signup_ref)
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS exclude_from_stats BOOLEAN NOT NULL DEFAULT false;
 
 -- ─────────────────────────────────────────────────────────────────
--- KNOWN UNRECONCILED DRIFT — READ BEFORE TRUSTING THIS FILE
+-- RECONCILED 2026-09-02 — see BACKLOG.md's schema.sql entry for the
+-- full history. These 5 tables were live and used by application code
+-- but declared nowhere above; a full pg_constraint/information_schema/
+-- pg_indexes/pg_policies dump replaced the old names-only drift note
+-- with the real shapes below.
+-- ─────────────────────────────────────────────────────────────────
+
+-- Aggregated per-topic correctness, read by src/analytics.ts's
+-- getComparativeStats ("you vs the platform average"). RLS is enabled with
+-- no policies — this may mean that feature is silently non-functional for
+-- real users (no legitimate path for an authenticated/anon read to return a
+-- row); flagged as a separate BACKLOG.md item, not fixed here.
+CREATE TABLE IF NOT EXISTS aggregate_stats (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  topic          TEXT UNIQUE NOT NULL,
+  total_correct  INTEGER DEFAULT 0,
+  total_answered INTEGER DEFAULT 0,
+  updated_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE aggregate_stats ENABLE ROW LEVEL SECURITY;
+-- No policies exist (confirmed live) — writes go through
+-- update_aggregate_stats (SECURITY DEFINER, bypasses RLS by design).
+
+-- Async challenge mode: one row per challenge; either party can update
+-- scores as they play. share_code supports joining without knowing the
+-- challenged party up front (app/challenge.tsx's "enter a code" flow).
+CREATE TABLE IF NOT EXISTS challenges (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  challenger_id       UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  challenger_name     TEXT NOT NULL,
+  challenged_id       UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  challenged_email    TEXT,
+  status              TEXT NOT NULL DEFAULT 'pending'
+                         CHECK (status IN ('pending', 'accepted', 'completed', 'expired')),
+  topic_category      TEXT,
+  question_ids        JSONB NOT NULL DEFAULT '[]',
+  challenger_score    INTEGER,
+  challenger_time     INTEGER,
+  challenger_answers  JSONB,
+  challenged_score    INTEGER,
+  challenged_time     INTEGER,
+  challenged_answers  JSONB,
+  winner_id           UUID,
+  created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  expires_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (NOW() + INTERVAL '24 hours'),
+  share_code          TEXT NOT NULL UNIQUE
+);
+
+CREATE INDEX IF NOT EXISTS challenges_challenger_idx ON challenges(challenger_id);
+CREATE INDEX IF NOT EXISTS challenges_challenged_idx ON challenges(challenged_id);
+CREATE INDEX IF NOT EXISTS challenges_share_code_idx ON challenges(share_code);
+-- share_code already has a UNIQUE index from the constraint above — this
+-- plain index on the same column is live but redundant (BACKLOG.md's
+-- "unused indexes" item; left alone per that decision, recorded not fixed).
+
+ALTER TABLE challenges ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "ch_insert" ON challenges;
+CREATE POLICY "ch_insert" ON challenges FOR INSERT WITH CHECK (challenger_id = auth.uid());
+DROP POLICY IF EXISTS "ch_challenger_select" ON challenges;
+CREATE POLICY "ch_challenger_select" ON challenges FOR SELECT USING (challenger_id = auth.uid());
+DROP POLICY IF EXISTS "ch_challenged_select" ON challenges;
+CREATE POLICY "ch_challenged_select" ON challenges FOR SELECT USING (challenged_id = auth.uid());
+DROP POLICY IF EXISTS "ch_sharecode_select" ON challenges;
+CREATE POLICY "ch_sharecode_select" ON challenges FOR SELECT USING (true);
+-- Deliberately public read — joining by share_code needs to look up a row
+-- before the joiner has any other recorded relationship to it.
+DROP POLICY IF EXISTS "ch_update" ON challenges;
+CREATE POLICY "ch_update" ON challenges FOR UPDATE USING (challenger_id = auth.uid() OR challenged_id = auth.uid());
+
+-- Parents can subscribe to a weekly progress digest for a specific learner
+-- (server/proxy.js POST /api/send-weekly-parent-emails, (tabs)/settings.tsx).
+CREATE TABLE IF NOT EXISTS parent_email_subscriptions (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  learner_id          UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  parent_email        TEXT NOT NULL,
+  confirmed           BOOLEAN DEFAULT false,
+  confirmation_token  UUID DEFAULT gen_random_uuid(),
+  created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE (learner_id, parent_email)
+);
+
+ALTER TABLE parent_email_subscriptions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users manage own parent subscriptions" ON parent_email_subscriptions;
+CREATE POLICY "Users manage own parent subscriptions" ON parent_email_subscriptions
+  FOR ALL USING (auth.uid() = learner_id) WITH CHECK (auth.uid() = learner_id);
+
+-- "I passed!" stories, optionally shared to a public wall (app/ipassed.tsx,
+-- (tabs)/progress.tsx).
+CREATE TABLE IF NOT EXISTS pass_stories (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID NOT NULL REFERENCES auth.users(id),
+  username    TEXT,
+  score       INTEGER,
+  test_date   DATE,
+  story       TEXT,
+  shared      BOOLEAN DEFAULT false,
+  created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE pass_stories ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can insert own stories" ON pass_stories;
+CREATE POLICY "Users can insert own stories" ON pass_stories FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can read own stories" ON pass_stories;
+CREATE POLICY "Users can read own stories" ON pass_stories FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Public can read shared stories" ON pass_stories;
+CREATE POLICY "Public can read shared stories" ON pass_stories FOR SELECT USING (shared = true);
+-- Live also has a second, functionally-identical policy under a different
+-- name ("Public read shared stories") — a duplicate, not two real rules.
+-- Matches BACKLOG.md's "Duplicate permissive policies" advisor item;
+-- recorded here, not reproduced or fixed.
+
+-- Pre-launch email capture (server/proxy.js POST /api/waitlist).
+CREATE TABLE IF NOT EXISTS waitlist (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email       TEXT NOT NULL UNIQUE,
+  created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE waitlist ENABLE ROW LEVEL SECURITY;
+-- No policies exist (confirmed live) — correct: only ever written via the
+-- service role key, no client-side access needed.
+
+-- ─────────────────────────────────────────────────────────────────
+-- STILL OPEN — the two things reconciliation didn't resolve:
 --
--- THIS FILE CANNOT RECREATE THE LIVE DATABASE. A full
--- information_schema dump on 2026-08-25 found live objects that are
--- not declared anywhere above. They are recorded here as a map, NOT as
--- runnable DDL: only column *names* were captured, so the types,
--- defaults, constraints, indexes and RLS policies are unknown. Writing
--- speculative CREATE TABLE statements would produce a schema that
--- silently disagrees with production, which is worse than an
--- acknowledged gap.
+-- instructor_earnings.paid_at (TIMESTAMP WITH TIME ZONE, nullable, no
+-- default) is live and undeclared, deliberately left that way — referenced
+-- by zero source files, deferred pending the Stripe Connect payout-flow
+-- investigation (see BACKLOG.md's "instructor.tsx has a complete-looking
+-- referral/earnings/payout flow" item). Document-or-drop is easier to call
+-- once that resolves.
 --
--- Live, actively used by application code, NOT declared above:
---   aggregate_stats            (id topic total_correct total_answered
---                               updated_at)
---                               -- src/analytics.ts
---   challenges                 (18 cols: id challenger_id
---                               challenger_name challenged_id
---                               challenged_email status topic_category
---                               question_ids challenger_score
---                               challenger_time challenger_answers
---                               challenged_score challenged_time
---                               challenged_answers winner_id
---                               created_at expires_at share_code)
---                               -- app/challenge.tsx, (tabs)/home.tsx
---   parent_email_subscriptions (id learner_id parent_email confirmed
---                               confirmation_token created_at)
---                               -- (tabs)/settings.tsx, proxy.js
---   pass_stories               (id user_id username score test_date
---                               story shared created_at)
---                               -- app/ipassed.tsx, (tabs)/progress.tsx
---   waitlist                   (id email created_at)
---                               -- proxy.js POST /api/waitlist
---
--- Live but unused by any code — residue from the Stripe Connect payout
--- work that was blocked partway:
---   instructor_earnings.paid_at   (referenced in zero source files;
---                                  payout_id + status carry the payout
---                                  state that is actually read)
---
--- Declared above but NOT live — never applied, and referenced by no
--- code. Do not assume hazard attempts are being persisted:
---   hazard_attempts            (declared at the CREATE TABLE above,
---                               absent from the live database)
---
--- To close this properly, dump column types/defaults/constraints and
--- RLS for the tables listed above and replace this comment with real
--- declarations. Tracked as follow-up work, deliberately not attempted
--- from column names alone.
---
--- Also note: this Supabase project is SHARED with Zen Footy. The live
--- schema additionally contains matches, players, lineups and
--- attendance, which belong to that product and are correctly absent
--- from this file. Service-role code here can reach them — keep writes
--- narrowly scoped.
+-- This Supabase project is SHARED with Zen Footy. The live schema
+-- additionally contains matches, players, lineups and attendance, which
+-- belong to that product and are correctly absent from this file.
+-- Service-role code here can reach them — keep writes narrowly scoped.
 -- ─────────────────────────────────────────────────────────────────
