@@ -8,7 +8,8 @@ rather than folding unrelated work into an unrelated commit.
 ## Comparative stats feature is silently dead
 
 **Found:** 2026-09-02, while reconciling `schema.sql` (`aggregate_stats` has
-RLS enabled with zero policies). **Confirmed, not just inferred**, by
+RLS enabled with zero policies). **Fixed same day.** **Confirmed, not just
+inferred**, by
 minting a real session for a test account and hitting the actual REST
 endpoint the app uses:
 
@@ -45,18 +46,35 @@ recorded platform-wide (`if (row.total_answered < 50) return null`).
   line is meant to be appended when stats are available. Same failure mode:
   the line is just silently omitted from the alert text.
 
-**Not fixed here** — this is a behavior/RLS-policy decision, not a
-documentation one (see `schema.sql` reconciliation entry above, which is
-where this was found). `aggregate_stats` only holds aggregate, non-personal
-counts (per-topic totals, no user identifiers), so a public SELECT policy
-is very likely safe — but that's a call for whoever picks this up, not
-assumed here.
+**Fix:** `CREATE POLICY "Anyone can read aggregate stats" ON aggregate_stats
+FOR SELECT USING (true);` — confirmed safe from the live shape, not the
+general principle: `id`/`topic`/`total_correct`/`total_answered`/`updated_at`,
+no FKs, no user-identifying column, each row a running sum/count across every
+contributor rather than a per-event log.
 
-**Also worth knowing, separate from the RLS bug:** even with RLS fixed,
-most topics don't have enough volume to clear the 50-answer threshold yet —
-of the two topics with any data at all, `Alertness` has 114 (would show) and
-`Attitude` has 12 (would still return `null`). Fixing RLS makes the feature
-*able* to work; it doesn't guarantee it shows up for every topic yet.
+**Verified live after applying, both directions:**
+- The same REST call now returns the real data:
+  `GET /rest/v1/aggregate_stats?topic=eq.Alertness` → `200
+  [{"total_correct":105,"total_answered":114}]`, as an authenticated user.
+- Writes are still blocked. An authenticated `POST` (insert) got a hard
+  `403`: `"new row violates row-level security policy for table
+  \"aggregate_stats\""`. An authenticated `PATCH` (update) came back `200`
+  with zero rows returned — not an error, but confirmed a true no-op by
+  re-checking the row directly: same `total_correct`/`total_answered` and
+  the same `updated_at` timestamp as before the attempt. `FOR SELECT`
+  scopes the new policy to the `SELECT` command only; `INSERT`/`UPDATE`/
+  `DELETE` have no policy of their own, so RLS's default-deny keeps
+  blocking them regardless of the table-level `GRANT`s `anon`/`authenticated`
+  already hold (Supabase's default — RLS, not `GRANT`s, is the real gate).
+  `update_aggregate_stats` itself is unaffected either way: `SECURITY
+  DEFINER`, runs as the table owner, which Postgres exempts from RLS
+  entirely since `FORCE ROW LEVEL SECURITY` isn't set on this table.
+
+**Also worth knowing, separate from the RLS bug:** most topics still don't
+have enough volume to clear the 50-answer threshold — of the two topics with
+any data at all, `Alertness` has 114 (shows now) and `Attitude` has 12
+(still returns `null`). The fix makes the feature able to work; it doesn't
+make it show up for every topic yet.
 
 ---
 

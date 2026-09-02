@@ -582,10 +582,10 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS exclude_from_stats BOOLEAN NOT NUL
 -- ─────────────────────────────────────────────────────────────────
 
 -- Aggregated per-topic correctness, read by src/analytics.ts's
--- getComparativeStats ("you vs the platform average"). RLS is enabled with
--- no policies — this may mean that feature is silently non-functional for
--- real users (no legitimate path for an authenticated/anon read to return a
--- row); flagged as a separate BACKLOG.md item, not fixed here.
+-- getComparativeStats ("you vs the platform average"). No user-identifying
+-- columns, no FKs — each row is a running sum/count across every
+-- contributor to a topic, not a per-event log, so there is no way to
+-- derive any individual's data from it.
 CREATE TABLE IF NOT EXISTS aggregate_stats (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   topic          TEXT UNIQUE NOT NULL,
@@ -595,8 +595,24 @@ CREATE TABLE IF NOT EXISTS aggregate_stats (
 );
 
 ALTER TABLE aggregate_stats ENABLE ROW LEVEL SECURITY;
--- No policies exist (confirmed live) — writes go through
--- update_aggregate_stats (SECURITY DEFINER, bypasses RLS by design).
+
+-- Fixed 2026-09-02 (see BACKLOG.md's "Comparative stats feature is silently
+-- dead" entry): this table had RLS enabled with zero policies, which made
+-- getComparativeStats's direct client read always return nothing for a
+-- real user. Added a public SELECT-only policy.
+CREATE POLICY "Anyone can read aggregate stats" ON aggregate_stats FOR SELECT USING (true);
+-- FOR SELECT is load-bearing, not decorative: it scopes this policy to the
+-- SELECT command only. INSERT/UPDATE/DELETE have no policy of their own, so
+-- RLS keeps blocking them regardless of this one and regardless of the
+-- table-level GRANTs anon/authenticated already hold by Supabase's default
+-- convention (RLS, not GRANTs, is the real gate here) — verified live:
+-- an authenticated INSERT attempt got a hard 403 ("new row violates row-
+-- level security policy"), and an authenticated UPDATE attempt returned
+-- 200 with zero rows affected (RLS's USING clause matched nothing, a true
+-- no-op — confirmed the row's value and updated_at were unchanged
+-- afterwards). Writes still only happen through update_aggregate_stats
+-- (SECURITY DEFINER, runs as the table owner, which Postgres exempts from
+-- RLS entirely since FORCE ROW LEVEL SECURITY isn't set here).
 
 -- Async challenge mode: one row per challenge; either party can update
 -- scores as they play. share_code supports joining without knowing the
