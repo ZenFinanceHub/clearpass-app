@@ -2,6 +2,7 @@ export type DeepLink =
   | { type: 'referral';        code: string }
   | { type: 'referralCapture'; code: string }
   | { type: 'confirmParent';   token: string }
+  | { type: 'authCallback' }
   | { type: 'unknown' };
 
 // Hosts that legitimately carry a root-level ?ref= (marketing site + app web build)
@@ -27,6 +28,14 @@ export function handleIncomingUrl(url: string): DeepLink {
     if (path === 'referral') {
       const code = parsed.searchParams.get('code');
       if (code) return { type: 'referral', code: code.toUpperCase() };
+    }
+
+    // The Google sign-in OAuth redirect (see src/socialAuth.ts). This is
+    // handled by its own route, app/auth/callback.tsx — recognised here so
+    // it's classified correctly rather than lumped in with genuinely
+    // unrecognised URLs.
+    if (path === 'auth/callback') {
+      return { type: 'authCallback' };
     }
 
     if ((path === '' || path === 'start') && REFERRAL_HOSTS.has(parsed.hostname)) {
