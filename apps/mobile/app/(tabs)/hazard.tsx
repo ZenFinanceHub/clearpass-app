@@ -30,6 +30,17 @@ import { usePipVisibility } from '@/src/PipVisibilityContext';
 
 type Phase = 'info' | 'pre-clip' | 'player' | 'clip-result' | 'solution' | 'results';
 
+// The real DVSA theory test's hazard perception format — a fixed, external
+// fact about the actual exam, not derived from supabaseClips/hazardClips.
+// This app's own practice clip library is a live count of whatever's active
+// in the hazard_clips table (currently far more than 14, and not shaped like
+// the real test), so deriving "how the real exam works" copy from it would
+// produce numbers that don't match the exam at all. These describe the exam,
+// not this screen's own clip count.
+const DVSA_HAZARD_CLIP_COUNT = 14;
+const DVSA_HAZARD_MAX_SCORE = 75;
+const DVSA_HAZARD_PASS_SCORE = 44;
+
 /** Fisher-Yates shuffle, then swap the first slot away from `excludeId` if it landed there. */
 function shuffleClipsAvoidingRepeat<T extends { id: string }>(clips: T[], excludeId: string | null): T[] {
   if (clips.length <= 1) return clips;
@@ -220,6 +231,11 @@ export default function HazardScreen() {
   const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
   const [warningAcked, setWarningAcked] = useState(false);
+  // null = no manual toggle yet, so visibility defaults to "expanded for a
+  // first-time visitor, collapsed once they've attempted something" — see
+  // showExplainer below. Once the user taps it, that explicit choice wins
+  // regardless of attempt count, for the rest of this screen's lifetime.
+  const [explainerManuallyExpanded, setExplainerManuallyExpanded] = useState<boolean | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -509,12 +525,34 @@ export default function HazardScreen() {
     }
 
     const attempted = (userProgress?.hazardPerceptionHistory ?? []).filter(h => h.clipId).length;
+    // Expanded by default only for a genuine first-time visitor (no attempts
+    // yet, so the grid below is empty anyway and this is the moment the
+    // explanation is actually useful); collapsed to a re-openable toggle once
+    // there's history, so returning users get the clip grid sooner rather
+    // than re-reading the same explainer every visit.
+    const showExplainer = explainerManuallyExpanded ?? (attempted === 0);
     return (
       <View style={styles.bg}>
         <OfflineBanner />
         <ScrollView style={{ flex: 1, backgroundColor: theme.backgroundColor }} contentContainerStyle={styles.scrollContent}>
           <Text style={[styles.heading, { fontSize: theme.fontSize(26), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Hazard Perception'}</Text>
           <Text style={[styles.sub, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>{'Tap a clip to practise it, or run the full test'}</Text>
+
+          <TouchableOpacity
+            style={styles.explainerToggle}
+            onPress={() => setExplainerManuallyExpanded(!showExplainer)}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showExplainer }}
+          >
+            <Text style={[styles.explainerToggleText, { color: theme.textColor }]}>{'How it works'}</Text>
+            <Text style={[styles.explainerChevron, { color: theme.subTextColor }]}>{showExplainer ? '▾' : '▸'}</Text>
+          </TouchableOpacity>
+          {showExplainer && (
+            <Text style={[styles.bodyText, { color: theme.subTextColor }]}>
+              {`Hazard perception is the second half of your theory test. You watch ${DVSA_HAZARD_CLIP_COUNT} short clips filmed from a driver's view and click as soon as you spot a hazard starting to develop. The earlier you spot it, the more points you score. You need ${DVSA_HAZARD_PASS_SCORE} out of ${DVSA_HAZARD_MAX_SCORE} to pass.`}
+            </Text>
+          )}
 
           <View style={styles.statsRow}>
             {([
@@ -988,6 +1026,9 @@ const styles = StyleSheet.create({
   heading: { fontSize: 26, fontWeight: '800', textAlign: 'center' },
   sub: { fontSize: 14, textAlign: 'center' },
   bodyText: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  explainerToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 },
+  explainerToggleText: { fontSize: 15, fontWeight: '700' },
+  explainerChevron: { fontSize: 13 },
   clipCounter: { fontSize: 13, fontWeight: '700', color: Colors.indigo, letterSpacing: 0.5 },
 
   card: {
