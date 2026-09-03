@@ -249,10 +249,24 @@ function RootLayout() {
         // navigation to /roadsigns), let it through without overriding.
         const entryPoints = new Set(['', 'index', 'onboarding', 'landing']);
         if (entryPoints.has(segments[0] ?? '')) {
-          let route = '/(tabs)/home';
+          // Same reasoning as app/auth/callback.tsx's goToDestination(): on
+          // repeated failure, default to the screen that creates a profile
+          // rather than the one that assumes it exists. One retry first,
+          // since the likely cause is a transient network blip — most
+          // traffic here is a returning, already-onboarded user, so this
+          // only misroutes someone in the rare case of two consecutive
+          // failures, and it's self-correcting (an existing account_type
+          // is never overwritten by choose-account-type.tsx's insert).
+          let route: string;
           try {
             route = await resolvePostAuthRoute(session.user.id);
-          } catch {}
+          } catch {
+            try {
+              route = await resolvePostAuthRoute(session.user.id);
+            } catch {
+              route = '/auth/choose-account-type';
+            }
+          }
           router.replace(route);
         }
         return;
