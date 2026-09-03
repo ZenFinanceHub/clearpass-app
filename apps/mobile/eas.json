@@ -49,6 +49,12 @@
         "releaseStatus": "inProgress",
         "rollout": 0.2
       }
+    },
+    "internal": {
+      "android": {
+        "serviceAccountKeyPath": "./google-play-service-account.json",
+        "track": "internal"
+      }
     }
   }
 }
