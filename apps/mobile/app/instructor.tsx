@@ -920,6 +920,40 @@ function PayoutHistorySection({ payouts }: { payouts: PayoutEntry[] }) {
   );
 }
 
+// ─── InstructorCodeCard ─────────────────────────────────────────────────────
+// Shared between the empty-learners and with-learners views, so the code is
+// visible regardless of learner count rather than only before the first one
+// is added — previously duplicated per-branch state in this file, so this is
+// pulled out rather than becoming a fourth copy.
+
+function InstructorCodeCard({ code }: { code: string }) {
+  const theme = useTheme();
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    await Clipboard.setStringAsync(code);
+    // Inline feedback rather than Alert.alert: this screen is part of the
+    // static web export, and Alert is a no-op on react-native-web — the
+    // same reasoning already applied to paywall.tsx's notice text.
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <TouchableOpacity
+      style={[styles.codeCardLarge, { backgroundColor: theme.cardColor }]}
+      onPress={() => void handleCopy()}
+      activeOpacity={0.85}
+    >
+      <Text style={[styles.codeCardLabel, { color: theme.subTextColor }]}>{'YOUR CODE'}</Text>
+      <Text style={styles.codeCardValue}>{code}</Text>
+      <Text style={[styles.codeCardHint, { color: theme.subTextColor }]}>
+        {copied ? 'Copied!' : 'Tap to copy'}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
 // ─── AccountSection ───────────────────────────────────────────────────────────
 // Self-service instructor -> learner switch. The reverse (learner ->
 // instructor) is deliberately NOT offered here — choose-account-type.tsx at
@@ -1074,12 +1108,7 @@ function InstructorDashboard({
         <Text style={[styles.emptySub, { color: theme.subTextColor }]}>
           {'Share your instructor code with a learner to get started.'}
         </Text>
-        {instructorCode && (
-          <View style={styles.codeCardLarge}>
-            <Text style={[styles.codeCardLabel, { color: theme.subTextColor }]}>{'YOUR CODE'}</Text>
-            <Text style={styles.codeCardValue}>{instructorCode}</Text>
-          </View>
-        )}
+        {instructorCode && <InstructorCodeCard code={instructorCode} />}
         <TouchableOpacity
           style={styles.addLearnerBtn}
           onPress={() => setShowAdd(true)}
@@ -1125,6 +1154,8 @@ function InstructorDashboard({
           <Text style={styles.addBtnText}>{'+ Add'}</Text>
         </TouchableOpacity>
       </View>
+
+      {instructorCode && <InstructorCodeCard code={instructorCode} />}
 
       {learners.map(entry => (
         <LearnerCard key={entry.rel.id} data={entry} onPress={() => setSelectedLearner(entry)} />
@@ -1516,7 +1547,6 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 20, fontWeight: '800', textAlign: 'center' },
   emptySub:   { fontSize: 14, textAlign: 'center', lineHeight: 22 },
   codeCardLarge: {
-    backgroundColor: '#F0FDFA',
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
@@ -1527,6 +1557,7 @@ const styles = StyleSheet.create({
   },
   codeCardLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 1.5, marginBottom: 8 },
   codeCardValue: { fontSize: 40, fontWeight: '900', color: Colors.indigo, letterSpacing: 8 },
+  codeCardHint: { fontSize: 12, textAlign: 'center', lineHeight: 18, marginTop: 8 },
   addLearnerBtn: {
     backgroundColor: Colors.indigo,
     borderRadius: 14,
