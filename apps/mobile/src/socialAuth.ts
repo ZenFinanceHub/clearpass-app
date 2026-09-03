@@ -1,5 +1,6 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { makeRedirectUri } from 'expo-auth-session';
 import type { Session } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -74,7 +75,20 @@ export async function signInWithGoogle(): Promise<SocialAuthResult | null> {
   const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
   if (result.type !== 'success') return null;
 
-  const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(result.url);
+  // exchangeCodeForSession() expects the bare PKCE auth code, not the full
+  // redirect URL — it POSTs whatever it's given verbatim as `auth_code`.
+  // Linking.parse() rather than `new URL()`: clearpass:// is a non-special
+  // scheme under the WHATWG URL spec, and neither Hermes' built-in URL nor
+  // any polyfill is guaranteed to parse it the way an http(s) URL parses —
+  // this codebase's own deep link handler (src/deepLinks.ts) already works
+  // around exactly that by rewriting to https:// before using `new URL()`.
+  // expo-linking's parser is built to handle the app's own custom-scheme
+  // URLs directly, with no such rewrite needed.
+  const codeParam = Linking.parse(result.url).queryParams?.code;
+  const code = Array.isArray(codeParam) ? codeParam[0] : codeParam;
+  if (!code) return null;
+
+  const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
   if (sessionError) throw sessionError;
 
   const session = sessionData.session;
