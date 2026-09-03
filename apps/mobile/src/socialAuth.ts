@@ -1,6 +1,5 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
 import { makeRedirectUri } from 'expo-auth-session';
 import type { Session } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -12,6 +11,30 @@ export type SocialAuthResult = {
 };
 
 const PENDING_USERNAME_KEY = '@clearpass/pending_username';
+
+// The Supabase client (src/supabase.ts) deliberately stays on the default
+// 'implicit' flow rather than 'pkce': PKCE's code_verifier is tied to
+// whichever client storage initiated the request, and this app's
+// password-reset flow always requests from the native app (AsyncStorage)
+// but completes in a device web browser (separate localStorage) — under
+// PKCE that exchange can never succeed. Under implicit flow, the OAuth
+// redirect carries self-contained bearer tokens in the URL fragment
+// (#access_token=...&refresh_token=...), not a code — setSession()
+// establishes the session directly from those, no exchange round trip or
+// stored verifier needed.
+//
+// Mirrors Supabase's own parseParametersFromURL (auth-js/lib/helpers.js):
+// hash params first, then search params override — some failures (e.g. a
+// provider-level error before Supabase issues tokens) can land in the
+// query instead of the fragment. Deliberately only reads .hash/.search —
+// this URL's .pathname/.host are unreliable for a non-http(s) scheme on
+// React Native (see app/auth/callback.tsx), so this never touches them.
+function parseAuthRedirectParams(url: string): URLSearchParams {
+  const parsed = new URL(url);
+  const params = new URLSearchParams(parsed.hash.startsWith('#') ? parsed.hash.slice(1) : '');
+  new URLSearchParams(parsed.search).forEach((value, key) => params.set(key, value));
+  return params;
+}
 
 async function checkIsNewUser(userId: string): Promise<boolean> {
   const { data: existing } = await supabase
@@ -75,20 +98,20 @@ export async function signInWithGoogle(): Promise<SocialAuthResult | null> {
   const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
   if (result.type !== 'success') return null;
 
-  // exchangeCodeForSession() expects the bare PKCE auth code, not the full
-  // redirect URL — it POSTs whatever it's given verbatim as `auth_code`.
-  // Linking.parse() rather than `new URL()`: clearpass:// is a non-special
-  // scheme under the WHATWG URL spec, and neither Hermes' built-in URL nor
-  // any polyfill is guaranteed to parse it the way an http(s) URL parses —
-  // this codebase's own deep link handler (src/deepLinks.ts) already works
-  // around exactly that by rewriting to https:// before using `new URL()`.
-  // expo-linking's parser is built to handle the app's own custom-scheme
-  // URLs directly, with no such rewrite needed.
-  const codeParam = Linking.parse(result.url).queryParams?.code;
-  const code = Array.isArray(codeParam) ? codeParam[0] : codeParam;
-  if (!code) return null;
+  const params = parseAuthRedirectParams(result.url);
+  const oauthError = params.get('error');
+  if (oauthError) {
+    throw new Error(params.get('error_description') || oauthError);
+  }
 
-  const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  if (!accessToken || !refreshToken) return null;
+
+  const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+  });
   if (sessionError) throw sessionError;
 
   const session = sessionData.session;

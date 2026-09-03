@@ -1,24 +1,44 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as Sentry from '@sentry/react-native';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import * as Linking from 'expo-linking';
+import { router, Stack } from 'expo-router';
 import { supabase } from '@/src/supabase';
 import { resolvePostAuthRoute } from '@/src/postAuthRouting';
 import { Colors } from '@/src/constants/theme';
 
+// How long to wait for Linking.useURL()/getInitialURL() to resolve a URL
+// before concluding none is coming. useURL() is null on the very first
+// render until the native module resolves the cold-start URL — this isn't
+// a real failure, just not-yet-available, so it gets a bounded wait rather
+// than an immediate error.
+const RAW_URL_WAIT_MS = 3000;
+
+// Mirrors socialAuth.ts's parseAuthRedirectParams(): hash params first,
+// then search params override (Supabase's own parseParametersFromURL does
+// the same — some failures land in the query instead of the fragment).
+// Deliberately only reads .hash/.search, never .pathname/.host — this
+// URL's .pathname/.host are unreliable for a non-http(s) scheme on React
+// Native (confirmed against the installed polyfill: hardcoded to
+// https?://, so they silently return '' for clearpass://), which is
+// exactly why this screen no longer uses useLocalSearchParams() — that's
+// populated from expo-router's own use of the same broken path parsing.
+function parseAuthRedirectParams(url: string): URLSearchParams {
+  const parsed = new URL(url);
+  const params = new URLSearchParams(parsed.hash.startsWith('#') ? parsed.hash.slice(1) : '');
+  new URLSearchParams(parsed.search).forEach((value, key) => params.set(key, value));
+  return params;
+}
+
 // Receives the Google sign-in OAuth redirect, clearpass://auth/callback (see
 // src/socialAuth.ts). signInWithGoogle() already tries to catch this in-line
-// via WebBrowser.openAuthSessionAsync and exchange the code itself — on
+// via WebBrowser.openAuthSessionAsync and complete the sign-in itself — on
 // Android that interception isn't always reliable, and the OS can instead
 // deliver this URL as an ordinary deep link, which previously had no route
 // to land on and showed expo-router's "Unmatched Route" screen. This screen
-// finishes the sign-in directly from the URL instead.
+// finishes the sign-in directly from the raw URL instead.
 export default function AuthCallbackScreen() {
-  const { code, error, error_description: errorDescription } = useLocalSearchParams<{
-    code?: string;
-    error?: string;
-    error_description?: string;
-  }>();
+  const urlFromHook = Linking.useURL();
   const ran = useRef(false);
   // Shown inline rather than via Alert.alert — this screen is part of the
   // static web export (app.json web.output) and Alert is a no-op on
@@ -28,10 +48,34 @@ export default function AuthCallbackScreen() {
 
   useEffect(() => {
     if (ran.current) return;
-    ran.current = true;
-    void completeSignIn();
+    let cancelled = false;
+
+    const timeout = setTimeout(() => {
+      if (!cancelled && !ran.current) {
+        ran.current = true;
+        fail('Sign in link was missing information. Please try again.');
+      }
+    }, RAW_URL_WAIT_MS);
+
+    async function run() {
+      // useURL() can still be null on this exact render — ask directly
+      // rather than treating "not yet available" as "nothing was sent".
+      const url = urlFromHook ?? (await Linking.getInitialURL());
+      if (cancelled || ran.current) return;
+      if (!url) return; // wait for urlFromHook to update, or the timeout above
+
+      ran.current = true;
+      clearTimeout(timeout);
+      await completeSignIn(url);
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [urlFromHook]);
 
   async function goToDestination(userId: string) {
     let route = '/(tabs)/home';
@@ -45,19 +89,25 @@ export default function AuthCallbackScreen() {
     setErrorMessage(message);
   }
 
-  async function completeSignIn() {
+  async function completeSignIn(url: string) {
     try {
-      if (error) {
+      const params = parseAuthRedirectParams(url);
+
+      const oauthError = params.get('error');
+      if (oauthError) {
         // The provider itself reported a failure (e.g. the user cancelled
-        // or denied access) — nothing to exchange.
-        fail(errorDescription || 'Google sign in was not completed. Please try again.');
+        // or denied access) — nothing to establish a session from.
+        fail(params.get('error_description') || 'Google sign in was not completed. Please try again.');
         return;
       }
 
-      if (!code) {
-        // No code and no error. Most likely signInWithGoogle()'s own
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+
+      if (!accessToken || !refreshToken) {
+        // No tokens and no error. Most likely signInWithGoogle()'s own
         // openAuthSessionAsync call already caught this redirect and
-        // completed the exchange before the OS also delivered it here as a
+        // completed sign-in before the OS also delivered it here as a
         // deep link — check for the session it may have already created.
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
@@ -68,23 +118,28 @@ export default function AuthCallbackScreen() {
         return;
       }
 
-      const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+      const { data, error: sessionError } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+
       if (data.session) {
         await goToDestination(data.session.user.id);
         return;
       }
 
-      if (exchangeError) {
-        // A PKCE code is single-use. If signInWithGoogle()'s own in-line
-        // exchange already consumed it, this call is *expected* to fail —
-        // check for an existing session before treating it as real failure.
+      if (sessionError) {
+        // Unlike a PKCE code, a bearer token pair isn't single-use —
+        // calling setSession() here with the same tokens signInWithGoogle()
+        // already used in-line is harmless and idempotent, not a race to
+        // guard against. A real failure here is worth reporting.
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           await goToDestination(session.user.id);
           return;
         }
 
-        Sentry.captureException(exchangeError, {
+        Sentry.captureException(sessionError, {
           tags: { context: 'auth_callback_exchange' },
         });
         fail('Sign in failed. Please try again.');
