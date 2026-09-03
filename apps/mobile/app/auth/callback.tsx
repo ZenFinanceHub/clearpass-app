@@ -78,10 +78,21 @@ export default function AuthCallbackScreen() {
   }, [urlFromHook]);
 
   async function goToDestination(userId: string) {
-    let route = '/(tabs)/home';
+    // The safe default on repeated failure is the screen that creates the
+    // profile, not the one that assumes it already exists — landing on
+    // /(tabs)/home here used to mean a new user could get silently stranded
+    // with no profile row and no way back to the screen that makes one.
+    // One retry first, since the likely cause is a transient network blip.
+    let route: string;
     try {
       route = await resolvePostAuthRoute(userId);
-    } catch {}
+    } catch {
+      try {
+        route = await resolvePostAuthRoute(userId);
+      } catch {
+        route = '/auth/choose-account-type';
+      }
+    }
     router.replace(route);
   }
 
