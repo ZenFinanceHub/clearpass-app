@@ -1308,14 +1308,28 @@ const styles = StyleSheet.create({
     borderTopWidth: 0.5,
     borderTopColor: '#E5E7EB',
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
+    // Only takes effect once flexWrap actually pushes referralBtns onto its
+    // own line — with a single flex line (the common case) row-gap has no
+    // effect, so this doesn't add unwanted space when everything fits.
+    rowGap: 8,
   },
-  referralLeft:    { gap: 2 },
+  // flexShrink: 1 (View defaults to 0, unlike web) lets this side give up
+  // width to the buttons rather than push them past the card edge. The code
+  // itself is never truncated — no numberOfLines here — so if it's ever
+  // still too wide once shrunk, referralCode wraps onto a second line
+  // instead of being cut off or forcing an overflow.
+  referralLeft:    { gap: 2, flexShrink: 1 },
   referralLabel:   { fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
   referralCode:    { fontSize: 18, fontWeight: '800', letterSpacing: 2 },
   referralHint:    { fontSize: 10, marginTop: 1 },
-  referralBtns:    { flexDirection: 'row', gap: 8 },
+  // flexShrink: 0 is already View's default; stated explicitly so the
+  // buttons' fixed, tappable size next to referralLeft's flexShrink: 1 above
+  // reads as a deliberate pair, not an oversight — matches avatarRow's
+  // avatar/profileInfo split elsewhere in this file.
+  referralBtns:    { flexDirection: 'row', gap: 8, flexShrink: 0 },
   referralCopyBtn: {
     borderRadius: 8,
     borderWidth: 1,
