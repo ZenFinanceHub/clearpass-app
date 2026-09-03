@@ -19,8 +19,9 @@ authorised to do so under a direct DVSA licence agreement.
 - "What does this sign mean?" questions in mock and practice modes display the sign image
 
 **Hazard Perception**
-- The app will include official DVSA hazard perception clips (pending delivery from DVSA
-  under the signed licence agreement — coming soon)
+- Fully live: real DVSA-licensed hazard perception clips, filmed from a driver's view
+- Tap as soon as you spot a hazard starting to develop — scored 0-5 points per hazard
+  based on reaction speed
 - Explain what hazard perception is and how the test works
 
 **Subscriptions & Billing**
@@ -30,7 +31,7 @@ authorised to do so under a direct DVSA licence agreement.
 
 **Platform Availability**
 - iOS: available on TestFlight, App Store submission in progress
-- Android: first build submitted to Google Play, awaiting review
+- Android: live on Google Play
 - Web: available at clearpass-app.vercel.app
 
 ## KNOWN ISSUES — BE TRANSPARENT ABOUT THESE
@@ -61,10 +62,10 @@ DVSA photo (TSRGD diagram 560) was not included in the current asset pack. It wi
 replaced when the official pack arrives.
 
 ## DVSA LICENCE — KEY TALKING POINTS
-- ClearPass holds a direct licence agreement with DVSA
-- This makes it one of very few apps authorised to use official DVSA content
-- Official hazard perception clips and theory test questions are coming once the licence
-  invoice is settled and assets are delivered
+- ClearPass holds a direct licence agreement with DVSA (licence 639UJ6EF)
+- This makes it one of very few apps authorised to use DVSA-licensed content
+- Hazard perception clips and theory test questions are both live and DVSA-licensed under
+  this agreement
 - Do not overstate what is currently live vs coming soon — be accurate
 
 ## ESCALATION RULES
