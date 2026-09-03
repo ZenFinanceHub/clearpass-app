@@ -14,6 +14,43 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/src/supabase';
 import { loadUserProgress, saveUserProgress } from '@/src/storage';
 
+// Inserts '/' immediately after the 2nd and 4th digit, as they're typed —
+// '12' becomes '12/' the instant the 2nd digit lands, not on the next one.
+function insertDateSeparators(digits: string): string {
+  if (digits.length < 2) return digits;
+  if (digits.length === 2) return `${digits}/`;
+  if (digits.length < 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  if (digits.length === 4) return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
+}
+
+// Formats free-typed or pasted text into DD/MM/YYYY as the user goes.
+// Stripping to digits and rebuilding from scratch handles paste and stray
+// slashes the same way as normal typing — there's only one code path.
+//
+// The one thing that needs special handling is backspacing onto an
+// auto-inserted separator: raw text gets shorter, but the digit count
+// doesn't change (the deleted character was '/', not a digit), so without
+// this check the separator would just get reinserted and backspace would
+// look like it did nothing. Detecting that case and dropping one more
+// digit makes a single backspace at a separator boundary remove the digit
+// before it, instead of requiring two presses.
+//
+// This re-derives the whole field from its digit stream rather than
+// tracking cursor position, so a multi-character deletion spanning a
+// separator in the middle of a filled field re-chunks whatever digits
+// remain left-to-right rather than preserving field boundaries — an
+// accepted limitation of a lightweight formatter, not a full masked-input
+// implementation.
+function formatDateInput(raw: string, previousFormatted: string): string {
+  let digits = raw.replace(/\D/g, '').slice(0, 8);
+  const previousDigits = previousFormatted.replace(/\D/g, '');
+  if (raw.length < previousFormatted.length && digits.length === previousDigits.length && digits.length > 0) {
+    digits = digits.slice(0, -1);
+  }
+  return insertDateSeparators(digits);
+}
+
 function parseDdMmYyyy(input: string): string | null {
   const match = input.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
   if (!match) return null;
@@ -83,10 +120,10 @@ export default function TestDateScreen() {
           <TextInput
             style={styles.input}
             value={dateInput}
-            onChangeText={(t) => { setDateInput(t); setError(''); }}
+            onChangeText={(t) => { setDateInput(formatDateInput(t, dateInput)); setError(''); }}
             placeholder="DD/MM/YYYY"
             placeholderTextColor="#374151"
-            keyboardType="numbers-and-punctuation"
+            keyboardType="number-pad"
             maxLength={10}
           />
           {error.length > 0 && <Text style={styles.errorText}>{error}</Text>}
