@@ -1,6 +1,16 @@
 // Static image map for DVSA road sign JPGs.
 // All require() calls must use literal paths — Metro resolves them at bundle time.
 // Signs not listed here fall back to SVG rendering in roadsigns.tsx.
+//
+// Metro deduplicates assets that share a basename and pixel dimensions, even
+// across different folders — it collapses them to a single registered asset,
+// keeping only one of the source files. This silently broke zebra-crossing-ahead:
+// its source file shared both a basename and dimensions with an unrelated root
+// asset, and Metro's registry kept the wrong one. Any subfolder file whose
+// basename also exists at the asset pack root must carry a disambiguating
+// suffix (e.g. `544-zebra-crossing.jpg`, not `544.jpg`) — this isn't visible
+// from reading this file, so it's easy to reintroduce by adding a new sign
+// image without checking for a root-level basename clash first.
 
 const SIGN_IMAGES: Record<string, any> = {
 
@@ -44,7 +54,7 @@ const SIGN_IMAGES: Record<string, any> = {
   // ── Traffic calming signs ─────────────────────────────────────────────────
   'road-humps':           require('../assets/signs/traffic-calming-jpg/557.1.jpg'),
   'priority-over-oncoming':require('../assets/signs/traffic-calming-jpg/811.jpg'),
-  'zebra-crossing-ahead': require('../assets/signs/traffic-calming-jpg/544.jpg'),
+  'zebra-crossing-ahead': require('../assets/signs/traffic-calming-jpg/544-zebra-crossing.jpg'),
 
   // ── Tram signs ────────────────────────────────────────────────────────────
   'route-for-trams':      require('../assets/signs/tram-signs-jpg/953.1.jpg'),

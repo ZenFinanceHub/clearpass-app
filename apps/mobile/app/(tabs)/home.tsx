@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useClientDimensions } from '@/src/hooks/useClientDimensions';
+import { getHazardVideoList } from '@/src/hazardVideos';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
 import {
@@ -241,6 +242,7 @@ export default function HomeScreen() {
   const dims = useClientDimensions();
   const [studyPlan, setStudyPlan] = useState<SimpleStudyPlan | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [hazardClipCount, setHazardClipCount] = useState<number | null>(null);
   const cardW: '30%' | '47%' = dims && dims.width >= 600 ? '30%' : '47%';
 
   async function handleRefresh() {
@@ -307,6 +309,11 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      // Fire-and-forget: the Hazard card's count shouldn't block anything
+      // else this effect does, and a failed/slow fetch just leaves it on
+      // the non-numeric fallback label.
+      void getHazardVideoList().then(clips => setHazardClipCount(clips.length));
+
       void (async () => {
         await syncPendingUsername();
 
@@ -722,7 +729,9 @@ export default function HomeScreen() {
           <ScaleButton style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/hazard' as any)} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'⚠️'}</Text>
             <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Hazard</Text>
-            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>14 clips</Text>
+            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>
+              {hazardClipCount !== null ? `${hazardClipCount} clips` : 'Practice clips'}
+            </Text>
           </ScaleButton>
 
           <ScaleButton style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/(tabs)/learn')} activeOpacity={0.8}>
