@@ -38,6 +38,9 @@ const SIGN_IMAGES: Record<string, any> = {
   'tunnel':               require('../assets/signs/529.1.jpg'),
   'school-crossing':      require('../assets/signs/545.jpg'),
 
+  // ── Traffic calming signs ─────────────────────────────────────────────────
+  'road-humps':           require('../assets/signs/traffic-calming-jpg/557.1.jpg'),
+
   // ── Level crossing signs ──────────────────────────────────────────────────
   'level-crossing-barriers':    require('../assets/signs/level-crossing-signs-jpg/770.jpg'),
   'level-crossing-no-barriers': require('../assets/signs/level-crossing-signs-jpg/771.jpg'),
