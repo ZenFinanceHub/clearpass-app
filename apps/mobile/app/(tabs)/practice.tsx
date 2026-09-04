@@ -17,7 +17,7 @@ import {
   TopicCategory,
   Question,
   QuestionState,
-  questionCountsTowardChallenge,
+  shouldShowChallengeBadge,
   UserProgress,
   XP_REWARDS,
   awardXp,
@@ -111,12 +111,23 @@ function DailyChallengeQuestionBadge({
       </View>
     );
   }
-  if (!questionCountsTowardChallenge(dailyChallenge, topicCategory)) return null;
+  if (!shouldShowChallengeBadge(dailyChallenge, topicCategory)) return null;
+  const dc = dailyChallenge!;
+  let message: React.ReactNode;
+  if (dc.challengeType === 'anyQuestions') {
+    message = "Counts toward today's challenge";
+  } else if (dc.challengeType === 'practiceScore') {
+    message = `Score ${dc.targetCount}+ this session for today's challenge`;
+  } else {
+    message = (
+      <>
+        {"Counts toward today's challenge ("}{dc.currentCount}{'/'}{dc.targetCount}{')'}
+      </>
+    );
+  }
   return (
     <View style={styles.challengeBadge}>
-      <Text style={styles.challengeBadgeText}>
-        {"Counts toward today's challenge ("}{dailyChallenge!.currentCount}{'/'}{dailyChallenge!.targetCount}{')'}
-      </Text>
+      <Text style={styles.challengeBadgeText}>{message}</Text>
     </View>
   );
 }
@@ -800,6 +811,10 @@ export default function PracticeScreen() {
   async function finaliseSession() {
     const results = resultsRef.current;
     const progress = userProgressRef.current ?? createFreshUserProgress();
+    // Hoisted from further down (where saveSessionHistory still uses it) so
+    // the timeMinutes challenge below can use the real duration instead of a
+    // flat per-session guess.
+    const durationSeconds = Math.round((Date.now() - sessionStartTimeRef.current) / 1000);
 
     const topicData: Partial<Record<TopicCategory, { correct: number; total: number }>> = {};
     for (const { question, correct } of results) {
@@ -856,7 +871,12 @@ export default function PracticeScreen() {
       } else if (dc.challengeType === 'practiceScore') {
         if (correctCount >= dc.targetCount) newCount = dc.targetCount;
       } else if (dc.challengeType === 'timeMinutes') {
-        newCount = Math.min(newCount + 10, dc.targetCount);
+        // Floored, not rounded to nearest — matches this app's existing
+        // preference (see the hazard screen's "to pass" stat pill) for
+        // never overstating progress. A session under 60s contributes 0
+        // whole minutes; minutes still accumulate across sessions today
+        // since currentCount persists between sessions.
+        newCount = Math.min(newCount + Math.floor(durationSeconds / 60), dc.targetCount);
       }
 
       const justCompleted = newCount >= dc.targetCount;
@@ -875,7 +895,6 @@ export default function PracticeScreen() {
     await saveUserProgress(final);
     await syncProgressToCloud(final);
 
-    const durationSeconds = Math.round((Date.now() - sessionStartTimeRef.current) / 1000);
     const topicKeys = Object.keys(topicData) as TopicCategory[];
     const sessionTopic = topicKeys.length === 1 ? (TOPIC_LABELS[topicKeys[0]] ?? 'Mixed') : 'Mixed';
     void saveSessionHistory({ date: new Date().toISOString(), score: correctCount, total: results.length, topic: sessionTopic, durationSeconds });
