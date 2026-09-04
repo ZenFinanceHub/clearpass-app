@@ -81,6 +81,26 @@ export function questionCountsTowardChallenge(
   return dc.topicCategory === topicCategory;
 }
 
+/**
+ * Whether the in-quiz "counts toward today's challenge" badge should show
+ * for the current question. Deliberately separate from
+ * questionCountsTowardChallenge, which gates the actual per-question
+ * currentCount increment and must stay topic-only: anyQuestions and
+ * practiceScore are tracked in bulk at session end instead (see
+ * finaliseSession() in apps/mobile/app/(tabs)/practice.tsx), so reusing the
+ * increment gate here would double-count them. This function only decides
+ * whether to show a heads-up — it never mutates the challenge.
+ */
+export function shouldShowChallengeBadge(
+  dc: DailyChallenge | null | undefined,
+  topicCategory: string,
+): boolean {
+  if (!dc) return false;
+  if (isDailyChallengeComplete(dc)) return false;
+  if (dc.challengeType === 'topic') return dc.topicCategory === topicCategory;
+  return dc.challengeType === 'anyQuestions' || dc.challengeType === 'practiceScore';
+}
+
 export function applyCorrectAnswerToChallenge(
   dc: DailyChallenge,
   topicCategory: string,
