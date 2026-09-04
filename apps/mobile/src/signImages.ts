@@ -25,6 +25,9 @@ const SIGN_IMAGES: Record<string, any> = {
   'humpback-bridge':      require('../assets/signs/528.jpg'),
   'quayside':             require('../assets/signs/555.jpg'),
   'two-way-traffic-ahead':require('../assets/signs/521.jpg'),
+  'two-way-traffic-crosses-one-way':require('../assets/signs/522.jpg'),
+  'side-winds':           require('../assets/signs/581.jpg'),
+  'end-dual-carriageway': require('../assets/signs/520.jpg'),
   'ford':                 require('../assets/signs/554.jpg'),
   'opening-bridge':       require('../assets/signs/529.jpg'),
   'low-aircraft':         require('../assets/signs/558.jpg'),
@@ -40,6 +43,12 @@ const SIGN_IMAGES: Record<string, any> = {
 
   // ── Traffic calming signs ─────────────────────────────────────────────────
   'road-humps':           require('../assets/signs/traffic-calming-jpg/557.1.jpg'),
+  'priority-over-oncoming':require('../assets/signs/traffic-calming-jpg/811.jpg'),
+  'zebra-crossing-ahead': require('../assets/signs/traffic-calming-jpg/544.jpg'),
+
+  // ── Tram signs ────────────────────────────────────────────────────────────
+  'route-for-trams':      require('../assets/signs/tram-signs-jpg/953.1.jpg'),
+  'trams-crossing-ahead': require('../assets/signs/tram-signs-jpg/772.jpg'),
 
   // ── Level crossing signs ──────────────────────────────────────────────────
   'level-crossing-barriers':    require('../assets/signs/level-crossing-signs-jpg/770.jpg'),
@@ -75,6 +84,9 @@ const SIGN_IMAGES: Record<string, any> = {
   'no-motor-vehicles':    require('../assets/signs/regulatory-signs-jpg/619.jpg'),
   'no-overtaking':        require('../assets/signs/regulatory-signs-jpg/632.jpg'),
   'min-speed-30':         require('../assets/signs/regulatory-signs-jpg/651.jpg'),
+  'give-priority-oncoming':require('../assets/signs/regulatory-signs-jpg/615.jpg'),
+  'no-motorcycles':       require('../assets/signs/regulatory-signs-jpg/619.2.jpg'),
+  'pass-either-side':     require('../assets/signs/regulatory-signs-jpg/611.jpg'),
 
   // ── Bus, cycle and pedestrian signs ──────────────────────────────────────
   'no-through-road':               require('../assets/signs/bus-and-cycle-signs-jpg/816.jpg'),
@@ -82,12 +94,15 @@ const SIGN_IMAGES: Record<string, any> = {
   'cycles-only':                   require('../assets/signs/bus-and-cycle-signs-jpg/955.jpg'),
   'pedestrians-only':              require('../assets/signs/bus-and-cycle-signs-jpg/956.jpg'),
   'cycles-pedestrians-segregated': require('../assets/signs/bus-and-cycle-signs-jpg/957.jpg'),
+  'contraflow-bus-lane':           require('../assets/signs/bus-and-cycle-signs-jpg/960.jpg'),
+  'cycle-route-ahead':             require('../assets/signs/bus-and-cycle-signs-jpg/950.jpg'),
 
   // ── Information signs ────────────────────────────────────────────────────
   'parking-place':        require('../assets/signs/information-signs-jpg/801.jpg'),
   'one-way-traffic':      require('../assets/signs/information-signs-jpg/810.jpg'),
   'hospital':             require('../assets/signs/information-signs-jpg/827.1.jpg'),
   'camera-ahead':         require('../assets/signs/speed-limit-signs-jpg/878.jpg'),
+  'emergency-pedestrian-exit':require('../assets/signs/information-signs-jpg/2711.jpg'),
 
   // ── Motorway signs ───────────────────────────────────────────────────────
   'motorway-start':       require('../assets/signs/motorway-signs-jpg/2901.jpg'),
@@ -102,9 +117,13 @@ const SIGN_IMAGES: Record<string, any> = {
   'primary-route-direction': require('../assets/signs/direction-and-tourist-signs-jpg/2025.jpg'),
   'local-route-direction':   require('../assets/signs/direction-and-tourist-signs-jpg/2301.jpg'),
   'tourist-attraction':      require('../assets/signs/direction-and-tourist-signs-jpg/2201.jpg'),
+  'park-and-ride':           require('../assets/signs/direction-and-tourist-signs-jpg/2504P.jpg'),
+  'diversion-route':         require('../assets/signs/direction-and-tourist-signs-jpg/2702.jpg'),
 
   // ── On-street parking / red route signs ──────────────────────────────────
   'red-route':            require('../assets/signs/on-street-parking-jpg/CW701.jpg'),
+  'end-restricted-parking':require('../assets/signs/on-street-parking-jpg/664.jpg'),
+  'park-verge-footway':   require('../assets/signs/on-street-parking-jpg/668.jpg'),
 
   // ── Road works signs ─────────────────────────────────────────────────────
   'road-works-ahead':       require('../assets/signs/road-works-and-temporary-jpg/7001.jpg'),
