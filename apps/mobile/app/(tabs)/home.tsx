@@ -49,7 +49,7 @@ import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { Pip, PipMood } from '@/src/components/Pip';
 import RoadmapPath from '@/src/components/RoadmapPath';
-import { allQuestions } from '@clearpass/content';
+import { allQuestions, roadSigns } from '@clearpass/content';
 import { supabase } from '@/src/supabase';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
@@ -710,7 +710,7 @@ export default function HomeScreen() {
           <ScaleButton style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/roadsigns' as any)} activeOpacity={0.8}>
             <Text style={styles.actionEmoji}>{'🚦'}</Text>
             <Text style={[styles.actionTitle, { fontSize: theme.fontSize(14), color: theme.textColor }]}>Road Signs</Text>
-            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>89 UK signs</Text>
+            <Text style={[styles.actionSub, { fontSize: theme.fontSize(11), color: theme.subTextColor }]}>{roadSigns.length}{' UK signs'}</Text>
           </ScaleButton>
 
           <ScaleButton style={[styles.actionCard, { width: cardW }]} onPress={() => router.push('/highwaycode' as any)} activeOpacity={0.8}>
