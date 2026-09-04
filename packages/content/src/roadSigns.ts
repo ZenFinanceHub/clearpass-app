@@ -460,6 +460,19 @@ export const roadSigns: RoadSign[] = [
     relatedRuleNumber: 160,
   },
   {
+    id: 'road-humps',
+    name: 'Road humps',
+    category: SignCategory.Warning,
+    shape: 'triangle',
+    borderColor: RED,
+    fillColor: WHITE,
+    textColor: BLACK,
+    meaning: 'Road humps ahead, used to slow traffic down. A supplementary plate below the sign may show the distance the humps extend over.',
+    whatToDo: 'Slow down in good time before the humps and cross them at a reduced, steady speed.',
+    commonMistake: 'Taking the humps too fast. This unsettles the car, can cause loss of control, and risks damage to the suspension.',
+    relatedRuleNumber: 153,
+  },
+  {
     id: 'quayside',
     name: 'Quayside or river bank',
     category: SignCategory.Warning,
@@ -1221,7 +1234,7 @@ export const roadSigns: RoadSign[] = [
     relatedRuleNumber: 288,
   },
   {
-    id: 'contra-flow',
+    id: 'ramp',
     name: 'Ramp',
     category: SignCategory.RoadWorks,
     shape: 'rectangle',
