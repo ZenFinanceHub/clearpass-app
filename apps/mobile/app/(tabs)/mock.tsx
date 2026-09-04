@@ -16,9 +16,11 @@ import {
   Question,
   TopicCategory,
   XP_REWARDS,
+  applyCorrectAnswerToChallenge,
   awardXp,
   calculateReadiness,
   checkAchievements,
+  didChallengeJustComplete,
 } from '@clearpass/core';
 import { allQuestions, questionsByTopic } from '@clearpass/content';
 import {
@@ -264,10 +266,36 @@ export default function MockScreen() {
 
     const today = new Date().toISOString().split('T')[0];
     const dc = progress.dailyChallenge;
-    if (dc && dc.date === today && !dc.completed && dc.challengeType === 'mock') {
-      progress = awardXp(progress, XP_REWARDS.DAILY_CHALLENGE);
-      xpEarned += XP_REWARDS.DAILY_CHALLENGE;
-      progress = { ...progress, dailyChallenge: { ...dc, currentCount: dc.targetCount, completed: true } };
+    if (dc && dc.date === today && !dc.completed) {
+      if (dc.challengeType === 'mock') {
+        progress = awardXp(progress, XP_REWARDS.DAILY_CHALLENGE);
+        xpEarned += XP_REWARDS.DAILY_CHALLENGE;
+        progress = { ...progress, dailyChallenge: { ...dc, currentCount: dc.targetCount, completed: true } };
+      } else if (dc.challengeType === 'topic' && dc.topicCategory) {
+        // Applied once, in bulk, at submit — mirroring the 'mock' handling
+        // above rather than per-question like practice.tsx's handleAnswer.
+        // Every exit from the 'test' phase (timeout, Submit, and the
+        // "abandon" flow, which is itself just "Submit & End Test") reaches
+        // this function, so an actually-abandoned test (app closed/
+        // backgrounded) simply never runs it — zero credit, not partial or
+        // inconsistent credit. No separate per-question wiring needed here.
+        // DailyChallenge.topicCategory is a plain string (decoupled from the
+        // enum for serialization), but it's always populated from a real
+        // TopicCategory value in dailyChallenge.ts's templates.
+        const topicCorrect = byTopic[dc.topicCategory as TopicCategory]?.correct ?? 0;
+        let updatedDc = dc;
+        for (let i = 0; i < topicCorrect; i++) {
+          updatedDc = applyCorrectAnswerToChallenge(updatedDc, dc.topicCategory);
+        }
+        if (updatedDc !== dc) {
+          const justCompleted = didChallengeJustComplete(dc, updatedDc);
+          progress = { ...progress, dailyChallenge: updatedDc };
+          if (justCompleted) {
+            progress = awardXp(progress, XP_REWARDS.DAILY_CHALLENGE);
+            xpEarned += XP_REWARDS.DAILY_CHALLENGE;
+          }
+        }
+      }
     }
 
     const { newAchievements, updatedProgress } = checkAchievements(progress);
