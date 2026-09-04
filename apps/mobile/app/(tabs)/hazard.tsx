@@ -63,7 +63,7 @@ function makeVideoHtml(url: string): string {
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #000; width: 100vw; height: 100vh; overflow: hidden; }
-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+video { width: 100%; height: 100%; object-fit: contain; display: block; }
 </style>
 </head>
 <body>
