@@ -854,7 +854,12 @@ export default function HomeScreen() {
 
       {/* 6. Daily Challenge */}
       {dc && (
-        <View style={[styles.dcCard, dc.completed && styles.dcCardComplete]}>
+        <TouchableOpacity
+          style={[styles.dcCard, dc.completed && styles.dcCardComplete]}
+          onPress={() => router.push('/(tabs)/practice')}
+          disabled={dc.completed}
+          activeOpacity={0.8}
+        >
           <View style={styles.dcTopRow}>
             <Text style={styles.dcLabel}>DAILY CHALLENGE</Text>
             {dc.completed && (
@@ -872,8 +877,16 @@ export default function HomeScreen() {
           <View style={styles.dcBarTrack}>
             <View style={[styles.dcBarFill, { width: `${dcPct}%` as any }]} />
           </View>
-          <Text style={styles.dcProgress}>{dc.currentCount}{' / '}{dc.targetCount}</Text>
-        </View>
+          <View style={styles.dcBottomRow}>
+            <Text style={styles.dcProgress}>{dc.currentCount}{' / '}{dc.targetCount}</Text>
+            {!dc.completed && (
+              <View style={styles.dcTapHintRow}>
+                <Text style={styles.dcTapHint}>Answer questions in Practice to make progress</Text>
+                <Text style={styles.dcChevron}>{'›'}</Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
       )}
 
       {/* 7. Challenge slim banner */}
@@ -1432,7 +1445,11 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   dcBarFill:    { height: 6, backgroundColor: Colors.indigo, borderRadius: 3 },
+  dcBottomRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   dcProgress:   { fontSize: 12, color: Colors.mutedText, fontWeight: '500' },
+  dcTapHintRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  dcTapHint:    { fontSize: 12, color: Colors.mutedText, fontWeight: '500' },
+  dcChevron:    { fontSize: 16, color: Colors.mutedText },
 
   // ── Tip Card ──────────────────────────────────────────────────────────────────
   tipCard: {
