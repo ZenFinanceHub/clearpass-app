@@ -108,7 +108,7 @@ const SIGN_IMAGES: Record<string, any> = {
   'men-at-work':            require('../assets/signs/road-works-and-temporary-jpg/7001.1.jpg'),
   'loose-chippings':        require('../assets/signs/road-works-and-temporary-jpg/7009.jpg'),
   'width-restriction-works':require('../assets/signs/road-works-and-temporary-jpg/7012.jpg'),
-  'contra-flow':            require('../assets/signs/road-works-and-temporary-jpg/7013.jpg'),
+  'ramp':                   require('../assets/signs/road-works-and-temporary-jpg/7013.jpg'),
   'road-works-lights':      require('../assets/signs/road-works-and-temporary-jpg/7021.jpg'),
 };
 

@@ -902,7 +902,7 @@ function RectSignSymbol({ id }: { id: string }) {
       );
 
     // ── Road Works rectangles ─────────────────────────────────────────────────
-    case 'contra-flow':
+    case 'ramp':
       return (
         <G>
           <Path d="M14,24 L70,24 M58,14 L70,24 L58,34" stroke={BK} strokeWidth="6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
