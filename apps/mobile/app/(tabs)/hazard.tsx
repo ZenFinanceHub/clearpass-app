@@ -207,9 +207,7 @@ export default function HazardScreen() {
   const [clicks, setClicks] = useState<number[]>([]);
   const [currentTime, setCurrentTime] = useState(0);
   const [clipResults, setClipResults] = useState<HazardClipResult[]>([]);
-  const [muted, setMuted] = useState(true);
   const flashAnim = useRef(new Animated.Value(0)).current;
-  const webViewRef = useRef<any>(null);
   const pendingHomeRef = useRef(false);
   const lastTapAtRef = useRef<number>(0);
   const lastExitedClipIdRef = useRef<string | null>(null);
@@ -287,19 +285,12 @@ export default function HazardScreen() {
     setPhase('clip-result');
   }
 
-  function handleMuteToggle() {
-    const next = !muted;
-    setMuted(next);
-    webViewRef.current?.injectJavaScript(`document.getElementById('v').muted = ${String(next)}; void(0);`);
-  }
-
   function handleNextClip() {
     const totalClips = activeClips.length > 0 ? activeClips.length : hazardClips.length;
     if (!singleClipMode && clipIndex + 1 < totalClips) {
       setClipIndex((i) => i + 1);
       setClicks([]);
       setCurrentTime(0);
-      setMuted(true);
       setSolutionVideoUrl(null);
       setWarningAcked(false);
       setPhase('pre-clip');
@@ -382,7 +373,6 @@ export default function HazardScreen() {
       setClicks([]);
       setCurrentTime(0);
       setClipResults([]);
-      setMuted(true);
       setWarningAcked(false);
       setPhase('pre-clip');
     } else {
@@ -391,7 +381,6 @@ export default function HazardScreen() {
       setClicks([]);
       setCurrentTime(0);
       setClipResults([]);
-      setMuted(true);
     }
   }
 
@@ -406,7 +395,6 @@ export default function HazardScreen() {
     setClicks([]);
     setCurrentTime(0);
     setClipResults([]);
-    setMuted(true);
     setSolutionVideoUrl(null);
     setWarningAcked(false);
     setPhase('pre-clip');
@@ -429,7 +417,6 @@ export default function HazardScreen() {
     setClicks([]);
     setCurrentTime(0);
     setClipResults([]);
-    setMuted(true);
     setWarningAcked(false);
     setPhase('pre-clip');
   }
@@ -440,7 +427,6 @@ export default function HazardScreen() {
     setSingleClipMode(false);
     setClicks([]);
     setCurrentTime(0);
-    setMuted(true);
     setSolutionVideoUrl(null);
     setWarningAcked(false);
     setPhase('info');
@@ -685,7 +671,6 @@ export default function HazardScreen() {
       const WebView = (require('react-native-webview') as { default: React.ComponentType<any> }).default;
       videoContent = (
         <WebView
-          ref={webViewRef}
           key={clipIndex}
           source={{ html: makeVideoHtml(clip.videoUrl) }}
           style={StyleSheet.absoluteFillObject}
@@ -739,11 +724,6 @@ export default function HazardScreen() {
           {/* Exit */}
           <TouchableOpacity style={styles.exitBtnPlayer} onPress={handleExitClip} activeOpacity={0.85}>
             <Text style={styles.exitBtnPlayerText}>{'← Exit'}</Text>
-          </TouchableOpacity>
-
-          {/* Mute toggle */}
-          <TouchableOpacity style={styles.muteBtn} onPress={handleMuteToggle}>
-            <Text style={styles.muteBtnText}>{muted ? '[ mute ]' : '[ sound ]'}</Text>
           </TouchableOpacity>
 
           {/* HUD — deliberately shows no tap count or score-shaped number here.
@@ -1128,17 +1108,6 @@ const styles = StyleSheet.create({
   playerScreen: { flex: 1, backgroundColor: '#000000' },
   videoWrap: { flex: 1, backgroundColor: '#000000', overflow: 'hidden' },
   flashOverlay: { backgroundColor: '#FCD34D' },
-  muteBtn: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    zIndex: 12,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  muteBtnText: { fontSize: 11, fontWeight: '700', color: '#FFFFFF' },
   exitBtnPlayer: {
     position: 'absolute',
     top: 16,
