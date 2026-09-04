@@ -19,6 +19,7 @@ import { getAccessToken } from '@/src/getAccessToken';
 import { handleSessionExpired } from '@/src/handleSessionExpired';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
+import { roadSigns } from '@clearpass/content';
 
 function getProxyUrl(): string {
   return __DEV__
@@ -45,7 +46,7 @@ APP SUPPORT
 For questions about ClearPass itself, answer helpfully using the following knowledge:
 - Mock tests: timed, full-length, exam conditions. Practice modes include standard,
   battle mode, weak-spot drilling, and speed round.
-- Road Signs: all 88 UK road signs using DVSA-licensed imagery, organised by
+- Road Signs: all ${roadSigns.length} UK road signs using DVSA-licensed imagery, organised by
   category and fully searchable.
 - Hazard Perception: DVSA clips, licensed under the signed agreement, are now live in the app.
 - Platform: iOS (TestFlight + App Store), Android (submitted to Google Play), Web (getclearpass.co.uk).
