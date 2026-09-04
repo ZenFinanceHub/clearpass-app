@@ -2,15 +2,20 @@
 // All require() calls must use literal paths — Metro resolves them at bundle time.
 // Signs not listed here fall back to SVG rendering in roadsigns.tsx.
 //
-// Metro deduplicates assets that share a basename and pixel dimensions, even
-// across different folders — it collapses them to a single registered asset,
-// keeping only one of the source files. This silently broke zebra-crossing-ahead:
-// its source file shared both a basename and dimensions with an unrelated root
-// asset, and Metro's registry kept the wrong one. Any subfolder file whose
-// basename also exists at the asset pack root must carry a disambiguating
-// suffix (e.g. `544-zebra-crossing.jpg`, not `544.jpg`) — this isn't visible
-// from reading this file, so it's easy to reintroduce by adding a new sign
-// image without checking for a root-level basename clash first.
+// Metro can deduplicate assets that share a basename and pixel dimensions,
+// even across different folders, collapsing them to a single registered
+// asset and keeping only one of the source files. Any subfolder file whose
+// basename also exists at the asset pack root should carry a disambiguating
+// suffix (e.g. `544-zebra-crossing.jpg`, not `544.jpg`) to avoid this risk —
+// it isn't visible from reading this file, so it's easy to reintroduce by
+// adding a new sign image without checking for a root-level basename clash
+// first. Note: when we investigated a reported blank sign, the specific
+// `544.jpg` pair turned out to be byte-identical duplicates of the same
+// correct zebra-crossing image, not a case of Metro actually serving the
+// wrong one — the real bug there was pedestrians-road being mapped to that
+// duplicate instead of its own correct file (544.1.jpg). The basename clash
+// itself was still worth removing, since it's a real risk if two same-named
+// files ever do have different content.
 
 const SIGN_IMAGES: Record<string, any> = {
 
@@ -30,7 +35,7 @@ const SIGN_IMAGES: Record<string, any> = {
   'road-narrows-both':    require('../assets/signs/516.jpg'),
   'road-narrows-right':   require('../assets/signs/517.jpg'),
   'slippery-road':        require('../assets/signs/557.jpg'),
-  'pedestrians-road':     require('../assets/signs/544.jpg'),
+  'pedestrians-road':     require('../assets/signs/544.1.jpg'),
   'children':             require('../assets/signs/545.jpg'),
   'humpback-bridge':      require('../assets/signs/528.jpg'),
   'quayside':             require('../assets/signs/555.jpg'),
