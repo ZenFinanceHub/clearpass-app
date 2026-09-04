@@ -881,7 +881,7 @@ export default function HomeScreen() {
             <Text style={styles.dcProgress}>{dc.currentCount}{' / '}{dc.targetCount}</Text>
             {!dc.completed && (
               <View style={styles.dcTapHintRow}>
-                <Text style={styles.dcTapHint}>Answer questions in Practice to make progress</Text>
+                <Text style={styles.dcTapHint}>Go to Practice</Text>
                 <Text style={styles.dcChevron}>{'›'}</Text>
               </View>
             )}
@@ -1445,9 +1445,17 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   dcBarFill:    { height: 6, backgroundColor: Colors.indigo, borderRadius: 3 },
-  dcBottomRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  dcProgress:   { fontSize: 12, color: Colors.mutedText, fontWeight: '500' },
-  dcTapHintRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  // flexWrap + rowGap: at large accessibility text sizes, dcProgress and
+  // dcTapHintRow together can outgrow the card's width — same fix as
+  // settings.tsx's referralRow. rowGap only takes effect once wrapping
+  // actually happens, so the common single-line case is unchanged.
+  dcBottomRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 8 },
+  // Short and fixed-shape ("10 / 10") — never needs to shrink.
+  dcProgress:   { fontSize: 12, color: Colors.mutedText, fontWeight: '500', flexShrink: 0 },
+  // The side carrying the actual growable text ("Go to Practice") — yields
+  // width first, wrapping onto its own line via dcBottomRow's flexWrap
+  // rather than overflowing the card.
+  dcTapHintRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
   dcTapHint:    { fontSize: 12, color: Colors.mutedText, fontWeight: '500' },
   dcChevron:    { fontSize: 16, color: Colors.mutedText },
 
