@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "co.uk.getclearpass.app",
-      "buildNumber": "19",
+      "buildNumber": "20",
       "usesAppleSignIn": true,
       "associatedDomains": [
         "applinks:getclearpass.co.uk",
@@ -32,7 +32,7 @@
         "backgroundColor": "#4F46E5"
       },
       "package": "co.uk.getclearpass.app",
-      "versionCode": 11,
+      "versionCode": 12,
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "blockedPermissions": [
