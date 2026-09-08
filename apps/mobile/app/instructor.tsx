@@ -727,7 +727,7 @@ function ReferralSection({
   onShare: () => void;
 }) {
   const theme = useTheme();
-  const link = `getclearpass.co.uk?ref=${referralCode}`;
+  const link = `getclearpass.co.uk/start?ref=${referralCode}`;
   return (
     <View style={[styles.refSection, { backgroundColor: theme.cardColor }]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 }}>
@@ -1072,14 +1072,14 @@ function InstructorDashboard({
 
   async function handleCopyLink() {
     if (!referralCode) return;
-    await Clipboard.setStringAsync(`https://getclearpass.co.uk?ref=${referralCode}`);
+    await Clipboard.setStringAsync(`https://getclearpass.co.uk/start?ref=${referralCode}`);
     Alert.alert('Copied!', 'Referral link copied to clipboard.');
   }
 
   async function handleShareLink() {
     if (!referralCode) return;
     await Share.share({
-      message: `I recommend ClearPass for your theory test revision. Use my link for the UK's smartest theory test app: getclearpass.co.uk?ref=${referralCode}`,
+      message: `I recommend ClearPass for your theory test revision. Use my link for the UK's smartest theory test app: getclearpass.co.uk/start?ref=${referralCode}`,
     });
   }
 
