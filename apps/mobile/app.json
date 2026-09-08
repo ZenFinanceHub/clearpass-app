@@ -48,7 +48,8 @@
           "data": [
             {
               "scheme": "https",
-              "host": "getclearpass.co.uk"
+              "host": "getclearpass.co.uk",
+              "path": "/start"
             }
           ],
           "category": [
