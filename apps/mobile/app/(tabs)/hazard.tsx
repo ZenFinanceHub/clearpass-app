@@ -810,7 +810,7 @@ export default function HazardScreen() {
     const seekTo = meta?.solution_start_s ?? 60;
     const solHtml = solutionVideoUrl ? `<!DOCTYPE html>
 <html><head><meta name="viewport" content="width=device-width, initial-scale=1">
-<style>* { margin:0; padding:0; box-sizing:border-box; } body { background:#000; width:100vw; height:100vh; overflow:hidden; } video { width:100%; height:100%; object-fit:cover; display:block; }</style>
+<style>* { margin:0; padding:0; box-sizing:border-box; } body { background:#000; width:100vw; height:100vh; overflow:hidden; } video { width:100%; height:100%; object-fit:contain; display:block; }</style>
 </head><body>
 <video id="v" src="${solutionVideoUrl}" autoplay playsinline muted></video>
 <script>
