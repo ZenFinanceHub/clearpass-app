@@ -12,6 +12,8 @@ import {
   View,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import * as ScreenOrientation from 'expo-screen-orientation';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DVSA_HAZARD_PASS_RATIO, HazardClip, HazardClipResult, HazardSessionResult, HazardWindow, UserProgress, calculateHazardTotal, scoreClip } from '@clearpass/core';
 import { hazardClips } from '@clearpass/content';
 import { loadUserProgress, saveUserProgress } from '@/src/storage';
@@ -131,16 +133,28 @@ function WebVideoPlayer({ youtubeId, durationSec, onEnded, onTimeUpdate }: WebVi
 /**
  * Wraps any WebView/video element actually rendering hazard footage — the
  * scored clip AND the solution/reveal clip both use this. Hides the global
- * Pip FAB for exactly as long as this is mounted, tied to real video
- * playback rather than a hand-maintained list of phase names. A future
- * phase that plays video is covered automatically just by wrapping its
- * video element in this, instead of needing a separate gate kept in sync.
+ * Pip FAB and locks the screen to landscape for exactly as long as this is
+ * mounted, tied to real video playback rather than a hand-maintained list
+ * of phase names. A future phase that plays video is covered automatically
+ * just by wrapping its video element in this, instead of needing a
+ * separate gate kept in sync.
+ *
+ * The orientation lock is a runtime override of app.json's app-wide
+ * "portrait" setting — expo-screen-orientation is designed for exactly
+ * this, no change to that setting is needed. If lockAsync fails (seen
+ * intermittently on Android independent of this app), we deliberately
+ * swallow the error: the fallback is just today's existing letterboxed
+ * portrait playback, not a crash.
  */
 function VideoSurface({ children }: { children: React.ReactNode }) {
   const { setHidden } = usePipVisibility();
   useEffect(() => {
     setHidden(true);
-    return () => setHidden(false);
+    void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => {});
+    return () => {
+      setHidden(false);
+      void ScreenOrientation.unlockAsync().catch(() => {});
+    };
   }, [setHidden]);
   return <>{children}</>;
 }
@@ -212,6 +226,7 @@ export default function HazardScreen() {
   const lastTapAtRef = useRef<number>(0);
   const lastExitedClipIdRef = useRef<string | null>(null);
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [celebQueue, setCelebQueue] = useState<CelebrationEvent[]>([]);
   const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
@@ -722,14 +737,21 @@ export default function HazardScreen() {
           />
 
           {/* Exit */}
-          <TouchableOpacity style={styles.exitBtnPlayer} onPress={handleExitClip} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={[styles.exitBtnPlayer, { top: 16 + insets.top, left: 16 + insets.left }]}
+            onPress={handleExitClip}
+            activeOpacity={0.85}
+          >
             <Text style={styles.exitBtnPlayerText}>{'← Exit'}</Text>
           </TouchableOpacity>
 
           {/* HUD — deliberately shows no tap count or score-shaped number here.
               The clip position isn't tap-reactive; nothing in this bar changes
               in response to a tap, so it can't be used to infer scoring. */}
-          <View style={styles.hud} pointerEvents="none">
+          <View
+            style={[styles.hud, { bottom: 16 + insets.bottom, left: 16 + insets.left, right: 16 + insets.right }]}
+            pointerEvents="none"
+          >
             <Text style={styles.hudText}>
               {clipIndex + 1}
               {'/'}
@@ -788,7 +810,7 @@ export default function HazardScreen() {
     const seekTo = meta?.solution_start_s ?? 60;
     const solHtml = solutionVideoUrl ? `<!DOCTYPE html>
 <html><head><meta name="viewport" content="width=device-width, initial-scale=1">
-<style>* { margin:0; padding:0; box-sizing:border-box; } body { background:#000; width:100vw; height:100vh; overflow:hidden; } video { width:100%; height:100%; object-fit:cover; display:block; }</style>
+<style>* { margin:0; padding:0; box-sizing:border-box; } body { background:#000; width:100vw; height:100vh; overflow:hidden; } video { width:100%; height:100%; object-fit:contain; display:block; }</style>
 </head><body>
 <video id="v" src="${solutionVideoUrl}" autoplay playsinline muted></video>
 <script>
@@ -817,7 +839,13 @@ v.addEventListener('ended', function() { window.ReactNativeWebView.postMessage(J
               />
             </VideoSurface>
           ) : null}
-          <View style={[styles.hud, { top: 16, bottom: undefined }]} pointerEvents="none">
+          <View
+            style={[
+              styles.hud,
+              { top: 16 + insets.top, bottom: undefined, left: 16 + insets.left, right: 16 + insets.right },
+            ]}
+            pointerEvents="none"
+          >
             <Text style={styles.hudText}>{'Solution clip'}</Text>
             <Text style={styles.hudText}>{'Hazard shown with red circle'}</Text>
           </View>
