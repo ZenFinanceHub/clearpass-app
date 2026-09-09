@@ -794,13 +794,13 @@ function RectSignSymbol({ id }: { id: string }) {
           <Rect x="72" y="12" width="12" height="12" fill={BK} rx="2" />
         </G>
       );
-    case 'zone-30-entry':
+    case 'zone-20-entry':
       return (
         <G>
           <SvgText x="65" y="32" fontSize="14" fontWeight="bold" fill={RD} textAnchor="middle" letterSpacing="1">
             ZONE
           </SvgText>
-          <SvgText x="65" y="62" fontSize="30" fontWeight="bold" fill={RD} textAnchor="middle">30</SvgText>
+          <SvgText x="65" y="62" fontSize="30" fontWeight="bold" fill={RD} textAnchor="middle">20</SvgText>
         </G>
       );
     case 'red-route':
