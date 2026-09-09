@@ -80,7 +80,8 @@ const SIGN_IMAGES: Record<string, any> = {
   'speed-60':             require('../assets/signs/speed-limit-signs-jpg/670V60.jpg'),
   'national-speed-limit': require('../assets/signs/speed-limit-signs-jpg/671.jpg'),
   'end-speed-restriction':require('../assets/signs/speed-limit-signs-jpg/672.jpg'),
-  'zone-30-entry':        require('../assets/signs/speed-limit-signs-jpg/674.jpg'),
+  'zone-20-entry':        require('../assets/signs/speed-limit-signs-jpg/674.jpg'),
+  'zone-20-end':          require('../assets/signs/speed-limit-signs-jpg/675.jpg'),
 
   // ── Regulatory / prohibition signs ───────────────────────────────────────
   'stop-sign':            require('../assets/signs/regulatory-signs-jpg/601.1.jpg'),
@@ -97,6 +98,7 @@ const SIGN_IMAGES: Record<string, any> = {
   'no-vehicles':          require('../assets/signs/regulatory-signs-jpg/617.jpg'),
   'no-cycling':           require('../assets/signs/bus-and-cycle-signs-jpg/951.jpg'),
   'no-motor-vehicles':    require('../assets/signs/regulatory-signs-jpg/619.jpg'),
+  'vehicle-height-limit': require('../assets/signs/low-bridge-signs-jpg/629.2A.jpg'),
   'no-overtaking':        require('../assets/signs/regulatory-signs-jpg/632.jpg'),
   'min-speed-30':         require('../assets/signs/regulatory-signs-jpg/651.jpg'),
   'give-priority-oncoming':require('../assets/signs/regulatory-signs-jpg/615.jpg'),
@@ -127,6 +129,9 @@ const SIGN_IMAGES: Record<string, any> = {
   'countdown-300':        require('../assets/signs/motorway-signs-jpg/823.jpg'),
   'countdown-200':        require('../assets/signs/motorway-signs-jpg/824.jpg'),
   'countdown-100':        require('../assets/signs/motorway-signs-jpg/825.jpg'),
+  'junction-number':      require('../assets/signs/motorway-signs-jpg/2906.jpg'),
+  'right-lane-closed':    require('../assets/signs/motorway-signs-jpg/6008.jpg'),
+  'leave-motorway-next-exit': require('../assets/signs/motorway-signs-jpg/6003.jpg'),
 
   // ── Direction / tourist signs ─────────────────────────────────────────────
   'primary-route-direction': require('../assets/signs/direction-and-tourist-signs-jpg/2025.jpg'),
@@ -139,6 +144,7 @@ const SIGN_IMAGES: Record<string, any> = {
   'red-route':            require('../assets/signs/on-street-parking-jpg/CW701.jpg'),
   'end-restricted-parking':require('../assets/signs/on-street-parking-jpg/664.jpg'),
   'park-verge-footway':   require('../assets/signs/on-street-parking-jpg/668.jpg'),
+  'urban-clearway':       require('../assets/signs/on-street-parking-jpg/646.jpg'),
 
   // ── Road works signs ─────────────────────────────────────────────────────
   'road-works-ahead':       require('../assets/signs/road-works-and-temporary-jpg/7001.jpg'),
