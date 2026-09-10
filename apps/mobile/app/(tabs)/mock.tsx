@@ -14,6 +14,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useNavigation, useRoute, usePreventRemove } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { mockTestExitGuard } from '@/src/mockTestExitGuard';
+import { usePipVisibility } from '@/src/PipVisibilityContext';
 import {
   Achievement,
   MockTestResult,
@@ -125,6 +126,7 @@ export default function MockScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const route = useRoute();
+  const { setHidden: setPipHidden } = usePipVisibility();
   const [phase, setPhase] = useState<Phase>('start');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -239,6 +241,16 @@ export default function MockScreen() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, route.key]);
+
+  // Hides the floating Pip FAB while a test is in progress — it sat over
+  // the flag button in the top bar. Same PipVisibilityContext mechanism
+  // hazard.tsx's VideoSurface already uses for the clip player/solution
+  // screens; shared global flag, so only one screen needs to be hiding it
+  // at a time in practice.
+  useEffect(() => {
+    setPipHidden(phase === 'test');
+    return () => setPipHidden(false);
+  }, [phase, setPipHidden]);
 
   function handleStart(mode: 'standard' | 'quick') {
     const activeTotal = mode === 'quick' ? QUICK_QUESTIONS : TOTAL_QUESTIONS;
@@ -447,14 +459,17 @@ export default function MockScreen() {
 
   return (
     <View style={[styles.flex, { backgroundColor: theme.backgroundColor }]}>
-      {/* Top bar */}
+      {/* Top bar — three zones: left/right fixed width so the centre timer
+          is always exactly centred regardless of qCounter text length,
+          instead of the previous two-flex:1-sides approach. */}
       <View style={styles.topBar}>
-        <View style={styles.leftGroup}>
+        <View style={styles.leftZone}>
           <TouchableOpacity
             style={styles.exitBtn}
             onPress={() => requestExit()}
             activeOpacity={0.7}
             accessibilityLabel="Exit mock test"
+            hitSlop={{ top: 11, bottom: 11, left: 11, right: 11 }}
           >
             <Text style={styles.exitBtnText}>{'✕'}</Text>
           </TouchableOpacity>
@@ -468,9 +483,17 @@ export default function MockScreen() {
           </Text>
           <Text style={styles.pauseHint}>{'tap to pause'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.flagTouchable} onPress={() => toggleFlag(currentIndex)} activeOpacity={0.7}>
-          <Text style={[styles.flagIcon, isFlagged && styles.flagIconActive]}>{'[!]'}</Text>
-        </TouchableOpacity>
+        <View style={styles.rightZone}>
+          <TouchableOpacity
+            style={styles.flagBtn}
+            onPress={() => toggleFlag(currentIndex)}
+            activeOpacity={0.7}
+            accessibilityLabel={isFlagged ? 'Unflag question' : 'Flag question'}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={[styles.flagIcon, isFlagged && styles.flagIconActive]}>{'[!]'}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -904,22 +927,34 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 0.5,
     borderBottomColor: '#E5E7EB',
   },
-  leftGroup: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  exitBtn: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F4F6' },
-  exitBtnText: { fontSize: 13, fontWeight: '700', color: '#6B7280' },
+  // Fixed-width left/right zones (equal width) so the timer in between is
+  // always exactly centred, regardless of qCounter's text length — the
+  // previous two-flex:1-sides approach depended on both sides' natural
+  // content staying roughly balanced, which a longer/larger-scaled
+  // qCounter string could throw off.
+  leftZone: { width: 96, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  // Slightly larger + a visible border over the previous plain light-grey
+  // fill: on a real device the old fill (#F3F4F6 circle, #6B7280 glyph) was
+  // reported as not visible — low contrast against the white bar, not an
+  // actual layout collapse (verified in an isolated harness: the button
+  // was always present at its intended size, just hard to see).
+  exitBtn: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#D1D5DB' },
+  exitBtnText: { fontSize: 13, fontWeight: '800', color: '#374151' },
   qCounter: { fontSize: 14, fontWeight: '600' },
-  timerGroup: { alignItems: 'center' },
+  timerGroup: { flex: 1, alignItems: 'center' },
   timerText: { fontSize: 22, fontWeight: '800', color: '#111827', fontVariant: ['tabular-nums'], textAlign: 'center' },
   pauseHint: { fontSize: 9, color: '#9CA3AF', marginTop: 1, textAlign: 'center' },
   timerWarn: { color: '#EF4444' },
-  flagTouchable: { flex: 1, alignItems: 'flex-end' },
+  rightZone: { width: 96, alignItems: 'flex-end' },
+  // Visual tap area is icon-sized (32x32); hitSlop below brings the actual
+  // hit target to ~56pt without widening the visible button.
+  flagBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   flagIcon: { fontSize: 18, fontWeight: '800', color: '#9CA3AF' },
   flagIconActive: { color: '#B45309' },
 
