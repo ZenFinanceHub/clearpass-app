@@ -167,33 +167,33 @@ async function safeDeleteWebhookEvent(db, eventId) {
 //     of the real progress object, clobbering everything else in it)
 //   - upsertProgress(userId, progress) -> Promise<{ error: any }>
 //   - deleteWebhookEvent(eventId) -> Promise<void>   (only called on failure)
+// rcApi must provide getProEntitlement(appUserId) -> Promise<{ active,
+// expiresAt }> (see lib/revenuecatApi.js). Only consulted when
+// REVENUECAT_SECRET_API_KEY is set — see applyTransferViaRevenueCat below
+// for why this is the primary path and applyTransferLocal is a fallback.
+//
+// Always logs the raw transferred_from/transferred_to arrays first, before
+// anything else — including $RCAnonymousID values and even when there's
+// nothing to do, so a no-op transfer is still traceable in the logs.
 //
 // Reads every source and destination row FIRST, before writing anything —
-// sourceExpiresAt is captured up front so a later failure never loses it,
-// and a read error aborts before any write happens at all. Only a source
-// expiry that's still in the future counts; an already-lapsed iap grant has
-// nothing left to transfer.
-//
-// Destinations are granted BEFORE sources are cleared, deliberately. This
-// is what makes a retry after a partial failure safe: if a destination
-// upsert fails, no source has been touched yet, so the retry starts clean.
-// If a source upsert fails AFTER its destination already succeeded, the
-// retry re-reads the (still uncleared) source, re-grants the SAME values to
-// the (already-granted) destination — harmless, since same-source
-// reapplication is idempotent (see shouldApplyProGrant) — and then clears
-// the source. The reverse order would lose sourceExpiresAt entirely if a
-// destination write failed after its source had already been cleared, with
-// no way to recover it on retry.
+// a read error aborts before any write happens at all.
 //
 // On any read or write failure, this event's dedup row is deleted so
 // RevenueCat's retry isn't silently swallowed by the dedup check next time.
 //
 // Returns { ok: true } on full success (including the "nothing to do"
 // case — no Supabase-user destinations), or { ok: false, retry: true } if
-// any read or write failed.
-async function applyTransfer(event, db) {
-  const sourceIds = (Array.isArray(event.transferred_from) ? event.transferred_from : []).filter(isSupabaseUserId);
-  const destIds = (Array.isArray(event.transferred_to) ? event.transferred_to : []).filter(isSupabaseUserId);
+// any read, write, or RevenueCat lookup failed.
+async function applyTransfer(event, db, rcApi) {
+  const rawFrom = Array.isArray(event.transferred_from) ? event.transferred_from : [];
+  const rawTo = Array.isArray(event.transferred_to) ? event.transferred_to : [];
+  console.log(
+    `[revenuecat-webhook] TRANSFER ${event.id}: transferred_from=${JSON.stringify(rawFrom)} transferred_to=${JSON.stringify(rawTo)}`,
+  );
+
+  const sourceIds = rawFrom.filter(isSupabaseUserId);
+  const destIds = rawTo.filter(isSupabaseUserId);
 
   if (destIds.length === 0) {
     console.log(`[revenuecat-webhook] TRANSFER ${event.id}: no Supabase-user destinations, skipping`);
@@ -215,6 +215,30 @@ async function applyTransfer(event, db) {
     return { ok: false, retry: true };
   }
 
+  if (!process.env.REVENUECAT_SECRET_API_KEY) {
+    console.error(
+      `[revenuecat-webhook] TRANSFER ${event.id}: REVENUECAT_SECRET_API_KEY not set — falling back to local source-expiry logic`,
+    );
+    return applyTransferLocal(event, db, sourceRows, destRows, sourceIds);
+  }
+
+  return applyTransferViaRevenueCat(event, db, rcApi, sourceRows, destRows);
+}
+
+// Fallback path, used only when REVENUECAT_SECRET_API_KEY isn't set. Trusts
+// whatever the source's OWN Supabase row already says about its iap grant —
+// this is what missed the destination grant in the TRANSFER we actually hit
+// in production (the source's local row didn't carry a future-expiry iap
+// grant, even though RevenueCat itself knew the destination's entitlement
+// was active), which is exactly why applyTransferViaRevenueCat above is now
+// the primary path. Kept as a safety net for when the API key is missing —
+// degrades to "can't determine anything new", not "grant nothing was ever
+// possible".
+//
+// Destinations are granted BEFORE sources are cleared, deliberately — see
+// applyTransferViaRevenueCat's comment for the retry-safety reasoning,
+// which applies identically here.
+async function applyTransferLocal(event, db, sourceRows, destRows, sourceIds) {
   const nowIso = new Date().toISOString();
   let sourceExpiresAt = null;
   for (const { progress } of sourceRows) {
@@ -244,6 +268,7 @@ async function applyTransfer(event, db) {
         sourceIds.join(',') || '(none)',
         'expires',
         patch.proExpiresAt,
+        '(local fallback)',
       );
     }
   }
@@ -257,7 +282,96 @@ async function applyTransfer(event, db) {
         await safeDeleteWebhookEvent(db, event.id);
         return { ok: false, retry: true };
       }
-      console.log(`[revenuecat-webhook] TRANSFER ${event.id}: cleared iap grant from source`, id);
+      console.log(`[revenuecat-webhook] TRANSFER ${event.id}: cleared iap grant from source`, id, '(local fallback)');
+    }
+  }
+
+  return { ok: true };
+}
+
+// Primary path. Asks RevenueCat directly, per user, whether the "pro"
+// entitlement is active — rather than inferring it from what a Supabase
+// row happens to already say, which is what applyTransferLocal does and
+// what missed a real grant in production (see its comment above).
+//
+// Destinations are granted BEFORE sources are cleared, deliberately. This
+// is what makes a retry after a partial failure safe: if a destination
+// upsert (or its RC lookup) fails, no source has been touched yet, so the
+// retry starts clean. If a source upsert fails AFTER its destination
+// already succeeded, the retry re-grants the SAME values to the
+// (already-granted) destination — harmless, since same-source
+// reapplication is idempotent (see shouldApplyProGrant) — and then clears
+// the source. The reverse order would have nothing left to grant from if a
+// destination write failed after its source had already been cleared.
+async function applyTransferViaRevenueCat(event, db, rcApi, sourceRows, destRows) {
+  for (const { id, progress } of destRows) {
+    let entitlement;
+    try {
+      entitlement = await rcApi.getProEntitlement(id);
+    } catch (err) {
+      console.error(`[revenuecat-webhook] TRANSFER ${event.id}: RevenueCat lookup failed for destination`, id, '—', err.message || err);
+      await safeDeleteWebhookEvent(db, event.id);
+      return { ok: false, retry: true };
+    }
+
+    if (!entitlement.active) {
+      console.log(`[revenuecat-webhook] TRANSFER ${event.id}: destination`, id, 'has no active "pro" entitlement in RevenueCat, no grant');
+      continue;
+    }
+    if (!entitlement.expiresAt) {
+      console.warn(
+        `[revenuecat-webhook] TRANSFER ${event.id}: destination ${id} has a non-expiring "pro" entitlement in RevenueCat — not granting (no open-ended Pro)`,
+      );
+      continue;
+    }
+    if (!shouldApplyProGrant(progress.proSource, 'iap', progress.proExpiresAt, entitlement.expiresAt)) {
+      continue;
+    }
+
+    const patch = { isPro: true, proExpiresAt: entitlement.expiresAt, proSource: 'iap' };
+    const { error } = await db.upsertProgress(id, { ...progress, ...patch });
+    if (error) {
+      console.error(`[revenuecat-webhook] TRANSFER ${event.id}: destination upsert failed for`, id, error.message || error);
+      await safeDeleteWebhookEvent(db, event.id);
+      return { ok: false, retry: true };
+    }
+    console.log(
+      `[revenuecat-webhook] TRANSFER ${event.id}: granted iap to destination`,
+      id,
+      'expires',
+      patch.proExpiresAt,
+      '(via RevenueCat lookup)',
+    );
+  }
+
+  for (const { id, progress } of sourceRows) {
+    // Nothing to clear locally regardless of what RC says — skip the
+    // lookup entirely rather than spend an API call on it.
+    if (progress.proSource !== 'iap') continue;
+
+    let entitlement;
+    try {
+      entitlement = await rcApi.getProEntitlement(id);
+    } catch (err) {
+      console.error(`[revenuecat-webhook] TRANSFER ${event.id}: RevenueCat lookup failed for source`, id, '—', err.message || err);
+      await safeDeleteWebhookEvent(db, event.id);
+      return { ok: false, retry: true };
+    }
+
+    if (entitlement.active) {
+      console.log(`[revenuecat-webhook] TRANSFER ${event.id}: source`, id, 'still has an active "pro" entitlement in RevenueCat, not clearing');
+      continue;
+    }
+
+    const patch = resolveTransferSourceUpdate(progress);
+    if (patch) {
+      const { error } = await db.upsertProgress(id, { ...progress, ...patch });
+      if (error) {
+        console.error(`[revenuecat-webhook] TRANSFER ${event.id}: source upsert failed for`, id, error.message || error);
+        await safeDeleteWebhookEvent(db, event.id);
+        return { ok: false, retry: true };
+      }
+      console.log(`[revenuecat-webhook] TRANSFER ${event.id}: cleared iap grant from source`, id, '(via RevenueCat lookup)');
     }
   }
 

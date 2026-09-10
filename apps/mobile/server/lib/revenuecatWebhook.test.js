@@ -416,3 +416,137 @@ test('applySingleUserUpdate: a TEST event with a non-UUID app_user_id is skipped
 
   assert.deepEqual(result, { ok: true });
 });
+
+// ─── applyTransfer via RevenueCat lookup (REVENUECAT_SECRET_API_KEY set) ──
+
+// Stub RC API client: `responses` maps appUserId -> { active, expiresAt };
+// anything not listed resolves to { active: false, expiresAt: null }.
+// `throwFor` makes specific appUserId lookups throw (a real API failure).
+function createStubRcApi(responses = {}, throwFor = new Set()) {
+  const calls = [];
+  return {
+    calls,
+    async getProEntitlement(appUserId) {
+      calls.push(appUserId);
+      if (throwFor.has(appUserId)) throw new Error('stub RevenueCat API failure');
+      return responses[appUserId] || { active: false, expiresAt: null };
+    },
+  };
+}
+
+// REVENUECAT_SECRET_API_KEY gates which path applyTransfer takes, and must
+// never leak between tests — every test below sets/deletes it itself and
+// restores whatever was there before in a finally block.
+async function withRcApiKey(value, fn) {
+  const previous = process.env.REVENUECAT_SECRET_API_KEY;
+  if (value === undefined) {
+    delete process.env.REVENUECAT_SECRET_API_KEY;
+  } else {
+    process.env.REVENUECAT_SECRET_API_KEY = value;
+  }
+  try {
+    await fn();
+  } finally {
+    if (previous === undefined) {
+      delete process.env.REVENUECAT_SECRET_API_KEY;
+    } else {
+      process.env.REVENUECAT_SECRET_API_KEY = previous;
+    }
+  }
+}
+
+test('applyTransfer via RC: anonymous source + active destination → granted (the case actually hit in production)', async () => {
+  await withRcApiKey('sk_test', async () => {
+    const db = createStubDb({ [DEST_ID]: {} });
+    const rcApi = createStubRcApi({ [DEST_ID]: { active: true, expiresAt: FUTURE_EXPIRY } });
+    const event = {
+      id: 'evt_rc_1',
+      type: 'TRANSFER',
+      transferred_from: ['$RCAnonymousID:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
+      transferred_to: [DEST_ID],
+    };
+
+    const result = await applyTransfer(event, db, rcApi);
+
+    assert.deepEqual(result, { ok: true });
+    assert.deepEqual(db.store.get(DEST_ID), { isPro: true, proExpiresAt: FUTURE_EXPIRY, proSource: 'iap' });
+    // No real Supabase source, so RC was never asked about one.
+    assert.deepEqual(rcApi.calls, [DEST_ID]);
+  });
+});
+
+test('applyTransfer via RC: destination not active in RevenueCat → no grant', async () => {
+  await withRcApiKey('sk_test', async () => {
+    const db = createStubDb({ [DEST_ID]: {} });
+    const rcApi = createStubRcApi({ [DEST_ID]: { active: false, expiresAt: null } });
+    const event = { id: 'evt_rc_2', type: 'TRANSFER', transferred_from: [], transferred_to: [DEST_ID] };
+
+    const result = await applyTransfer(event, db, rcApi);
+
+    assert.deepEqual(result, { ok: true });
+    assert.deepEqual(db.store.get(DEST_ID), {});
+  });
+});
+
+test('applyTransfer via RC: a RevenueCat API error aborts before any write, deletes the dedup row, signals retry', async () => {
+  await withRcApiKey('sk_test', async () => {
+    const db = createStubDb({ [DEST_ID]: {} });
+    const rcApi = createStubRcApi({}, new Set([DEST_ID]));
+    const event = { id: 'evt_rc_3', type: 'TRANSFER', transferred_from: [], transferred_to: [DEST_ID] };
+
+    const result = await applyTransfer(event, db, rcApi);
+
+    assert.deepEqual(result, { ok: false, retry: true });
+    assert.deepEqual(db.store.get(DEST_ID), {});
+    assert.deepEqual(db.deletedEvents, ['evt_rc_3']);
+  });
+});
+
+test('applyTransfer: REVENUECAT_SECRET_API_KEY missing falls back to local source-expiry logic', async () => {
+  await withRcApiKey(undefined, async () => {
+    const db = createStubDb({
+      [SOURCE_ID]: { isPro: true, proExpiresAt: FUTURE_EXPIRY, proSource: 'iap' },
+      [DEST_ID]: {},
+    });
+    // An rcApi that would throw if ever called — proves the fallback never
+    // touches it.
+    const rcApi = { getProEntitlement: async () => { throw new Error('should not be called'); } };
+    const event = { id: 'evt_rc_4', type: 'TRANSFER', transferred_from: [SOURCE_ID], transferred_to: [DEST_ID] };
+
+    const result = await applyTransfer(event, db, rcApi);
+
+    assert.deepEqual(result, { ok: true });
+    assert.deepEqual(db.store.get(DEST_ID), { isPro: true, proExpiresAt: FUTURE_EXPIRY, proSource: 'iap' });
+    assert.deepEqual(db.store.get(SOURCE_ID), { isPro: false, proExpiresAt: null, proSource: null });
+  });
+});
+
+test('applyTransfer via RC: source still active in RevenueCat → source is not cleared', async () => {
+  await withRcApiKey('sk_test', async () => {
+    const originalSource = { isPro: true, proExpiresAt: FUTURE_EXPIRY, proSource: 'iap' };
+    const db = createStubDb({ [SOURCE_ID]: originalSource, [DEST_ID]: {} });
+    const rcApi = createStubRcApi({
+      [DEST_ID]: { active: false, expiresAt: null },
+      [SOURCE_ID]: { active: true, expiresAt: FUTURE_EXPIRY },
+    });
+    const event = { id: 'evt_rc_5', type: 'TRANSFER', transferred_from: [SOURCE_ID], transferred_to: [DEST_ID] };
+
+    const result = await applyTransfer(event, db, rcApi);
+
+    assert.deepEqual(result, { ok: true });
+    assert.deepEqual(db.store.get(SOURCE_ID), originalSource);
+  });
+});
+
+test('applyTransfer via RC: destination active but non-expiring ("pro" with a null expiry) → no grant, warning only', async () => {
+  await withRcApiKey('sk_test', async () => {
+    const db = createStubDb({ [DEST_ID]: {} });
+    const rcApi = createStubRcApi({ [DEST_ID]: { active: true, expiresAt: null } });
+    const event = { id: 'evt_rc_6', type: 'TRANSFER', transferred_from: [], transferred_to: [DEST_ID] };
+
+    const result = await applyTransfer(event, db, rcApi);
+
+    assert.deepEqual(result, { ok: true });
+    assert.deepEqual(db.store.get(DEST_ID), {});
+  });
+});

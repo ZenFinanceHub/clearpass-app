@@ -15,6 +15,7 @@ const {
   applySingleUserUpdate,
 } = require('./lib/revenuecatWebhook');
 const { applyStripeProGrant } = require('./lib/stripeWebhook');
+const revenuecatApi = require('./lib/revenuecatApi');
 const { INSTRUCTOR_PAYOUT_STRIPE_MINOR } = require('./lib/earnings');
 const {
   generateSeatToken,
@@ -555,7 +556,7 @@ app.post('/api/revenuecat-webhook', express.json(), async (req, res) => {
   // status so RC retries — the dedup row is already removed by then (see
   // applyTransfer), so the retry isn't swallowed by the dedup check above.
   if (event.type === 'TRANSFER') {
-    const result = await applyTransfer(event, db);
+    const result = await applyTransfer(event, db, revenuecatApi);
     if (!result.ok) {
       return res.status(500).json({ error: 'Transfer processing failed' });
     }
@@ -2577,4 +2578,5 @@ app.post('/api/cron/daily-stats', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`ClearPass proxy running on http://localhost:${PORT}`);
+  console.log(`REVENUECAT_SECRET_API_KEY configured: ${process.env.REVENUECAT_SECRET_API_KEY ? 'yes' : 'no'}`);
 });
