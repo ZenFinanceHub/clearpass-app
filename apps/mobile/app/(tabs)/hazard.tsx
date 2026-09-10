@@ -136,11 +136,13 @@ function WebVideoPlayer({ youtubeId, durationSec, onEnded, onTimeUpdate }: WebVi
 /**
  * Wraps any WebView/video element actually rendering hazard footage — the
  * scored clip AND the solution/reveal clip both use this. Hides the global
- * Pip FAB and locks the screen to landscape for exactly as long as this is
- * mounted, tied to real video playback rather than a hand-maintained list
- * of phase names. A future phase that plays video is covered automatically
- * just by wrapping its video element in this, instead of needing a
- * separate gate kept in sync.
+ * Pip FAB and follows the device's own sensor for orientation (portrait
+ * shows the video letterboxed, landscape fills the screen — rather than
+ * forcing landscape) for exactly as long as this is mounted, tied to real
+ * video playback rather than a hand-maintained list of phase names. A
+ * future phase that plays video is covered automatically just by wrapping
+ * its video element in this, instead of needing a separate gate kept in
+ * sync.
  *
  * The orientation lock is a runtime override of app.json's app-wide
  * "portrait" setting — expo-screen-orientation is designed for exactly
@@ -148,12 +150,22 @@ function WebVideoPlayer({ youtubeId, durationSec, onEnded, onTimeUpdate }: WebVi
  * intermittently on Android independent of this app), we deliberately
  * swallow the error: the fallback is just today's existing letterboxed
  * portrait playback, not a crash.
+ *
+ * ALL (not the previous LANDSCAPE-only lock — this expo-screen-orientation
+ * version's OrientationLock enum has no ALL_BUT_UPSIDE_DOWN value, checked
+ * against node_modules before using it) is safe against remounting/
+ * restarting the video mid-rotation: this app's generated AndroidManifest
+ * declares android:configChanges="...|orientation|screenSize|screenLayout|..."
+ * on MainActivity (verified via a local `expo prebuild`, not committed),
+ * which means Android handles a rotation via onConfigurationChanged() in
+ * place — it does not destroy/recreate the Activity, so the WebView, the
+ * timer, and every recorded tap all survive a mid-clip rotation untouched.
  */
 function VideoSurface({ children }: { children: React.ReactNode }) {
   const { setHidden } = usePipVisibility();
   useEffect(() => {
     setHidden(true);
-    void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => {});
+    void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.ALL).catch(() => {});
     return () => {
       setHidden(false);
       void ScreenOrientation.unlockAsync().catch(() => {});
@@ -826,29 +838,40 @@ export default function HazardScreen() {
             pointerEvents="none"
           />
 
-          {/* Exit */}
+          {/* Exit — icon-only, transparent background: nothing may overlay
+              the video area during playback, so this is deliberately not a
+              filled shape or bar, just a glyph with a shadow for legibility
+              against whatever footage is behind it. zIndex 12 (same as
+              before) keeps it above the zIndex:10 tap-catcher above, so a
+              tap here is a genuine UI event, never forwarded to
+              handleVideoTap as a hazard tap — the tap-catcher only ever
+              receives touches outside this button's (hitSlop-expanded)
+              bounds. */}
           <TouchableOpacity
             style={[styles.exitBtnPlayer, { top: 16 + insets.top, left: 16 + insets.left }]}
             onPress={() => requestExit()}
-            activeOpacity={0.85}
+            activeOpacity={0.6}
+            accessibilityLabel="Exit clip"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Text style={styles.exitBtnPlayerText}>{'← Exit'}</Text>
+            <Text style={styles.exitBtnPlayerText}>{'✕'}</Text>
           </TouchableOpacity>
+        </View>
 
-          {/* HUD — deliberately shows no tap count or score-shaped number here.
-              The clip position isn't tap-reactive; nothing in this bar changes
-              in response to a tap, so it can't be used to infer scoring. */}
-          <View
-            style={[styles.hud, { bottom: 16 + insets.bottom, left: 16 + insets.left, right: 16 + insets.right }]}
-            pointerEvents="none"
-          >
-            <Text style={styles.hudText}>
-              {clipIndex + 1}
-              {'/'}
-              {activeClips.length > 0 ? activeClips.length : hazardClips.length}
-            </Text>
-            <Text style={styles.hudText}>{formatTime(currentTime)}</Text>
-          </View>
+        {/* Clip position + time — moved out of the video area entirely
+            (previously an absolutely-positioned bar overlaying the
+            footage) so nothing overlays the video during playback.
+            Deliberately shows no tap count or score-shaped number here:
+            the clip position isn't tap-reactive, nothing in this bar
+            changes in response to a tap, so it can't be used to infer
+            scoring. */}
+        <View style={styles.playerInfoBar}>
+          <Text style={styles.playerInfoText}>
+            {clipIndex + 1}
+            {'/'}
+            {activeClips.length > 0 ? activeClips.length : hazardClips.length}
+          </Text>
+          <Text style={styles.playerInfoText}>{formatTime(currentTime)}</Text>
         </View>
 
         <View style={styles.tapHintBar}>
@@ -932,31 +955,29 @@ v.addEventListener('ended', function() { window.ReactNativeWebView.postMessage(J
             </VideoSurface>
           ) : null}
 
-          {/* Exit — the solution/reveal clip had no way to leave before
-              it finished playing; same landscape-lock risk as the player
-              phase above (both are wrapped in VideoSurface). */}
+          {/* Exit — icon-only, transparent background — see the matching
+              comment on the player phase's exit button above; same
+              reasoning applies here (nothing may overlay the video). */}
           <TouchableOpacity
             style={[styles.exitBtnPlayer, { top: 16 + insets.top, left: 16 + insets.left }]}
             onPress={() => requestExit()}
-            activeOpacity={0.85}
+            activeOpacity={0.6}
+            accessibilityLabel="Exit clip"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Text style={styles.exitBtnPlayerText}>{'← Exit'}</Text>
+            <Text style={styles.exitBtnPlayerText}>{'✕'}</Text>
           </TouchableOpacity>
-
-          <View
-            style={[
-              styles.hud,
-              // Pushed down below the new exit button (top: 16 + insets.top),
-              // which sits at the same left edge — was flush with the top
-              // before that button existed.
-              { top: 56 + insets.top, bottom: undefined, left: 16 + insets.left, right: 16 + insets.right },
-            ]}
-            pointerEvents="none"
-          >
-            <Text style={styles.hudText}>{'Solution clip'}</Text>
-            <Text style={styles.hudText}>{'Hazard shown with red circle'}</Text>
-          </View>
         </View>
+
+        {/* "Solution clip" / hazard-marker labels — moved out of the video
+            area entirely (previously an absolutely-positioned bar
+            overlaying the footage), same reasoning as the player phase's
+            clip position/time bar above. */}
+        <View style={styles.playerInfoBar}>
+          <Text style={styles.playerInfoText}>{'Solution clip'}</Text>
+          <Text style={styles.playerInfoText}>{'Hazard shown with red circle'}</Text>
+        </View>
+
         <View style={styles.tapHintBar}>
           <TouchableOpacity onPress={handleNextClip} activeOpacity={0.85}>
             <Text style={[styles.tapHintText, { color: Colors.indigo, fontWeight: '700' }]}>
@@ -1245,17 +1266,26 @@ const styles = StyleSheet.create({
   playerScreen: { flex: 1, backgroundColor: '#000000' },
   videoWrap: { flex: 1, backgroundColor: '#000000', overflow: 'hidden' },
   flashOverlay: { backgroundColor: '#FCD34D' },
+  // Icon-only, transparent — nothing may overlay the video area during
+  // playback/scoring, so this is deliberately not a filled shape or bar.
+  // zIndex 12 keeps it above the tap-catcher's zIndex:10, so a tap here is
+  // never forwarded to handleVideoTap as a hazard tap.
   exitBtnPlayer: {
     position: 'absolute',
-    top: 16,
-    left: 16,
+    width: 32,
+    height: 32,
     zIndex: 12,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  exitBtnPlayerText: { fontSize: 11, fontWeight: '700', color: '#FFFFFF' },
+  exitBtnPlayerText: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.9)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
 
   // Exit confirmation — same recipe as mock.tsx's pauseOverlay/pauseCard
   // (dark overlay, centered white rounded card, primary + muted-secondary
@@ -1282,20 +1312,16 @@ const styles = StyleSheet.create({
   exitConfirmLeaveBtn: { borderRadius: 14, paddingVertical: 12, width: '100%', alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB' },
   exitConfirmLeaveBtnText: { color: '#6B7280', fontSize: 14, fontWeight: '600' },
 
-  hud: {
-    position: 'absolute',
-    bottom: 16,
-    left: 16,
-    right: 16,
-    zIndex: 12,
+  // Below videoWrap (in normal layout flow, not overlaying it) — replaces
+  // the old absolutely-positioned "hud" bar that sat on top of the footage.
+  playerInfoBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 10,
+    backgroundColor: '#111827',
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
-  hudText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
+  playerInfoText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
   tapHintBar: { backgroundColor: '#FFFFFF', paddingVertical: 12, alignItems: 'center', borderTopWidth: 0.5, borderTopColor: '#E5E7EB' },
   tapHintText: { fontSize: 13, color: '#374151' },
 
