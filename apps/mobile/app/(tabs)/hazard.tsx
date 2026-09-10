@@ -17,6 +17,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useNavigation, useRoute, usePreventRemove } from '@react-navigation/native';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { hazardExitGuard } from '@/src/hazardExitGuard';
+import { APP_STORE_URL, PLAY_STORE_URL } from '@/lib/links';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DVSA_HAZARD_PASS_RATIO, HazardClip, HazardClipResult, HazardSessionResult, HazardWindow, UserProgress, calculateHazardTotal, scoreClip } from '@clearpass/core';
 import { hazardClips } from '@clearpass/content';
@@ -581,14 +582,14 @@ export default function HazardScreen() {
             since a web visitor's device isn't known from Platform.OS === 'web'. */}
         <TouchableOpacity
           style={styles.secondaryBtn}
-          onPress={() => { Linking.openURL('https://apps.apple.com/app/clearpass-theory-test/id000000000').catch(() => {}); }}
+          onPress={() => { Linking.openURL(APP_STORE_URL).catch(() => {}); }}
           activeOpacity={0.85}
         >
           <Text style={styles.secondaryBtnText}>{'Get it on the App Store'}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.secondaryBtn}
-          onPress={() => { Linking.openURL('https://play.google.com/store/apps/details?id=co.uk.getclearpass.app').catch(() => {}); }}
+          onPress={() => { Linking.openURL(PLAY_STORE_URL).catch(() => {}); }}
           activeOpacity={0.85}
         >
           <Text style={styles.secondaryBtnText}>{'Get it on Google Play'}</Text>

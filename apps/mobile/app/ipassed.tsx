@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/src/supabase';
+import { APP_STORE_REVIEW_URL, PLAY_STORE_URL } from '@/lib/links';
 import { loadUserProgress, saveUserProgress, createFreshUserProgress } from '@/src/storage';
 import { awardXp } from '@clearpass/core';
 import { useTheme } from '@/src/theme';
@@ -121,9 +122,7 @@ function PassedFlow() {
   }
 
   async function handleRateApp() {
-    const url = Platform.OS === 'ios'
-      ? 'https://apps.apple.com/app/clearpass-theory-test/id000000000'
-      : 'https://play.google.com/store/apps/details?id=co.uk.getclearpass.app';
+    const url = Platform.OS === 'ios' ? APP_STORE_REVIEW_URL : PLAY_STORE_URL;
     try { await Linking.openURL(url); } catch {}
     setShowReview(false);
     router.replace('/(tabs)/home');
