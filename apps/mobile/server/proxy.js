@@ -556,7 +556,7 @@ app.post('/api/revenuecat-webhook', express.json(), async (req, res) => {
   // status so RC retries — the dedup row is already removed by then (see
   // applyTransfer), so the retry isn't swallowed by the dedup check above.
   if (event.type === 'TRANSFER') {
-    const result = await applyTransfer(event, db, revenuecatApi);
+    const result = await applyTransfer(event, db, revenuecatApi, { post: postToSlack });
     if (!result.ok) {
       return res.status(500).json({ error: 'Transfer processing failed' });
     }

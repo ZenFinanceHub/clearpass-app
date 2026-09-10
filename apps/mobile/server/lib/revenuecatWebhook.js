@@ -159,6 +159,19 @@ async function safeDeleteWebhookEvent(db, eventId) {
   }
 }
 
+// Posts to Slack and swallows any failure — a Slack outage must never
+// affect the webhook's own response. slack.post(text) is expected to
+// already guarantee this itself (see postToSlack in proxy.js, "never
+// throws and never rejects"), but that guarantee is enforced here too
+// rather than only trusted, so it holds regardless of what's injected.
+async function safeSlackPost(slack, text) {
+  try {
+    await slack.post(text);
+  } catch (err) {
+    console.error('[revenuecat-webhook] Slack post failed:', err.message || err);
+  }
+}
+
 // Applies one TRANSFER event end to end. db must provide:
 //   - getProgress(userId) -> Promise<object|null>   (stored `progress`, or
 //     null if no row exists — MUST throw/reject on an actual read error,
@@ -171,6 +184,10 @@ async function safeDeleteWebhookEvent(db, eventId) {
 // expiresAt }> (see lib/revenuecatApi.js). Only consulted when
 // REVENUECAT_SECRET_API_KEY is set — see applyTransferViaRevenueCat below
 // for why this is the primary path and applyTransferLocal is a fallback.
+// slack must provide post(text) -> Promise<boolean> (see postToSlack in
+// proxy.js) — only used by applyTransferViaRevenueCat, one post per
+// destination outcome (granted/not granted/failed); the local fallback
+// path doesn't post, since it predates this and has its own logging.
 //
 // Always logs the raw transferred_from/transferred_to arrays first, before
 // anything else — including $RCAnonymousID values and even when there's
@@ -185,7 +202,7 @@ async function safeDeleteWebhookEvent(db, eventId) {
 // Returns { ok: true } on full success (including the "nothing to do"
 // case — no Supabase-user destinations), or { ok: false, retry: true } if
 // any read, write, or RevenueCat lookup failed.
-async function applyTransfer(event, db, rcApi) {
+async function applyTransfer(event, db, rcApi, slack) {
   const rawFrom = Array.isArray(event.transferred_from) ? event.transferred_from : [];
   const rawTo = Array.isArray(event.transferred_to) ? event.transferred_to : [];
   console.log(
@@ -211,6 +228,7 @@ async function applyTransfer(event, db, rcApi) {
     );
   } catch (err) {
     console.error(`[revenuecat-webhook] TRANSFER ${event.id}: read failed, aborting before any write:`, err.message || err);
+    await safeSlackPost(slack, `ClearPass transfer: failed, will retry, event ${event.id}, reason read error`);
     await safeDeleteWebhookEvent(db, event.id);
     return { ok: false, retry: true };
   }
@@ -219,10 +237,11 @@ async function applyTransfer(event, db, rcApi) {
     console.error(
       `[revenuecat-webhook] TRANSFER ${event.id}: REVENUECAT_SECRET_API_KEY not set — falling back to local source-expiry logic`,
     );
+    await safeSlackPost(slack, `ClearPass transfer: RevenueCat key missing, used fallback, event ${event.id}`);
     return applyTransferLocal(event, db, sourceRows, destRows, sourceIds);
   }
 
-  return applyTransferViaRevenueCat(event, db, rcApi, sourceRows, destRows);
+  return applyTransferViaRevenueCat(event, db, rcApi, slack, sourceRows, destRows);
 }
 
 // Fallback path, used only when REVENUECAT_SECRET_API_KEY isn't set. Trusts
@@ -303,28 +322,32 @@ async function applyTransferLocal(event, db, sourceRows, destRows, sourceIds) {
 // reapplication is idempotent (see shouldApplyProGrant) — and then clears
 // the source. The reverse order would have nothing left to grant from if a
 // destination write failed after its source had already been cleared.
-async function applyTransferViaRevenueCat(event, db, rcApi, sourceRows, destRows) {
+async function applyTransferViaRevenueCat(event, db, rcApi, slack, sourceRows, destRows) {
   for (const { id, progress } of destRows) {
     let entitlement;
     try {
       entitlement = await rcApi.getProEntitlement(id);
     } catch (err) {
       console.error(`[revenuecat-webhook] TRANSFER ${event.id}: RevenueCat lookup failed for destination`, id, '—', err.message || err);
+      await safeSlackPost(slack, `ClearPass transfer: failed, destination ${id}, expiry none`);
       await safeDeleteWebhookEvent(db, event.id);
       return { ok: false, retry: true };
     }
 
     if (!entitlement.active) {
       console.log(`[revenuecat-webhook] TRANSFER ${event.id}: destination`, id, 'has no active "pro" entitlement in RevenueCat, no grant');
+      await safeSlackPost(slack, `ClearPass transfer: not granted, destination ${id}, expiry none`);
       continue;
     }
     if (!entitlement.expiresAt) {
       console.warn(
         `[revenuecat-webhook] TRANSFER ${event.id}: destination ${id} has a non-expiring "pro" entitlement in RevenueCat — not granting (no open-ended Pro)`,
       );
+      await safeSlackPost(slack, `ClearPass transfer: not granted, destination ${id}, expiry none`);
       continue;
     }
     if (!shouldApplyProGrant(progress.proSource, 'iap', progress.proExpiresAt, entitlement.expiresAt)) {
+      await safeSlackPost(slack, `ClearPass transfer: not granted, destination ${id}, expiry ${entitlement.expiresAt}`);
       continue;
     }
 
@@ -332,6 +355,7 @@ async function applyTransferViaRevenueCat(event, db, rcApi, sourceRows, destRows
     const { error } = await db.upsertProgress(id, { ...progress, ...patch });
     if (error) {
       console.error(`[revenuecat-webhook] TRANSFER ${event.id}: destination upsert failed for`, id, error.message || error);
+      await safeSlackPost(slack, `ClearPass transfer: failed, destination ${id}, expiry ${patch.proExpiresAt}`);
       await safeDeleteWebhookEvent(db, event.id);
       return { ok: false, retry: true };
     }
@@ -342,6 +366,7 @@ async function applyTransferViaRevenueCat(event, db, rcApi, sourceRows, destRows
       patch.proExpiresAt,
       '(via RevenueCat lookup)',
     );
+    await safeSlackPost(slack, `ClearPass transfer: granted, destination ${id}, expiry ${patch.proExpiresAt}`);
   }
 
   for (const { id, progress } of sourceRows) {
@@ -354,6 +379,7 @@ async function applyTransferViaRevenueCat(event, db, rcApi, sourceRows, destRows
       entitlement = await rcApi.getProEntitlement(id);
     } catch (err) {
       console.error(`[revenuecat-webhook] TRANSFER ${event.id}: RevenueCat lookup failed for source`, id, '—', err.message || err);
+      await safeSlackPost(slack, `ClearPass transfer: failed, will retry, event ${event.id}, reason source lookup error`);
       await safeDeleteWebhookEvent(db, event.id);
       return { ok: false, retry: true };
     }
@@ -368,6 +394,7 @@ async function applyTransferViaRevenueCat(event, db, rcApi, sourceRows, destRows
       const { error } = await db.upsertProgress(id, { ...progress, ...patch });
       if (error) {
         console.error(`[revenuecat-webhook] TRANSFER ${event.id}: source upsert failed for`, id, error.message || error);
+        await safeSlackPost(slack, `ClearPass transfer: failed, will retry, event ${event.id}, reason source write error`);
         await safeDeleteWebhookEvent(db, event.id);
         return { ok: false, retry: true };
       }

@@ -283,7 +283,7 @@ test('applyTransfer: an already-expired source iap grant is not used for the des
   assert.deepEqual(db.store.get(SOURCE_ID), { isPro: false, proExpiresAt: null, proSource: null });
 });
 
-test('applyTransfer: destination read error — nothing written, dedup row deleted, retry signaled', async () => {
+test('applyTransfer: destination read error — nothing written, dedup row deleted, retry signaled, posts "failed, will retry"', async () => {
   const originalSource = { isPro: true, proExpiresAt: FUTURE_EXPIRY, proSource: 'iap' };
   const db = createStubDb(
     { [SOURCE_ID]: originalSource, [DEST_ID]: {} },
@@ -291,16 +291,18 @@ test('applyTransfer: destination read error — nothing written, dedup row delet
   );
   const event = { id: 'evt_6', type: 'TRANSFER', transferred_from: [SOURCE_ID], transferred_to: [DEST_ID] };
 
-  const result = await applyTransfer(event, db);
+  const slack = createStubSlack();
+  const result = await applyTransfer(event, db, undefined, slack);
 
   assert.deepEqual(result, { ok: false, retry: true });
   // Nothing written at all — the read error aborts before either loop runs.
   assert.deepEqual(db.store.get(SOURCE_ID), originalSource);
   assert.deepEqual(db.store.get(DEST_ID), {});
   assert.deepEqual(db.deletedEvents, ['evt_6']);
+  assert.deepEqual(slack.posts, ['ClearPass transfer: failed, will retry, event evt_6, reason read error']);
 });
 
-test('applyTransfer: source read error — nothing written, dedup row deleted, retry signaled', async () => {
+test('applyTransfer: source read error — nothing written, dedup row deleted, retry signaled, posts "failed, will retry"', async () => {
   const originalSource = { isPro: true, proExpiresAt: FUTURE_EXPIRY, proSource: 'iap' };
   const db = createStubDb(
     { [SOURCE_ID]: originalSource, [DEST_ID]: {} },
@@ -308,12 +310,14 @@ test('applyTransfer: source read error — nothing written, dedup row deleted, r
   );
   const event = { id: 'evt_7', type: 'TRANSFER', transferred_from: [SOURCE_ID], transferred_to: [DEST_ID] };
 
-  const result = await applyTransfer(event, db);
+  const slack = createStubSlack();
+  const result = await applyTransfer(event, db, undefined, slack);
 
   assert.deepEqual(result, { ok: false, retry: true });
   assert.deepEqual(db.store.get(SOURCE_ID), originalSource);
   assert.deepEqual(db.store.get(DEST_ID), {});
   assert.deepEqual(db.deletedEvents, ['evt_7']);
+  assert.deepEqual(slack.posts, ['ClearPass transfer: failed, will retry, event evt_7, reason read error']);
 });
 
 test('applyTransfer: a failing deleteWebhookEvent does not crash the handler — still reports retry', async () => {
@@ -434,6 +438,20 @@ function createStubRcApi(responses = {}, throwFor = new Set()) {
   };
 }
 
+// Stub Slack poster: `post` calls are recorded verbatim; `throws: true`
+// makes it reject, to prove applyTransfer swallows that and carries on.
+function createStubSlack({ throws = false } = {}) {
+  const posts = [];
+  return {
+    posts,
+    async post(text) {
+      posts.push(text);
+      if (throws) throw new Error('stub Slack failure');
+      return true;
+    },
+  };
+}
+
 // REVENUECAT_SECRET_API_KEY gates which path applyTransfer takes, and must
 // never leak between tests — every test below sets/deletes it itself and
 // restores whatever was there before in a finally block.
@@ -466,12 +484,14 @@ test('applyTransfer via RC: anonymous source + active destination → granted (t
       transferred_to: [DEST_ID],
     };
 
-    const result = await applyTransfer(event, db, rcApi);
+    const slack = createStubSlack();
+    const result = await applyTransfer(event, db, rcApi, slack);
 
     assert.deepEqual(result, { ok: true });
     assert.deepEqual(db.store.get(DEST_ID), { isPro: true, proExpiresAt: FUTURE_EXPIRY, proSource: 'iap' });
     // No real Supabase source, so RC was never asked about one.
     assert.deepEqual(rcApi.calls, [DEST_ID]);
+    assert.deepEqual(slack.posts, [`ClearPass transfer: granted, destination ${DEST_ID}, expiry ${FUTURE_EXPIRY}`]);
   });
 });
 
@@ -481,43 +501,65 @@ test('applyTransfer via RC: destination not active in RevenueCat → no grant', 
     const rcApi = createStubRcApi({ [DEST_ID]: { active: false, expiresAt: null } });
     const event = { id: 'evt_rc_2', type: 'TRANSFER', transferred_from: [], transferred_to: [DEST_ID] };
 
-    const result = await applyTransfer(event, db, rcApi);
+    const slack = createStubSlack();
+    const result = await applyTransfer(event, db, rcApi, slack);
 
     assert.deepEqual(result, { ok: true });
     assert.deepEqual(db.store.get(DEST_ID), {});
+    assert.deepEqual(slack.posts, [`ClearPass transfer: not granted, destination ${DEST_ID}, expiry none`]);
   });
 });
 
-test('applyTransfer via RC: a RevenueCat API error aborts before any write, deletes the dedup row, signals retry', async () => {
+test('applyTransfer via RC: a RevenueCat API error aborts before any write, deletes the dedup row, signals retry, posts "failed"', async () => {
   await withRcApiKey('sk_test', async () => {
     const db = createStubDb({ [DEST_ID]: {} });
     const rcApi = createStubRcApi({}, new Set([DEST_ID]));
     const event = { id: 'evt_rc_3', type: 'TRANSFER', transferred_from: [], transferred_to: [DEST_ID] };
 
-    const result = await applyTransfer(event, db, rcApi);
+    const slack = createStubSlack();
+    const result = await applyTransfer(event, db, rcApi, slack);
 
     assert.deepEqual(result, { ok: false, retry: true });
     assert.deepEqual(db.store.get(DEST_ID), {});
     assert.deepEqual(db.deletedEvents, ['evt_rc_3']);
+    assert.deepEqual(slack.posts, [`ClearPass transfer: failed, destination ${DEST_ID}, expiry none`]);
   });
 });
 
-test('applyTransfer: REVENUECAT_SECRET_API_KEY missing falls back to local source-expiry logic', async () => {
+test('applyTransfer via RC: a failing Slack post is swallowed — does not affect the webhook result', async () => {
+  await withRcApiKey('sk_test', async () => {
+    const db = createStubDb({ [DEST_ID]: {} });
+    const rcApi = createStubRcApi({ [DEST_ID]: { active: true, expiresAt: FUTURE_EXPIRY } });
+    const event = { id: 'evt_rc_3b', type: 'TRANSFER', transferred_from: [], transferred_to: [DEST_ID] };
+
+    const slack = createStubSlack({ throws: true });
+    const result = await applyTransfer(event, db, rcApi, slack);
+
+    assert.deepEqual(result, { ok: true });
+    assert.deepEqual(db.store.get(DEST_ID), { isPro: true, proExpiresAt: FUTURE_EXPIRY, proSource: 'iap' });
+  });
+});
+
+test('applyTransfer: REVENUECAT_SECRET_API_KEY missing falls back to local source-expiry logic, posts once that the fallback was used', async () => {
   await withRcApiKey(undefined, async () => {
     const db = createStubDb({
       [SOURCE_ID]: { isPro: true, proExpiresAt: FUTURE_EXPIRY, proSource: 'iap' },
       [DEST_ID]: {},
     });
     // An rcApi that would throw if ever called — proves the fallback never
-    // touches it.
+    // touches it. applyTransferLocal itself never posts to Slack either
+    // (asserted below via the single expected post being the fallback
+    // notice, not anything from inside the local grant/clear logic).
     const rcApi = { getProEntitlement: async () => { throw new Error('should not be called'); } };
+    const slack = createStubSlack();
     const event = { id: 'evt_rc_4', type: 'TRANSFER', transferred_from: [SOURCE_ID], transferred_to: [DEST_ID] };
 
-    const result = await applyTransfer(event, db, rcApi);
+    const result = await applyTransfer(event, db, rcApi, slack);
 
     assert.deepEqual(result, { ok: true });
     assert.deepEqual(db.store.get(DEST_ID), { isPro: true, proExpiresAt: FUTURE_EXPIRY, proSource: 'iap' });
     assert.deepEqual(db.store.get(SOURCE_ID), { isPro: false, proExpiresAt: null, proSource: null });
+    assert.deepEqual(slack.posts, ['ClearPass transfer: RevenueCat key missing, used fallback, event evt_rc_4']);
   });
 });
 
@@ -531,10 +573,65 @@ test('applyTransfer via RC: source still active in RevenueCat → source is not 
     });
     const event = { id: 'evt_rc_5', type: 'TRANSFER', transferred_from: [SOURCE_ID], transferred_to: [DEST_ID] };
 
-    const result = await applyTransfer(event, db, rcApi);
+    const slack = createStubSlack();
+    const result = await applyTransfer(event, db, rcApi, slack);
 
     assert.deepEqual(result, { ok: true });
     assert.deepEqual(db.store.get(SOURCE_ID), originalSource);
+    // A normal source-clearing outcome doesn't post to Slack — only
+    // destination outcomes and source FAILURES do (see the two tests below).
+    assert.deepEqual(slack.posts, [`ClearPass transfer: not granted, destination ${DEST_ID}, expiry none`]);
+  });
+});
+
+test('applyTransfer via RC: source lookup error posts "failed, will retry" with reason', async () => {
+  await withRcApiKey('sk_test', async () => {
+    const originalSource = { isPro: true, proExpiresAt: FUTURE_EXPIRY, proSource: 'iap' };
+    const db = createStubDb({ [SOURCE_ID]: originalSource, [DEST_ID]: {} });
+    const rcApi = createStubRcApi(
+      { [DEST_ID]: { active: false, expiresAt: null } },
+      new Set([SOURCE_ID]),
+    );
+    const event = { id: 'evt_rc_9', type: 'TRANSFER', transferred_from: [SOURCE_ID], transferred_to: [DEST_ID] };
+
+    const slack = createStubSlack();
+    const result = await applyTransfer(event, db, rcApi, slack);
+
+    assert.deepEqual(result, { ok: false, retry: true });
+    assert.deepEqual(db.store.get(SOURCE_ID), originalSource);
+    assert.deepEqual(db.deletedEvents, ['evt_rc_9']);
+    // The destination's "not granted" outcome posted first, then the source
+    // lookup failure aborted the whole event.
+    assert.deepEqual(slack.posts, [
+      `ClearPass transfer: not granted, destination ${DEST_ID}, expiry none`,
+      'ClearPass transfer: failed, will retry, event evt_rc_9, reason source lookup error',
+    ]);
+  });
+});
+
+test('applyTransfer via RC: source DB write fails after RC confirms it is no longer active → "failed, will retry"', async () => {
+  await withRcApiKey('sk_test', async () => {
+    const originalSource = { isPro: true, proExpiresAt: FUTURE_EXPIRY, proSource: 'iap' };
+    const db = createStubDb(
+      { [SOURCE_ID]: originalSource, [DEST_ID]: {} },
+      { failIds: new Set([SOURCE_ID]) },
+    );
+    const rcApi = createStubRcApi({
+      [DEST_ID]: { active: false, expiresAt: null },
+      [SOURCE_ID]: { active: false, expiresAt: null },
+    });
+    const event = { id: 'evt_rc_10', type: 'TRANSFER', transferred_from: [SOURCE_ID], transferred_to: [DEST_ID] };
+
+    const slack = createStubSlack();
+    const result = await applyTransfer(event, db, rcApi, slack);
+
+    assert.deepEqual(result, { ok: false, retry: true });
+    assert.deepEqual(db.store.get(SOURCE_ID), originalSource);
+    assert.deepEqual(db.deletedEvents, ['evt_rc_10']);
+    assert.deepEqual(slack.posts, [
+      `ClearPass transfer: not granted, destination ${DEST_ID}, expiry none`,
+      'ClearPass transfer: failed, will retry, event evt_rc_10, reason source write error',
+    ]);
   });
 });
 
@@ -544,9 +641,41 @@ test('applyTransfer via RC: destination active but non-expiring ("pro" with a nu
     const rcApi = createStubRcApi({ [DEST_ID]: { active: true, expiresAt: null } });
     const event = { id: 'evt_rc_6', type: 'TRANSFER', transferred_from: [], transferred_to: [DEST_ID] };
 
-    const result = await applyTransfer(event, db, rcApi);
+    const slack = createStubSlack();
+    const result = await applyTransfer(event, db, rcApi, slack);
 
     assert.deepEqual(result, { ok: true });
     assert.deepEqual(db.store.get(DEST_ID), {});
+    assert.deepEqual(slack.posts, [`ClearPass transfer: not granted, destination ${DEST_ID}, expiry none`]);
+  });
+});
+
+test('applyTransfer via RC: destination already has a higher-priority grant → not granted, posts the RC expiry', async () => {
+  await withRcApiKey('sk_test', async () => {
+    const db = createStubDb({ [DEST_ID]: { isPro: true, proExpiresAt: null, proSource: 'comp' } });
+    const rcApi = createStubRcApi({ [DEST_ID]: { active: true, expiresAt: FUTURE_EXPIRY } });
+    const event = { id: 'evt_rc_7', type: 'TRANSFER', transferred_from: [], transferred_to: [DEST_ID] };
+
+    const slack = createStubSlack();
+    const result = await applyTransfer(event, db, rcApi, slack);
+
+    assert.deepEqual(result, { ok: true });
+    assert.deepEqual(db.store.get(DEST_ID), { isPro: true, proExpiresAt: null, proSource: 'comp' });
+    assert.deepEqual(slack.posts, [`ClearPass transfer: not granted, destination ${DEST_ID}, expiry ${FUTURE_EXPIRY}`]);
+  });
+});
+
+test('applyTransfer via RC: destination DB write fails after a successful lookup → failed, posts the expiry that would have been granted', async () => {
+  await withRcApiKey('sk_test', async () => {
+    const db = createStubDb({ [DEST_ID]: {} }, { failIds: new Set([DEST_ID]) });
+    const rcApi = createStubRcApi({ [DEST_ID]: { active: true, expiresAt: FUTURE_EXPIRY } });
+    const event = { id: 'evt_rc_8', type: 'TRANSFER', transferred_from: [], transferred_to: [DEST_ID] };
+
+    const slack = createStubSlack();
+    const result = await applyTransfer(event, db, rcApi, slack);
+
+    assert.deepEqual(result, { ok: false, retry: true });
+    assert.deepEqual(db.deletedEvents, ['evt_rc_8']);
+    assert.deepEqual(slack.posts, [`ClearPass transfer: failed, destination ${DEST_ID}, expiry ${FUTURE_EXPIRY}`]);
   });
 });
