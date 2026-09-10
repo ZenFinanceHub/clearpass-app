@@ -57,6 +57,7 @@ import { Pip } from '@/src/components/Pip';
 import { PaywallPrompt } from '@/src/components/PaywallPrompt';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { ShareCardModal } from '@/src/components/ShareableCard';
+import { MarkdownText } from '@/src/components/MarkdownText';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
 import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
@@ -1242,7 +1243,12 @@ export default function PracticeScreen() {
           ) : aiExplanation !== null ? (
             <View style={styles.aiCard}>
               <Text style={styles.aiCardTitle}>AI TUTOR</Text>
-              <Text style={styles.aiCardBody}>{aiExplanation}</Text>
+              <MarkdownText
+                content={aiExplanation}
+                color={Colors.textDark}
+                fontSize={14}
+                lineHeight={22}
+              />
             </View>
           ) : aiLoading ? (
             <View style={styles.aiLoadingRow}>

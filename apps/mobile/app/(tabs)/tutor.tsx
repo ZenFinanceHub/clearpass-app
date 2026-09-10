@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import * as Sentry from '@sentry/react-native';
 import { Pip } from '@/src/components/Pip';
+import { MarkdownText } from '@/src/components/MarkdownText';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { getAccessToken } from '@/src/getAccessToken';
 import { handleSessionExpired } from '@/src/handleSessionExpired';
@@ -354,13 +355,13 @@ export default function TutorScreen() {
               </View>
             )}
             <View style={[styles.bubble, msg.role === 'user' ? styles.bubbleUser : styles.bubbleTutor]}>
-              <Text style={[
-                styles.bubbleText,
-                msg.role === 'user' ? styles.bubbleTextUser : styles.bubbleTextTutor,
-                { fontFamily: theme.fontFamily, fontSize: theme.fontSize(14), lineHeight: theme.lineHeight(21) },
-              ]}>
-                {msg.content}
-              </Text>
+              <MarkdownText
+                content={msg.content}
+                color={msg.role === 'user' ? '#FFFFFF' : '#111827'}
+                fontFamily={theme.fontFamily}
+                fontSize={theme.fontSize(14)}
+                lineHeight={theme.lineHeight(21)}
+              />
               <Text style={[styles.bubbleTime, msg.role === 'user' ? styles.timeUser : styles.timeTutor]}>
                 {msg.time}
               </Text>
