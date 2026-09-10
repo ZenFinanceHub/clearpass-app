@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  BackHandler,
   Linking,
   Modal,
   Platform,
@@ -12,7 +13,9 @@ import {
   View,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import { useNavigation, useRoute, usePreventRemove } from '@react-navigation/native';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import { hazardExitGuard } from '@/src/hazardExitGuard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DVSA_HAZARD_PASS_RATIO, HazardClip, HazardClipResult, HazardSessionResult, HazardWindow, UserProgress, calculateHazardTotal, scoreClip } from '@clearpass/core';
 import { hazardClips } from '@clearpass/content';
@@ -250,6 +253,14 @@ export default function HazardScreen() {
   // regardless of attempt count, for the rest of this screen's lifetime.
   const [explainerManuallyExpanded, setExplainerManuallyExpanded] = useState<boolean | null>(null);
 
+  // ── Exit confirmation (player + solution phases — both landscape-locked,
+  // actively-playing video) ──
+  const navigation = useNavigation();
+  const route = useRoute();
+  const [exitModalVisible, setExitModalVisible] = useState(false);
+  const pendingExitRef = useRef<(() => void) | null>(null);
+  const inVideoPlayback = phase === 'player' || phase === 'solution';
+
   useFocusEffect(
     useCallback(() => {
       void loadUserProgress().then(p => setUserProgress(p));
@@ -446,6 +457,85 @@ export default function HazardScreen() {
     setWarningAcked(false);
     setPhase('info');
   }
+
+  /** Shows the exit-confirmation modal instead of leaving immediately. */
+  function requestExit(onConfirmed?: () => void) {
+    pendingExitRef.current = onConfirmed ?? null;
+    setExitModalVisible(true);
+  }
+
+  function confirmExit() {
+    setExitModalVisible(false);
+    handleExitClip(); // phase change away from 'player'/'solution' unmounts
+                       // VideoSurface, which is what actually stops/unloads
+                       // the video and releases the landscape orientation
+                       // lock (see VideoSurface's cleanup, above) — this
+                       // must run regardless of what the pending action
+                       // (e.g. a tab switch) does next, since tabs don't
+                       // unmount on blur by default and would otherwise
+                       // leave the screen stuck landscape-locked in the
+                       // background.
+    const run = pendingExitRef.current;
+    pendingExitRef.current = null;
+    run?.();
+  }
+
+  function cancelExit() {
+    setExitModalVisible(false);
+    pendingExitRef.current = null;
+  }
+
+  // Covers a genuine stack/route removal (e.g. a forced redirect elsewhere
+  // mid-clip). Tab-bar taps don't fire this — see hazardExitGuard.
+  usePreventRemove(inVideoPlayback, ({ data }) => {
+    requestExit(() => navigation.dispatch(data.action));
+  });
+
+  // Android hardware back: same reasoning as mock.tsx's exit guard — this
+  // is a tab-root screen with no push-based back stack, so the default
+  // action would silently switch to the first tab rather than emit a
+  // removal event, and beforeRemove/usePreventRemove can't catch it either.
+  useEffect(() => {
+    if (!inVideoPlayback || Platform.OS === 'web') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      requestExit();
+      return true;
+    });
+    return () => sub.remove();
+  }, [inVideoPlayback]);
+
+  // Registers this screen with the tab-bar tabPress guard in
+  // app/(tabs)/_layout.tsx — see hazardExitGuard for why switching tabs
+  // needs to be intercepted there instead of here.
+  useEffect(() => {
+    hazardExitGuard.active = inVideoPlayback;
+    hazardExitGuard.routeKey = route.key;
+    hazardExitGuard.requestExit = requestExit;
+    return () => {
+      hazardExitGuard.active = false;
+      hazardExitGuard.requestExit = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inVideoPlayback, route.key]);
+
+  // Rendered from both the player and solution phases below — Modal-based,
+  // not Alert.alert (a no-op on react-native-web).
+  const exitConfirmModal = (
+    <Modal visible={exitModalVisible} transparent animationType="fade" onRequestClose={cancelExit}>
+      <View style={styles.exitConfirmOverlay}>
+        <View style={styles.exitConfirmCard}>
+          <Text style={styles.exitConfirmTitle}>{'Leave this clip?'}</Text>
+          <Text style={styles.exitConfirmNote}>{"Your score won't be saved."}</Text>
+          <TouchableOpacity style={styles.exitConfirmKeepBtn} onPress={cancelExit} activeOpacity={0.85}>
+            <Text style={styles.exitConfirmKeepBtnText}>{'Keep going'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.exitConfirmLeaveBtn} onPress={confirmExit} activeOpacity={0.85}>
+            <Text style={styles.exitConfirmLeaveBtnText}>{'Leave clip'}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
 
   // ── WEB GUARD ────────────────────────────────────────────────────────────
   // The web build has no ground-truth video clock (see WebVideoPlayer — its
@@ -739,7 +829,7 @@ export default function HazardScreen() {
           {/* Exit */}
           <TouchableOpacity
             style={[styles.exitBtnPlayer, { top: 16 + insets.top, left: 16 + insets.left }]}
-            onPress={handleExitClip}
+            onPress={() => requestExit()}
             activeOpacity={0.85}
           >
             <Text style={styles.exitBtnPlayerText}>{'← Exit'}</Text>
@@ -766,6 +856,8 @@ export default function HazardScreen() {
             {scoringWindowClosed ? 'Scoring closed for this clip' : 'Tap anywhere to mark a hazard'}
           </Text>
         </View>
+
+        {exitConfirmModal}
       </View>
     );
   }
@@ -839,10 +931,25 @@ v.addEventListener('ended', function() { window.ReactNativeWebView.postMessage(J
               />
             </VideoSurface>
           ) : null}
+
+          {/* Exit — the solution/reveal clip had no way to leave before
+              it finished playing; same landscape-lock risk as the player
+              phase above (both are wrapped in VideoSurface). */}
+          <TouchableOpacity
+            style={[styles.exitBtnPlayer, { top: 16 + insets.top, left: 16 + insets.left }]}
+            onPress={() => requestExit()}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.exitBtnPlayerText}>{'← Exit'}</Text>
+          </TouchableOpacity>
+
           <View
             style={[
               styles.hud,
-              { top: 16 + insets.top, bottom: undefined, left: 16 + insets.left, right: 16 + insets.right },
+              // Pushed down below the new exit button (top: 16 + insets.top),
+              // which sits at the same left edge — was flush with the top
+              // before that button existed.
+              { top: 56 + insets.top, bottom: undefined, left: 16 + insets.left, right: 16 + insets.right },
             ]}
             pointerEvents="none"
           >
@@ -857,6 +964,8 @@ v.addEventListener('ended', function() { window.ReactNativeWebView.postMessage(J
             </Text>
           </TouchableOpacity>
         </View>
+
+        {exitConfirmModal}
       </View>
     );
   }
@@ -1147,6 +1256,32 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   exitBtnPlayerText: { fontSize: 11, fontWeight: '700', color: '#FFFFFF' },
+
+  // Exit confirmation — same recipe as mock.tsx's pauseOverlay/pauseCard
+  // (dark overlay, centered white rounded card, primary + muted-secondary
+  // button), not a shared style module since the two files don't share one.
+  exitConfirmOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15,23,42,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+  },
+  exitConfirmCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 28,
+    width: '82%',
+    alignItems: 'center',
+    gap: 12,
+  },
+  exitConfirmTitle: { fontSize: 22, fontWeight: '900', color: '#111827' },
+  exitConfirmNote: { fontSize: 12, color: '#6B7280', textAlign: 'center', lineHeight: 18 },
+  exitConfirmKeepBtn: { backgroundColor: Colors.indigo, borderRadius: 14, paddingVertical: 15, width: '100%', alignItems: 'center', marginTop: 4 },
+  exitConfirmKeepBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  exitConfirmLeaveBtn: { borderRadius: 14, paddingVertical: 12, width: '100%', alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB' },
+  exitConfirmLeaveBtnText: { color: '#6B7280', fontSize: 14, fontWeight: '600' },
+
   hud: {
     position: 'absolute',
     bottom: 16,

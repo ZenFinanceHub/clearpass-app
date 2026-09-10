@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/src/constants/theme';
 import { Pip } from '@/src/components/Pip';
 import { mockTestExitGuard } from '@/src/mockTestExitGuard';
+import { hazardExitGuard } from '@/src/hazardExitGuard';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -68,13 +69,17 @@ export default function TabLayout() {
           fontWeight: '700',
         },
       }}
-      // Blocks switching away from the Mock Test tab mid-test — see
-      // mockTestExitGuard for why this can't live inside mock.tsx itself.
+      // Blocks switching away from the Mock Test or Hazard tab mid-session —
+      // see mockTestExitGuard/hazardExitGuard for why this can't live inside
+      // mock.tsx/hazard.tsx themselves.
       screenListeners={({ route }) => ({
         tabPress: (e) => {
           if (mockTestExitGuard.active && route.key !== mockTestExitGuard.routeKey) {
             e.preventDefault();
             mockTestExitGuard.requestExit?.(() => router.replace(`/(tabs)/${route.name}` as any));
+          } else if (hazardExitGuard.active && route.key !== hazardExitGuard.routeKey) {
+            e.preventDefault();
+            hazardExitGuard.requestExit?.(() => router.replace(`/(tabs)/${route.name}` as any));
           }
         },
       })}
