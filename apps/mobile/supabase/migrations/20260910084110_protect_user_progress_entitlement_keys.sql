@@ -1,7 +1,4 @@
 -- APPLIED 2026-09-10 via Supabase SQL Editor
--- DRAFT — NOT APPLIED. Written for review only; do not run against any
--- database until the test plan in the accompanying report has been executed
--- against a staging project.
 --
 -- Closes a privilege-escalation gap: public.user_progress's only write
 -- policy is `for all using (auth.uid() = id)` with no `with check`, so any
