@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -67,7 +68,7 @@ function makeVideoHtml(url: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #000; width: 100vw; height: 100vh; overflow: hidden; }
+html, body { background: #000; width: 100%; height: 100%; overflow: hidden; }
 video { width: 100%; height: 100%; object-fit: contain; display: block; }
 </style>
 </head>
@@ -242,6 +243,12 @@ export default function HazardScreen() {
   const lastExitedClipIdRef = useRef<string | null>(null);
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  // Drives STYLE-only changes to the player/solution chrome around the video
+  // (flexDirection, which side panel shows) — never used to conditionally
+  // mount/unmount or reparent the WebView itself, so it can't cause the
+  // remount-on-rotation risk that useWindowDimensions normally carries.
+  const { width: winWidth, height: winHeight } = useWindowDimensions();
+  const isLandscape = winWidth > winHeight;
 
   const [celebQueue, setCelebQueue] = useState<CelebrationEvent[]>([]);
   const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
@@ -814,13 +821,39 @@ export default function HazardScreen() {
       );
     }
 
+    const clipPositionLabel = `${clipIndex + 1}/${activeClips.length > 0 ? activeClips.length : hazardClips.length}`;
+    const tapHintLabel = scoringWindowClosed ? 'Scoring closed for this clip' : 'Tap anywhere to mark a hazard';
+
     return (
-      <View style={styles.playerScreen}>
+      <View style={[styles.playerScreen, isLandscape && styles.playerScreenRow]}>
+        {/* Landscape only — exit button moves beside the video instead of
+            overlaying it, in its own side panel. Conditional on isLandscape
+            (a STYLE/layout decision), but this branch never touches
+            videoWrap or the WebView below: it's a sibling element entirely
+            outside videoWrap, added/removed as an extra sibling, so the
+            WebView's parent, position and key are untouched by rotation. */}
+        {isLandscape && (
+          <View style={[styles.sidePanel, { paddingLeft: 12 + insets.left }]}>
+            <TouchableOpacity
+              style={styles.exitBtnSide}
+              onPress={() => requestExit()}
+              activeOpacity={0.6}
+              accessibilityLabel="Exit clip"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Text style={styles.exitBtnPlayerText}>{'✕'}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View style={styles.videoWrap}>
           <VideoSurface>{videoContent}</VideoSurface>
 
           {/* Tap overlay — disabled outright once scoring windows have closed, so
-              taps during any reveal footage register nothing at all. */}
+              taps during any reveal footage register nothing at all. Covers
+              exactly videoWrap in both orientations: in landscape the exit
+              button and info panel are outside videoWrap (siblings, see
+              above/below), never inside it, so this never risks covering them. */}
           <TouchableOpacity
             style={[StyleSheet.absoluteFillObject, { zIndex: 10 }]}
             activeOpacity={1}
@@ -838,47 +871,56 @@ export default function HazardScreen() {
             pointerEvents="none"
           />
 
-          {/* Exit — icon-only, transparent background: nothing may overlay
-              the video area during playback, so this is deliberately not a
-              filled shape or bar, just a glyph with a shadow for legibility
-              against whatever footage is behind it. zIndex 12 (same as
-              before) keeps it above the zIndex:10 tap-catcher above, so a
+          {/* Exit — portrait only. Icon-only, transparent background:
+              nothing may overlay the video area during playback, so this is
+              deliberately not a filled shape or bar, just a glyph with a
+              shadow for legibility against whatever footage is behind it.
+              zIndex 12 keeps it above the zIndex:10 tap-catcher above, so a
               tap here is a genuine UI event, never forwarded to
               handleVideoTap as a hazard tap — the tap-catcher only ever
               receives touches outside this button's (hitSlop-expanded)
-              bounds. */}
-          <TouchableOpacity
-            style={[styles.exitBtnPlayer, { top: 16 + insets.top, left: 16 + insets.left }]}
-            onPress={() => requestExit()}
-            activeOpacity={0.6}
-            accessibilityLabel="Exit clip"
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Text style={styles.exitBtnPlayerText}>{'✕'}</Text>
-          </TouchableOpacity>
+              bounds. In landscape this is replaced by the side-panel exit
+              button above, which sits outside videoWrap entirely rather
+              than overlaying it. */}
+          {!isLandscape && (
+            <TouchableOpacity
+              style={[styles.exitBtnPlayer, { top: 16 + insets.top, left: 16 + insets.left }]}
+              onPress={() => requestExit()}
+              activeOpacity={0.6}
+              accessibilityLabel="Exit clip"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Text style={styles.exitBtnPlayerText}>{'✕'}</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* Clip position + time — moved out of the video area entirely
-            (previously an absolutely-positioned bar overlaying the
-            footage) so nothing overlays the video during playback.
-            Deliberately shows no tap count or score-shaped number here:
-            the clip position isn't tap-reactive, nothing in this bar
+        {/* Clip position + time (+ tap hint in landscape) — moved out of the
+            video area entirely (previously an absolutely-positioned bar
+            overlaying the footage) so nothing overlays the video during
+            playback. Deliberately shows no tap count or score-shaped number
+            here: the clip position isn't tap-reactive, nothing in this bar
             changes in response to a tap, so it can't be used to infer
-            scoring. */}
-        <View style={styles.playerInfoBar}>
-          <Text style={styles.playerInfoText}>
-            {clipIndex + 1}
-            {'/'}
-            {activeClips.length > 0 ? activeClips.length : hazardClips.length}
-          </Text>
-          <Text style={styles.playerInfoText}>{formatTime(currentTime)}</Text>
-        </View>
-
-        <View style={styles.tapHintBar}>
-          <Text style={styles.tapHintText}>
-            {scoringWindowClosed ? 'Scoring closed for this clip' : 'Tap anywhere to mark a hazard'}
-          </Text>
-        </View>
+            scoring. Landscape stacks these in the side panel (full video
+            height, no top/bottom bars); portrait keeps them as bars below
+            the video. */}
+        {isLandscape ? (
+          <View style={[styles.sidePanel, { paddingRight: 12 + insets.right }]}>
+            <Text style={styles.sideInfoText}>{clipPositionLabel}</Text>
+            <Text style={styles.sideInfoText}>{formatTime(currentTime)}</Text>
+            <Text style={[styles.sideInfoText, styles.sideHintText]}>{tapHintLabel}</Text>
+          </View>
+        ) : (
+          <>
+            <View style={styles.playerInfoBar}>
+              <Text style={styles.playerInfoText}>{clipPositionLabel}</Text>
+              <Text style={styles.playerInfoText}>{formatTime(currentTime)}</Text>
+            </View>
+            <View style={styles.tapHintBar}>
+              <Text style={styles.tapHintText}>{tapHintLabel}</Text>
+            </View>
+          </>
+        )}
 
         {exitConfirmModal}
       </View>
@@ -925,7 +967,7 @@ export default function HazardScreen() {
     const seekTo = meta?.solution_start_s ?? 60;
     const solHtml = solutionVideoUrl ? `<!DOCTYPE html>
 <html><head><meta name="viewport" content="width=device-width, initial-scale=1">
-<style>* { margin:0; padding:0; box-sizing:border-box; } body { background:#000; width:100vw; height:100vh; overflow:hidden; } video { width:100%; height:100%; object-fit:contain; display:block; }</style>
+<style>* { margin:0; padding:0; box-sizing:border-box; } html, body { background:#000; width:100%; height:100%; overflow:hidden; } video { width:100%; height:100%; object-fit:contain; display:block; }</style>
 </head><body>
 <video id="v" src="${solutionVideoUrl}" autoplay playsinline muted></video>
 <script>
@@ -938,8 +980,28 @@ v.addEventListener('ended', function() { window.ReactNativeWebView.postMessage(J
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const WebView = (require('react-native-webview') as { default: React.ComponentType<any> }).default;
 
+    const nextLabel = isLast ? 'See Results →' : 'Next Clip →';
+
     return (
-      <View style={styles.playerScreen}>
+      <View style={[styles.playerScreen, isLandscape && styles.playerScreenRow]}>
+        {/* Landscape only — see the matching side-panel comment on the
+            player phase above; same reasoning (a sibling of videoWrap, not
+            a wrapper around it, so the WebView's parent/position/key are
+            untouched by rotation). */}
+        {isLandscape && (
+          <View style={[styles.sidePanel, { paddingLeft: 12 + insets.left }]}>
+            <TouchableOpacity
+              style={styles.exitBtnSide}
+              onPress={() => requestExit()}
+              activeOpacity={0.6}
+              accessibilityLabel="Exit clip"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Text style={styles.exitBtnPlayerText}>{'✕'}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View style={styles.videoWrap}>
           {solutionVideoUrl ? (
             <VideoSurface>
@@ -955,36 +1017,51 @@ v.addEventListener('ended', function() { window.ReactNativeWebView.postMessage(J
             </VideoSurface>
           ) : null}
 
-          {/* Exit — icon-only, transparent background — see the matching
-              comment on the player phase's exit button above; same
-              reasoning applies here (nothing may overlay the video). */}
-          <TouchableOpacity
-            style={[styles.exitBtnPlayer, { top: 16 + insets.top, left: 16 + insets.left }]}
-            onPress={() => requestExit()}
-            activeOpacity={0.6}
-            accessibilityLabel="Exit clip"
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Text style={styles.exitBtnPlayerText}>{'✕'}</Text>
-          </TouchableOpacity>
+          {/* Exit — portrait only. Icon-only, transparent background — see
+              the matching comment on the player phase's exit button above;
+              same reasoning applies here (nothing may overlay the video).
+              In landscape this is replaced by the side-panel exit button
+              above. */}
+          {!isLandscape && (
+            <TouchableOpacity
+              style={[styles.exitBtnPlayer, { top: 16 + insets.top, left: 16 + insets.left }]}
+              onPress={() => requestExit()}
+              activeOpacity={0.6}
+              accessibilityLabel="Exit clip"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Text style={styles.exitBtnPlayerText}>{'✕'}</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* "Solution clip" / hazard-marker labels — moved out of the video
-            area entirely (previously an absolutely-positioned bar
-            overlaying the footage), same reasoning as the player phase's
-            clip position/time bar above. */}
-        <View style={styles.playerInfoBar}>
-          <Text style={styles.playerInfoText}>{'Solution clip'}</Text>
-          <Text style={styles.playerInfoText}>{'Hazard shown with red circle'}</Text>
-        </View>
-
-        <View style={styles.tapHintBar}>
-          <TouchableOpacity onPress={handleNextClip} activeOpacity={0.85}>
-            <Text style={[styles.tapHintText, { color: Colors.indigo, fontWeight: '700' }]}>
-              {isLast ? 'See Results →' : 'Next Clip →'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        {/* "Solution clip" / hazard-marker labels (+ Next Clip link in
+            landscape) — moved out of the video area entirely (previously an
+            absolutely-positioned bar overlaying the footage), same
+            reasoning as the player phase's clip position/time bar above. */}
+        {isLandscape ? (
+          <View style={[styles.sidePanel, { paddingRight: 12 + insets.right }]}>
+            <Text style={styles.sideInfoText}>{'Solution clip'}</Text>
+            <Text style={styles.sideInfoText}>{'Hazard shown with red circle'}</Text>
+            <TouchableOpacity onPress={handleNextClip} activeOpacity={0.85} style={{ marginTop: 8 }}>
+              <Text style={[styles.sideInfoText, { color: Colors.indigoDark, fontWeight: '800' }]}>{nextLabel}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <View style={styles.playerInfoBar}>
+              <Text style={styles.playerInfoText}>{'Solution clip'}</Text>
+              <Text style={styles.playerInfoText}>{'Hazard shown with red circle'}</Text>
+            </View>
+            <View style={styles.tapHintBar}>
+              <TouchableOpacity onPress={handleNextClip} activeOpacity={0.85}>
+                <Text style={[styles.tapHintText, { color: Colors.indigo, fontWeight: '700' }]}>
+                  {nextLabel}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
 
         {exitConfirmModal}
       </View>
@@ -1264,8 +1341,28 @@ const styles = StyleSheet.create({
 
   // Player — stays black
   playerScreen: { flex: 1, backgroundColor: '#000000' },
+  // Landscape: exit + info move into side panels (see sidePanel below)
+  // instead of top/bottom bars, so videoWrap keeps the full screen height —
+  // only style changes, videoWrap/WebView's position in the tree is
+  // unaffected either way.
+  playerScreenRow: { flexDirection: 'row' },
   videoWrap: { flex: 1, backgroundColor: '#000000', overflow: 'hidden' },
   flashOverlay: { backgroundColor: '#FCD34D' },
+  // Landscape-only exit/info column beside the video — a sibling of
+  // videoWrap, never a wrapper around it. Fixed width sized for the ✕ button
+  // or a couple of short lines of text; insets padding added by the caller
+  // on whichever side actually has the notch/home-indicator inset.
+  sidePanel: {
+    width: 88,
+    backgroundColor: '#111827',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 6,
+  },
+  exitBtnSide: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  sideInfoText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF', textAlign: 'center' },
+  sideHintText: { marginTop: 8, opacity: 0.75, fontWeight: '600' },
   // Icon-only, transparent — nothing may overlay the video area during
   // playback/scoring, so this is deliberately not a filled shape or bar.
   // zIndex 12 keeps it above the tap-catcher's zIndex:10, so a tap here is
