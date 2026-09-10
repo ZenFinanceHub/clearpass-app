@@ -2186,7 +2186,14 @@ const styles = StyleSheet.create({
   battleButtonSub: { fontSize: 12, color: Colors.mutedText, lineHeight: 18 },
 
   // Progress bar
-  progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  // marginTop clears the floating Pip FAB (app/_layout.tsx, top-right,
+  // 52x52), which otherwise sits directly over the "42%" progress percent
+  // here — this is the first thing in the scroll content, right below the
+  // tab header, in the same top-right corner the FAB occupies. Verified in
+  // an isolated harness: "42%" was fully hidden behind the FAB without
+  // this margin. Pip stays visible/usable on this screen — only pushed
+  // down, matching the "don't hide Pip on Practice" requirement.
+  progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6, marginTop: 44 },
   progressLabel: { fontSize: 13, color: Colors.mutedText, fontWeight: '500' },
   progressPct: { fontSize: 13, color: Colors.indigo, fontWeight: '700' },
   progressTrack: {
