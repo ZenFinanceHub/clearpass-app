@@ -40,16 +40,34 @@ function shouldApplyProGrant(currentSource, incomingSource, currentExpiresAt, in
   return incomingExpiresAt > currentExpiresAt;
 }
 
-// Instructor-sourced and comp-sourced Pro are both granted unconditionally
-// and never expire on their own — instructor for as long as the account is
-// an instructor, comp for as long as someone manually granted it stands.
-function isExemptFromProExpiry(source) {
-  return source === 'instructor' || source === 'comp';
+// Comp-sourced Pro is granted unconditionally and never expires on its own —
+// a manual, one-off decision with no automated signal to key off.
+//
+// Instructor-sourced Pro is exempt only *while the profile is still an
+// instructor*. accountType is optional and, when omitted, this preserves
+// the old unconditional-exemption behaviour — every existing call site that
+// doesn't have a profile row handy (e.g. the /api/explain quota check,
+// which only reads user_progress) keeps working exactly as before. Only a
+// caller that actually looked up the profile (the expire-pro cron) gets the
+// stricter check. Passing a non-'instructor' accountType for anything other
+// than an 'instructor'-sourced state has no effect — 'comp' and paid
+// sources never look at it.
+function isExemptFromProExpiry(source, accountType) {
+  if (source === 'comp') return true;
+  if (source === 'instructor') return accountType === undefined || accountType === 'instructor';
+  return false;
 }
 
-function isEligibleForProExpiry(state, nowIso) {
-  if (isExemptFromProExpiry(state.proSource)) return false;
-  return state.isPro === true && !!state.proExpiresAt && state.proExpiresAt < nowIso;
+function isEligibleForProExpiry(state, nowIso, accountType) {
+  if (isExemptFromProExpiry(state.proSource, accountType)) return false;
+  if (state.isPro !== true) return false;
+  // Instructor grants carry no proExpiresAt (see grant-instructor-pro) — an
+  // instructor grant only ever reaches here once it's no longer exempt
+  // (accountType !== 'instructor', checked above), and at that point it's
+  // eligible immediately. There's no date to wait out, unlike stripe/iap/
+  // seat below.
+  if (state.proSource === 'instructor') return true;
+  return !!state.proExpiresAt && state.proExpiresAt < nowIso;
 }
 
 // Used when an instructor switches their own account back to learner. Only

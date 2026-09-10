@@ -2164,12 +2164,26 @@ app.post('/api/cron/expire-pro', async (req, res) => {
       .select('id, progress');
     if (error) throw error;
 
-    // isEligibleForProExpiry excludes proSource: 'instructor' rows (granted
-    // by /api/cron/grant-instructor-pro below, unconditional for as long as
-    // the account is an instructor) and proSource: 'comp' rows (manually
-    // granted, e.g. reviewers/partners/beta testers — never expires on its
-    // own, no automated process re-grants it).
-    const toExpire = (rows || []).filter(row => isEligibleForProExpiry(row.progress || {}, now));
+    // Needed to know whether an instructor-sourced grant is still
+    // warranted — account_type lives on profiles, not user_progress. A
+    // profile's account_type can change (in-app switch-to-learner, or
+    // directly) without anything touching user_progress, so an
+    // instructor-sourced grant on a since-demoted account would otherwise
+    // never be caught: it has no proExpiresAt to expire against.
+    const { data: profileRows, error: profilesErr } = await supabaseAdmin
+      .from('profiles')
+      .select('id, account_type');
+    if (profilesErr) throw profilesErr;
+    const accountTypeById = new Map((profileRows || []).map(p => [p.id, p.account_type]));
+
+    // isEligibleForProExpiry excludes proSource: 'comp' rows unconditionally
+    // (manually granted, e.g. reviewers/partners/beta testers — never
+    // expires on its own, no automated process re-grants it), and excludes
+    // proSource: 'instructor' rows only while the profile is still
+    // account_type: 'instructor' — see isExemptFromProExpiry.
+    const toExpire = (rows || []).filter(row =>
+      isEligibleForProExpiry(row.progress || {}, now, accountTypeById.get(row.id))
+    );
 
     let expired = 0;
     for (const row of toExpire) {
@@ -2200,8 +2214,16 @@ app.post('/api/cron/expire-pro', async (req, res) => {
 // ── Cron: grant instructor Pro ────────────────────────────────────────────
 // POST /api/cron/grant-instructor-pro
 // Idempotent reconciliation: every profile with account_type = 'instructor'
-// gets unconditional, non-expiring Pro-level access tagged proSource:
-// 'instructor'. Never overwrites an existing 'stripe' or 'comp' grant (see
+// AND a row in instructor_verifications gets unconditional, non-expiring
+// Pro-level access tagged proSource: 'instructor'. account_type alone is
+// not enough — it's self-declared client-side at signup (see
+// app/auth/choose-account-type.tsx), so gating only on it let anyone tap
+// "I'm an instructor" and collect free Pro the next time this cron ran.
+// instructor_verifications has no RLS policies at all (service_role/
+// postgres only, same convention as stripe_webhook_events) — a row only
+// exists there if it was inserted manually after actually confirming the
+// account.
+// Never overwrites an existing 'stripe' or 'comp' grant (see
 // shouldApplyProGrant in lib/entitlement.js) — an instructor who separately
 // paid keeps their own paid entitlement and its own expiry until it lapses,
 // at which point expire-pro clears proSource and this cron picks them up on
@@ -2221,9 +2243,23 @@ app.post('/api/cron/grant-instructor-pro', async (req, res) => {
       .eq('account_type', 'instructor');
     if (instructorsErr) throw instructorsErr;
 
-    const instructorIds = (instructors || []).map(i => i.id);
+    const allInstructorIds = (instructors || []).map(i => i.id);
+    if (allInstructorIds.length === 0) {
+      return res.json({ granted: 0, alreadyCorrect: 0, skipped: 0, unverified: 0, total: 0 });
+    }
+
+    const { data: verifiedRows, error: verifiedErr } = await supabaseAdmin
+      .from('instructor_verifications')
+      .select('user_id')
+      .in('user_id', allInstructorIds);
+    if (verifiedErr) throw verifiedErr;
+
+    const verifiedIds = new Set((verifiedRows || []).map(v => v.user_id));
+    const instructorIds = allInstructorIds.filter(id => verifiedIds.has(id));
+    const unverified = allInstructorIds.length - instructorIds.length;
+
     if (instructorIds.length === 0) {
-      return res.json({ granted: 0, alreadyCorrect: 0, skipped: 0, total: 0 });
+      return res.json({ granted: 0, alreadyCorrect: 0, skipped: 0, unverified, total: allInstructorIds.length });
     }
 
     const { data: rows, error: progressErr } = await supabaseAdmin
@@ -2274,9 +2310,9 @@ app.post('/api/cron/grant-instructor-pro', async (req, res) => {
     }
 
     console.log(
-      `[grant-instructor-pro] granted ${granted}, alreadyCorrect ${alreadyCorrect}, skipped ${skipped} (blocked by an existing stripe grant), total ${instructorIds.length}`
+      `[grant-instructor-pro] granted ${granted}, alreadyCorrect ${alreadyCorrect}, skipped ${skipped} (blocked by an existing stripe grant), unverified ${unverified}, total ${allInstructorIds.length}`
     );
-    res.json({ granted, alreadyCorrect, skipped, total: instructorIds.length });
+    res.json({ granted, alreadyCorrect, skipped, unverified, total: allInstructorIds.length });
   } catch (err) {
     console.error('[grant-instructor-pro] error:', err);
     res.status(500).json({ error: 'Grant instructor pro failed', detail: String(err) });
