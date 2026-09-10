@@ -1,4 +1,4 @@
--- DRAFT — NOT APPLIED.
+-- APPLIED 2026-09-10 via Supabase SQL Editor
 --
 -- account_type = 'instructor' is self-declared client-side at signup (see
 -- app/auth/choose-account-type.tsx — a plain two-button screen, no
