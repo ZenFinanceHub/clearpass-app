@@ -476,15 +476,14 @@ footer { background: var(--dark); padding: 72px 0 44px; }
 .store-badges { display: flex; gap: 10px; flex-wrap: wrap; }
 .store-badge {
   background: #1F2937; border: 1px solid #374151; border-radius: 12px;
-  padding: 10px 16px; display: flex; align-items: center; gap: 10px; opacity: 0.65;
-  transition: opacity 0.2s;
+  padding: 10px 16px; display: flex; align-items: center; gap: 10px; opacity: 1;
+  cursor: pointer; transition: opacity 0.2s;
 }
 .store-badge:hover { opacity: 0.85; }
 .store-icon { font-size: 20px; }
 .store-text { display: flex; flex-direction: column; }
 .store-small { font-size: 9px; color: #9CA3AF; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
 .store-name { font-size: 13px; color: #fff; font-weight: 700; }
-.store-soon { font-size: 9px; color: var(--teal-l); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 1px; }
 .footer-col { min-width: 140px; }
 .footer-col-title { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #9CA3AF; margin-bottom: 18px; }
 .footer-col a { display: block; font-size: 14px; color: #6B7280; margin-bottom: 11px; transition: color 0.2s; }
