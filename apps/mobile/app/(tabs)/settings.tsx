@@ -156,6 +156,8 @@ export default function SettingsScreen() {
   const [editName, setEditName]           = useState('');
   const [saving, setSaving]               = useState(false);
   const [successMsg, setSuccessMsg]       = useState('');
+  const [passwordResetNotice, setPasswordResetNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [sendingPasswordReset, setSendingPasswordReset] = useState(false);
 
   // Toast
   const toastOpacity = useRef(new Animated.Value(0)).current;
@@ -331,15 +333,34 @@ export default function SettingsScreen() {
   }
 
   async function handleChangePassword() {
+    if (sendingPasswordReset) return;
     if (!email) {
-      Alert.alert('No email', 'No email address found for your account.');
+      setPasswordResetNotice({ type: 'error', text: 'No email address found for your account.' });
       return;
     }
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
-    if (error) {
-      Alert.alert('Error', error.message);
-    } else {
-      Alert.alert('Email sent', `Password reset instructions sent to ${email}`);
+    setSendingPasswordReset(true);
+    setPasswordResetNotice(null);
+    try {
+      // redirectTo matches forgot-password.tsx's own resetPasswordForEmail
+      // call — without it the emailed link falls back to Supabase's
+      // default Site URL instead of this app's own reset-password screen.
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: 'https://clearpass-app.vercel.app/auth/reset-password',
+      });
+      if (error) {
+        setPasswordResetNotice({ type: 'error', text: error.message });
+      } else {
+        setPasswordResetNotice({ type: 'success', text: `Password reset instructions sent to ${email}` });
+      }
+    } catch {
+      // Alert.alert is a no-op on react-native-web (this screen is part of
+      // the static web export, app.json's web.output) — inline state is
+      // the only feedback that actually reaches a web user, so both the
+      // error and success paths above use it instead, and this catch must
+      // too rather than falling back to Alert.alert.
+      setPasswordResetNotice({ type: 'error', text: 'Could not send reset email. Please try again.' });
+    } finally {
+      setSendingPasswordReset(false);
     }
   }
 
@@ -726,9 +747,18 @@ export default function SettingsScreen() {
           style={[styles.row, styles.rowBorder]}
           onPress={() => void handleChangePassword()}
           activeOpacity={0.75}
+          disabled={sendingPasswordReset}
         >
           <View style={styles.textWrap}>
             <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Change Password'}</Text>
+            {(sendingPasswordReset || passwordResetNotice) && (
+              <Text style={[
+                styles.description,
+                { fontSize: theme.fontSize(12), color: passwordResetNotice?.type === 'error' ? '#EF4444' : theme.subTextColor },
+              ]}>
+                {sendingPasswordReset ? 'Sending...' : passwordResetNotice?.text}
+              </Text>
+            )}
           </View>
           <Text style={styles.chevron}>{'›'}</Text>
         </TouchableOpacity>
