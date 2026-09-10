@@ -1,6 +1,5 @@
 import React, { useRef, useState } from 'react';
 import {
-  Alert,
   Modal,
   Platform,
   StyleSheet,
@@ -11,6 +10,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/src/constants/theme';
+import { Alert } from '@/src/CrossPlatformAlert';
 import { DVSA_HAZARD_PASS_RATIO } from '@clearpass/core';
 
 // ─── Types ────────────────────────────────────────────────────────────────────

@@ -19,6 +19,7 @@ import { supabase } from '@/src/supabase';
 import { configureNotificationHandler } from '@/src/notifications';
 import { configurePurchases } from '@/src/purchases';
 import { resolvePostAuthRoute } from '@/src/postAuthRouting';
+import { CrossPlatformAlertHost } from '@/src/CrossPlatformAlert';
 import { Colors } from '@/src/constants/theme';
 import {
   getCacheStatus,
@@ -411,6 +412,7 @@ function RootLayout() {
               otherwise sit on top of and intercept taps for. */}
           <PipFab top={insets.top + 56} />
           <InstructorRouteGuardOverlay />
+          <CrossPlatformAlertHost />
           {showCachingToast && (
             <View style={[toastStyles.toast, { bottom: 96 + insets.bottom }]} pointerEvents="none">
               <Text style={toastStyles.text}>{'Downloading content for offline use...'}</Text>

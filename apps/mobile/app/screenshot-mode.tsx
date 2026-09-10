@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -8,6 +7,7 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from '@/src/CrossPlatformAlert';
 import { allQuestions } from '@clearpass/content';
 import { TopicCategory } from '@clearpass/core';
 import type { UserProgress, MockTestResult } from '@clearpass/core';

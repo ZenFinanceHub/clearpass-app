@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   AppState,
   Linking,
   Modal,
@@ -15,6 +14,7 @@ import {
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
+import { Alert } from '@/src/CrossPlatformAlert';
 import { supabase } from '@/src/supabase';
 import { getAccessToken } from '@/src/getAccessToken';
 import { createFreshUserProgress } from '@/src/storage';

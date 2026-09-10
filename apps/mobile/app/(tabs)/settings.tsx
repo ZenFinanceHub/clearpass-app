@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Modal,
   Platform,
@@ -17,6 +16,7 @@ import {
 import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from '@/src/CrossPlatformAlert';
 import { supabase } from '@/src/supabase';
 import { getAccessToken } from '@/src/getAccessToken';
 import { useAccessibility } from '@/src/AccessibilityContext';

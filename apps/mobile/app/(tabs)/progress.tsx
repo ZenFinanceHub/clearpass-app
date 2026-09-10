@@ -3,7 +3,6 @@ import { loadSRState, SpacedRepetitionState } from '@/src/spacedRepetition';
 import { computeAndSavePassProbability, PassProbabilityResult } from '@/src/passProbability';
 import { allQuestions } from '@clearpass/content';
 import {
-  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -13,6 +12,7 @@ import {
 } from 'react-native';
 import { supabase } from '@/src/supabase';
 import { router } from 'expo-router';
+import { Alert } from '@/src/CrossPlatformAlert';
 import {
   ACHIEVEMENTS,
   Achievement,

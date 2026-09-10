@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
   Share,
@@ -13,6 +12,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
+import { Alert } from '@/src/CrossPlatformAlert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TopicCategory, awardXp } from '@clearpass/core';
 import { getProxyUrl } from '@/src/proxyUrl';

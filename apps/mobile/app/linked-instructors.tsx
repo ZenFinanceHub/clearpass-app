@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -12,6 +11,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
+import { Alert } from '@/src/CrossPlatformAlert';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 import { Pip } from '@/src/components/Pip';

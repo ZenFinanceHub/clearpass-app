@@ -1,7 +1,8 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { Platform, Alert } from 'react-native';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from './CrossPlatformAlert';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
