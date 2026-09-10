@@ -74,12 +74,21 @@ test('shouldApplyProGrant: stripe vs iap tie on an equal expiry date does not ap
   assert.equal(shouldApplyProGrant('stripe', 'iap', same, same), false);
 });
 
-test('shouldApplyProGrant: stripe vs iap — a missing current expiry loses to any incoming expiry', () => {
-  assert.equal(shouldApplyProGrant('stripe', 'iap', null, '2026-06-01T00:00:00.000Z'), true);
+test('shouldApplyProGrant: a missing current expiry is now protected against ANY incoming grant with a real expiry, regardless of source priority (was: "loses to any incoming expiry" — that behaviour is exactly what let an instructor/comp permanent grant get silently replaced by a purchase that later expired)', () => {
+  assert.equal(shouldApplyProGrant('stripe', 'iap', null, '2026-06-01T00:00:00.000Z'), false);
 });
 
 test('shouldApplyProGrant: stripe vs iap — a missing incoming expiry never wins', () => {
   assert.equal(shouldApplyProGrant('stripe', 'iap', '2026-06-01T00:00:00.000Z', null), false);
+});
+
+test('shouldApplyProGrant: permanent grants (comp/instructor, proExpiresAt: null) are protected from any incoming grant that has an expiry, whatever the source priority', () => {
+  assert.equal(shouldApplyProGrant('comp', 'iap', null, '2026-06-01T00:00:00.000Z'), false);
+  assert.equal(shouldApplyProGrant('instructor', 'iap', null, '2026-06-01T00:00:00.000Z'), false);
+});
+
+test('shouldApplyProGrant: a comp grant that DOES carry a real expiry is not permanent — normal iap/stripe priority still applies', () => {
+  assert.equal(shouldApplyProGrant('comp', 'iap', '2026-06-01T00:00:00.000Z', '2026-09-01T00:00:00.000Z'), true);
 });
 
 test('isExemptFromProExpiry is true for instructor- and comp-sourced grants only', () => {

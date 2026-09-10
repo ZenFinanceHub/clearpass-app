@@ -21,6 +21,23 @@ const PRO_SOURCE_PRIORITY = { stripe: 4, iap: 4, comp: 3, instructor: 2, seat: 1
 function shouldApplyProGrant(currentSource, incomingSource, currentExpiresAt, incomingExpiresAt) {
   if (!currentSource) return true;
 
+  // A permanent grant (no expiry at all — comp or instructor, the only two
+  // sources ever written with proExpiresAt: null) is never replaced by a
+  // DIFFERENT source's grant that DOES carry an expiry, regardless of
+  // source priority. Without this, a higher-priority but time-limited grant
+  // (a real iap/stripe purchase) would silently downgrade someone from
+  // permanent free access to a grant that eventually expires and clears
+  // entirely — an instructor or comp user who makes one purchase and lets
+  // it lapse would lose Pro outright, with nothing to reconcile it back
+  // (grant-instructor-pro only grants to the verified subset; an unverified
+  // grandfathered instructor who fell through this gap would never be
+  // re-granted). Restricted to currentSource !== incomingSource so a
+  // same-source renewal/reapplication (e.g. RENEWAL for someone whose
+  // stored proExpiresAt happens to be missing) is unaffected — that case
+  // already always succeeds via the currentSource === incomingSource check
+  // below, and must keep doing so.
+  if (currentSource !== incomingSource && !currentExpiresAt && incomingExpiresAt) return false;
+
   const currentPriority = PRO_SOURCE_PRIORITY[currentSource];
   const incomingPriority = PRO_SOURCE_PRIORITY[incomingSource];
   if (incomingPriority !== currentPriority) return incomingPriority > currentPriority;
