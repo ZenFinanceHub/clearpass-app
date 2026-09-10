@@ -387,3 +387,32 @@ test('applySingleUserUpdate: missing app_user_id is a safe no-op', async () => {
   assert.deepEqual(result, { ok: true });
   assert.equal(db.store.size, 0);
 });
+
+// A db whose every method throws — used to prove a code path never reaches
+// the database at all, not just that it happens to succeed.
+function createUnreachableDb() {
+  const fail = () => { throw new Error('db should not have been called'); };
+  return { getProgress: fail, upsertProgress: fail, deleteWebhookEvent: fail };
+}
+
+test('applySingleUserUpdate: an RC anonymous app_user_id is skipped before any read', async () => {
+  const db = createUnreachableDb();
+  const event = {
+    id: 'evt_su_6',
+    type: 'INITIAL_PURCHASE',
+    app_user_id: '$RCAnonymousID:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  };
+
+  const result = await applySingleUserUpdate(event, db);
+
+  assert.deepEqual(result, { ok: true });
+});
+
+test('applySingleUserUpdate: a TEST event with a non-UUID app_user_id is skipped before any read', async () => {
+  const db = createUnreachableDb();
+  const event = { id: 'evt_su_7', type: 'TEST', app_user_id: 'test_app_user_id' };
+
+  const result = await applySingleUserUpdate(event, db);
+
+  assert.deepEqual(result, { ok: true });
+});

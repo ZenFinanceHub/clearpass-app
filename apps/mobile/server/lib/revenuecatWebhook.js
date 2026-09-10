@@ -278,6 +278,18 @@ async function applySingleUserUpdate(event, db) {
     return { ok: true };
   }
 
+  // Not every app_user_id is a real Supabase user — RC's own anonymous ids
+  // ("$RCAnonymousID:...", a fresh un-logged-in install) and its TEST event
+  // ids (sent when you click "Send test event" in the RC dashboard, e.g.
+  // "test_app_user_id") both fail isSupabaseUserId. Neither corresponds to
+  // a user_progress row, so this is skipped before any read is attempted —
+  // same reasoning as filtering TRANSFER's transferred_from/transferred_to
+  // through isSupabaseUserId.
+  if (!isSupabaseUserId(userId)) {
+    console.log(`[revenuecat-webhook] ${event.type} ${event.id}: non-Supabase app_user_id, skipping`);
+    return { ok: true };
+  }
+
   let currentProgress;
   try {
     currentProgress = (await db.getProgress(userId)) || {};
