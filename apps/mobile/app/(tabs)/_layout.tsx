@@ -1,9 +1,10 @@
 import React from 'react';
 import { Platform, Text, View } from 'react-native';
-import { Tabs } from 'expo-router';
+import { Tabs, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/src/constants/theme';
 import { Pip } from '@/src/components/Pip';
+import { mockTestExitGuard } from '@/src/mockTestExitGuard';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -67,6 +68,16 @@ export default function TabLayout() {
           fontWeight: '700',
         },
       }}
+      // Blocks switching away from the Mock Test tab mid-test — see
+      // mockTestExitGuard for why this can't live inside mock.tsx itself.
+      screenListeners={({ route }) => ({
+        tabPress: (e) => {
+          if (mockTestExitGuard.active && route.key !== mockTestExitGuard.routeKey) {
+            e.preventDefault();
+            mockTestExitGuard.requestExit?.(() => router.replace(`/(tabs)/${route.name}` as any));
+          }
+        },
+      })}
     >
       {TABS.map(({ name, title, headerTitle, headerPip, icon, iconFocused, hidden }) => (
         <Tabs.Screen

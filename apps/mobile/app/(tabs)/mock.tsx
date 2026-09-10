@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  BackHandler,
   Image,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,7 +11,9 @@ import {
   View,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import { useNavigation, useRoute, usePreventRemove } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { mockTestExitGuard } from '@/src/mockTestExitGuard';
 import {
   Achievement,
   MockTestResult,
@@ -119,6 +123,8 @@ type ResultData = { correct: number; timeTaken: number; byTopic: ByTopic; xpEarn
 export default function MockScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const route = useRoute();
   const [phase, setPhase] = useState<Phase>('start');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -175,6 +181,64 @@ export default function MockScreen() {
     if (phase === 'test' && timeRemaining <= 0) void doSubmit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeRemaining, phase]);
+
+  // ── Exit confirmation ──
+  // Leaving mid-test must never look like a completed mock test: the timer
+  // stops, and (per the existing design — see the daily-challenge comment in
+  // doSubmit) skipping doSubmit() already means zero credit, not partial.
+  const [exitModalVisible, setExitModalVisible] = useState(false);
+  const pendingExitRef = useRef<(() => void) | null>(null);
+
+  function requestExit(onConfirmed?: () => void) {
+    pendingExitRef.current = onConfirmed ?? null;
+    setExitModalVisible(true);
+  }
+
+  function confirmExit() {
+    setExitModalVisible(false);
+    setIsPaused(false);
+    setPhase('start'); // triggers the timer effect's cleanup above
+    const run = pendingExitRef.current;
+    pendingExitRef.current = null;
+    run?.();
+  }
+
+  function cancelExit() {
+    setExitModalVisible(false);
+    pendingExitRef.current = null;
+  }
+
+  // Covers a genuine stack/route removal (e.g. a forced redirect elsewhere
+  // while mid-test). Tab-bar taps don't fire this — see mockTestExitGuard.
+  usePreventRemove(phase === 'test', ({ data }) => {
+    requestExit(() => navigation.dispatch(data.action));
+  });
+
+  // Android hardware back: with no push-based back stack on this tab-root
+  // screen, the default action would silently switch to the first tab
+  // rather than emit a removal event, so beforeRemove can't catch it either.
+  useEffect(() => {
+    if (phase !== 'test' || Platform.OS === 'web') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      requestExit();
+      return true;
+    });
+    return () => sub.remove();
+  }, [phase]);
+
+  // Registers this screen with the tab-bar tabPress guard in
+  // app/(tabs)/_layout.tsx — see mockTestExitGuard for why switching tabs
+  // needs to be intercepted there instead of here.
+  useEffect(() => {
+    mockTestExitGuard.active = phase === 'test';
+    mockTestExitGuard.routeKey = route.key;
+    mockTestExitGuard.requestExit = requestExit;
+    return () => {
+      mockTestExitGuard.active = false;
+      mockTestExitGuard.requestExit = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, route.key]);
 
   function handleStart(mode: 'standard' | 'quick') {
     const activeTotal = mode === 'quick' ? QUICK_QUESTIONS : TOTAL_QUESTIONS;
@@ -385,9 +449,19 @@ export default function MockScreen() {
     <View style={[styles.flex, { backgroundColor: theme.backgroundColor }]}>
       {/* Top bar */}
       <View style={styles.topBar}>
-        <Text style={[styles.qCounter, { fontFamily: theme.fontFamily, color: theme.subTextColor }]}>
-          {'Q '}{currentIndex + 1}{' / '}{questions.length}
-        </Text>
+        <View style={styles.leftGroup}>
+          <TouchableOpacity
+            style={styles.exitBtn}
+            onPress={() => requestExit()}
+            activeOpacity={0.7}
+            accessibilityLabel="Exit mock test"
+          >
+            <Text style={styles.exitBtnText}>{'✕'}</Text>
+          </TouchableOpacity>
+          <Text style={[styles.qCounter, { fontFamily: theme.fontFamily, color: theme.subTextColor }]}>
+            {'Q '}{currentIndex + 1}{' / '}{questions.length}
+          </Text>
+        </View>
         <TouchableOpacity style={styles.timerGroup} onPress={() => setIsPaused(true)} activeOpacity={0.8}>
           <Text style={[styles.timerText, isWarning && styles.timerWarn]}>
             {formatTime(timeRemaining)}
@@ -475,6 +549,22 @@ export default function MockScreen() {
           </View>
         </View>
       )}
+
+      {/* Exit confirmation — Modal-based, not Alert.alert (a no-op on react-native-web) */}
+      <Modal visible={exitModalVisible} transparent animationType="fade" onRequestClose={cancelExit}>
+        <View style={styles.pauseOverlay}>
+          <View style={styles.pauseCard}>
+            <Text style={styles.pauseTitle}>{'Leave this mock test?'}</Text>
+            <Text style={styles.pauseNote}>{"Your progress won't be saved."}</Text>
+            <TouchableOpacity style={styles.resumeBtn} onPress={cancelExit} activeOpacity={0.85}>
+              <Text style={styles.resumeBtnText}>{'Keep going'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.abandonBtn} onPress={confirmExit} activeOpacity={0.85}>
+              <Text style={styles.abandonBtnText}>{'Leave test'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Grid overview modal */}
       <Modal visible={showGrid} transparent animationType="slide" onRequestClose={() => setShowGrid(false)}>
@@ -821,12 +911,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: '#E5E7EB',
   },
-  qCounter: { fontSize: 14, fontWeight: '600', width: 80 },
+  leftGroup: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  exitBtn: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F4F6' },
+  exitBtnText: { fontSize: 13, fontWeight: '700', color: '#6B7280' },
+  qCounter: { fontSize: 14, fontWeight: '600' },
   timerGroup: { alignItems: 'center' },
   timerText: { fontSize: 22, fontWeight: '800', color: '#111827', fontVariant: ['tabular-nums'], textAlign: 'center' },
   pauseHint: { fontSize: 9, color: '#9CA3AF', marginTop: 1, textAlign: 'center' },
   timerWarn: { color: '#EF4444' },
-  flagTouchable: { width: 80, alignItems: 'flex-end' },
+  flagTouchable: { flex: 1, alignItems: 'flex-end' },
   flagIcon: { fontSize: 18, fontWeight: '800', color: '#9CA3AF' },
   flagIconActive: { color: '#B45309' },
 
