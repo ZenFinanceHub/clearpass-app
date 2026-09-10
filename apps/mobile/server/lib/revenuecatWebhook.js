@@ -84,9 +84,235 @@ function resolveRevenueCatUpdate(eventType, expirationAtMs, currentProgress) {
     };
   }
 
-  // BILLING_ISSUE, PRODUCT_CHANGE, TRANSFER, etc. — acknowledged by the
-  // caller (so RC doesn't retry), not acted on yet.
+  // BILLING_ISSUE, PRODUCT_CHANGE, UNCANCELLATION, etc. — acknowledged by
+  // the caller (so RC doesn't retry), not acted on yet. TRANSFER is handled
+  // separately below, since it moves a grant between two different users
+  // rather than patching one.
   return { progress: null, warning: null };
 }
 
-module.exports = { expirationMsToIso, resolveRevenueCatUpdate };
+// RC's real app_user_ids (set from the Supabase user id at
+// Purchases.configure()/logIn() — see src/purchases.ts) are standard v4
+// UUIDs. Its own anonymous ids look like "$RCAnonymousID:<32 hex chars>"
+// and never correspond to a user_progress row, so they're filtered out of
+// both sides of a TRANSFER rather than queried for nothing.
+const SUPABASE_USER_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isSupabaseUserId(id) {
+  return typeof id === 'string' && SUPABASE_USER_ID_RE.test(id);
+}
+
+// Computes the patch for one SOURCE user of a TRANSFER. Mirrors
+// EXPIRATION's guard exactly: only clears if the grant is still
+// iap-sourced, so a source who's since been re-granted via stripe/comp/
+// instructor/seat keeps that grant untouched — a transfer moves what was
+// actually theirs from RC's rails, not whatever else they have now.
+// Returns null for "no change" (nothing to clear), same convention as
+// resolveRevenueCatUpdate's progress field.
+function resolveTransferSourceUpdate(currentProgress) {
+  if (currentProgress.proSource !== 'iap') return null;
+  const cleared = clearIapGrant(currentProgress);
+  return { isPro: cleared.isPro, proExpiresAt: cleared.proExpiresAt, proSource: cleared.proSource };
+}
+
+// Computes the patch for one DESTINATION user of a TRANSFER. RC's TRANSFER
+// event carries no expiration_at_ms of its own — the entitlement being
+// moved is whatever the source(s) actually had, so the caller passes in
+// sourceExpiresAt (the source's own current proExpiresAt, read before it's
+// cleared). No usable expiry means nothing to grant: an open-ended Pro
+// grant with no end date is exactly what this migration's trigger and this
+// handler both exist to prevent, so it's refused with a warning rather
+// than silently granted forever.
+// Goes through the same shouldApplyProGrant precedence as every other iap
+// grant, so a destination with a higher-priority existing grant (stripe,
+// comp) is never downgraded.
+function resolveTransferDestinationUpdate(currentProgress, sourceExpiresAt) {
+  if (!sourceExpiresAt) {
+    return {
+      progress: null,
+      warning: 'TRANSFER destination has no usable source proExpiresAt — not granting (no open-ended Pro)',
+    };
+  }
+  if (!shouldApplyProGrant(currentProgress.proSource, 'iap', currentProgress.proExpiresAt, sourceExpiresAt)) {
+    return { progress: null, warning: null };
+  }
+  return {
+    progress: { isPro: true, proExpiresAt: sourceExpiresAt, proSource: 'iap' },
+    warning: null,
+  };
+}
+
+// Deletes the dedup row for a failed event, so RevenueCat's retry isn't
+// silently swallowed by the dedup check next time. If the delete itself
+// fails, that's logged loudly (error level, with the event id) rather than
+// swallowed — a dedup row left behind after a real failure means every
+// retry gets silently dropped as "duplicate", with nothing in the logs to
+// explain why the transfer never actually completed.
+async function safeDeleteWebhookEvent(db, eventId) {
+  try {
+    await db.deleteWebhookEvent(eventId);
+  } catch (err) {
+    console.error(
+      `[revenuecat-webhook] TRANSFER ${eventId}: failed to delete its dedup row after a failure — a retry may be silently swallowed as "duplicate":`,
+      err.message || err,
+    );
+  }
+}
+
+// Applies one TRANSFER event end to end. db must provide:
+//   - getProgress(userId) -> Promise<object|null>   (stored `progress`, or
+//     null if no row exists — MUST throw/reject on an actual read error,
+//     never return null for that; a swallowed read error read as "no row"
+//     would let a grant or clear proceed against a stale empty {} instead
+//     of the real progress object, clobbering everything else in it)
+//   - upsertProgress(userId, progress) -> Promise<{ error: any }>
+//   - deleteWebhookEvent(eventId) -> Promise<void>   (only called on failure)
+//
+// Reads every source and destination row FIRST, before writing anything —
+// sourceExpiresAt is captured up front so a later failure never loses it,
+// and a read error aborts before any write happens at all. Only a source
+// expiry that's still in the future counts; an already-lapsed iap grant has
+// nothing left to transfer.
+//
+// Destinations are granted BEFORE sources are cleared, deliberately. This
+// is what makes a retry after a partial failure safe: if a destination
+// upsert fails, no source has been touched yet, so the retry starts clean.
+// If a source upsert fails AFTER its destination already succeeded, the
+// retry re-reads the (still uncleared) source, re-grants the SAME values to
+// the (already-granted) destination — harmless, since same-source
+// reapplication is idempotent (see shouldApplyProGrant) — and then clears
+// the source. The reverse order would lose sourceExpiresAt entirely if a
+// destination write failed after its source had already been cleared, with
+// no way to recover it on retry.
+//
+// On any read or write failure, this event's dedup row is deleted so
+// RevenueCat's retry isn't silently swallowed by the dedup check next time.
+//
+// Returns { ok: true } on full success (including the "nothing to do"
+// case — no Supabase-user destinations), or { ok: false, retry: true } if
+// any read or write failed.
+async function applyTransfer(event, db) {
+  const sourceIds = (Array.isArray(event.transferred_from) ? event.transferred_from : []).filter(isSupabaseUserId);
+  const destIds = (Array.isArray(event.transferred_to) ? event.transferred_to : []).filter(isSupabaseUserId);
+
+  if (destIds.length === 0) {
+    console.log(`[revenuecat-webhook] TRANSFER ${event.id}: no Supabase-user destinations, skipping`);
+    return { ok: true };
+  }
+
+  let sourceRows;
+  let destRows;
+  try {
+    sourceRows = await Promise.all(
+      sourceIds.map(async (id) => ({ id, progress: (await db.getProgress(id)) || {} }))
+    );
+    destRows = await Promise.all(
+      destIds.map(async (id) => ({ id, progress: (await db.getProgress(id)) || {} }))
+    );
+  } catch (err) {
+    console.error(`[revenuecat-webhook] TRANSFER ${event.id}: read failed, aborting before any write:`, err.message || err);
+    await safeDeleteWebhookEvent(db, event.id);
+    return { ok: false, retry: true };
+  }
+
+  const nowIso = new Date().toISOString();
+  let sourceExpiresAt = null;
+  for (const { progress } of sourceRows) {
+    if (progress.proSource === 'iap' && progress.proExpiresAt && progress.proExpiresAt > nowIso) {
+      if (!sourceExpiresAt || progress.proExpiresAt > sourceExpiresAt) {
+        sourceExpiresAt = progress.proExpiresAt;
+      }
+    }
+  }
+
+  for (const { id, progress } of destRows) {
+    const { progress: patch, warning } = resolveTransferDestinationUpdate(progress, sourceExpiresAt);
+    if (warning) {
+      console.warn(`[revenuecat-webhook] ${warning} (event ${event.id}, destination ${id})`);
+    }
+    if (patch) {
+      const { error } = await db.upsertProgress(id, { ...progress, ...patch });
+      if (error) {
+        console.error(`[revenuecat-webhook] TRANSFER ${event.id}: destination upsert failed for`, id, error.message || error);
+        await safeDeleteWebhookEvent(db, event.id);
+        return { ok: false, retry: true };
+      }
+      console.log(
+        `[revenuecat-webhook] TRANSFER ${event.id}: granted iap to destination`,
+        id,
+        'source',
+        sourceIds.join(',') || '(none)',
+        'expires',
+        patch.proExpiresAt,
+      );
+    }
+  }
+
+  for (const { id, progress } of sourceRows) {
+    const patch = resolveTransferSourceUpdate(progress);
+    if (patch) {
+      const { error } = await db.upsertProgress(id, { ...progress, ...patch });
+      if (error) {
+        console.error(`[revenuecat-webhook] TRANSFER ${event.id}: source upsert failed for`, id, error.message || error);
+        await safeDeleteWebhookEvent(db, event.id);
+        return { ok: false, retry: true };
+      }
+      console.log(`[revenuecat-webhook] TRANSFER ${event.id}: cleared iap grant from source`, id);
+    }
+  }
+
+  return { ok: true };
+}
+
+// Applies one single-user RC event (INITIAL_PURCHASE/RENEWAL/CANCELLATION/
+// EXPIRATION/anything resolveRevenueCatUpdate handles) via the same
+// db-adapter shape as applyTransfer. A read error aborts before any write
+// and signals retry — the bug this replaces silently treated a failed read
+// as "no row" ({}), then upserted THAT as the user's entire progress,
+// wiping out everything else in it (mock test history, XP, streaks, ...)
+// down to just the patch fields.
+async function applySingleUserUpdate(event, db) {
+  const userId = event.app_user_id;
+  if (!userId) {
+    console.error('[revenuecat-webhook] missing app_user_id on event:', event.id, event.type);
+    return { ok: true };
+  }
+
+  let currentProgress;
+  try {
+    currentProgress = (await db.getProgress(userId)) || {};
+  } catch (err) {
+    console.error(`[revenuecat-webhook] ${event.type} ${event.id}: read failed for`, userId, '—', err.message || err);
+    await safeDeleteWebhookEvent(db, event.id);
+    return { ok: false, retry: true };
+  }
+
+  const { progress: patch, warning } = resolveRevenueCatUpdate(event.type, event.expiration_at_ms, currentProgress);
+  if (warning) {
+    console.warn(`[revenuecat-webhook] ${warning} (event ${event.id}, user ${userId})`);
+  }
+  if (!patch) {
+    console.log(`[revenuecat-webhook] ${event.type}: no update applied for user`, userId);
+    return { ok: true };
+  }
+
+  const updatedProgress = { ...currentProgress, ...patch };
+  const { error } = await db.upsertProgress(userId, updatedProgress);
+  if (error) {
+    console.error(`[revenuecat-webhook] ${event.type} ${event.id}: write failed for`, userId, '—', error.message || error);
+    await safeDeleteWebhookEvent(db, event.id);
+    return { ok: false, retry: true };
+  }
+  console.log(`[revenuecat-webhook] ${event.type} applied for user`, userId);
+  return { ok: true };
+}
+
+module.exports = {
+  expirationMsToIso,
+  resolveRevenueCatUpdate,
+  isSupabaseUserId,
+  resolveTransferSourceUpdate,
+  resolveTransferDestinationUpdate,
+  applyTransfer,
+  applySingleUserUpdate,
+};

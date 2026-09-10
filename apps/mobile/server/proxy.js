@@ -2,7 +2,6 @@ require('dotenv').config({ path: __dirname + '/.env' });
 
 const express = require('express');
 const cors = require('cors');
-const { computeProExpiresAt } = require('./lib/proExpiry');
 const { deriveConnectStatus } = require('./lib/connectStatus');
 const {
   shouldApplyProGrant,
@@ -11,7 +10,11 @@ const {
   isInstructorGrantAlreadyCorrect,
   hasBlockingRelationships,
 } = require('./lib/entitlement');
-const { resolveRevenueCatUpdate } = require('./lib/revenuecatWebhook');
+const {
+  applyTransfer,
+  applySingleUserUpdate,
+} = require('./lib/revenuecatWebhook');
+const { applyStripeProGrant } = require('./lib/stripeWebhook');
 const { INSTRUCTOR_PAYOUT_STRIPE_MINOR } = require('./lib/earnings');
 const {
   generateSeatToken,
@@ -366,65 +369,64 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
       return res.json({ received: true });
     }
 
+    // getProgress throws on a real read error rather than returning null
+    // for it, so applyStripeProGrant can't mistake "the read failed" for
+    // "no row exists" and overwrite the user's entire progress with just
+    // the patch fields (see lib/stripeWebhook.js for the full reasoning).
+    const db = {
+      getProgress: async (id) => {
+        const { data, error } = await supabaseAdmin.from('user_progress').select('progress').eq('id', id).maybeSingle();
+        if (error) throw error;
+        return data?.progress || null;
+      },
+      upsertProgress: async (id, progress) => {
+        return supabaseAdmin.from('user_progress').upsert({ id, progress, updated_at: new Date().toISOString() });
+      },
+      deleteWebhookEvent: async (eventId) => {
+        await supabaseAdmin.from('stripe_webhook_events').delete().eq('event_id', eventId);
+      },
+    };
+
+    const grantResult = await applyStripeProGrant(event, userId, db);
+    if (!grantResult.ok) {
+      return res.status(500).json({ error: 'Stripe grant processing failed' });
+    }
+
+    // Track referral commission
     try {
-      const { data: existing } = await supabaseAdmin
-        .from('user_progress')
-        .select('progress')
+      const { data: userProfile } = await supabaseAdmin
+        .from('profiles')
+        .select('referred_by')
         .eq('id', userId)
         .single();
 
-      const updatedProgress = { ...(existing?.progress || {}) };
-      if (shouldApplyProGrant(updatedProgress.proSource, 'stripe')) {
-        updatedProgress.isPro = true;
-        updatedProgress.proExpiresAt = computeProExpiresAt();
-        updatedProgress.proSource = 'stripe';
-      }
-
-      const { error } = await supabaseAdmin
-        .from('user_progress')
-        .upsert({ id: userId, progress: updatedProgress, updated_at: new Date().toISOString() })
-        .eq('id', userId);
-
-      console.log('Supabase update result:', error ? error.message : 'success');
-
-      // Track referral commission
-      try {
-        const { data: userProfile } = await supabaseAdmin
+      if (userProfile?.referred_by) {
+        const { data: referrer } = await supabaseAdmin
           .from('profiles')
-          .select('referred_by')
-          .eq('id', userId)
+          .select('id, account_type')
+          .eq('referral_code', userProfile.referred_by)
           .single();
 
-        if (userProfile?.referred_by) {
-          const { data: referrer } = await supabaseAdmin
-            .from('profiles')
-            .select('id, account_type')
-            .eq('referral_code', userProfile.referred_by)
-            .single();
-
-          // Only a real instructor account earns commission — referral_code
-          // is a column any profile can carry (e.g. a learner's "invite a
-          // friend" code shares the same column), and previously this
-          // matched on referral_code alone with no account_type check, so
-          // any matching profile got credited regardless of role.
-          if (referrer && referrer.account_type === 'instructor') {
-            // This webhook only fires for Stripe Checkout purchases (every platform
-            // currently routes through Stripe — see paywall.tsx), so the Stripe-fee
-            // net applies here, not the App Store/Google Play commission rate.
-            await supabaseAdmin.from('instructor_earnings').insert({
-              instructor_id: referrer.id,
-              learner_id: userId,
-              amount: INSTRUCTOR_PAYOUT_STRIPE_MINOR / 100,
-              status: 'pending',
-            });
-            console.log('[webhook] Referral commission recorded for instructor:', referrer.id);
-          }
+        // Only a real instructor account earns commission — referral_code
+        // is a column any profile can carry (e.g. a learner's "invite a
+        // friend" code shares the same column), and previously this
+        // matched on referral_code alone with no account_type check, so
+        // any matching profile got credited regardless of role.
+        if (referrer && referrer.account_type === 'instructor') {
+          // This webhook only fires for Stripe Checkout purchases (every platform
+          // currently routes through Stripe — see paywall.tsx), so the Stripe-fee
+          // net applies here, not the App Store/Google Play commission rate.
+          await supabaseAdmin.from('instructor_earnings').insert({
+            instructor_id: referrer.id,
+            learner_id: userId,
+            amount: INSTRUCTOR_PAYOUT_STRIPE_MINOR / 100,
+            status: 'pending',
+          });
+          console.log('[webhook] Referral commission recorded for instructor:', referrer.id);
         }
-      } catch (e) {
-        console.error('[webhook] Referral commission error:', e);
       }
     } catch (e) {
-      console.error('[webhook] Supabase error:', e);
+      console.error('[webhook] Referral commission error:', e);
     }
   }
 
@@ -525,54 +527,51 @@ app.post('/api/revenuecat-webhook', express.json(), async (req, res) => {
     return res.status(500).json({ error: 'Webhook dedup failed' });
   }
 
-  // app_user_id is the Supabase user id — set as appUserID when the app
-  // calls Purchases.configure() (see src/purchases.ts), so this maps
-  // straight back to user_progress.id with no separate lookup table.
-  const userId = event.app_user_id;
-  if (!userId) {
-    console.error('[revenuecat-webhook] missing app_user_id on event:', event.id, event.type);
+  // Shared Supabase adapter for both branches below — getProgress throws on
+  // a real read error rather than returning null for it, so neither branch
+  // can mistake "the read failed" for "no row exists" and overwrite a
+  // user's entire progress with just the patch fields (see
+  // applyTransfer/applySingleUserUpdate in lib/revenuecatWebhook.js for the
+  // full reasoning).
+  const db = {
+    getProgress: async (id) => {
+      const { data, error } = await supabaseAdmin.from('user_progress').select('progress').eq('id', id).maybeSingle();
+      if (error) throw error;
+      return data?.progress || null;
+    },
+    upsertProgress: async (id, progress) => {
+      return supabaseAdmin.from('user_progress').upsert({ id, progress, updated_at: new Date().toISOString() });
+    },
+    deleteWebhookEvent: async (eventId) => {
+      await supabaseAdmin.from('revenuecat_webhook_events').delete().eq('event_id', eventId);
+    },
+  };
+
+  // TRANSFER moves an iap grant between two different Supabase users, not
+  // a single app_user_id — handled entirely separately from the
+  // single-user path below. All the ordering/retry logic lives in
+  // applyTransfer (lib/revenuecatWebhook.js); this is just the Supabase
+  // adapter it runs against. A failed read or write returns a non-2xx
+  // status so RC retries — the dedup row is already removed by then (see
+  // applyTransfer), so the retry isn't swallowed by the dedup check above.
+  if (event.type === 'TRANSFER') {
+    const result = await applyTransfer(event, db);
+    if (!result.ok) {
+      return res.status(500).json({ error: 'Transfer processing failed' });
+    }
     return res.json({ received: true });
   }
 
-  try {
-    const { data: existing } = await supabaseAdmin
-      .from('user_progress')
-      .select('progress')
-      .eq('id', userId)
-      .single();
-
-    const currentProgress = existing?.progress || {};
-    // resolveRevenueCatUpdate trusts RC's own expiration_at_ms over any
-    // locally-computed guess — see lib/revenuecatWebhook.js for the full
-    // per-event-type reasoning (INITIAL_PURCHASE/RENEWAL/CANCELLATION/
-    // EXPIRATION), including the fixed-duration fallback used only when
-    // that field is unexpectedly absent from the payload.
-    const { progress: patch, warning } = resolveRevenueCatUpdate(event.type, event.expiration_at_ms, currentProgress);
-
-    if (warning) {
-      console.warn(`[revenuecat-webhook] ${warning} (event ${event.id}, user ${userId})`);
-    }
-
-    if (!patch) {
-      console.log(`[revenuecat-webhook] ${event.type}: no update applied for user`, userId);
-      return res.json({ received: true });
-    }
-
-    const updatedProgress = { ...currentProgress, ...patch };
-    const { error } = await supabaseAdmin
-      .from('user_progress')
-      .upsert({ id: userId, progress: updatedProgress, updated_at: new Date().toISOString() })
-      .eq('id', userId);
-
-    if (error) {
-      console.error('[revenuecat-webhook] Supabase update error:', error.message);
-    } else {
-      console.log(`[revenuecat-webhook] ${event.type} applied for user`, userId);
-    }
-  } catch (e) {
-    console.error('[revenuecat-webhook] Supabase error:', e);
+  // Every other event type (INITIAL_PURCHASE/RENEWAL/CANCELLATION/
+  // EXPIRATION/etc) is single-user — app_user_id is the Supabase user id,
+  // set as appUserID when the app calls Purchases.configure() (see
+  // src/purchases.ts). All the read-error/retry handling lives in
+  // applySingleUserUpdate (lib/revenuecatWebhook.js); this just runs it
+  // against the same db adapter as TRANSFER above.
+  const result = await applySingleUserUpdate(event, db);
+  if (!result.ok) {
+    return res.status(500).json({ error: 'Update processing failed' });
   }
-
   res.json({ received: true });
 });
 
