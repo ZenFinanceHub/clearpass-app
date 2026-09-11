@@ -1,4 +1,14 @@
--- APPLIED 2026-09-11 via Supabase SQL Editor
+-- APPLIED 2026-09-11 via `supabase db push` — NOT actually applied via the
+-- SQL Editor as this header used to claim: the reality check in
+-- scripts/db-baseline.js found instructor_verification_requests, its
+-- index, and both admin.verify_instructor/reject_instructor missing from
+-- the live database (only the `admin` schema itself existed, created
+-- incidentally by the later v2 migration's own `create schema if not
+-- exists admin`) — this file was never actually run, despite the original
+-- header's claim. Confirmed safe to apply for real at that point: every
+-- statement is create-if-not-exists/create-or-replace, RLS is being
+-- enabled not disabled, and every REVOKE is on an object this same
+-- migration creates, not a pre-existing one.
 --
 -- Manual instructor verification. Decision: evidence is an ADI or trainee
 -- (PDI) licence number only, flexible format, qualified and trainee
