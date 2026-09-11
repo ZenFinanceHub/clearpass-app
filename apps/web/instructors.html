@@ -202,7 +202,12 @@
     // Referral tracking: capture ?ref= from the URL and propagate it to every
     // CTA link that sends visitors into the app, so instructor referrals attribute.
     (function initReferralTracking() {
-      const refFromUrl = new URLSearchParams(window.location.search).get('ref');
+      // Sanitised the same way as every other ref value in this codebase
+      // (see MAX_SIGNUP_REF_LENGTH / the charset check in proxy.js's
+      // /api/instructor/signup) — letters, digits and hyphens only, max 40
+      // chars. An unusable ref is dropped rather than propagated broken.
+      const rawRefFromUrl = new URLSearchParams(window.location.search).get('ref');
+      const refFromUrl = rawRefFromUrl && /^[A-Za-z0-9-]{1,40}$/.test(rawRefFromUrl) ? rawRefFromUrl : null;
       if (refFromUrl) {
         try { sessionStorage.setItem('clearpass_ref', refFromUrl); } catch (e) {}
       }

@@ -18,6 +18,13 @@ const { applyStripeProGrant } = require('./lib/stripeWebhook');
 const revenuecatApi = require('./lib/revenuecatApi');
 const { INSTRUCTOR_PAYOUT_STRIPE_MINOR, markPayoutAndEarningsPaid } = require('./lib/earnings');
 const {
+  ABANDONED_NOTIFIED_META_KEY,
+  buildAppSignupBackfillRows,
+  formatSignupNotification,
+  formatAbandonedSignupNotification,
+  findUnnotifiedAbandonedSignups,
+} = require('./lib/instructorSignups');
+const {
   generateSeatToken,
   isSeatPurchaseSession,
   resolveSeatGrant,
@@ -1474,7 +1481,7 @@ app.post('/api/instructor/signup', async (req, res) => {
     // round trip regardless of which device opens the email, and it is not
     // client-writable afterwards. It still satisfies "stamp the ref at
     // account creation" — just onto the auth user rather than the profile.
-    const { error: createError } = await supabaseAdmin.auth.admin.createUser({
+    const { data: createData, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
       email_confirm: false,
       user_metadata: {
@@ -1506,6 +1513,22 @@ app.post('/api/instructor/signup', async (req, res) => {
       }
     } else {
       console.log('[instructor-signup] step1 created', signupRef ? 'with ref' : 'no ref');
+
+      // Same belt-and-braces as complete-signup's own Slack post below,
+      // despite postToSlack() already never throwing: awaited so it happens
+      // before the response, but any failure must never turn an
+      // already-created auth user into a failed request. No email — this is
+      // the "started" half of the pair, "not finished after 24h"
+      // (grant-instructor-pro) is the other; neither includes an address,
+      // only the user id.
+      const startedUserId = createData?.user?.id;
+      if (startedUserId) {
+        try {
+          await postToSlack(`Instructor signup started: via web, ref ${signupRef || 'none'}, user ${startedUserId}`);
+        } catch (err) {
+          console.error('[instructor-signup] slack notify failed:', err.message || err);
+        }
+      }
     }
 
     return res.json({ ok: true });
@@ -1608,6 +1631,20 @@ app.post('/api/instructor/complete-signup', async (req, res) => {
     }
 
     console.log('[instructor-complete] profile created', signupRef ? 'with ref' : 'no ref');
+
+    // Non-fatal: the profile is already created and committed by this
+    // point, so a failure here must not turn a successful signup into an
+    // error the instructor sees. Only reached on a fresh insert (the
+    // already_instructor branches above return before this line), so this
+    // never double-inserts for the same user_id.
+    const { error: signupTrackError } = await supabaseAdmin.from('instructor_signups').insert({
+      user_id: userId,
+      source: 'web',
+      campaign_ref: signupRef,
+    });
+    if (signupTrackError) {
+      console.error('[instructor-complete] instructor_signups insert failed:', signupTrackError.message);
+    }
 
     // Fired here rather than in step 1 on purpose: an unverified auth row is
     // not a signup, and notifying on one would report accounts that may never
@@ -2218,6 +2255,27 @@ app.post('/api/cron/expire-pro', async (req, res) => {
   }
 });
 
+// ── Cron: list every auth user, paginated ──────────────────────────────────
+// GoTrue's admin listUsers is paginated; used here (and only here today) to
+// find step-1 instructor signups (user_metadata.instructor_signup_intent)
+// that never became a profile — there is no profiles/instructor_signups row
+// to query for those, since instructor_signups.user_id references
+// profiles(id). Fine at today's user count (double digits); if that grows
+// enough for this to matter, this is the thing to replace first.
+async function listAllAuthUsers(supabaseAdmin) {
+  const perPage = 1000;
+  let page = 1;
+  const all = [];
+  for (;;) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+    if (error) throw error;
+    all.push(...data.users);
+    if (data.users.length < perPage) break;
+    page += 1;
+  }
+  return all;
+}
+
 // ── Cron: grant instructor Pro ────────────────────────────────────────────
 // POST /api/cron/grant-instructor-pro
 // Idempotent reconciliation: every profile with account_type = 'instructor'
@@ -2237,7 +2295,17 @@ app.post('/api/cron/expire-pro', async (req, res) => {
 // its next run; an instructor who was manually comp'd keeps that grant
 // indefinitely, since comp is a deliberate one-off decision this automated
 // cron should never silently override.
-// Schedule: daily at 02:00 Europe/London (after expire-pro).
+//
+// Also does the instructor_signups bookkeeping and its two Slack alerts
+// (see the instructor_signups migration and lib/instructorSignups.js):
+// backfill 'app' rows, notify on any row still unposted, and flag step-1
+// signups abandoned for 24h+. None of this touches the grant logic above or
+// its response contract — granted/alreadyCorrect/skipped/unverified/total
+// mean exactly what they did before; the new counters are additive.
+//
+// Schedule: every 15 minutes (was daily at 02:00 Europe/London) — moved so
+// the two Slack alerts are timely; the Pro grant itself stays just as
+// idempotent run this often as it was once a day.
 
 app.post('/api/cron/grant-instructor-pro', async (req, res) => {
   if (!requireCronAuth(req, res)) return;
@@ -2251,8 +2319,92 @@ app.post('/api/cron/grant-instructor-pro', async (req, res) => {
     if (instructorsErr) throw instructorsErr;
 
     const allInstructorIds = (instructors || []).map(i => i.id);
+
+    // ── Signup tracking: backfill + notify ──────────────────────────────
+    let signupsBackfilled = 0;
+    let signupsNotified = 0;
+    if (allInstructorIds.length > 0) {
+      const { data: trackedRows, error: trackedErr } = await supabaseAdmin
+        .from('instructor_signups')
+        .select('user_id')
+        .in('user_id', allInstructorIds);
+      if (trackedErr) throw trackedErr;
+
+      const backfillRows = buildAppSignupBackfillRows(allInstructorIds, (trackedRows || []).map(r => r.user_id));
+      if (backfillRows.length > 0) {
+        const { error: backfillErr } = await supabaseAdmin.from('instructor_signups').insert(backfillRows);
+        if (backfillErr) {
+          console.error('[grant-instructor-pro] instructor_signups backfill failed:', backfillErr.message);
+        } else {
+          signupsBackfilled = backfillRows.length;
+        }
+      }
+    }
+
+    const { data: unnotifiedRows, error: unnotifiedErr } = await supabaseAdmin
+      .from('instructor_signups')
+      .select('user_id, source, campaign_ref')
+      .is('notified_at', null);
+    if (unnotifiedErr) throw unnotifiedErr;
+
+    if ((unnotifiedRows || []).length > 0) {
+      const unnotifiedIds = unnotifiedRows.map(r => r.user_id);
+      const { data: profileRows, error: profileErr } = await supabaseAdmin
+        .from('profiles')
+        .select('id, display_name')
+        .in('id', unnotifiedIds);
+      if (profileErr) throw profileErr;
+      const displayNameById = Object.fromEntries((profileRows || []).map(p => [p.id, p.display_name]));
+
+      for (const row of unnotifiedRows) {
+        const text = formatSignupNotification({
+          displayName: displayNameById[row.user_id] || null,
+          source: row.source,
+          campaignRef: row.campaign_ref,
+          userId: row.user_id,
+        });
+        const posted = await postToSlack(text);
+        if (!posted) {
+          console.error('[grant-instructor-pro] signup notify slack post failed for', row.user_id, '— will retry next run');
+          continue;
+        }
+        const { error: notifyUpdateErr } = await supabaseAdmin
+          .from('instructor_signups')
+          .update({ notified_at: new Date().toISOString() })
+          .eq('user_id', row.user_id);
+        if (notifyUpdateErr) {
+          console.error('[grant-instructor-pro] failed to stamp notified_at for', row.user_id, notifyUpdateErr.message);
+          continue;
+        }
+        signupsNotified++;
+      }
+    }
+
+    // ── Abandoned step-1 signups (24h+, never completed) ────────────────
+    let abandonedNotified = 0;
+    const authUsers = await listAllAuthUsers(supabaseAdmin);
+    const abandoned = findUnnotifiedAbandonedSignups(authUsers, allInstructorIds);
+    for (const u of abandoned) {
+      const posted = await postToSlack(formatAbandonedSignupNotification({ userId: u.id }));
+      if (!posted) {
+        console.error('[grant-instructor-pro] abandoned-signup slack post failed for', u.id, '— will retry next run');
+        continue;
+      }
+      const { error: flagErr } = await supabaseAdmin.auth.admin.updateUserById(u.id, {
+        user_metadata: { ...(u.user_metadata || {}), [ABANDONED_NOTIFIED_META_KEY]: true },
+      });
+      if (flagErr) {
+        console.error('[grant-instructor-pro] failed to flag abandoned signup', u.id, flagErr.message || flagErr, '— will re-notify next run');
+        continue;
+      }
+      abandonedNotified++;
+    }
+
     if (allInstructorIds.length === 0) {
-      return res.json({ granted: 0, alreadyCorrect: 0, skipped: 0, unverified: 0, total: 0 });
+      return res.json({
+        granted: 0, alreadyCorrect: 0, skipped: 0, unverified: 0, total: 0,
+        signupsBackfilled, signupsNotified, abandonedNotified,
+      });
     }
 
     const { data: verifiedRows, error: verifiedErr } = await supabaseAdmin
@@ -2266,7 +2418,10 @@ app.post('/api/cron/grant-instructor-pro', async (req, res) => {
     const unverified = allInstructorIds.length - instructorIds.length;
 
     if (instructorIds.length === 0) {
-      return res.json({ granted: 0, alreadyCorrect: 0, skipped: 0, unverified, total: allInstructorIds.length });
+      return res.json({
+        granted: 0, alreadyCorrect: 0, skipped: 0, unverified, total: allInstructorIds.length,
+        signupsBackfilled, signupsNotified, abandonedNotified,
+      });
     }
 
     const { data: rows, error: progressErr } = await supabaseAdmin
@@ -2319,7 +2474,10 @@ app.post('/api/cron/grant-instructor-pro', async (req, res) => {
     console.log(
       `[grant-instructor-pro] granted ${granted}, alreadyCorrect ${alreadyCorrect}, skipped ${skipped} (blocked by an existing stripe grant), unverified ${unverified}, total ${allInstructorIds.length}`
     );
-    res.json({ granted, alreadyCorrect, skipped, unverified, total: allInstructorIds.length });
+    res.json({
+      granted, alreadyCorrect, skipped, unverified, total: allInstructorIds.length,
+      signupsBackfilled, signupsNotified, abandonedNotified,
+    });
   } catch (err) {
     console.error('[grant-instructor-pro] error:', err);
     res.status(500).json({ error: 'Grant instructor pro failed', detail: String(err) });
