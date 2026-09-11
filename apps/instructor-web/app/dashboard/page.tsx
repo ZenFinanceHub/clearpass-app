@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useInstructorAuth } from "@/lib/useInstructorAuth";
 import { supabase } from "@/lib/supabase";
 import { seatInviteLink, type InstructorSeat } from "@/lib/types";
+import VerificationCard from "@/components/VerificationCard";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://clearpass-app-production.up.railway.app";
 const MAX_DISPLAY_NAME_LENGTH = 60;
@@ -174,6 +175,8 @@ export default function DashboardPage() {
       </header>
 
       <main>
+        <VerificationCard />
+
         <div className="section-card">
           <form onSubmit={(e) => void handleSaveDisplayName(e)}>
             <div className="field" style={{ marginBottom: 0 }}>
