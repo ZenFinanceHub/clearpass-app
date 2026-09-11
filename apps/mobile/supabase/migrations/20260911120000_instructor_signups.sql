@@ -1,5 +1,4 @@
--- DRAFT — NOT APPLIED. Written for review only; run manually via the
--- Supabase SQL Editor once reviewed.
+-- APPLIED 2026-09-11 via Supabase SQL Editor
 --
 -- Tracks how each instructor account was created (web signup vs the mobile
 -- app's self-declared choose-account-type screen) and whether it's been
