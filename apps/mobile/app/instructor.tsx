@@ -17,7 +17,7 @@ import { router } from 'expo-router';
 import { Alert } from '@/src/CrossPlatformAlert';
 import { supabase } from '@/src/supabase';
 import { getAccessToken } from '@/src/getAccessToken';
-import { createFreshUserProgress } from '@/src/storage';
+import { createFreshUserProgress, loadUserProgress } from '@/src/storage';
 import {
   calculateReadiness,
   MockTestResult,
@@ -83,6 +83,24 @@ type PayoutEntry = {
   status: 'processing' | 'paid' | 'failed';
   failure_reason: string | null;
   created_at: string;
+};
+
+// Matches GET/POST /api/instructor/verification's response shape (proxy.js)
+// — mirrors instructor-web's VerificationCard.tsx.
+type LicenceType = 'adi' | 'pdi';
+type VerificationStatus = 'loading' | 'none' | 'pending' | 'verified' | 'rejected';
+type VerificationData = {
+  status: VerificationStatus;
+  licenceType: LicenceType | null;
+  submittedAt: string | null;
+  reviewNote: string | null;
+};
+
+// Matches GET /api/instructor/payout-proof's response shape.
+type PayoutProofStatus = 'loading' | 'none' | 'pending_review' | 'approved' | 'rejected';
+type PayoutProofData = {
+  status: PayoutProofStatus;
+  reviewNote: string | null;
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -754,15 +772,260 @@ function ReferralSection({
   );
 }
 
+// ─── VerificationCard ─────────────────────────────────────────────────────────
+// Mirrors apps/instructor-web/components/VerificationCard.tsx — same copy,
+// same endpoint, same declaration-gated submit. Manual verification:
+// evidence is a self-declared ADI or trainee (PDI) licence number; a fresh,
+// non-duplicate submission auto-verifies instantly (Pro grants right away
+// server-side), a duplicate number or a resubmission after rejection needs
+// a human. Always rendered (not gated behind PAYOUT_FEATURES_LIVE) — Pro
+// itself doesn't depend on Stripe Connect being ready, only payouts do.
+
+function licenceTypeLabel(licenceType: LicenceType | null): string {
+  return licenceType === 'pdi' ? 'trainee (PDI)' : 'ADI';
+}
+
+function VerificationCard({ data, onRefresh }: { data: VerificationData; onRefresh: () => void }) {
+  const theme = useTheme();
+  const [editing, setEditing]           = useState(false);
+  const [licenceType, setLicenceType]   = useState<LicenceType>('adi');
+  const [licenceNumber, setLicenceNumber] = useState('');
+  const [declaration, setDeclaration]   = useState(false);
+  const [submitting, setSubmitting]     = useState(false);
+  const [error, setError]               = useState('');
+
+  useEffect(() => {
+    if (data.licenceType) setLicenceType(data.licenceType);
+  }, [data.licenceType]);
+
+  async function handleSubmit() {
+    setError('');
+    setSubmitting(true);
+    try {
+      const token = await getAccessToken();
+      if (!token) {
+        setError('Please sign in again.');
+        return;
+      }
+      const res = await fetch(`${PROXY_URL}/api/instructor/verification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ licenceType, licenceNumber, declaration }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        const messages: Record<string, string> = {
+          declaration_required: 'Please confirm the declaration below before submitting.',
+          invalid_licence_number_characters: 'Licence numbers can only contain letters, digits, spaces and hyphens.',
+          licence_number_required: 'Please enter your licence number.',
+          licence_number_too_short: 'That licence number looks too short — please check and try again.',
+          licence_number_too_long: 'That licence number looks too long — please check and try again.',
+        };
+        setError(messages[body.error] ?? 'Could not submit. Please try again.');
+        return;
+      }
+
+      setEditing(false);
+      setLicenceNumber('');
+      setDeclaration(false);
+
+      // Server already granted Pro synchronously when this auto-verifies
+      // (grantInstructorProForUser runs inside the same request) — pull the
+      // fresh value into the local cache so it shows immediately, same
+      // pattern payment-success.tsx uses after a Stripe purchase, just
+      // without that screen's polling loop since there's no webhook delay
+      // to wait out here.
+      if (body.status === 'verified') {
+        void loadUserProgress();
+      }
+      onRefresh();
+    } catch {
+      setError('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (data.status === 'loading') return null;
+
+  if (data.status === 'verified') {
+    return (
+      <View style={styles.verifiedBadgeRow}>
+        <Text style={styles.verifiedBadgeText}>{"You're verified, free Pro is on ✓"}</Text>
+      </View>
+    );
+  }
+
+  const showForm = data.status === 'none' || editing;
+
+  return (
+    <View style={[styles.earningsSection, { backgroundColor: theme.cardColor }]}>
+      {data.status === 'pending' && !editing && (
+        <>
+          <Text style={[styles.earningsSectionTitle, { color: theme.textColor }]}>
+            {'We need to check a couple of details'}
+          </Text>
+          <Text style={[styles.payoutMinText, { color: theme.subTextColor }]}>{"We'll be in touch."}</Text>
+          <Text style={[styles.payoutMinText, { color: theme.subTextColor }]}>
+            {`Submitted: ${licenceTypeLabel(data.licenceType)} licence${data.submittedAt ? ` on ${formatDate(data.submittedAt)}` : ''}`}
+          </Text>
+          <TouchableOpacity onPress={() => setEditing(true)} activeOpacity={0.7}>
+            <Text style={styles.correctItText}>{'Correct it'}</Text>
+          </TouchableOpacity>
+        </>
+      )}
+
+      {data.status === 'rejected' && !editing && (
+        <>
+          <Text style={[styles.earningsSectionTitle, { color: theme.textColor }]}>
+            {"We couldn't verify that number"}
+          </Text>
+          {data.reviewNote && (
+            <Text style={[styles.payoutMinText, { color: theme.subTextColor }]}>{data.reviewNote}</Text>
+          )}
+          <TouchableOpacity style={styles.payoutBtn} onPress={() => setEditing(true)} activeOpacity={0.85}>
+            <Text style={styles.payoutBtnText}>{'Try again'}</Text>
+          </TouchableOpacity>
+        </>
+      )}
+
+      {showForm && (
+        <>
+          <Text style={[styles.earningsSectionTitle, { color: theme.textColor }]}>
+            {data.status === 'none' ? 'Get free Pro: add your ADI or trainee licence number' : 'Resubmit your licence number'}
+          </Text>
+          <View style={styles.licenceTypeRow}>
+            <TouchableOpacity
+              style={[styles.licenceTypeChip, licenceType === 'adi' && styles.licenceTypeChipSelected]}
+              onPress={() => setLicenceType('adi')}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.licenceTypeChipText, licenceType === 'adi' && styles.licenceTypeChipTextSelected]}>
+                {'ADI'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.licenceTypeChip, licenceType === 'pdi' && styles.licenceTypeChipSelected]}
+              onPress={() => setLicenceType('pdi')}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.licenceTypeChipText, licenceType === 'pdi' && styles.licenceTypeChipTextSelected]}>
+                {'Trainee (PDI)'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <TextInput
+            style={[styles.licenceNumberInput, { color: theme.textColor, borderColor: '#E5E7EB' }]}
+            placeholder="Licence number"
+            placeholderTextColor={theme.subTextColor}
+            value={licenceNumber}
+            onChangeText={(t) => { setLicenceNumber(t); setError(''); }}
+            autoCapitalize="characters"
+            autoCorrect={false}
+          />
+          <TouchableOpacity
+            style={styles.declarationRow}
+            onPress={() => setDeclaration(d => !d)}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.checkbox, declaration && styles.checkboxChecked]}>
+              {declaration && <Text style={styles.checkboxTick}>{'✓'}</Text>}
+            </View>
+            <Text style={[styles.declarationText, { color: theme.subTextColor }]}>
+              {"I confirm I'm a DVSA-registered ADI or trainee instructor (PDI). We may remove free Pro if we can't confirm this."}
+            </Text>
+          </TouchableOpacity>
+          {error.length > 0 && <Text style={styles.verificationErrorText}>{error}</Text>}
+          <TouchableOpacity
+            style={[styles.payoutBtn, (submitting || !declaration || !licenceNumber) && styles.btnDisabled]}
+            onPress={() => void handleSubmit()}
+            activeOpacity={0.85}
+            disabled={submitting || !declaration || !licenceNumber}
+          >
+            {submitting
+              ? <ActivityIndicator color="#FFFFFF" size="small" />
+              : <Text style={styles.payoutBtnText}>{'Submit'}</Text>}
+          </TouchableOpacity>
+          {editing && (
+            <TouchableOpacity onPress={() => setEditing(false)} activeOpacity={0.7}>
+              <Text style={styles.correctItText}>{'Cancel'}</Text>
+            </TouchableOpacity>
+          )}
+        </>
+      )}
+    </View>
+  );
+}
+
+// ─── PayoutProofCard ──────────────────────────────────────────────────────────
+// Required before an instructor's first payout — see POST/GET
+// /api/instructor/payout-proof. The 1.1.2 native binaries this OTA runs on
+// have neither expo-image-picker nor expo-document-picker linked (checked
+// against package.json at the 1.1.2 EAS build commits: not present), and an
+// OTA update can only ship new JS, never a new native module — so this
+// deliberately never tries an in-app upload. Upload only happens on the web
+// dashboard, where instructor-web's own PayoutProofCard handles it; this is
+// read/status-only plus a link out.
+
+function PayoutProofCard({ data }: { data: PayoutProofData }) {
+  const theme = useTheme();
+
+  if (data.status === 'loading') return null;
+
+  if (data.status === 'approved') {
+    return (
+      <View style={styles.verifiedBadgeRow}>
+        <Text style={styles.verifiedBadgeText}>{'Payouts unlocked ✓'}</Text>
+      </View>
+    );
+  }
+
+  if (data.status === 'pending_review') {
+    return (
+      <View style={[styles.earningsSection, { backgroundColor: theme.cardColor }]}>
+        <Text style={[styles.earningsSectionTitle, { color: theme.textColor }]}>
+          {"Thanks, we're checking your document"}
+        </Text>
+        <Text style={[styles.payoutMinText, { color: theme.subTextColor }]}>
+          {"We'll let you know once payouts are unlocked."}
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.earningsSection, { backgroundColor: theme.cardColor }]}>
+      <Text style={[styles.earningsSectionTitle, { color: theme.textColor }]}>{'Unlock payouts'}</Text>
+      <Text style={[styles.payoutMinText, { color: theme.subTextColor }]}>
+        {'Upload a photo of your ADI certificate or trainee licence on your web dashboard.'}
+      </Text>
+      {data.status === 'rejected' && data.reviewNote && (
+        <Text style={[styles.payoutMinText, { color: theme.subTextColor }]}>{data.reviewNote}</Text>
+      )}
+      <TouchableOpacity
+        style={styles.payoutBtn}
+        onPress={() => void Linking.openURL('https://instructors.getclearpass.co.uk')}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.payoutBtnText}>{'Upload on your web dashboard'}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 // ─── EarningsSection ──────────────────────────────────────────────────────────
 
 function EarningsSection({
   earnings,
   connectStatus,
+  verified,
+  proofApproved,
   onRefresh,
 }: {
   earnings: EarningEntry[];
   connectStatus: ConnectAccountRow | null;
+  verified: boolean;
+  proofApproved: boolean;
   onRefresh: () => void;
 }) {
   const theme = useTheme();
@@ -770,10 +1033,15 @@ function EarningsSection({
 
   const total   = earnings.reduce((s, e) => s + Number(e.amount), 0);
   const pending = earnings.filter(e => e.status === 'pending').reduce((s, e) => s + Number(e.amount), 0);
+  const payoutsUnlocked = verified && proofApproved;
 
   async function handlePayout() {
     if (pending < 10) {
       Alert.alert('Not enough yet', 'Minimum payout is £10 — keep referring to unlock your payout!');
+      return;
+    }
+    if (!payoutsUnlocked) {
+      Alert.alert('Not unlocked yet', "Payouts unlock once you're verified and your certificate is approved");
       return;
     }
     setRequesting(true);
@@ -815,6 +1083,12 @@ function EarningsSection({
         Alert.alert('Not enough yet', 'Minimum payout is £10 — keep referring to unlock your payout!');
       } else if (data.error === 'transfer_ambiguous') {
         Alert.alert('Payout unconfirmed', data.detail || 'We could not confirm this payout. Please contact support before trying again.');
+        onRefresh();
+      } else if (data.error === 'not_verified' || data.error === 'proof_required') {
+        // The server's own message is the accurate one here (which of the
+        // two conditions is missing) — a generic fallback would be actively
+        // wrong, not just vague.
+        Alert.alert('Payouts locked', data.message || "Payouts unlock once you're verified and your certificate is approved");
         onRefresh();
       } else {
         Alert.alert('Payout failed', data.detail || 'Please try again in a moment.');
@@ -866,14 +1140,17 @@ function EarningsSection({
       >
         <Text style={styles.payoutBtnText}>{payoutButtonLabel(pending, connectStatus, requesting)}</Text>
       </TouchableOpacity>
-      {pending < 10 && (
+      {pending < 10 ? (
         <Text style={[styles.payoutMinText, { color: theme.subTextColor }]}>{'Minimum payout is £10'}</Text>
-      )}
-      {pending >= 10 && connectStatus?.status === 'restricted' && (
+      ) : !payoutsUnlocked ? (
+        <Text style={[styles.payoutMinText, { color: theme.subTextColor }]}>
+          {"Payouts unlock once you're verified and your certificate is approved"}
+        </Text>
+      ) : connectStatus?.status === 'restricted' ? (
         <Text style={[styles.payoutMinText, { color: theme.subTextColor }]}>
           {'Stripe needs more information before you can be paid — tap above to update your details.'}
         </Text>
-      )}
+      ) : null}
     </View>
   );
 }
@@ -1054,6 +1331,8 @@ function InstructorDashboard({
   earnings,
   connectStatus,
   payouts,
+  verification,
+  payoutProof,
   loading,
   onRefresh,
 }: {
@@ -1063,6 +1342,8 @@ function InstructorDashboard({
   earnings: EarningEntry[];
   connectStatus: ConnectAccountRow | null;
   payouts: PayoutEntry[];
+  verification: VerificationData;
+  payoutProof: PayoutProofData;
   loading: boolean;
   onRefresh: () => void;
 }) {
@@ -1109,6 +1390,7 @@ function InstructorDashboard({
           {'Share your instructor code with a learner to get started.'}
         </Text>
         {instructorCode && <InstructorCodeCard code={instructorCode} />}
+        <VerificationCard data={verification} onRefresh={onRefresh} />
         <TouchableOpacity
           style={styles.addLearnerBtn}
           onPress={() => setShowAdd(true)}
@@ -1123,8 +1405,17 @@ function InstructorDashboard({
             onShare={() => void handleShareLink()}
           />
         )}
+        {PAYOUT_FEATURES_LIVE && verification.status === 'verified' && (
+          <PayoutProofCard data={payoutProof} />
+        )}
         {PAYOUT_FEATURES_LIVE && (
-          <EarningsSection earnings={earnings} connectStatus={connectStatus} onRefresh={onRefresh} />
+          <EarningsSection
+            earnings={earnings}
+            connectStatus={connectStatus}
+            verified={verification.status === 'verified'}
+            proofApproved={payoutProof.status === 'approved'}
+            onRefresh={onRefresh}
+          />
         )}
         {PAYOUT_FEATURES_LIVE && <PayoutHistorySection payouts={payouts} />}
         <AccountSection acceptedLearnerCount={learners.length} />
@@ -1156,6 +1447,7 @@ function InstructorDashboard({
       </View>
 
       {instructorCode && <InstructorCodeCard code={instructorCode} />}
+      <VerificationCard data={verification} onRefresh={onRefresh} />
 
       {learners.map(entry => (
         <LearnerCard key={entry.rel.id} data={entry} onPress={() => setSelectedLearner(entry)} />
@@ -1168,8 +1460,17 @@ function InstructorDashboard({
           onShare={() => void handleShareLink()}
         />
       )}
+      {PAYOUT_FEATURES_LIVE && verification.status === 'verified' && (
+        <PayoutProofCard data={payoutProof} />
+      )}
       {PAYOUT_FEATURES_LIVE && (
-        <EarningsSection earnings={earnings} connectStatus={connectStatus} onRefresh={onRefresh} />
+        <EarningsSection
+          earnings={earnings}
+          connectStatus={connectStatus}
+          verified={verification.status === 'verified'}
+          proofApproved={payoutProof.status === 'approved'}
+          onRefresh={onRefresh}
+        />
       )}
       {PAYOUT_FEATURES_LIVE && <PayoutHistorySection payouts={payouts} />}
       <AccountSection acceptedLearnerCount={learners.length} />
@@ -1195,6 +1496,10 @@ export default function InstructorScreen() {
   const [earnings,       setEarnings]       = useState<EarningEntry[]>([]);
   const [connectStatus,  setConnectStatus]  = useState<ConnectAccountRow | null>(null);
   const [payouts,        setPayouts]        = useState<PayoutEntry[]>([]);
+  const [verification,   setVerification]   = useState<VerificationData>({
+    status: 'loading', licenceType: null, submittedAt: null, reviewNote: null,
+  });
+  const [payoutProof,    setPayoutProof]    = useState<PayoutProofData>({ status: 'loading', reviewNote: null });
   const [loading,        setLoading]        = useState(true);
 
   useEffect(() => { void loadData(); }, []);
@@ -1259,6 +1564,38 @@ export default function InstructorScreen() {
         .eq('instructor_id', user.id)
         .order('created_at', { ascending: false });
       setPayouts((payoutRows as PayoutEntry[] | null) ?? []);
+
+      // Neither instructor_verification_requests nor instructor_payout_
+      // proofs has any RLS policy — service-role only, same as
+      // instructor-web — so these go through the Railway API with the
+      // caller's own Bearer token, not a direct Supabase query.
+      const authToken = await getAccessToken();
+      if (authToken) {
+        try {
+          const res = await fetch(`${PROXY_URL}/api/instructor/verification`, {
+            headers: { Authorization: `Bearer ${authToken}` },
+          });
+          if (res.ok) {
+            const body = await res.json();
+            setVerification({
+              status: body.status,
+              licenceType: body.licenceType,
+              submittedAt: body.submittedAt,
+              reviewNote: body.reviewNote,
+            });
+          }
+        } catch {}
+
+        try {
+          const res = await fetch(`${PROXY_URL}/api/instructor/payout-proof`, {
+            headers: { Authorization: `Bearer ${authToken}` },
+          });
+          if (res.ok) {
+            const body = await res.json();
+            setPayoutProof({ status: body.status, reviewNote: body.reviewNote });
+          }
+        } catch {}
+      }
 
       const { data: rels } = await supabase
         .from('instructor_relationships')
@@ -1348,6 +1685,8 @@ export default function InstructorScreen() {
           earnings={earnings}
           connectStatus={connectStatus}
           payouts={payouts}
+          verification={verification}
+          payoutProof={payoutProof}
           loading={loading}
           onRefresh={() => void loadData()}
         />
@@ -1806,6 +2145,51 @@ const styles = StyleSheet.create({
   },
   payoutBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
   payoutMinText: { fontSize: 12, textAlign: 'center' },
+
+  // Verification / payout-proof cards
+  verifiedBadgeRow: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#064E3B',
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+  },
+  verifiedBadgeText: { color: '#34D399', fontSize: 13, fontWeight: '700' },
+  correctItText: { color: Colors.indigo, fontSize: 13, fontWeight: '700' },
+  licenceTypeRow: { flexDirection: 'row', gap: 10 },
+  licenceTypeChip: {
+    flex: 1,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  licenceTypeChipSelected: { borderColor: Colors.indigo, backgroundColor: '#EEF2FF' },
+  licenceTypeChipText: { fontSize: 14, fontWeight: '700', color: '#6B7280' },
+  licenceTypeChipTextSelected: { color: Colors.indigo },
+  licenceNumberInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+  },
+  declarationRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: '#9CA3AF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  checkboxChecked: { backgroundColor: Colors.indigo, borderColor: Colors.indigo },
+  checkboxTick: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
+  declarationText: { flex: 1, fontSize: 12, lineHeight: 17 },
+  verificationErrorText: { color: '#EF4444', fontSize: 13, fontWeight: '600' },
 
   switchToLearnerBtn: {
     borderRadius: 12,
