@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 
-const LAST_UPDATED = '18 August 2026';
+const LAST_UPDATED = '11 September 2026';
 
 export default function PrivacyPolicyScreen() {
   const theme = useTheme();
@@ -36,7 +36,8 @@ export default function PrivacyPolicyScreen() {
         {'- Mock test results and timestamps\n'}
         {'- Device type and platform (iOS, Android or Web) for analytics\n'}
         {'- Anonymous usage statistics (question accuracy aggregated across all users)\n'}
-        {'- Payment status (whether your account is Pro) -- we do not store card details'}
+        {'- Payment status (whether your account is Pro) -- we do not store card details\n'}
+        {'- ADI certificate or trainee (PDI) licence photo or scan (instructors only, uploaded before your first payout)'}
       </Section>
 
       <Section title="How we use your information" theme={theme}>
@@ -45,7 +46,8 @@ export default function PrivacyPolicyScreen() {
         {'- To generate AI tutor explanations (questions are sent to Anthropic for processing -- no conversation history is retained by ClearPass)\n'}
         {'- To process payments via Stripe (we receive only a confirmation of payment, not card data)\n'}
         {'- To send weekly progress emails to a parent or guardian, if you have opted in\n'}
-        {'- To produce anonymous aggregate statistics showing platform-wide accuracy by topic'}
+        {'- To produce anonymous aggregate statistics showing platform-wide accuracy by topic\n'}
+        {'- To automatically check an uploaded ADI/PDI document against your declared licence details before unlocking instructor payouts (using Anthropic\'s AI -- see below)'}
       </Section>
 
       <Section title="Legal basis for processing (GDPR)" theme={theme}>
@@ -73,7 +75,7 @@ export default function PrivacyPolicyScreen() {
         {'We do not sell, trade or rent your personal information to third parties. We share data only with:\n\n'}
         {'- Supabase (database and authentication provider)\n'}
         {'- Stripe (payment processing)\n'}
-        {'- Anthropic (AI tutor explanations, question text only)\n'}
+        {'- Anthropic (AI tutor explanations, question text only; and, for instructors, automated checking of an uploaded ADI/PDI document photo before payouts)\n'}
         {'- Resend (email delivery for parent notifications)\n\n'}
         {'All third-party providers are bound by their own privacy policies and data processing agreements.'}
       </Section>
@@ -81,6 +83,12 @@ export default function PrivacyPolicyScreen() {
       <Section title="Instructor and parent access" theme={theme}>
         {'If you link your account to a driving instructor, they can view your progress data (readiness score, topic performance, mock test history). You can unlink instructors at any time from Settings.\n\n'}
         {'If you add a parent email, they will receive weekly summary emails. You can remove the parent email at any time from Settings > Parent Updates.'}
+      </Section>
+
+      <Section title="Instructor payout verification" theme={theme}>
+        {'If you\'re an instructor and request a payout, we ask you to upload a photo or scan of your ADI certificate or trainee (PDI) licence. This is stored privately in our database and is only used to confirm your registration against the licence details you declared -- it is never shown to other users or made public.\n\n'}
+        {'We use Anthropic\'s AI to automatically read the document and check it matches your declaration; anything it can\'t confidently match is reviewed by a member of the ClearPass team by hand. Anthropic\'s own privacy policy governs how they handle this data during the check; ClearPass does not send them your email, payment details or any other personal information alongside the document.\n\n'}
+        {'We retain your uploaded document for as long as your instructor account is active. If you delete your account, it is permanently deleted along with your other data (see Account Deletion).'}
       </Section>
 
       <Section title="Your rights" theme={theme}>

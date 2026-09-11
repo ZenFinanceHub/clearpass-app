@@ -561,3 +561,36 @@ happened yet.
 
 10 connections configured. Fine for current scale; revisit if the instance is
 upgraded.
+
+---
+
+## Pending mobile-app (OTA) changes
+
+Changes that touch `apps/mobile/app` (or anything an EAS Update OTA — not a
+plain Vercel/Railway deploy — is needed for) but were deliberately deferred
+rather than pushed as part of unrelated work. Running list; check items off
+(or fold them into the OTA's own commit) when they actually ship.
+
+Nothing currently pending — the privacy-policy wording below was applied
+directly (2026-09-11) rather than deferred, since it needed to be live
+before the payout-proof feature it documents.
+
+### `apps/mobile/app/privacy-policy.tsx` *is* the published privacy policy
+
+`apps/mobile/vercel.json` builds `clearpass-app.vercel.app` via `npx expo
+export --platform web` from `apps/mobile` — the `/privacy-policy` route on
+that domain (the exact URL in both `docs/app-store-metadata.md` and
+`docs/google-play-checklist.md`, and the one `apps/web/instructors.html`'s
+footer links out to) is generated directly from this `.tsx` file. `apps/web`
+has no privacy policy of its own — there is no separate page to edit
+instead of this one.
+
+The instructor payout-proof wording (new bullets under "Information we
+collect"/"How we use your information", the updated Anthropic bullet under
+"Data sharing", and a new "Instructor payout verification" section) was
+added directly to this file on 2026-09-11, ahead of the payout-proof
+feature's own launch, specifically so the published policy wouldn't lag a
+live feature that collects a new kind of personal document. It ships with
+the next routine 1.1.2 OTA from `main` — no separate app-store/EAS build
+required for this change specifically, since `clearpass-app.vercel.app`
+itself rebuilds on every push to `main` regardless of mobile OTA cadence.
