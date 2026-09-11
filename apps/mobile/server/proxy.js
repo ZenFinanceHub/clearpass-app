@@ -1640,7 +1640,16 @@ app.post('/api/instructor/signup', async (req, res) => {
       const startedUserId = createData?.user?.id;
       if (startedUserId) {
         try {
-          await postToSlack(`Instructor signup started: via web, ref ${signupRef || 'none'}, user ${startedUserId}`);
+          // In practice this path never sees an e2e user — createUser above
+          // always sets user_metadata to exactly { instructor_signup_intent,
+          // signup_ref }, and scripts/smoke-instructor.js creates its own
+          // throwaway accounts directly rather than through this endpoint —
+          // but checked anyway so nothing here silently stops being true if
+          // either of those ever changes.
+          await postToSlackUnlessE2E(
+            `Instructor signup started: via web, ref ${signupRef || 'none'}, user ${startedUserId}`,
+            isE2EUser(createData?.user?.user_metadata)
+          );
         } catch (err) {
           console.error('[instructor-signup] slack notify failed:', err.message || err);
         }
@@ -1672,7 +1681,7 @@ app.post('/api/instructor/signup', async (req, res) => {
 app.post('/api/instructor/complete-signup', async (req, res) => {
   const auth = await verifyAuth(req, res);
   if (!auth) return;
-  const { userId, supabaseAdmin } = auth;
+  const { userId, supabaseAdmin, isE2E } = auth;
 
   if (!rateLimit(res, `complete:${userId}`, 10, 15 * 60 * 1000)) return;
 
@@ -1776,13 +1785,14 @@ app.post('/api/instructor/complete-signup', async (req, res) => {
     // successful signup into an error the instructor sees. postToSlack()
     // swallows its own failures; this is belt and braces around that.
     try {
-      await postToSlack(
+      await postToSlackUnlessE2E(
         [
           ':mortar_board: *New instructor signup*',
           `*Email:* ${authUser.email || '(unknown)'}`,
           signupRef ? `*Ref:* \`${signupRef}\`` : '*Ref:* none',
           `*When:* ${new Date().toISOString()}`,
-        ].join('\n')
+        ].join('\n'),
+        isE2E
       );
     } catch (err) {
       console.error('[instructor-complete] slack notify failed:', err.message || err);
