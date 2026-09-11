@@ -777,16 +777,20 @@ ALTER TABLE waitlist ENABLE ROW LEVEL SECURITY;
 -- No policies exist (confirmed live) — correct: only ever written via the
 -- service role key, no client-side access needed.
 
--- ─────────────────────────────────────────────────────────────────
--- STILL OPEN — the two things reconciliation didn't resolve:
---
 -- instructor_earnings.paid_at (TIMESTAMP WITH TIME ZONE, nullable, no
--- default) is live and undeclared, deliberately left that way — referenced
--- by zero source files, deferred pending the Stripe Connect payout-flow
--- investigation (see BACKLOG.md's "instructor.tsx has a complete-looking
--- referral/earnings/payout flow" item). Document-or-drop is easier to call
--- once that resolves.
---
+-- default) is live. It was undeclared and unset by any code path — the
+-- payout-request handler (proxy.js, via lib/earnings.js's
+-- markPayoutAndEarningsPaid) flips status to 'paid' after a successful
+-- Stripe transfer but never stamped this column, so every real payout left
+-- paid_at null. Found 2026-09-11 investigating two 'paid' earnings with no
+-- paid_at: one (payout_id also null) turned out to be synthetic data from
+-- scripts/seed-test-learners.js, not a real payout; the other had a real
+-- payout_id linked to a payouts row with a genuine stripe_transfer_id —
+-- that one is the actual bug, now fixed to set paid_at = the same
+-- timestamp written to payouts.updated_at.
+ALTER TABLE instructor_earnings ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP WITH TIME ZONE;
+
+-- ─────────────────────────────────────────────────────────────────
 -- This Supabase project is SHARED with Zen Footy. The live schema
 -- additionally contains matches, players, lineups and attendance, which
 -- belong to that product and are correctly absent from this file.

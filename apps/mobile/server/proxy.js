@@ -16,7 +16,7 @@ const {
 } = require('./lib/revenuecatWebhook');
 const { applyStripeProGrant } = require('./lib/stripeWebhook');
 const revenuecatApi = require('./lib/revenuecatApi');
-const { INSTRUCTOR_PAYOUT_STRIPE_MINOR } = require('./lib/earnings');
+const { INSTRUCTOR_PAYOUT_STRIPE_MINOR, markPayoutAndEarningsPaid } = require('./lib/earnings');
 const {
   generateSeatToken,
   isSeatPurchaseSession,
@@ -1215,21 +1215,28 @@ app.post('/api/instructor/payout-request', async (req, res) => {
         idempotencyKey: `payout-transfer-${payout.id}`,
       });
 
-      const { error: paidPayoutError } = await supabaseAdmin
-        .from('payouts')
-        .update({ status: 'paid', stripe_transfer_id: transfer.id, updated_at: new Date().toISOString() })
-        .eq('id', payout.id);
+      const paidAt = new Date().toISOString();
+      const { payoutError: paidPayoutError, earningsError: paidEarningsError } = await markPayoutAndEarningsPaid(
+        {
+          markPayoutPaid: (payoutId, transferId, at) =>
+            supabaseAdmin
+              .from('payouts')
+              .update({ status: 'paid', stripe_transfer_id: transferId, updated_at: at })
+              .eq('id', payoutId),
+          markEarningsPaid: (payoutId, at) =>
+            supabaseAdmin
+              .from('instructor_earnings')
+              .update({ status: 'paid', paid_at: at })
+              .eq('payout_id', payoutId),
+        },
+        { payoutId: payout.id, transferId: transfer.id, paidAt },
+      );
       if (paidPayoutError) {
         console.error(
           '[payout-request] failed to mark payout paid after successful transfer:',
           paidPayoutError, 'payout_id:', payout.id, 'stripe_transfer_id:', transfer.id,
         );
       }
-
-      const { error: paidEarningsError } = await supabaseAdmin
-        .from('instructor_earnings')
-        .update({ status: 'paid' })
-        .eq('payout_id', payout.id);
       if (paidEarningsError) {
         console.error(
           '[payout-request] failed to mark earnings paid after successful transfer:',

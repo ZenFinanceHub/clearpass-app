@@ -46,6 +46,27 @@ function formatMinor(minor) {
   return `£${(minor / 100).toFixed(2)}`;
 }
 
+// Marks a completed Stripe transfer's payout row and its claimed earnings
+// paid. db adapter:
+//   - markPayoutPaid(payoutId, transferId, paidAt) -> Promise<{ error }>
+//   - markEarningsPaid(payoutId, paidAt) -> Promise<{ error }>
+//
+// Both calls are attempted regardless of the other's outcome: by the time
+// this runs, the real money has already moved (the Stripe transfer
+// succeeded), so a bookkeeping write failure here must never be allowed to
+// skip the other write — it's returned for the caller to log instead.
+//
+// instructor_earnings.paid_at is a real, live column (see schema.sql) that
+// this used to leave null on every paid earning — proxy.js's payout-request
+// handler set status: 'paid' but never stamped paid_at, so there was no way
+// to tell from the row itself when (or via which payout) an earning was
+// actually paid out, short of following payout_id back to payouts.updated_at.
+async function markPayoutAndEarningsPaid(db, { payoutId, transferId, paidAt }) {
+  const { error: payoutError } = await db.markPayoutPaid(payoutId, transferId, paidAt);
+  const { error: earningsError } = await db.markEarningsPaid(payoutId, paidAt);
+  return { payoutError, earningsError };
+}
+
 module.exports = {
   SUBSCRIPTION_PRICE_MINOR,
   INSTRUCTOR_SHARE_PCT,
@@ -58,4 +79,5 @@ module.exports = {
   INSTRUCTOR_PAYOUT_STRIPE_MINOR,
   INSTRUCTOR_PAYOUT_WORST_CASE_MINOR,
   formatMinor,
+  markPayoutAndEarningsPaid,
 };
