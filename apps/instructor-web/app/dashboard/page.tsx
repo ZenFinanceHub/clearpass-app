@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { useInstructorAuth } from "@/lib/useInstructorAuth";
 import { supabase } from "@/lib/supabase";
 import { seatInviteLink, type InstructorSeat } from "@/lib/types";
-import VerificationCard from "@/components/VerificationCard";
+import VerificationCard, { type Status as VerificationStatus } from "@/components/VerificationCard";
+import PayoutProofCard from "@/components/PayoutProofCard";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://clearpass-app-production.up.railway.app";
 const MAX_DISPLAY_NAME_LENGTH = 60;
@@ -14,6 +15,7 @@ const MAX_DISPLAY_NAME_LENGTH = 60;
 export default function DashboardPage() {
   const auth = useInstructorAuth();
   const router = useRouter();
+  const [verificationStatus, setVerificationStatus] = useState<VerificationStatus>("loading");
   const [seats, setSeats] = useState<InstructorSeat[] | null>(null);
   const [loadError, setLoadError] = useState("");
   const [buying, setBuying] = useState(false);
@@ -175,7 +177,8 @@ export default function DashboardPage() {
       </header>
 
       <main>
-        <VerificationCard />
+        <VerificationCard onStatusChange={setVerificationStatus} />
+        {verificationStatus === "verified" && <PayoutProofCard />}
 
         <div className="section-card">
           <form onSubmit={(e) => void handleSaveDisplayName(e)}>

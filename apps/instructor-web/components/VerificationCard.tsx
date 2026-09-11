@@ -7,7 +7,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://clearpass-app-produc
 const SUPPORT_URL = "https://clearpass-app.vercel.app/contact";
 
 type LicenceType = "adi" | "pdi";
-type Status = "loading" | "none" | "pending" | "verified" | "rejected";
+export type Status = "loading" | "none" | "pending" | "verified" | "rejected";
 
 type ApiResponse = {
   status: "none" | "pending" | "verified" | "rejected";
@@ -20,10 +20,15 @@ function licenceTypeLabel(licenceType: LicenceType | null) {
   return licenceType === "pdi" ? "trainee (PDI)" : "ADI";
 }
 
-// Manual verification, evidence is an ADI or trainee (PDI) licence number
-// only — see GET/POST /api/instructor/verification in proxy.js. There is
-// no automated check here; a human reviews every submission.
-export default function VerificationCard() {
+// Manual verification, evidence is a self-declared ADI or trainee (PDI)
+// licence number — see GET/POST /api/instructor/verification in proxy.js.
+// A fresh, non-duplicate submission auto-verifies instantly; a duplicate
+// number or a resubmission after rejection needs a human, hence 'pending'.
+//
+// onStatusChange reports the resolved status up to the dashboard, which
+// uses it to decide whether PayoutProofCard should render at all — that
+// card is meaningless (and its own POST would 403) before verification.
+export default function VerificationCard({ onStatusChange }: { onStatusChange?: (status: Status) => void }) {
   const [status, setStatus] = useState<Status>("loading");
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
   const [reviewNote, setReviewNote] = useState<string | null>(null);
@@ -32,6 +37,7 @@ export default function VerificationCard() {
   const [editing, setEditing] = useState(false);
   const [licenceType, setLicenceType] = useState<LicenceType>("adi");
   const [licenceNumber, setLicenceNumber] = useState("");
+  const [declaration, setDeclaration] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -47,6 +53,7 @@ export default function VerificationCard() {
       if (!res.ok) return;
       const body = (await res.json()) as ApiResponse;
       setStatus(body.status);
+      onStatusChange?.(body.status);
       setSubmittedAt(body.submittedAt);
       setReviewNote(body.reviewNote);
       setLastLicenceType(body.licenceType);
@@ -77,11 +84,12 @@ export default function VerificationCard() {
       const res = await fetch(`${API_URL}/api/instructor/verification`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ licenceType, licenceNumber }),
+        body: JSON.stringify({ licenceType, licenceNumber, declaration }),
       });
       const body = await res.json();
       if (!res.ok) {
         const messages: Record<string, string> = {
+          declaration_required: "Please confirm the declaration below before submitting.",
           invalid_licence_number_characters: "Licence numbers can only contain letters, digits, spaces and hyphens.",
           licence_number_required: "Please enter your licence number.",
           licence_number_too_short: "That licence number looks too short — please check and try again.",
@@ -92,6 +100,7 @@ export default function VerificationCard() {
       }
       setEditing(false);
       setLicenceNumber("");
+      setDeclaration(false);
       await load();
     } catch {
       setError("Could not reach the server. Check your connection and try again.");
@@ -105,7 +114,7 @@ export default function VerificationCard() {
   if (status === "verified") {
     return (
       <span className="badge badge-redeemed" style={{ marginBottom: "1rem" }}>
-        Verified instructor ✓
+        You&apos;re verified, free Pro is on ✓
       </span>
     );
   }
@@ -116,9 +125,9 @@ export default function VerificationCard() {
     <div className="section-card">
       {status === "pending" && !editing && (
         <>
-          <p style={{ margin: 0, fontWeight: 600 }}>We&apos;re checking your details</p>
+          <p style={{ margin: 0, fontWeight: 600 }}>We need to check a couple of details</p>
           <p className="muted" style={{ marginTop: "0.4rem" }}>
-            Free Pro is usually switched on within 24 hours.
+            We&apos;ll be in touch.
           </p>
           <p className="muted" style={{ marginTop: "0.4rem", fontSize: "0.85rem" }}>
             Submitted: {licenceTypeLabel(lastLicenceType)} licence
@@ -189,13 +198,28 @@ export default function VerificationCard() {
               autoComplete="off"
             />
           </div>
+          <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", marginTop: "0.8rem", fontSize: "0.85rem" }}>
+            <input
+              type="checkbox"
+              checked={declaration}
+              onChange={(e) => {
+                setDeclaration(e.target.checked);
+                setError("");
+              }}
+              style={{ marginTop: "0.15rem" }}
+            />
+            <span>
+              I confirm I&apos;m a DVSA-registered ADI or trainee instructor (PDI). We may remove free Pro if we can&apos;t
+              confirm this.
+            </span>
+          </label>
           {error && (
             <div className="error-banner" role="alert" style={{ marginTop: "0.6rem" }}>
               <span>{error}</span>
             </div>
           )}
           <div style={{ display: "flex", gap: "0.6rem", marginTop: "0.7rem", alignItems: "center" }}>
-            <button className="btn btn-primary" type="submit" disabled={submitting}>
+            <button className="btn btn-primary" type="submit" disabled={submitting || !declaration}>
               {submitting ? "Submitting…" : "Submit"}
             </button>
             {editing && (
