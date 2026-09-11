@@ -594,3 +594,37 @@ live feature that collects a new kind of personal document. It ships with
 the next routine 1.1.2 OTA from `main` — no separate app-store/EAS build
 required for this change specifically, since `clearpass-app.vercel.app`
 itself rebuilds on every push to `main` regardless of mobile OTA cadence.
+
+---
+
+## Switch on instructor payouts after the ADI conference (27 Sept)
+
+Payouts stay off (`PAYOUT_FEATURES_LIVE = false` in
+`apps/mobile/app/instructor.tsx`) until after the ADI conference on 27
+Sept 2026 — a deliberate call, not a readiness gap discovered late.
+Verification and payout-proof collection both stay live in the meantime
+(referral earnings are tracked from day one regardless); only the actual
+payout request is gated. Copy across `apps/web/instructors.html`,
+instructor-web's `PayoutProofCard`, and (once the flag flips) the mobile
+app's own payout copy all needs to say "payouts open soon"/"tracked from
+day one" rather than implying payouts are available now — see the
+2026-09-11 copy pass.
+
+**What flipping this on needs:**
+- Stripe Connect working in live mode: real onboarding (not just the
+  platform profile/business-model steps already done), live webhook
+  secrets configured in Railway, and enough platform balance to actually
+  fund transfers — `POST /api/instructor/payout-request` moves real money
+  the moment this is live.
+- A payout screen on the web dashboard (instructor-web has no
+  earnings/payout-request UI at all today — see the 2026-09-11 gap noted
+  when `VerificationCard`/`PayoutProofCard` first shipped there; only the
+  mobile app's `instructor.tsx` has one, and it's the thing this flag
+  gates).
+- Flipping `PAYOUT_FEATURES_LIVE` to `true` and shipping that via an EAS
+  Update OTA (JS-only change, no native build needed).
+- Payout checks added to `apps/mobile/server/scripts/smoke-instructor.js`
+  — today it deliberately stops at "payout request with no proof → 403"
+  (see that script's own comments); once payouts are live, a real
+  successful-payout path (or at least a "verified + approved proof
+  still can't be paid without Stripe" negative check) belongs there too.
