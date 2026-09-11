@@ -27,6 +27,7 @@
 require('dotenv').config({ path: __dirname + '/../.env' });
 
 const { createClient } = require('@supabase/supabase-js');
+const { deleteInstructorDocuments } = require('../lib/instructorDocuments');
 
 const INSTRUCTOR_EMAIL = 'enquiries+instructor@zen-finance.co.uk';
 const TEST_LEARNER_EMAIL_RE = /^test-learner-\d+@zen-finance\.co\.uk$/;
@@ -236,6 +237,14 @@ async function deleteTestLearners(supabaseAdmin) {
     // keeps the delete order explicit and harmless either way.
     await supabaseAdmin.from('instructor_relationships').delete().eq('learner_id', u.id);
     await supabaseAdmin.from('instructor_earnings').delete().eq('learner_id', u.id);
+    // These are always test learners, never instructors, so this is
+    // normally a no-op — kept anyway so every account-deletion path in
+    // this project does the same instructor-documents cleanup, with no
+    // path that could silently leave an orphaned file behind.
+    const docsResult = await deleteInstructorDocuments(supabaseAdmin.storage.from('instructor-documents'), u.id);
+    if (docsResult.error) {
+      console.error(`  instructor-documents cleanup failed for ${u.email}: ${docsResult.error.message || docsResult.error}`);
+    }
     const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(u.id);
     if (delErr) {
       console.error(`  FAILED to delete ${u.email}: ${delErr.message}`);

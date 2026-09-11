@@ -21,6 +21,7 @@
 require('dotenv').config({ path: __dirname + '/../.env' });
 
 const { createClient } = require('@supabase/supabase-js');
+const { deleteInstructorDocuments } = require('../lib/instructorDocuments');
 
 const EXECUTE = process.argv.includes('--execute');
 
@@ -47,8 +48,14 @@ const DELETE_EMAILS = [
 
 // Mirrors the cleanup order in POST /api/delete-account (proxy.js) — every
 // table that can reference this user id, deleted before the user_progress/
-// profiles/auth.users rows themselves.
+// profiles/auth.users rows themselves — plus instructor-documents storage
+// cleanup, which no table's ON DELETE CASCADE covers.
 async function deleteAccountCompletely(supabaseAdmin, id) {
+  const docsResult = await deleteInstructorDocuments(supabaseAdmin.storage.from('instructor-documents'), id);
+  if (docsResult.error) {
+    console.error(`  instructor-documents cleanup failed for ${id}: ${docsResult.error.message || docsResult.error}`);
+  }
+
   await Promise.allSettled([
     supabaseAdmin.from('parent_email_subscriptions').delete().eq('learner_id', id),
     supabaseAdmin.from('instructor_lesson_notes').delete().eq('instructor_id', id),

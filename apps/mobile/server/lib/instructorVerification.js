@@ -13,6 +13,13 @@ function licenceTypeLabel(licenceType) {
   return licenceType === 'adi' ? 'ADI' : 'Trainee';
 }
 
+// Shared with lib/payoutProof.js, which normalises Claude's extracted
+// licence_number the exact same way to compare it against what the
+// instructor originally submitted.
+function normaliseLicenceNumber(raw) {
+  return typeof raw === 'string' ? raw.toUpperCase().replace(/[ -]/g, '') : '';
+}
+
 // Validates and normalises a submitted licence number. Both the raw value
 // (as typed) and the normalised value (uppercase, spaces/hyphens stripped)
 // are kept — normalised is what duplicate-number matching and the length
@@ -31,7 +38,7 @@ function validateLicenceSubmission({ licenceType, licenceNumber }) {
   if (!LICENCE_NUMBER_CHARSET_RE.test(trimmed)) {
     return { ok: false, error: 'invalid_licence_number_characters' };
   }
-  const licenceNumberNormalised = trimmed.toUpperCase().replace(/[ -]/g, '');
+  const licenceNumberNormalised = normaliseLicenceNumber(trimmed);
   if (licenceNumberNormalised.length < 4) {
     return { ok: false, error: 'licence_number_too_short' };
   }
@@ -52,17 +59,56 @@ function shouldNotifySubmission(existingRequest, { licenceType, licenceNumberNor
   );
 }
 
-function formatVerificationSubmittedSlackMessage({ displayName, licenceType, licenceNumber, userId, duplicate }) {
+// v2: POST /api/instructor/verification requires an explicit declaration —
+// separate from validateLicenceSubmission, which only judges the licence
+// fields themselves.
+function hasValidDeclaration(declaration) {
+  return declaration === true;
+}
+
+// Which of the three submission outcomes applies, given what's already on
+// file. Checked in this order deliberately: a duplicate always needs a
+// human regardless of this account's own history (two different people
+// can't both hold the same licence number), so it wins over "this account
+// was previously rejected" even if both are somehow true at once.
+function classifyVerificationSubmission({ hasDuplicate, previousStatus }) {
+  if (hasDuplicate) return 'duplicate';
+  if (previousStatus === 'rejected') return 'resubmission';
+  return 'auto_verify';
+}
+
+function formatDuplicateNeedsReviewSlackMessage({ displayName, licenceType, licenceNumber, userId, duplicate }) {
   const name = displayName && displayName.trim() ? displayName.trim() : 'no name yet';
-  const lines = [
-    `Instructor to verify: ${name}, ${licenceTypeLabel(licenceType)} ${licenceNumber}, user ${userId}`,
+  return [
+    `Instructor needs review (duplicate number): ${name}, ${licenceTypeLabel(licenceType)} ${licenceNumber}, user ${userId}, also on ${duplicate.userId} (${duplicate.status})`,
     `select admin.verify_instructor('${userId}');`,
     `select admin.reject_instructor('${userId}', 'reason');`,
-  ];
-  if (duplicate) {
-    lines.push(`Warning: same licence number already on file for user ${duplicate.userId} (status: ${duplicate.status})`);
-  }
-  return lines.join('\n');
+  ].join('\n');
+}
+
+function formatResubmissionNeedsReviewSlackMessage({ displayName, licenceType, licenceNumber, userId, previousReviewNote }) {
+  const name = displayName && displayName.trim() ? displayName.trim() : 'no name yet';
+  const previousReason = previousReviewNote && previousReviewNote.trim() ? previousReviewNote.trim() : 'none';
+  return [
+    `Instructor needs review (resubmission after rejection): ${name}, ${licenceTypeLabel(licenceType)} ${licenceNumber}, user ${userId}, previous reason: ${previousReason}`,
+    `select admin.verify_instructor('${userId}');`,
+    `select admin.reject_instructor('${userId}', 'reason');`,
+  ].join('\n');
+}
+
+function formatAutoVerifiedSlackMessage({ displayName, licenceType, licenceNumber, userId }) {
+  const name = displayName && displayName.trim() ? displayName.trim() : 'no name yet';
+  return [
+    `Instructor auto-verified: ${name}, ${licenceTypeLabel(licenceType)} ${licenceNumber}, user ${userId}`,
+    `select admin.revoke_instructor('${userId}', 'reason');`,
+  ].join('\n');
+}
+
+// The instructor_verifications.note for an auto-verified request — 'auto:'
+// prefix distinguishes it at a glance from a manually-verified one's note
+// (see admin.verify_instructor's own note format in the v1 migration).
+function autoVerifiedNote({ licenceType, licenceNumber }) {
+  return `auto: ${licenceTypeLabel(licenceType)} ${licenceNumber}, self-declared`;
 }
 
 // GET /api/instructor/verification's status. instructor_verifications (not
@@ -90,13 +136,15 @@ function resolveVerificationStatus({ isVerified, request }) {
   };
 }
 
-// Whether a payout can be requested: only once a human has actually
-// verified the instructor (a row in instructor_verifications) — never
-// based on instructor_verification_requests.status, which the instructor
-// controls themselves by resubmitting and could otherwise self-approve by
-// racing a payout request against their own 'pending' state.
-function canRequestPayout({ isVerified }) {
-  return !!isVerified;
+// Whether a payout can be requested: verified (a row in
+// instructor_verifications — never instructor_verification_requests.status,
+// which the instructor controls themselves by resubmitting) AND an
+// approved payout-proof document. Both are required — verification alone
+// no longer unlocks payouts as of v2; a self-declared licence number
+// (possibly auto-verified) still needs a real document checked before
+// money moves.
+function canRequestPayout({ isVerified, hasApprovedProof }) {
+  return !!isVerified && !!hasApprovedProof;
 }
 
 // Whether an authenticated user may start/continue Stripe Connect
@@ -111,9 +159,15 @@ function canStartConnectOnboarding({ accountType }) {
 module.exports = {
   LICENCE_TYPES,
   licenceTypeLabel,
+  normaliseLicenceNumber,
   validateLicenceSubmission,
+  hasValidDeclaration,
+  classifyVerificationSubmission,
   shouldNotifySubmission,
-  formatVerificationSubmittedSlackMessage,
+  formatDuplicateNeedsReviewSlackMessage,
+  formatResubmissionNeedsReviewSlackMessage,
+  formatAutoVerifiedSlackMessage,
+  autoVerifiedNote,
   resolveVerificationStatus,
   canRequestPayout,
   canStartConnectOnboarding,

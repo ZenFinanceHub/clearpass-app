@@ -3,8 +3,13 @@ const assert = require('node:assert/strict');
 const {
   licenceTypeLabel,
   validateLicenceSubmission,
+  hasValidDeclaration,
+  classifyVerificationSubmission,
   shouldNotifySubmission,
-  formatVerificationSubmittedSlackMessage,
+  formatDuplicateNeedsReviewSlackMessage,
+  formatResubmissionNeedsReviewSlackMessage,
+  formatAutoVerifiedSlackMessage,
+  autoVerifiedNote,
   resolveVerificationStatus,
   canRequestPayout,
   canStartConnectOnboarding,
@@ -84,42 +89,105 @@ test('shouldNotifySubmission: true when the type changed', () => {
   assert.equal(shouldNotifySubmission(existing, { licenceType: 'pdi', licenceNumberNormalised: 'AB123456' }), true);
 });
 
-test('formatVerificationSubmittedSlackMessage: full message with the paste-in admin lines', () => {
-  const text = formatVerificationSubmittedSlackMessage({
+test('hasValidDeclaration: true only for the literal boolean true', () => {
+  assert.equal(hasValidDeclaration(true), true);
+  assert.equal(hasValidDeclaration(false), false);
+  assert.equal(hasValidDeclaration('true'), false);
+  assert.equal(hasValidDeclaration(1), false);
+  assert.equal(hasValidDeclaration(undefined), false);
+});
+
+test('classifyVerificationSubmission: duplicate wins regardless of this account\'s own history', () => {
+  assert.equal(classifyVerificationSubmission({ hasDuplicate: true, previousStatus: undefined }), 'duplicate');
+  assert.equal(classifyVerificationSubmission({ hasDuplicate: true, previousStatus: 'rejected' }), 'duplicate');
+});
+
+test('classifyVerificationSubmission: resubmission after a rejection, no duplicate', () => {
+  assert.equal(classifyVerificationSubmission({ hasDuplicate: false, previousStatus: 'rejected' }), 'resubmission');
+});
+
+test('classifyVerificationSubmission: auto_verify for a fresh, non-duplicate submission', () => {
+  assert.equal(classifyVerificationSubmission({ hasDuplicate: false, previousStatus: undefined }), 'auto_verify');
+  assert.equal(classifyVerificationSubmission({ hasDuplicate: false, previousStatus: 'pending' }), 'auto_verify');
+});
+
+test('formatDuplicateNeedsReviewSlackMessage', () => {
+  const text = formatDuplicateNeedsReviewSlackMessage({
     displayName: 'Pat Smith',
     licenceType: 'adi',
     licenceNumber: 'AB-123456',
     userId: 'u1',
+    duplicate: { userId: 'u3', status: 'verified' },
   });
   assert.equal(
     text,
     [
-      'Instructor to verify: Pat Smith, ADI AB-123456, user u1',
+      'Instructor needs review (duplicate number): Pat Smith, ADI AB-123456, user u1, also on u3 (verified)',
       "select admin.verify_instructor('u1');",
       "select admin.reject_instructor('u1', 'reason');",
     ].join('\n'),
   );
 });
 
-test('formatVerificationSubmittedSlackMessage: falls back to "no name yet"', () => {
-  const text = formatVerificationSubmittedSlackMessage({
+test('formatDuplicateNeedsReviewSlackMessage: falls back to "no name yet"', () => {
+  const text = formatDuplicateNeedsReviewSlackMessage({
     displayName: null,
     licenceType: 'pdi',
     licenceNumber: '123456',
     userId: 'u2',
+    duplicate: { userId: 'u4', status: 'pending' },
   });
-  assert.ok(text.startsWith('Instructor to verify: no name yet, Trainee 123456, user u2'));
+  assert.ok(text.startsWith('Instructor needs review (duplicate number): no name yet, Trainee 123456, user u2, also on u4 (pending)'));
 });
 
-test('formatVerificationSubmittedSlackMessage: appends a duplicate-number warning line', () => {
-  const text = formatVerificationSubmittedSlackMessage({
+test('formatResubmissionNeedsReviewSlackMessage: includes the previous rejection reason', () => {
+  const text = formatResubmissionNeedsReviewSlackMessage({
     displayName: 'Pat Smith',
     licenceType: 'adi',
     licenceNumber: 'AB123456',
     userId: 'u1',
-    duplicate: { userId: 'u3', status: 'verified' },
+    previousReviewNote: 'Number not found on register',
   });
-  assert.ok(text.endsWith('Warning: same licence number already on file for user u3 (status: verified)'));
+  assert.equal(
+    text,
+    [
+      'Instructor needs review (resubmission after rejection): Pat Smith, ADI AB123456, user u1, previous reason: Number not found on register',
+      "select admin.verify_instructor('u1');",
+      "select admin.reject_instructor('u1', 'reason');",
+    ].join('\n'),
+  );
+});
+
+test('formatResubmissionNeedsReviewSlackMessage: falls back to "none" with no previous note', () => {
+  const text = formatResubmissionNeedsReviewSlackMessage({
+    displayName: 'Pat Smith',
+    licenceType: 'pdi',
+    licenceNumber: '123456',
+    userId: 'u1',
+    previousReviewNote: null,
+  });
+  assert.ok(text.includes('previous reason: none'));
+});
+
+test('formatAutoVerifiedSlackMessage', () => {
+  const text = formatAutoVerifiedSlackMessage({
+    displayName: 'Pat Smith',
+    licenceType: 'adi',
+    licenceNumber: 'AB123456',
+    userId: 'u1',
+  });
+  assert.equal(
+    text,
+    [
+      'Instructor auto-verified: Pat Smith, ADI AB123456, user u1',
+      "select admin.revoke_instructor('u1', 'reason');",
+    ].join('\n'),
+  );
+});
+
+test('autoVerifiedNote', () => {
+  assert.equal(autoVerifiedNote({ licenceType: 'adi', licenceNumber: 'AB123456' }), 'auto: ADI AB123456, self-declared');
+  assert.equal(autoVerifiedNote({ licenceType: 'pdi', licenceNumber: '123456' }), 'auto: Trainee 123456, self-declared');
 });
 
 test('resolveVerificationStatus: verified via instructor_verifications even with no request row (grandfathered accounts)', () => {
@@ -153,9 +221,11 @@ test('resolveVerificationStatus: rejected, with a review note', () => {
   });
 });
 
-test('canRequestPayout: true only once verified', () => {
-  assert.equal(canRequestPayout({ isVerified: true }), true);
-  assert.equal(canRequestPayout({ isVerified: false }), false);
+test('canRequestPayout: true only once BOTH verified AND proof is approved', () => {
+  assert.equal(canRequestPayout({ isVerified: true, hasApprovedProof: true }), true);
+  assert.equal(canRequestPayout({ isVerified: true, hasApprovedProof: false }), false);
+  assert.equal(canRequestPayout({ isVerified: false, hasApprovedProof: true }), false);
+  assert.equal(canRequestPayout({ isVerified: false, hasApprovedProof: false }), false);
 });
 
 test('canStartConnectOnboarding: true for account_type=instructor, false for anything else', () => {

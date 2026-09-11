@@ -2,12 +2,12 @@ require('dotenv').config({ path: __dirname + '/.env' });
 
 const express = require('express');
 const cors = require('cors');
+const multer = require('multer');
+const heicConvert = require('heic-convert');
 const { deriveConnectStatus } = require('./lib/connectStatus');
 const {
-  shouldApplyProGrant,
   isEligibleForProExpiry,
   clearInstructorGrant,
-  isInstructorGrantAlreadyCorrect,
   hasBlockingRelationships,
 } = require('./lib/entitlement');
 const {
@@ -27,12 +27,30 @@ const {
 } = require('./lib/instructorSignups');
 const {
   validateLicenceSubmission,
+  hasValidDeclaration,
+  classifyVerificationSubmission,
   shouldNotifySubmission,
-  formatVerificationSubmittedSlackMessage,
+  formatDuplicateNeedsReviewSlackMessage,
+  formatResubmissionNeedsReviewSlackMessage,
+  formatAutoVerifiedSlackMessage,
+  autoVerifiedNote,
   resolveVerificationStatus,
   canRequestPayout,
   canStartConnectOnboarding,
 } = require('./lib/instructorVerification');
+const { grantInstructorProForUser } = require('./lib/grantInstructorPro');
+const { deleteInstructorDocuments } = require('./lib/instructorDocuments');
+const { isE2EUser } = require('./lib/e2e');
+const {
+  ALLOWED_DIRECT_MIME_TYPES,
+  MAX_FILE_SIZE_BYTES,
+  isAllowedDirectMimeType,
+  isHeicMimeType,
+  DOCUMENT_CHECK_SYSTEM_PROMPT,
+  formatPayoutProofAutoApprovedSlackMessage,
+  formatPayoutProofNeedsReviewSlackMessage,
+  checkPayoutProofDocument,
+} = require('./lib/payoutProof');
 const {
   generateSeatToken,
   isSeatPurchaseSession,
@@ -158,7 +176,29 @@ async function verifyAuth(req, res) {
     res.status(401).json({ error: 'unauthorized' });
     return null;
   }
-  return { userId: data.user.id, email: data.user.email ?? null, supabaseAdmin };
+  return {
+    userId: data.user.id,
+    email: data.user.email ?? null,
+    // isE2E: true only for scripts/smoke-instructor.js's own throwaway
+    // accounts (user_metadata.e2e === true) — see lib/e2e.js and
+    // postToSlackUnlessE2E below. Every Slack-posting authenticated
+    // endpoint gets this for free via verifyAuth rather than each needing
+    // its own auth.admin lookup.
+    isE2E: isE2EUser(data.user.user_metadata),
+    supabaseAdmin,
+  };
+}
+
+// Wraps postToSlack so none of scripts/smoke-instructor.js's own throwaway
+// e2e accounts ever post to #clearpass-updates — every Slack-posting call
+// site in the instructor-signup/verification/payout-proof flow goes
+// through this instead of postToSlack directly. Returns true (not false)
+// when suppressed so callers that gate a state change on a successful post
+// (e.g. "only stamp notified_at once posted") don't treat suppression as a
+// failure to retry.
+async function postToSlackUnlessE2E(text, isE2E) {
+  if (isE2E) return true;
+  return postToSlack(text);
 }
 
 function requireCronAuth(req, res) {
@@ -429,7 +469,13 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
         // friend" code shares the same column), and previously this
         // matched on referral_code alone with no account_type check, so
         // any matching profile got credited regardless of role.
-        if (referrer && referrer.account_type === 'instructor') {
+        //
+        // referrer.id === userId is an instructor crediting themselves —
+        // referred_by/referral_code are both plain client-writable text
+        // columns (see choose-account-type.tsx/signup.tsx), so an
+        // instructor could otherwise set their own referred_by to their
+        // own referral_code and collect commission on their own purchase.
+        if (referrer && referrer.account_type === 'instructor' && referrer.id !== userId) {
           // This webhook only fires for Stripe Checkout purchases (every platform
           // currently routes through Stripe — see paywall.tsx), so the Stripe-fee
           // net applies here, not the App Store/Google Play commission rate.
@@ -627,6 +673,16 @@ const DEFAULT_CALLER = 'ask_pip';
 const ANTHROPIC_MAX_TOKENS = 4000;
 const MAX_SYSTEM_CHARS = 8000;
 const MAX_MESSAGES = 40;
+
+// POST /api/instructor/payout-proof's document check — same Anthropic
+// client (raw fetch to /v1/messages, same headers/env var) and the same
+// model tier as ask_pip/study_plan above, since checking a real document
+// photo well is a higher-stakes vision task than the explainer's short
+// single-shot wording. The response is a small fixed JSON object (see
+// lib/payoutProof.js's DOCUMENT_CHECK_SYSTEM_PROMPT), nowhere near
+// ANTHROPIC_MAX_TOKENS, so it gets its own much smaller ceiling.
+const DOCUMENT_CHECK_MODEL = CALLER_MODELS.ask_pip;
+const DOCUMENT_CHECK_MAX_TOKENS = 500;
 
 // Shared quota on POST /api/explain, one counter across all three callers
 // (Ask Pip, the wrong-answer explainer, and the orphaned study plan
@@ -1163,19 +1219,34 @@ app.post('/api/instructor/payout-request', async (req, res) => {
     // Referral earnings still accrue for an unverified instructor (see the
     // Stripe webhook handler above — that check is only account_type, on
     // purpose, so a referral isn't silently lost while verification is
-    // pending) — but they can't be paid out until a human has actually
-    // confirmed the account. This is the only place that money leaving the
-    // platform is gated on verification.
+    // pending) — but they can't be paid out until BOTH a verification row
+    // exists AND a payout-proof document has been approved. This is the
+    // only place that money leaving the platform is gated on either.
     const { data: verifiedRow, error: verifiedErr } = await supabaseAdmin
       .from('instructor_verifications')
       .select('user_id')
       .eq('user_id', userId)
       .maybeSingle();
     if (verifiedErr) throw verifiedErr;
-    if (!canRequestPayout({ isVerified: !!verifiedRow })) {
+
+    if (!verifiedRow) {
       return res.status(403).json({
         error: 'not_verified',
         message: 'Your instructor account needs to be verified before you can request a payout. Add your licence number from your dashboard if you haven’t already.',
+      });
+    }
+
+    const { data: proofRow, error: proofErr } = await supabaseAdmin
+      .from('instructor_payout_proofs')
+      .select('status')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (proofErr) throw proofErr;
+
+    if (!canRequestPayout({ isVerified: !!verifiedRow, hasApprovedProof: proofRow?.status === 'approved' })) {
+      return res.status(403).json({
+        error: 'proof_required',
+        message: 'Upload your ADI certificate or trainee licence on your dashboard to unlock payouts',
       });
     }
 
@@ -1724,24 +1795,30 @@ app.post('/api/instructor/complete-signup', async (req, res) => {
   }
 });
 
-// ─── Instructor verification ──────────────────────────────────────────────────
+// ─── Instructor verification (v2) ──────────────────────────────────────────────
 //
-// Manual verification: evidence is an ADI or trainee (PDI) licence number
-// only, checked by a human. Neither endpoint below ever writes
-// instructor_verifications — that table (which grant-instructor-pro,
-// payout-request and Connect onboarding actually gate on) is only ever
-// written by admin.verify_instructor(), run manually by Craig in the
-// Supabase SQL Editor from the Slack message POST below produces. These
-// two endpoints only manage instructor_verification_requests: the
-// submission/audit trail and what the dashboard shows back to the
-// instructor.
+// Evidence is a self-declared ADI or trainee (PDI) licence number. Unlike
+// v1, a fresh, non-duplicate submission auto-verifies instantly (Pro grants
+// right away, via grantInstructorProForUser) — the licence number itself is
+// never checked against DVSA or any register, so this is knowingly a low
+// bar; admin.revoke_instructor exists specifically to undo one that turns
+// out wrong (every auto-verify Slack post includes the exact line to run).
+// Two situations still require Craig manually running admin.verify_
+// instructor/reject_instructor instead: the normalised number is already
+// on another account (two people can't both hold it), or this account was
+// previously rejected (a second self-declaration after a rejection doesn't
+// get the automatic benefit of the doubt again).
+//
+// Verification alone no longer unlocks payouts as of v2 — see payout-
+// request below, which additionally requires an approved
+// instructor_payout_proof.
 
 // POST /api/instructor/verification
-// Body: { licenceType: 'adi' | 'pdi', licenceNumber: string }
+// Body: { licenceType: 'adi' | 'pdi', licenceNumber: string, declaration: true }
 app.post('/api/instructor/verification', async (req, res) => {
   const auth = await verifyAuth(req, res);
   if (!auth) return;
-  const { userId, supabaseAdmin } = auth;
+  const { userId, supabaseAdmin, isE2E } = auth;
 
   try {
     const { data: profile, error: profileErr } = await supabaseAdmin
@@ -1770,6 +1847,10 @@ app.post('/api/instructor/verification', async (req, res) => {
       return res.json({ ok: true, status: 'verified' });
     }
 
+    if (!hasValidDeclaration(req.body?.declaration)) {
+      return res.status(400).json({ error: 'declaration_required' });
+    }
+
     const validation = validateLicenceSubmission({
       licenceType: req.body?.licenceType,
       licenceNumber: req.body?.licenceNumber,
@@ -1782,15 +1863,82 @@ app.post('/api/instructor/verification', async (req, res) => {
 
     const { data: existingRequest, error: existingErr } = await supabaseAdmin
       .from('instructor_verification_requests')
-      .select('licence_type, licence_number_normalised')
+      .select('licence_type, licence_number_normalised, status, review_note')
       .eq('user_id', userId)
       .maybeSingle();
     if (existingErr) throw existingErr;
 
-    // Resets status to 'pending' (and clears any prior reviewed_at/
-    // review_note) on every submission, including a resubmission after a
-    // rejection — a corrected number is a fresh request, not a continuation
-    // of the rejected one.
+    const { data: duplicateRows, error: duplicateErr } = await supabaseAdmin
+      .from('instructor_verification_requests')
+      .select('user_id, status')
+      .eq('licence_number_normalised', licenceNumberNormalised)
+      .neq('user_id', userId)
+      .limit(1);
+    if (duplicateErr) throw duplicateErr;
+    const duplicate = duplicateRows && duplicateRows[0]
+      ? { userId: duplicateRows[0].user_id, status: duplicateRows[0].status }
+      : null;
+
+    const path = classifyVerificationSubmission({
+      hasDuplicate: !!duplicate,
+      previousStatus: existingRequest?.status,
+    });
+
+    const notify = shouldNotifySubmission(existingRequest, { licenceType, licenceNumberNormalised });
+
+    if (path === 'auto_verify') {
+      // Resets any prior reviewed_at/review_note — a fresh, clean
+      // submission on this path always was going to auto-verify.
+      const { error: upsertErr } = await supabaseAdmin.from('instructor_verification_requests').upsert({
+        user_id: userId,
+        licence_type: licenceType,
+        licence_number: licenceNumber,
+        licence_number_normalised: licenceNumberNormalised,
+        status: 'verified',
+        submitted_at: new Date().toISOString(),
+        reviewed_at: new Date().toISOString(),
+        review_note: null,
+      });
+      if (upsertErr) throw upsertErr;
+
+      const { error: insertVerifiedErr } = await supabaseAdmin.from('instructor_verifications').insert({
+        user_id: userId,
+        note: autoVerifiedNote({ licenceType, licenceNumber }),
+      });
+      if (insertVerifiedErr && insertVerifiedErr.code !== '23505') {
+        throw insertVerifiedErr;
+      }
+
+      const grantResult = await grantInstructorProForUser(
+        userId,
+        {
+          getProgress: async (id) => {
+            const { data, error } = await supabaseAdmin.from('user_progress').select('progress').eq('id', id).maybeSingle();
+            if (error) throw error;
+            return data?.progress || null;
+          },
+          upsertProgress: async (id, progress) =>
+            supabaseAdmin.from('user_progress').upsert({ id, progress, updated_at: new Date().toISOString() }),
+          postSlack: (text) => postToSlackUnlessE2E(text, isE2E),
+        },
+        { displayName: profile.display_name }
+      );
+      if (grantResult.outcome === 'error') {
+        console.error('[instructor-verification] Pro grant failed after auto-verify for', userId, grantResult.error);
+      }
+
+      const posted = await postToSlackUnlessE2E(
+        formatAutoVerifiedSlackMessage({ displayName: profile.display_name, licenceType, licenceNumber, userId }),
+        isE2E
+      );
+      if (!posted) {
+        console.error('[instructor-verification] auto-verify slack notify failed for', userId);
+      }
+
+      return res.json({ ok: true, status: 'verified' });
+    }
+
+    // 'duplicate' or 'resubmission' — both land on 'pending' for a human.
     const { error: upsertErr } = await supabaseAdmin.from('instructor_verification_requests').upsert({
       user_id: userId,
       licence_type: licenceType,
@@ -1803,31 +1951,19 @@ app.post('/api/instructor/verification', async (req, res) => {
     });
     if (upsertErr) throw upsertErr;
 
-    if (shouldNotifySubmission(existingRequest, { licenceType, licenceNumberNormalised })) {
-      const { data: duplicateRows, error: duplicateErr } = await supabaseAdmin
-        .from('instructor_verification_requests')
-        .select('user_id, status')
-        .eq('licence_number_normalised', licenceNumberNormalised)
-        .neq('user_id', userId)
-        .limit(1);
-      if (duplicateErr) {
-        console.error('[instructor-verification] duplicate lookup failed:', duplicateErr.message);
-      }
-      const duplicate = duplicateRows && duplicateRows[0]
-        ? { userId: duplicateRows[0].user_id, status: duplicateRows[0].status }
-        : null;
-
-      const posted = await postToSlack(
-        formatVerificationSubmittedSlackMessage({
-          displayName: profile.display_name,
-          licenceType,
-          licenceNumber,
-          userId,
-          duplicate,
-        })
-      );
+    if (notify) {
+      const text = path === 'duplicate'
+        ? formatDuplicateNeedsReviewSlackMessage({ displayName: profile.display_name, licenceType, licenceNumber, userId, duplicate })
+        : formatResubmissionNeedsReviewSlackMessage({
+            displayName: profile.display_name,
+            licenceType,
+            licenceNumber,
+            userId,
+            previousReviewNote: existingRequest?.review_note,
+          });
+      const posted = await postToSlackUnlessE2E(text, isE2E);
       if (!posted) {
-        console.error('[instructor-verification] slack notify failed for', userId);
+        console.error('[instructor-verification] needs-review slack notify failed for', userId);
       }
     }
 
@@ -1864,6 +2000,222 @@ app.get('/api/instructor/verification', async (req, res) => {
   } catch (err) {
     console.error('[instructor-verification] GET error:', err.message || err);
     return res.status(500).json({ error: 'verification_status_failed' });
+  }
+});
+
+// ─── Instructor payout proof ───────────────────────────────────────────────────
+//
+// Required before a verified instructor's first payout (see payout-request
+// above). One file — JPEG/PNG/WebP/PDF direct, HEIC/HEIF converted to JPEG
+// server-side — stored privately in the instructor-documents bucket, then
+// checked by Claude against the licence type/number the instructor already
+// declared in instructor_verification_requests. Auto-approved only when
+// every condition in lib/payoutProof.js's decidePayoutProofOutcome holds;
+// anything else, including a check failure, lands on 'pending_review' for
+// Craig to resolve via admin.approve_payout_proof/reject_payout_proof.
+
+async function callAnthropicForDocumentCheck({ buffer, mimeType }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set');
+
+  const base64Data = buffer.toString('base64');
+  const contentBlock = mimeType === 'application/pdf'
+    ? { type: 'document', source: { type: 'base64', media_type: mimeType, data: base64Data } }
+    : { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64Data } };
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: DOCUMENT_CHECK_MODEL,
+      max_tokens: DOCUMENT_CHECK_MAX_TOKENS,
+      system: DOCUMENT_CHECK_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: [contentBlock, { type: 'text', text: 'Check this document.' }] }],
+    }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(`Anthropic returned ${response.status}: ${JSON.stringify(data)}`);
+  }
+  const textBlock = (data.content || []).find((b) => b.type === 'text');
+  if (!textBlock) throw new Error('No text content in Anthropic response');
+  return textBlock.text;
+}
+
+function extensionForMimeType(mimeType) {
+  if (mimeType === 'image/jpeg') return 'jpg';
+  if (mimeType === 'image/png') return 'png';
+  if (mimeType === 'image/webp') return 'webp';
+  return 'pdf';
+}
+
+// Deliberately NOT app-level middleware (unlike express.json() above) —
+// applied only to this one route, wrapped manually below so a rejected/
+// oversized file produces the same JSON error shape as everything else
+// here instead of Express's default HTML error page. fileFilter silently
+// drops (not errors on) an unrecognised mimetype; req.file being undefined
+// afterward is how that's detected.
+const payoutProofUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_FILE_SIZE_BYTES },
+  fileFilter: (req, file, cb) => {
+    cb(null, isAllowedDirectMimeType(file.mimetype) || isHeicMimeType(file.mimetype));
+  },
+}).single('file');
+
+// POST /api/instructor/payout-proof
+// multipart/form-data, one file field named "file".
+app.post('/api/instructor/payout-proof', async (req, res) => {
+  const auth = await verifyAuth(req, res);
+  if (!auth) return;
+  const { userId, supabaseAdmin, isE2E } = auth;
+
+  payoutProofUpload(req, res, async (uploadErr) => {
+    if (uploadErr) {
+      if (uploadErr.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: 'file_too_large', message: 'That file is larger than 10 MB.' });
+      }
+      console.error('[payout-proof] upload error:', uploadErr.message || uploadErr);
+      return res.status(400).json({ error: 'upload_failed' });
+    }
+
+    try {
+      const { data: verifiedRow, error: verifiedErr } = await supabaseAdmin
+        .from('instructor_verifications')
+        .select('user_id')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (verifiedErr) throw verifiedErr;
+      if (!verifiedRow) {
+        return res.status(403).json({ error: 'not_verified' });
+      }
+
+      // If already approved, change nothing — not even a re-upload.
+      const { data: existingProof, error: existingProofErr } = await supabaseAdmin
+        .from('instructor_payout_proofs')
+        .select('status')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (existingProofErr) throw existingProofErr;
+      if (existingProof?.status === 'approved') {
+        return res.json({ ok: true, status: 'approved' });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({
+          error: 'unsupported_file',
+          message: 'Please upload a JPEG, PNG, WebP, PDF or HEIC file, up to 10 MB.',
+        });
+      }
+
+      let buffer = req.file.buffer;
+      let mimeType = req.file.mimetype;
+
+      if (isHeicMimeType(mimeType)) {
+        try {
+          const converted = await heicConvert({ buffer, format: 'JPEG', quality: 0.9 });
+          buffer = Buffer.from(converted);
+          mimeType = 'image/jpeg';
+        } catch (convErr) {
+          console.error('[payout-proof] HEIC conversion failed:', convErr.message || convErr);
+          return res.status(400).json({
+            error: 'heic_conversion_failed',
+            message: 'Could not process that photo — please upload a JPEG, PNG, WebP or PDF instead.',
+          });
+        }
+      }
+
+      const storagePath = `${userId}/${Date.now()}.${extensionForMimeType(mimeType)}`;
+      const { error: storageErr } = await supabaseAdmin.storage
+        .from('instructor-documents')
+        .upload(storagePath, buffer, { contentType: mimeType, upsert: false });
+      if (storageErr) throw storageErr;
+
+      // The declared licence type/number to check the document against.
+      // Always present for a verified instructor in the normal auto-verify
+      // flow (it's what got them verified); a grandfathered/manually
+      // comp'd account with no request row at all can't be auto-checked
+      // against anything, so it goes straight to a human instead of
+      // guessing.
+      const { data: request, error: requestErr } = await supabaseAdmin
+        .from('instructor_verification_requests')
+        .select('licence_type, licence_number_normalised')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (requestErr) throw requestErr;
+
+      const decision = request
+        ? await checkPayoutProofDocument({
+            callAnthropic: () => callAnthropicForDocumentCheck({ buffer, mimeType }),
+            licenceType: request.licence_type,
+            licenceNumberNormalised: request.licence_number_normalised,
+          })
+        : { autoApprove: false, checkReason: 'no_declared_licence', extracted: null };
+
+      const { data: profile } = await supabaseAdmin.from('profiles').select('display_name').eq('id', userId).maybeSingle();
+      const displayName = profile?.display_name ?? null;
+
+      const nowIso = new Date().toISOString();
+      const { error: proofUpsertErr } = await supabaseAdmin.from('instructor_payout_proofs').upsert({
+        user_id: userId,
+        storage_path: storagePath,
+        mime_type: mimeType,
+        status: decision.autoApprove ? 'approved' : 'pending_review',
+        extracted: decision.extracted,
+        check_reason: decision.checkReason,
+        auto_approved: decision.autoApprove,
+        submitted_at: nowIso,
+        reviewed_at: decision.autoApprove ? nowIso : null,
+        review_note: null,
+      });
+      if (proofUpsertErr) throw proofUpsertErr;
+
+      if (decision.autoApprove) {
+        const posted = await postToSlackUnlessE2E(formatPayoutProofAutoApprovedSlackMessage({ displayName, userId }), isE2E);
+        if (!posted) console.error('[payout-proof] auto-approved slack post failed for', userId);
+        return res.json({ ok: true, status: 'approved' });
+      }
+
+      const posted = await postToSlackUnlessE2E(
+        formatPayoutProofNeedsReviewSlackMessage({ displayName, checkReason: decision.checkReason, storagePath, userId }),
+        isE2E
+      );
+      if (!posted) console.error('[payout-proof] needs-review slack post failed for', userId);
+      return res.json({ ok: true, status: 'pending_review' });
+    } catch (err) {
+      console.error('[payout-proof] POST error:', err.message || err);
+      return res.status(500).json({ error: 'payout_proof_failed' });
+    }
+  });
+});
+
+// GET /api/instructor/payout-proof
+// Returns { status: 'none'|'pending_review'|'approved'|'rejected', reviewNote }.
+app.get('/api/instructor/payout-proof', async (req, res) => {
+  const auth = await verifyAuth(req, res);
+  if (!auth) return;
+  const { userId, supabaseAdmin } = auth;
+
+  try {
+    const { data: proof, error } = await supabaseAdmin
+      .from('instructor_payout_proofs')
+      .select('status, review_note')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error) throw error;
+
+    return res.json({
+      status: proof?.status ?? 'none',
+      reviewNote: proof?.review_note ?? null,
+    });
+  } catch (err) {
+    console.error('[payout-proof] GET error:', err.message || err);
+    return res.status(500).json({ error: 'payout_proof_status_failed' });
   }
 });
 
@@ -2045,6 +2397,16 @@ app.post('/api/delete-account', async (req, res) => {
 
   const id = user.id;
   try {
+    // instructor-documents storage objects are NOT covered by any table's
+    // ON DELETE CASCADE — deleting profiles/instructor_payout_proofs below
+    // removes the database row, but leaves the actual uploaded file
+    // sitting in storage forever unless this runs. Alongside the other
+    // per-table deletes since it's equally independent of delete order.
+    const docsResult = await deleteInstructorDocuments(supabaseAdmin.storage.from('instructor-documents'), id);
+    if (docsResult.error) {
+      console.error('[delete-account] instructor-documents cleanup failed for', id, docsResult.error.message || docsResult.error);
+    }
+
     await Promise.allSettled([
       supabaseAdmin.from('parent_email_subscriptions').delete().eq('learner_id', id),
       supabaseAdmin.from('instructor_lesson_notes').delete().eq('instructor_id', id),
@@ -2495,9 +2857,18 @@ async function listAllAuthUsers(supabaseAdmin) {
 // its response contract — granted/alreadyCorrect/skipped/unverified/total
 // mean exactly what they did before; the new counters are additive.
 //
-// Schedule: every 15 minutes (was daily at 02:00 Europe/London) — moved so
-// the two Slack alerts are timely; the Pro grant itself stays just as
-// idempotent run this often as it was once a day.
+// scripts/smoke-instructor.js's throwaway e2e accounts (user_metadata.e2e)
+// are excluded from the instructor_signups backfill entirely, and every
+// Slack post in this job is routed through postToSlackUnlessE2E — see
+// lib/e2e.js.
+//
+// Schedule: daily at 02:00 Europe/London — reverted from every 15 minutes
+// now that verification (and its Pro grant) happens instantly via POST
+// /api/instructor/verification's auto-verify path; this cron is now just a
+// backstop for anything that falls through that path (a failed grant on
+// auto-verify, a manual admin.verify_instructor call, ...), so it no
+// longer needs to run more often than once a day. Signup-tracking
+// notifications now only sweep once a day too, as a consequence.
 
 app.post('/api/cron/grant-instructor-pro', async (req, res) => {
   if (!requireCronAuth(req, res)) return;
@@ -2513,6 +2884,9 @@ app.post('/api/cron/grant-instructor-pro', async (req, res) => {
     const allInstructorIds = (instructors || []).map(i => i.id);
     const instructorDisplayNameById = Object.fromEntries((instructors || []).map(i => [i.id, i.display_name]));
 
+    const authUsers = await listAllAuthUsers(supabaseAdmin);
+    const e2eUserIdSet = new Set(authUsers.filter(u => isE2EUser(u.user_metadata)).map(u => u.id));
+
     // ── Signup tracking: backfill + notify ──────────────────────────────
     let signupsBackfilled = 0;
     let signupsNotified = 0;
@@ -2523,7 +2897,8 @@ app.post('/api/cron/grant-instructor-pro', async (req, res) => {
         .in('user_id', allInstructorIds);
       if (trackedErr) throw trackedErr;
 
-      const backfillRows = buildAppSignupBackfillRows(allInstructorIds, (trackedRows || []).map(r => r.user_id));
+      const backfillEligibleIds = allInstructorIds.filter(id => !e2eUserIdSet.has(id));
+      const backfillRows = buildAppSignupBackfillRows(backfillEligibleIds, (trackedRows || []).map(r => r.user_id));
       if (backfillRows.length > 0) {
         const { error: backfillErr } = await supabaseAdmin.from('instructor_signups').insert(backfillRows);
         if (backfillErr) {
@@ -2556,7 +2931,7 @@ app.post('/api/cron/grant-instructor-pro', async (req, res) => {
           campaignRef: row.campaign_ref,
           userId: row.user_id,
         });
-        const posted = await postToSlack(text);
+        const posted = await postToSlackUnlessE2E(text, e2eUserIdSet.has(row.user_id));
         if (!posted) {
           console.error('[grant-instructor-pro] signup notify slack post failed for', row.user_id, '— will retry next run');
           continue;
@@ -2575,10 +2950,9 @@ app.post('/api/cron/grant-instructor-pro', async (req, res) => {
 
     // ── Abandoned step-1 signups (24h+, never completed) ────────────────
     let abandonedNotified = 0;
-    const authUsers = await listAllAuthUsers(supabaseAdmin);
     const abandoned = findUnnotifiedAbandonedSignups(authUsers, allInstructorIds);
     for (const u of abandoned) {
-      const posted = await postToSlack(formatAbandonedSignupNotification({ userId: u.id }));
+      const posted = await postToSlackUnlessE2E(formatAbandonedSignupNotification({ userId: u.id }), isE2EUser(u.user_metadata));
       if (!posted) {
         console.error('[grant-instructor-pro] abandoned-signup slack post failed for', u.id, '— will retry next run');
         continue;
@@ -2617,49 +2991,40 @@ app.post('/api/cron/grant-instructor-pro', async (req, res) => {
       });
     }
 
-    const { data: rows, error: progressErr } = await supabaseAdmin
-      .from('user_progress')
-      .select('id, progress')
-      .in('id', instructorIds);
-    if (progressErr) throw progressErr;
-
-    const progressById = Object.fromEntries((rows || []).map(r => [r.id, r.progress || {}]));
-
     let granted = 0;
     let alreadyCorrect = 0;
     let skipped = 0;
     for (const id of instructorIds) {
-      const currentProgress = progressById[id] || {};
+      const db = {
+        getProgress: async (userId) => {
+          const { data, error } = await supabaseAdmin.from('user_progress').select('progress').eq('id', userId).maybeSingle();
+          if (error) throw error;
+          return data?.progress || null;
+        },
+        upsertProgress: async (userId, progress) =>
+          supabaseAdmin.from('user_progress').upsert({ id: userId, progress, updated_at: new Date().toISOString() }),
+        postSlack: (text) => postToSlackUnlessE2E(text, e2eUserIdSet.has(id)),
+      };
 
-      if (isInstructorGrantAlreadyCorrect(currentProgress)) {
+      let result;
+      try {
+        result = await grantInstructorProForUser(id, db, { displayName: instructorDisplayNameById[id] });
+      } catch (err) {
+        console.error('[grant-instructor-pro] read error for', id, err.message || err);
+        continue;
+      }
+
+      if (result.outcome === 'already_correct') {
         alreadyCorrect++;
-        continue;
-      }
-
-      if (!shouldApplyProGrant(currentProgress.proSource, 'instructor')) {
+      } else if (result.outcome === 'skipped') {
         skipped++;
-        continue;
-      }
-
-      const updatedProgress = { ...currentProgress, isPro: true, proExpiresAt: null, proSource: 'instructor' };
-      const { error: updateError } = await supabaseAdmin
-        .from('user_progress')
-        .upsert({ id, progress: updatedProgress, updated_at: new Date().toISOString() });
-      if (updateError) {
-        console.error('[grant-instructor-pro] update error for', id, updateError.message);
-        continue;
-      }
-      granted++;
-
-      // Non-fatal, same as every other Slack post in this job: the grant
-      // itself already succeeded via the update above, so a Slack outage
-      // must not undo it or block the rest of the loop.
-      const displayName = instructorDisplayNameById[id];
-      const posted = await postToSlack(
-        `Instructor Pro granted: ${displayName && displayName.trim() ? displayName.trim() : 'no name yet'} (${id})`
-      );
-      if (!posted) {
-        console.error('[grant-instructor-pro] pro-granted slack post failed for', id);
+      } else if (result.outcome === 'granted') {
+        granted++;
+        if (result.slackPosted === false) {
+          console.error('[grant-instructor-pro] pro-granted slack post failed for', id);
+        }
+      } else if (result.outcome === 'error') {
+        console.error('[grant-instructor-pro] update error for', id, result.error?.message || result.error);
       }
     }
 
