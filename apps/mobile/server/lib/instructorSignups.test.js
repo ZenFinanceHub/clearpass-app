@@ -6,6 +6,7 @@ const {
   formatSignupNotification,
   formatAbandonedSignupNotification,
   findUnnotifiedAbandonedSignups,
+  buildWebSignupRow,
 } = require('./instructorSignups');
 
 test('buildAppSignupBackfillRows: only untracked instructor ids get a row, all sourced app', () => {
@@ -93,6 +94,23 @@ test('findUnnotifiedAbandonedSignups: excludes users who already completed signu
     },
   ];
   assert.deepEqual(findUnnotifiedAbandonedSignups(users, ['completed-1'], { now }), []);
+});
+
+test('buildWebSignupRow: source web, pre-notified with the given timestamp, campaign ref carried through', () => {
+  const now = new Date('2026-09-11T12:00:00.000Z');
+  assert.deepEqual(buildWebSignupRow({ userId: 'u1', campaignRef: 'adinjc26', now }), {
+    user_id: 'u1',
+    source: 'web',
+    campaign_ref: 'adinjc26',
+    notified_at: '2026-09-11T12:00:00.000Z',
+  });
+});
+
+test('buildWebSignupRow: notified_at is always set, even with no campaign ref', () => {
+  const now = new Date('2026-09-11T12:00:00.000Z');
+  const row = buildWebSignupRow({ userId: 'u2', campaignRef: null, now });
+  assert.equal(row.campaign_ref, null);
+  assert.equal(row.notified_at, '2026-09-11T12:00:00.000Z');
 });
 
 test('findUnnotifiedAbandonedSignups: excludes users already flagged as notified', () => {

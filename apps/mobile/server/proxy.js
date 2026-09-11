@@ -23,7 +23,16 @@ const {
   formatSignupNotification,
   formatAbandonedSignupNotification,
   findUnnotifiedAbandonedSignups,
+  buildWebSignupRow,
 } = require('./lib/instructorSignups');
+const {
+  validateLicenceSubmission,
+  shouldNotifySubmission,
+  formatVerificationSubmittedSlackMessage,
+  resolveVerificationStatus,
+  canRequestPayout,
+  canStartConnectOnboarding,
+} = require('./lib/instructorVerification');
 const {
   generateSeatToken,
   isSeatPurchaseSession,
@@ -1070,6 +1079,23 @@ app.post('/api/instructor/connect/onboarding-link', async (req, res) => {
   const { userId, email, supabaseAdmin } = auth;
 
   try {
+    // Previously missing — verifyAuth alone let any signed-in user (not
+    // just an instructor) open a Stripe Connect account through this
+    // endpoint. account_type is enough here, deliberately not verification:
+    // payout-request (below) already requires an instructor_verifications
+    // row before any money can actually be requested, so gating onboarding
+    // itself more tightly would only block an unverified instructor from
+    // getting Connect set up ahead of time.
+    const { data: profile, error: profileErr } = await supabaseAdmin
+      .from('profiles')
+      .select('account_type')
+      .eq('id', userId)
+      .maybeSingle();
+    if (profileErr) throw profileErr;
+    if (!canStartConnectOnboarding({ accountType: profile?.account_type })) {
+      return res.status(403).json({ error: 'not_an_instructor' });
+    }
+
     const { data: connectRow, error: selectError } = await supabaseAdmin
       .from('instructor_connect_accounts')
       .select('stripe_account_id')
@@ -1134,6 +1160,25 @@ app.post('/api/instructor/payout-request', async (req, res) => {
   const { userId, supabaseAdmin } = auth;
 
   try {
+    // Referral earnings still accrue for an unverified instructor (see the
+    // Stripe webhook handler above — that check is only account_type, on
+    // purpose, so a referral isn't silently lost while verification is
+    // pending) — but they can't be paid out until a human has actually
+    // confirmed the account. This is the only place that money leaving the
+    // platform is gated on verification.
+    const { data: verifiedRow, error: verifiedErr } = await supabaseAdmin
+      .from('instructor_verifications')
+      .select('user_id')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (verifiedErr) throw verifiedErr;
+    if (!canRequestPayout({ isVerified: !!verifiedRow })) {
+      return res.status(403).json({
+        error: 'not_verified',
+        message: 'Your instructor account needs to be verified before you can request a payout. Add your licence number from your dashboard if you haven’t already.',
+      });
+    }
+
     const { data: connectRow, error: connectError } = await supabaseAdmin
       .from('instructor_connect_accounts')
       .select('stripe_account_id, payouts_enabled')
@@ -1637,11 +1682,15 @@ app.post('/api/instructor/complete-signup', async (req, res) => {
     // error the instructor sees. Only reached on a fresh insert (the
     // already_instructor branches above return before this line), so this
     // never double-inserts for the same user_id.
-    const { error: signupTrackError } = await supabaseAdmin.from('instructor_signups').insert({
-      user_id: userId,
-      source: 'web',
-      campaign_ref: signupRef,
-    });
+    //
+    // notified_at is stamped immediately (not left null): the Slack post
+    // just below is this signup's notification, already carrying the
+    // campaign ref — leaving notified_at null would make
+    // grant-instructor-pro's "New instructor signup" sweep post a second,
+    // redundant alert for the same signup on its next run.
+    const { error: signupTrackError } = await supabaseAdmin
+      .from('instructor_signups')
+      .insert(buildWebSignupRow({ userId, campaignRef: signupRef }));
     if (signupTrackError) {
       console.error('[instructor-complete] instructor_signups insert failed:', signupTrackError.message);
     }
@@ -1672,6 +1721,149 @@ app.post('/api/instructor/complete-signup', async (req, res) => {
   } catch (err) {
     console.error('[instructor-complete] error:', err.message || err);
     return res.status(500).json({ error: 'signup_failed' });
+  }
+});
+
+// ─── Instructor verification ──────────────────────────────────────────────────
+//
+// Manual verification: evidence is an ADI or trainee (PDI) licence number
+// only, checked by a human. Neither endpoint below ever writes
+// instructor_verifications — that table (which grant-instructor-pro,
+// payout-request and Connect onboarding actually gate on) is only ever
+// written by admin.verify_instructor(), run manually by Craig in the
+// Supabase SQL Editor from the Slack message POST below produces. These
+// two endpoints only manage instructor_verification_requests: the
+// submission/audit trail and what the dashboard shows back to the
+// instructor.
+
+// POST /api/instructor/verification
+// Body: { licenceType: 'adi' | 'pdi', licenceNumber: string }
+app.post('/api/instructor/verification', async (req, res) => {
+  const auth = await verifyAuth(req, res);
+  if (!auth) return;
+  const { userId, supabaseAdmin } = auth;
+
+  try {
+    const { data: profile, error: profileErr } = await supabaseAdmin
+      .from('profiles')
+      .select('account_type, display_name')
+      .eq('id', userId)
+      .maybeSingle();
+    if (profileErr) throw profileErr;
+
+    if (!profile || profile.account_type !== 'instructor') {
+      return res.status(403).json({ error: 'not_an_instructor' });
+    }
+
+    // Already verified — change nothing, no re-notify. instructor_
+    // verifications (not this request's own status column) is the source
+    // of truth, same reasoning as GET below: a grandfathered/comp'd
+    // instructor may have no request row at all.
+    const { data: verifiedRow, error: verifiedErr } = await supabaseAdmin
+      .from('instructor_verifications')
+      .select('user_id')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (verifiedErr) throw verifiedErr;
+
+    if (verifiedRow) {
+      return res.json({ ok: true, status: 'verified' });
+    }
+
+    const validation = validateLicenceSubmission({
+      licenceType: req.body?.licenceType,
+      licenceNumber: req.body?.licenceNumber,
+    });
+    if (!validation.ok) {
+      return res.status(400).json({ error: validation.error });
+    }
+    const licenceType = req.body.licenceType;
+    const { licenceNumber, licenceNumberNormalised } = validation;
+
+    const { data: existingRequest, error: existingErr } = await supabaseAdmin
+      .from('instructor_verification_requests')
+      .select('licence_type, licence_number_normalised')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (existingErr) throw existingErr;
+
+    // Resets status to 'pending' (and clears any prior reviewed_at/
+    // review_note) on every submission, including a resubmission after a
+    // rejection — a corrected number is a fresh request, not a continuation
+    // of the rejected one.
+    const { error: upsertErr } = await supabaseAdmin.from('instructor_verification_requests').upsert({
+      user_id: userId,
+      licence_type: licenceType,
+      licence_number: licenceNumber,
+      licence_number_normalised: licenceNumberNormalised,
+      status: 'pending',
+      submitted_at: new Date().toISOString(),
+      reviewed_at: null,
+      review_note: null,
+    });
+    if (upsertErr) throw upsertErr;
+
+    if (shouldNotifySubmission(existingRequest, { licenceType, licenceNumberNormalised })) {
+      const { data: duplicateRows, error: duplicateErr } = await supabaseAdmin
+        .from('instructor_verification_requests')
+        .select('user_id, status')
+        .eq('licence_number_normalised', licenceNumberNormalised)
+        .neq('user_id', userId)
+        .limit(1);
+      if (duplicateErr) {
+        console.error('[instructor-verification] duplicate lookup failed:', duplicateErr.message);
+      }
+      const duplicate = duplicateRows && duplicateRows[0]
+        ? { userId: duplicateRows[0].user_id, status: duplicateRows[0].status }
+        : null;
+
+      const posted = await postToSlack(
+        formatVerificationSubmittedSlackMessage({
+          displayName: profile.display_name,
+          licenceType,
+          licenceNumber,
+          userId,
+          duplicate,
+        })
+      );
+      if (!posted) {
+        console.error('[instructor-verification] slack notify failed for', userId);
+      }
+    }
+
+    return res.json({ ok: true, status: 'pending' });
+  } catch (err) {
+    console.error('[instructor-verification] POST error:', err.message || err);
+    return res.status(500).json({ error: 'verification_submit_failed' });
+  }
+});
+
+// GET /api/instructor/verification
+// Returns { status: 'none'|'pending'|'verified'|'rejected', licenceType, submittedAt, reviewNote }.
+app.get('/api/instructor/verification', async (req, res) => {
+  const auth = await verifyAuth(req, res);
+  if (!auth) return;
+  const { userId, supabaseAdmin } = auth;
+
+  try {
+    const { data: verifiedRow, error: verifiedErr } = await supabaseAdmin
+      .from('instructor_verifications')
+      .select('user_id')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (verifiedErr) throw verifiedErr;
+
+    const { data: request, error: requestErr } = await supabaseAdmin
+      .from('instructor_verification_requests')
+      .select('licence_type, submitted_at, status, review_note')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (requestErr) throw requestErr;
+
+    return res.json(resolveVerificationStatus({ isVerified: !!verifiedRow, request }));
+  } catch (err) {
+    console.error('[instructor-verification] GET error:', err.message || err);
+    return res.status(500).json({ error: 'verification_status_failed' });
   }
 });
 
@@ -2314,11 +2506,12 @@ app.post('/api/cron/grant-instructor-pro', async (req, res) => {
 
     const { data: instructors, error: instructorsErr } = await supabaseAdmin
       .from('profiles')
-      .select('id')
+      .select('id, display_name')
       .eq('account_type', 'instructor');
     if (instructorsErr) throw instructorsErr;
 
     const allInstructorIds = (instructors || []).map(i => i.id);
+    const instructorDisplayNameById = Object.fromEntries((instructors || []).map(i => [i.id, i.display_name]));
 
     // ── Signup tracking: backfill + notify ──────────────────────────────
     let signupsBackfilled = 0;
@@ -2457,6 +2650,17 @@ app.post('/api/cron/grant-instructor-pro', async (req, res) => {
         continue;
       }
       granted++;
+
+      // Non-fatal, same as every other Slack post in this job: the grant
+      // itself already succeeded via the update above, so a Slack outage
+      // must not undo it or block the rest of the loop.
+      const displayName = instructorDisplayNameById[id];
+      const posted = await postToSlack(
+        `Instructor Pro granted: ${displayName && displayName.trim() ? displayName.trim() : 'no name yet'} (${id})`
+      );
+      if (!posted) {
+        console.error('[grant-instructor-pro] pro-granted slack post failed for', id);
+      }
     }
 
     // Every instructor checked must land in exactly one bucket. A mismatch

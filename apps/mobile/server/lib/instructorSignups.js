@@ -61,6 +61,21 @@ function findUnnotifiedAbandonedSignups(authUsers, completedProfileIds, { now = 
   });
 }
 
+// The instructor_signups row complete-signup inserts for a fresh web
+// signup. notified_at is stamped immediately (not left null) because that
+// same handler already posts its own "New instructor signup" Slack message
+// carrying the campaign ref — leaving notified_at null would make
+// grant-instructor-pro's unnotified-row sweep post a second, redundant
+// alert for the same signup on its next run.
+function buildWebSignupRow({ userId, campaignRef, now = new Date() }) {
+  return {
+    user_id: userId,
+    source: 'web',
+    campaign_ref: campaignRef,
+    notified_at: now.toISOString(),
+  };
+}
+
 module.exports = {
   ABANDONED_THRESHOLD_MS,
   ABANDONED_NOTIFIED_META_KEY,
@@ -68,4 +83,5 @@ module.exports = {
   formatSignupNotification,
   formatAbandonedSignupNotification,
   findUnnotifiedAbandonedSignups,
+  buildWebSignupRow,
 };
