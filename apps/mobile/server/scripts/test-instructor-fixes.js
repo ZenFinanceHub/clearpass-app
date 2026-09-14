@@ -72,6 +72,10 @@ function newAnonClient() {
   return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // Mirrors src/accountCodes.ts's alphabet — this is test-data shape only
 // (what an instructor_code/referral_code looks like), not the generator
 // under test.
@@ -100,6 +104,34 @@ async function createPasswordlessUser(label) {
   });
   if (error) throw new Error(`createUser (passwordless) failed: ${error.message}`);
   return { userId: data.user.id, email };
+}
+
+// Mirrors the exact sequence proven out in the Scenario A diagnostic: starts
+// from createPasswordlessUser's account, then completes a REAL OTP
+// verification — the same GoTrue verify-endpoint a real magic-link click
+// would hit, just fetching the OTP via the admin API instead of an inbox —
+// so email_confirmed_at ends up set exactly as it would for a real
+// instructor who actually clicked their link. This is the state a Path-A
+// instructor is in by the time they install the app that evening; see
+// TEST 1a below. (Contrast with the still-unconfirmed state TEST 1b covers.)
+async function createConfirmedPasswordlessUser(label) {
+  const { userId, email } = await createPasswordlessUser(label);
+
+  const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+    type: 'magiclink',
+    email,
+  });
+  if (linkError) throw new Error(`generateLink failed: ${linkError.message}`);
+
+  const otpClient = newAnonClient();
+  const { error: verifyError } = await otpClient.auth.verifyOtp({
+    email,
+    token: linkData.properties.email_otp,
+    type: 'magiclink',
+  });
+  if (verifyError) throw new Error(`verifyOtp failed: ${verifyError.message}`);
+
+  return { userId, email };
 }
 
 // A full account with a real password + session, used wherever a test needs
@@ -157,25 +189,49 @@ async function cleanupUsers(userIds) {
   }
 }
 
-// ── TEST 1 — already-registered email produces a magic link, not a dead end
+// ── TEST 1a — already-registered CONFIRMED email produces a magic link
+//
+// This is the real conference-flow state: instructor signs up on the web,
+// clicks their magic link (account becomes confirmed), installs the app
+// that evening, tries password signup with the same email. Fixture built
+// via createConfirmedPasswordlessUser — a real OTP verify, not a shortcut.
 
-test('TEST 1 — already-registered email produces a magic link, not a dead end', async () => {
+test('TEST 1a — already-registered CONFIRMED email produces a magic link, not a dead end', async () => {
   const created = [];
   try {
-    const { userId, email } = await createPasswordlessUser('t1');
+    const { userId, email } = await createConfirmedPasswordlessUser('t1a');
     created.push(userId);
 
-    assert.equal(await countAuthUsersByEmail(email), 1, 'sanity: exactly one auth.users row after createUser');
+    assert.equal(await countAuthUsersByEmail(email), 1, 'sanity: exactly one auth.users row after createUser + OTP verify');
+
+    const { data: before, error: beforeErr } = await supabaseAdmin.auth.admin.getUserById(userId);
+    assert.equal(beforeErr, null);
+    assert.ok(before.user.email_confirmed_at, 'sanity: fixture must be confirmed before the attack step');
 
     // Same call site as app/auth/signup.tsx's handleSignUp().
     const anon = newAnonClient();
-    const { error: signUpError } = await anon.auth.signUp({ email, password: 'Whatever-Not-Used-123' });
+    const { data: signUpData, error: signUpError } = await anon.auth.signUp({
+      email,
+      password: 'Whatever-Not-Used-123',
+    });
 
-    assert.ok(signUpError, 'expected supabase.auth.signUp to error for an already-registered email');
+    assert.ok(signUpError, 'expected supabase.auth.signUp to error for an already-registered, confirmed email');
+    assert.equal(signUpError.code, 'user_already_exists', `unexpected error code: ${signUpError.code}`);
+    assert.equal(signUpError.status, 422, `unexpected error status: ${signUpError.status}`);
     assert.ok(
       isAlreadyRegisteredError(signUpError),
       `isAlreadyRegisteredError() did not recognise this error — code=${signUpError.code} status=${signUpError.status} message=${signUpError.message}`
     );
+    assert.equal(signUpData.session, null, 'no session should be returned alongside an error');
+
+    // admin.generateLink({type:'magiclink'}) inside createConfirmedPasswordlessUser
+    // above and this signInWithOtp() call both draw on Supabase's per-email
+    // OTP-send rate limit — confirmed empirically (a first run hit "For
+    // security purposes, you can only request this after 59 seconds").
+    // A real instructor's day-scale gap between clicking their web link and
+    // trying the app clears this on its own; an automated test back-to-back
+    // doesn't, so wait it out rather than weaken or skip the assertion.
+    await sleep(62_000);
 
     // Same call site as signup.tsx's new handleSendMagicLink().
     const otpClient = newAnonClient();
@@ -183,9 +239,64 @@ test('TEST 1 — already-registered email produces a magic link, not a dead end'
       email,
       options: { shouldCreateUser: false },
     });
-    assert.equal(otpError, null, `signInWithOtp should succeed for an existing address, got: ${otpError?.message}`);
+    assert.equal(otpError, null, `signInWithOtp should succeed for an existing, confirmed address, got: ${otpError?.message}`);
 
     assert.equal(await countAuthUsersByEmail(email), 1, 'signUp + signInWithOtp must not create a second auth.users row');
+
+    // Original account is unchanged by the failed attack attempt.
+    const { data: after, error: afterErr } = await supabaseAdmin.auth.admin.getUserById(userId);
+    assert.equal(afterErr, null);
+    assert.equal(after.user.email_confirmed_at, before.user.email_confirmed_at, 'email_confirmed_at must not change');
+    assert.equal(after.user.identities.length, before.user.identities.length, 'identity count must not change');
+  } finally {
+    await cleanupUsers(created);
+  }
+});
+
+// ── TEST 1b — [KNOWN GAP, on the backlog] unconfirmed account is silently
+// claimed by signUp(), no error
+//
+// NOT the state a real instructor reaches the mobile app in — see TEST 1a
+// for that. This is the narrower window between POST /api/instructor/signup
+// step 1 (account created, email_confirm: false) and them ever clicking the
+// magic link. Pinned here so this already-known behaviour can't regress
+// further or get quietly forgotten — it is not the behaviour we want.
+// Do NOT "fix" this test by weakening it if it starts failing: that means
+// the underlying GoTrue behaviour changed, which is exactly what this test
+// exists to catch. No application code depends on this test passing.
+
+test('TEST 1b — [known gap] signUp() silently claims an UNCONFIRMED account, no error', async () => {
+  const created = [];
+  try {
+    const { userId, email } = await createPasswordlessUser('t1b');
+    created.push(userId);
+
+    const { data: before, error: beforeErr } = await supabaseAdmin.auth.admin.getUserById(userId);
+    assert.equal(beforeErr, null);
+    // getUserById omits email_confirmed_at entirely (undefined) rather than
+    // returning it as null when unset — assert "not set" via truthiness,
+    // not strict-equal against the wrong sentinel value.
+    assert.ok(!before.user.email_confirmed_at, 'sanity: fixture must be unconfirmed before the attack step');
+
+    const anon = newAnonClient();
+    const { data: signUpData, error: signUpError } = await anon.auth.signUp({
+      email,
+      password: 'Attacker-Chosen-Password-999!',
+    });
+
+    assert.equal(
+      signUpError,
+      null,
+      `expected no error — this is the known gap; if this now errors, the gap may have closed: ${signUpError?.message}`
+    );
+    assert.ok(signUpData.session, 'expected a live session to be returned — the known gap');
+    assert.equal(signUpData.user.id, userId, 'expected the SAME existing user id, not a new account');
+
+    assert.equal(await countAuthUsersByEmail(email), 1, 'no duplicate auth.users row is created either way');
+
+    const { data: after, error: afterErr } = await supabaseAdmin.auth.admin.getUserById(userId);
+    assert.equal(afterErr, null);
+    assert.ok(after.user.email_confirmed_at, 'the account becomes confirmed as a side effect of the claim');
   } finally {
     await cleanupUsers(created);
   }
