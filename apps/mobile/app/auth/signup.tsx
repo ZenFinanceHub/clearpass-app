@@ -19,23 +19,13 @@ import { signInWithApple, signInWithGoogle } from '@/src/socialAuth';
 import { resolvePostAuthRoute } from '@/src/postAuthRouting';
 import { Colors } from '@/src/constants/theme';
 import PasswordInput from '@/src/components/PasswordInput';
+// Plain CommonJS, shared with proxy.js and with
+// server/scripts/test-instructor-fixes.js — see that file's own header for
+// why this isn't inlined here anymore.
+import { isAlreadyRegisteredError } from '../../server/lib/authErrors';
 
 const PENDING_USERNAME_KEY = '@clearpass/pending_username';
 const REFERRAL_CODE_KEY    = 'referral_code';
-
-// Instructors who signed up on instructors.getclearpass.co.uk get a
-// passwordless (magic-link only) auth.users row — see
-// apps/mobile/server/proxy.js's POST /api/instructor/signup. If that same
-// email then hits this password-based signUp, Supabase reports it as
-// already registered; matches the same code/message check proxy.js already
-// uses for the equivalent admin.createUser case.
-function isAlreadyRegisteredError(error: { code?: string; message?: string }): boolean {
-  return (
-    error.code === 'user_already_exists' ||
-    error.code === 'email_exists' ||
-    /already registered|already exists/i.test(error.message ?? '')
-  );
-}
 
 export default function SignUpScreen() {
   const params = useLocalSearchParams<{ ref?: string }>();
