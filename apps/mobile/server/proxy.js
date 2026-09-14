@@ -1460,9 +1460,13 @@ app.post('/api/instructor/switch-to-learner', async (req, res) => {
       .upsert({ id: userId, progress: updatedProgress, updated_at: new Date().toISOString() });
     if (updateProgressErr) throw updateProgressErr;
 
+    // Cleared alongside account_type, not left behind: instructor_code and
+    // referral_code are only meaningful for a real instructor, and a stale
+    // instructor_code on a now-learner profile is exactly what let
+    // linked-instructors.tsx's code lookup match a non-instructor account.
     const { error: updateProfileErr } = await supabaseAdmin
       .from('profiles')
-      .update({ account_type: 'learner' })
+      .update({ account_type: 'learner', instructor_code: null, referral_code: null })
       .eq('id', userId);
     if (updateProfileErr) throw updateProfileErr;
 
