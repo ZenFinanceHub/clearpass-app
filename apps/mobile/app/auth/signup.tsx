@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { makeRedirectUri } from 'expo-auth-session';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/src/supabase';
 import { signInWithApple, signInWithGoogle } from '@/src/socialAuth';
@@ -21,6 +22,20 @@ import PasswordInput from '@/src/components/PasswordInput';
 
 const PENDING_USERNAME_KEY = '@clearpass/pending_username';
 const REFERRAL_CODE_KEY    = 'referral_code';
+
+// Instructors who signed up on instructors.getclearpass.co.uk get a
+// passwordless (magic-link only) auth.users row — see
+// apps/mobile/server/proxy.js's POST /api/instructor/signup. If that same
+// email then hits this password-based signUp, Supabase reports it as
+// already registered; matches the same code/message check proxy.js already
+// uses for the equivalent admin.createUser case.
+function isAlreadyRegisteredError(error: { code?: string; message?: string }): boolean {
+  return (
+    error.code === 'user_already_exists' ||
+    error.code === 'email_exists' ||
+    /already registered|already exists/i.test(error.message ?? '')
+  );
+}
 
 export default function SignUpScreen() {
   const params = useLocalSearchParams<{ ref?: string }>();
@@ -37,6 +52,11 @@ export default function SignUpScreen() {
   const [resendMessage,   setResendMessage]   = useState('');
   const [socialLoading,   setSocialLoading]   = useState(false);
   const [socialError,     setSocialError]     = useState('');
+
+  const [alreadyRegisteredEmail, setAlreadyRegisteredEmail] = useState<string | null>(null);
+  const [magicLinkSending,       setMagicLinkSending]       = useState(false);
+  const [magicLinkSent,          setMagicLinkSent]          = useState(false);
+  const [magicLinkError,         setMagicLinkError]         = useState('');
 
   useEffect(() => {
     // Don't persist params.ref to storage here — that would write on mere
@@ -58,6 +78,9 @@ export default function SignUpScreen() {
 
   async function handleSignUp() {
     setError('');
+    setAlreadyRegisteredEmail(null);
+    setMagicLinkSent(false);
+    setMagicLinkError('');
     if (username.trim().length < 3) { setError('Username must be at least 3 characters.'); return; }
     if (!email.trim())               { setError('Please enter an email address.'); return; }
     if (password.length < 6)         { setError('Password must be at least 6 characters.'); return; }
@@ -68,7 +91,14 @@ export default function SignUpScreen() {
         email: email.trim(),
         password,
       });
-      if (authError) { setError(authError.message); return; }
+      if (authError) {
+        if (isAlreadyRegisteredError(authError)) {
+          setAlreadyRegisteredEmail(email.trim());
+        } else {
+          setError(authError.message);
+        }
+        return;
+      }
 
       // user.id is available even when email confirmation is required (session will be null)
       const userId = session?.user?.id ?? user?.id;
@@ -150,6 +180,34 @@ export default function SignUpScreen() {
       setResendMessage('Could not resend. Please try again.');
     } finally {
       setResendLoading(false);
+    }
+  }
+
+  async function handleSendMagicLink() {
+    if (!alreadyRegisteredEmail) return;
+    setMagicLinkError('');
+    setMagicLinkSending(true);
+    try {
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email: alreadyRegisteredEmail,
+        options: {
+          shouldCreateUser: false,
+          // Lands on the same deep link Google/Apple sign-in already use
+          // (see src/socialAuth.ts) — app/auth/callback.tsx generically
+          // completes a session from access_token/refresh_token in the
+          // redirect URL, whichever flow put them there.
+          emailRedirectTo: makeRedirectUri({ scheme: 'clearpass', path: 'auth/callback' }),
+        },
+      });
+      if (otpError) {
+        setMagicLinkError(otpError.message);
+        return;
+      }
+      setMagicLinkSent(true);
+    } catch {
+      setMagicLinkError('Could not send the link. Please try again.');
+    } finally {
+      setMagicLinkSending(false);
     }
   }
 
@@ -303,6 +361,31 @@ export default function SignUpScreen() {
 
           {error.length > 0 && <Text style={styles.errorText}>{error}</Text>}
 
+          {alreadyRegisteredEmail && (
+            <View style={styles.alreadyRegisteredBox}>
+              <Text style={styles.alreadyRegisteredText}>
+                {'An account already exists for '}
+                <Text style={styles.confirmEmail}>{alreadyRegisteredEmail}</Text>
+                {". If that's you — for example, because you signed up as an instructor on the website — we can email you a sign-in link instead."}
+              </Text>
+              {magicLinkSent ? (
+                <Text style={styles.resendMessage}>{'Sign-in link sent — check your inbox.'}</Text>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.resendBtn, magicLinkSending && styles.submitBtnDisabled]}
+                  onPress={() => void handleSendMagicLink()}
+                  disabled={magicLinkSending}
+                  activeOpacity={0.75}
+                >
+                  {magicLinkSending
+                    ? <ActivityIndicator color={Colors.indigo} />
+                    : <Text style={styles.resendBtnText}>{'Email me a sign-in link'}</Text>}
+                </TouchableOpacity>
+              )}
+              {magicLinkError.length > 0 && <Text style={styles.errorText}>{magicLinkError}</Text>}
+            </View>
+          )}
+
           <TouchableOpacity
             style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
             onPress={() => void handleSignUp()}
@@ -371,6 +454,8 @@ const styles = StyleSheet.create({
   inputOptional: { borderStyle: 'dashed' },
   warnText:  { fontSize: 12, color: '#B45309', marginTop: -4 },
   errorText: { fontSize: 13, color: '#EF4444', marginTop: 2 },
+  alreadyRegisteredBox:  { marginTop: 2 },
+  alreadyRegisteredText: { fontSize: 13, color: '#6B7280', lineHeight: 18, marginBottom: 8 },
   submitBtn: {
     backgroundColor: Colors.indigo,
     borderRadius: 14,
