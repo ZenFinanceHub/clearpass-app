@@ -191,6 +191,7 @@ function LearnerModeView({
         .from('profiles')
         .select('id, username, display_name')
         .eq('instructor_code', code)
+        .eq('account_type', 'instructor')
         .single();
 
       if (error || !instructorProfile) {
