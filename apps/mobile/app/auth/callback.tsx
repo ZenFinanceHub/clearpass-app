@@ -102,51 +102,6 @@ export default function AuthCallbackScreen() {
   }
 
   async function completeSignIn(url: string) {
-    // ── TEMPORARY DIAGNOSTIC — Fix 3 magic-link investigation ──────────────
-    // Remove this whole block before the next production OTA after Craig has
-    // captured device output. Logs the raw incoming URL, unredacted on
-    // purpose (Craig's own throwaway test account) — the point is seeing
-    // exactly what did or didn't survive the mail-app -> OS -> app handoff.
-    // Isolated in its own try/catch so it can never change the real
-    // sign-in logic below, including if `new URL(url)` itself throws (this
-    // codebase already has a documented quirk with this URL polyfill on
-    // non-http(s) schemes — see parseAuthRedirectParams below — so that
-    // throwing here is itself diagnostic information, not just noise).
-    // Uses Sentry.captureMessage, not just a breadcrumb: a breadcrumb alone
-    // never becomes visible in Sentry unless some later event captures it,
-    // and the exact failure this is investigating ("missing information")
-    // doesn't call Sentry.captureException, so a breadcrumb-only version
-    // would capture nothing for the one case that matters.
-    try {
-      const diagParsed = new URL(url);
-      const diagData = {
-        url,
-        hashEmpty: !diagParsed.hash,
-        searchEmpty: !diagParsed.search,
-      };
-      console.log('[auth-callback-diag] raw url:', url);
-      console.log('[auth-callback-diag] hash empty:', diagData.hashEmpty, 'search empty:', diagData.searchEmpty);
-      Sentry.addBreadcrumb({
-        category: 'auth_callback_diagnostic',
-        message: 'raw incoming callback URL',
-        level: 'info',
-        data: diagData,
-      });
-      Sentry.captureMessage('auth_callback_diagnostic: raw incoming URL', {
-        level: 'info',
-        tags: { context: 'auth_callback_diagnostic' },
-        extra: diagData,
-      });
-    } catch (diagErr) {
-      console.log('[auth-callback-diag] raw url (new URL() threw):', url, diagErr);
-      Sentry.captureMessage('auth_callback_diagnostic: new URL() threw on raw incoming URL', {
-        level: 'info',
-        tags: { context: 'auth_callback_diagnostic' },
-        extra: { url, error: String(diagErr) },
-      });
-    }
-    // ── end TEMPORARY DIAGNOSTIC ────────────────────────────────────────────
-
     try {
       const params = parseAuthRedirectParams(url);
 
