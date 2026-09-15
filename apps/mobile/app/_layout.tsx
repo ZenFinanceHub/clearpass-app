@@ -39,9 +39,18 @@ configureNotificationHandler();
 
 const ONBOARDING_KEY = '@clearpass/hasSeenOnboarding';
 
-// Legal/contact pages must stay reachable without an account — the App Store
-// listing links directly to these, and they're legally required to be public.
-const PUBLIC_ROUTES = new Set(['privacy-policy', 'terms', 'legal', 'contact']);
+// Routes that must stay reachable without an account. privacy-policy/terms/
+// legal/contact: the App Store listing and the marketing site link directly
+// to these, and the legal ones are required to be public. paywall: also
+// externally linked from the marketing site, and renders pricing without a
+// session on its own — auth is only enforced reactively, inside
+// handleSubscribe(), which already redirects to sign-in itself if needed.
+// confirm-parent: reached from an email link by a parent who may have no
+// ClearPass account at all (see app/confirm-parent.tsx — no session check,
+// calls the confirm endpoint directly with just the token). Without this
+// entry, bootstrap() below bounces any of these straight to sign-in/
+// onboarding before the screen ever gets a chance to render.
+const PUBLIC_ROUTES = new Set(['privacy-policy', 'terms', 'legal', 'contact', 'confirm-parent', 'paywall']);
 
 // ── Instructor route guard ────────────────────────────────────────────────────
 // Instructor accounts get unconditional free Pro-level access (see
