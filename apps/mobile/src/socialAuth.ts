@@ -13,15 +13,22 @@ export type SocialAuthResult = {
 const PENDING_USERNAME_KEY = '@clearpass/pending_username';
 
 // The Supabase client (src/supabase.ts) deliberately stays on the default
-// 'implicit' flow rather than 'pkce': PKCE's code_verifier is tied to
-// whichever client storage initiated the request, and this app's
-// password-reset flow always requests from the native app (AsyncStorage)
-// but completes in a device web browser (separate localStorage) — under
-// PKCE that exchange can never succeed. Under implicit flow, the OAuth
-// redirect carries self-contained bearer tokens in the URL fragment
-// (#access_token=...&refresh_token=...), not a code — setSession()
-// establishes the session directly from those, no exchange round trip or
-// stored verifier needed.
+// 'implicit' flow rather than 'pkce'. That's not driven by Google/Apple
+// here — it's a DIFFERENT flow sharing this same client: password-reset
+// (app/auth/forgot-password.tsx) always requests from the native app
+// (AsyncStorage) but completes in a separate browser origin (the
+// web-exported app at clearpass-app.vercel.app, a different localStorage
+// entirely) — PKCE's code_verifier is tied to whichever storage initiated
+// the request, so that exchange could never succeed under PKCE. Magic-link
+// sign-in doesn't have that constraint (it resolves back into this same
+// native app process, not a separate browser) and now uses its own
+// dedicated PKCE client instead — see src/supabaseMagicLink.ts and
+// app/auth/callback.tsx's ?code= branch. Google stays on THIS client's
+// implicit flow because it already works and has no cross-origin problem
+// forcing a change: the OAuth redirect carries self-contained bearer
+// tokens in the URL fragment (#access_token=...&refresh_token=...), not a
+// code — setSession() establishes the session directly from those, no
+// exchange round trip or stored verifier needed.
 //
 // Mirrors Supabase's own parseParametersFromURL (auth-js/lib/helpers.js):
 // hash params first, then search params override — some failures (e.g. a
