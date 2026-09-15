@@ -5,7 +5,10 @@
 // 1a22d3d (linked-instructors.tsx: instructor_code lookup requires
 // account_type='instructor'), 13cda51 (signup.tsx: already-registered email
 // offers a magic link), and 0dae847 (proxy.js: switch-to-learner clears
-// instructor_code/referral_code).
+// instructor_code/referral_code) — plus the follow-on flowType migration
+// (src/supabaseMagicLink.ts: a dedicated PKCE client for the magic-link
+// request/completion pair, alongside callback.tsx's new ?code= branch,
+// leaving the main client and Google/Apple untouched on implicit flow).
 //
 // RUNS AGAINST PRODUCTION SUPABASE — same project as scripts/smoke-
 // instructor.js, for the same reason: there is no staging environment for
@@ -168,6 +171,39 @@ async function countAuthUsersByEmail(email) {
   return Number(rows[0]);
 }
 
+// Reads the raw magic-link verification token GoTrue stashes server-side
+// after a PKCE-flow signInWithOtp() call — no email/inbox access needed,
+// same idea as admin.generateLink's email_otp, but self-sourced so it's
+// actually tied to THIS client's own code_challenge (admin.generateLink
+// is NOT tied to any client's PKCE state — confirmed separately: it always
+// produces an implicit-shaped #access_token= redirect regardless of the
+// requesting client's flowType, so it can't be used to test this path).
+// Counter-intuitively lands in `recovery_token`, not `confirmation_token`
+// — confirmed empirically by reading both after a real PKCE signInWithOtp
+// call. Prefixed `pkce_` by GoTrue itself when the flow is PKCE, which is
+// itself confirmation this is the right column. Short retry loop as a
+// defensive margin against any write-visibility lag, not because one was
+// ever observed.
+async function readMagicLinkToken(userId) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const rows = runPsqlQuery(`select coalesce(recovery_token, '') from auth.users where id = '${userId}'`);
+    if (rows[0]) return rows[0];
+    await sleep(400);
+  }
+  throw new Error(`no recovery_token appeared for user ${userId} after signInWithOtp`);
+}
+
+// Follows the real GoTrue verify-and-redirect endpoint (the same one a
+// tapped email link hits) without a browser, reading the Location header
+// directly — same technique used in the Fix 3 diagnosis to confirm the
+// implicit-flow shape; here it confirms the PKCE shape instead.
+async function followMagicLinkVerify(token, redirectTo) {
+  const verifyUrl = `${SUPABASE_URL}/auth/v1/verify?token=${encodeURIComponent(token)}&type=magiclink&redirect_to=${encodeURIComponent(redirectTo)}`;
+  const res = await fetch(verifyUrl, { redirect: 'manual' });
+  const location = res.headers.get('location');
+  return { status: res.status, location };
+}
+
 // Deletes every row this suite could plausibly have written for these user
 // ids, across every table touched by any of the four tests, then the
 // auth.users rows themselves. Safe to call from any test's finally block
@@ -297,6 +333,76 @@ test('TEST 1b — [known gap] signUp() silently claims an UNCONFIRMED account, n
     const { data: after, error: afterErr } = await supabaseAdmin.auth.admin.getUserById(userId);
     assert.equal(afterErr, null);
     assert.ok(after.user.email_confirmed_at, 'the account becomes confirmed as a side effect of the claim');
+  } finally {
+    await cleanupUsers(created);
+  }
+});
+
+// ── TEST 5 — magic-link PKCE exchange (the flowType migration)
+//
+// Exercises the actual new code path end to end at the Supabase-client
+// level: a PKCE-flow signInWithOtp() (same config as
+// src/supabaseMagicLink.ts), the real GoTrue verify-and-redirect endpoint
+// (same one a tapped email link hits — no browser or inbox needed, see
+// followMagicLinkVerify), confirms the redirect is ?code=-shaped rather
+// than #access_token=-shaped, and exchangeCodeForSession() on the SAME
+// client instance that made the original request (its stored
+// code_verifier only matches for that instance — a fresh client here
+// would correctly fail, which is exactly why callback.tsx's new branch
+// and signup.tsx's request both go through the one shared
+// supabaseMagicLink client, not one created fresh each time).
+
+test('TEST 5 — magic-link PKCE exchange (flowType migration)', async () => {
+  const created = [];
+  try {
+    const { userId, email } = await createPasswordlessUser('t5');
+    created.push(userId);
+
+    const redirectTo = 'clearpass://auth/callback';
+
+    // Same shape as src/supabaseMagicLink.ts: flowType 'pkce',
+    // persistSession false, distinct storageKey.
+    const pkceClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        flowType: 'pkce',
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+        storageKey: 'sb-test5-magiclink-pkce',
+      },
+    });
+
+    const { error: otpError } = await pkceClient.auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: false, emailRedirectTo: redirectTo },
+    });
+    assert.equal(otpError, null, `signInWithOtp (pkce) failed: ${otpError?.message}`);
+
+    const token = await readMagicLinkToken(userId);
+    assert.match(token, /^pkce_/, 'GoTrue should tag a PKCE-flow token with the pkce_ prefix');
+
+    const { status, location } = await followMagicLinkVerify(token, redirectTo);
+    assert.equal(status, 303, `expected a redirect from the verify endpoint, got ${status}`);
+    assert.ok(location, 'expected a Location header on the verify redirect');
+
+    const locationUrl = new URL(location);
+    const code = locationUrl.searchParams.get('code');
+    assert.ok(code, `expected ?code= in the redirect — this is the shape callback.tsx's new branch parses. Location: ${location.replace(/code=[^&]+/, 'code=[REDACTED]')}`);
+    assert.equal(locationUrl.hash, '', 'PKCE redirect should carry no #access_token hash — that shape is implicit-flow only');
+
+    const { data: exchangeData, error: exchangeError } = await pkceClient.auth.exchangeCodeForSession(code);
+    assert.equal(exchangeError, null, `exchangeCodeForSession failed: ${exchangeError?.message}`);
+    assert.ok(exchangeData.session, 'expected a real session back from the exchange');
+    assert.equal(exchangeData.session.user.id, userId, 'exchanged session must belong to the fixture user');
+
+    // Mirrors callback.tsx's own fold-into-main-client step.
+    const mainClient = newAnonClient();
+    const { data: mainSessionData, error: setSessionError } = await mainClient.auth.setSession({
+      access_token: exchangeData.session.access_token,
+      refresh_token: exchangeData.session.refresh_token,
+    });
+    assert.equal(setSessionError, null, `setSession on the main client failed: ${setSessionError?.message}`);
+    assert.equal(mainSessionData.session?.user?.id, userId);
   } finally {
     await cleanupUsers(created);
   }
