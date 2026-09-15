@@ -3,6 +3,9 @@ import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import * as Sentry from '@sentry/react-native';
 import * as Linking from 'expo-linking';
 import { router, Stack } from 'expo-router';
+// TEMPORARY DIAGNOSTIC import — PKCE exchange failure investigation. Remove
+// alongside the rest of this diagnostic once the cause is found.
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/src/supabase';
 import { supabaseMagicLink } from '@/src/supabaseMagicLink';
 import { resolvePostAuthRoute } from '@/src/postAuthRouting';
@@ -121,13 +124,48 @@ export default function AuthCallbackScreen() {
       // exactly what they rely on.
       const code = params.get('code');
       if (code) {
+        // ── TEMPORARY DIAGNOSTIC — PKCE exchange failure investigation ────
+        // Remove this whole block (verifier check, captureMessage, and the
+        // verbatim-error fail() below) once the cause is found. Reports
+        // presence/length only for the stored code verifier, never its
+        // value — same convention as every other diagnostic this session:
+        // real data, no secrets on screen or in Sentry.
+        let verifierPresent = false;
+        let verifierLength = 0;
+        try {
+          const verifierRaw = await AsyncStorage.getItem('sb-clearpass-magiclink-pkce-code-verifier');
+          verifierPresent = verifierRaw !== null;
+          verifierLength = verifierRaw?.length ?? 0;
+        } catch {}
+        // ── end TEMPORARY DIAGNOSTIC (verifier check) ──────────────────────
+
         const { data: exchangeData, error: exchangeError } = await supabaseMagicLink.auth.exchangeCodeForSession(code);
 
         if (exchangeError) {
+          // ── TEMPORARY DIAGNOSTIC — cross-check via Sentry, independent of
+          // the on-screen text below in case Sentry delivery itself fails.
+          Sentry.captureMessage('auth_callback_pkce_exchange_diagnostic', {
+            level: 'info',
+            tags: { context: 'auth_callback_pkce_exchange_diagnostic' },
+            extra: {
+              verifierPresent,
+              verifierLength,
+              errorMessage: exchangeError.message,
+              errorCode: exchangeError.code ?? null,
+              errorStatus: exchangeError.status ?? null,
+            },
+          });
+          // ── end TEMPORARY DIAGNOSTIC (Sentry cross-check) ──────────────────
           Sentry.captureException(exchangeError, {
             tags: { context: 'auth_callback_pkce_exchange' },
           });
-          fail('Sign in failed. Please try again.');
+          // TEMPORARY: verbatim error + verifier state surfaced on screen for
+          // diagnosis — revert to the generic "Sign in failed. Please try
+          // again." once resolved.
+          fail(
+            `Sign in failed: [${exchangeError.code ?? 'no-code'}] ${exchangeError.message} ` +
+            `(verifier: ${verifierPresent ? `present, ${verifierLength} chars` : 'ABSENT'})`
+          );
           return;
         }
 
