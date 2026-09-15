@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as Sentry from '@sentry/react-native';
 import * as Linking from 'expo-linking';
-import { router, Stack } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 // TEMPORARY DIAGNOSTIC import — PKCE exchange failure investigation. Remove
 // alongside the rest of this diagnostic once the cause is found.
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -21,12 +21,16 @@ const RAW_URL_WAIT_MS = 3000;
 // Mirrors socialAuth.ts's parseAuthRedirectParams(): hash params first,
 // then search params override (Supabase's own parseParametersFromURL does
 // the same — some failures land in the query instead of the fragment).
-// Deliberately only reads .hash/.search, never .pathname/.host — this
-// URL's .pathname/.host are unreliable for a non-http(s) scheme on React
-// Native (confirmed against the installed polyfill: hardcoded to
-// https?://, so they silently return '' for clearpass://), which is
-// exactly why this screen no longer uses useLocalSearchParams() — that's
-// populated from expo-router's own use of the same broken path parsing.
+// Deliberately only reads .hash/.search, never .pathname/.host — not
+// because those are broken (they aren't: expo-router's own routing reads
+// exactly those fields and correctly lands this screen), but because this
+// function's whole job is recovering the access_token/refresh_token pair
+// from the URL *fragment* for the implicit-flow (Google/Apple) case — and
+// expo-router structurally drops URL fragments before it ever builds route
+// params (confirmed against fork/extractPathFromURL.js's fromDeepLink(),
+// 2026-09-15), so useLocalSearchParams() can never carry them. Query
+// params (PKCE's `code`) don't have that problem and ARE read via
+// useLocalSearchParams() below, in the effect.
 function parseAuthRedirectParams(url: string): URLSearchParams {
   const parsed = new URL(url);
   const params = new URLSearchParams(parsed.hash.startsWith('#') ? parsed.hash.slice(1) : '');
@@ -43,21 +47,40 @@ function parseAuthRedirectParams(url: string): URLSearchParams {
 // finishes the sign-in directly from the raw URL instead.
 export default function AuthCallbackScreen() {
   const urlFromHook = Linking.useURL();
+  // PKCE's `code` (and any query-delivered `error`) — populated by
+  // expo-router's own successful routing to this screen, so unlike
+  // urlFromHook/getInitialURL() below there's no "not resolved yet" race:
+  // if this component is mounted, routing already finished and these are
+  // already known.
+  const { code: codeParam, error: errorParam, error_description: errorDescriptionParam } =
+    useLocalSearchParams<{ code?: string; error?: string; error_description?: string }>();
   const ran = useRef(false);
   // Shown inline rather than via Alert.alert — this screen is part of the
   // static web export (app.json web.output) and Alert is a no-op on
   // react-native-web, which would leave a web user with no feedback at all
   // (same reasoning as paywall.tsx's own notice/error text).
   const [errorMessage, setErrorMessage] = useState('');
-  // TEMPORARY DIAGNOSTIC — set by completeSignIn's raw-URL diagnostic below,
-  // read by fail() so the raw URL shows up on screen no matter which branch
-  // calls fail(). console.log produced nothing earlier today, so this is
-  // the one channel that's actually worked — remove alongside the rest of
-  // this diagnostic once the cause is found.
-  const diagUrlRef = useRef('');
 
   useEffect(() => {
     if (ran.current) return;
+
+    // PKCE (magic link): handle directly from the already-resolved route
+    // params, without starting the urlFromHook/getInitialURL() race or its
+    // timeout below at all — this is what was firing "missing information"
+    // even though `code` had already arrived, because the race lost. The
+    // URL-based `code` branch inside completeSignIn() stays in place as a
+    // fallback for whatever case would make this not fire.
+    if (codeParam) {
+      ran.current = true;
+      void completeMagicLinkSignIn(codeParam);
+      return;
+    }
+    if (errorParam) {
+      ran.current = true;
+      fail(errorDescriptionParam || 'Sign in was not completed. Please try again.');
+      return;
+    }
+
     let cancelled = false;
 
     const timeout = setTimeout(() => {
@@ -85,7 +108,7 @@ export default function AuthCallbackScreen() {
       clearTimeout(timeout);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlFromHook]);
+  }, [urlFromHook, codeParam, errorParam, errorDescriptionParam]);
 
   async function goToDestination(userId: string) {
     // The safe default on repeated failure is the screen that creates the
@@ -107,61 +130,97 @@ export default function AuthCallbackScreen() {
   }
 
   function fail(message: string) {
-    // TEMPORARY DIAGNOSTIC: append the raw URL captured by completeSignIn's
-    // diagnostic block, whenever one was captured — see diagUrlRef above.
-    const suffix = diagUrlRef.current ? `\n\n[diag] ${diagUrlRef.current}` : '';
-    setErrorMessage(message + suffix);
+    setErrorMessage(message);
+  }
+
+  async function completeMagicLinkSignIn(code: string) {
+    // ── TEMPORARY DIAGNOSTIC — PKCE exchange failure investigation ────
+    // Remove this whole block (verifier check, captureMessage, and the
+    // verbatim-error fail() below) once the cause is found. Reports
+    // presence/length only for the stored code verifier, never its
+    // value — same convention as every other diagnostic this session:
+    // real data, no secrets on screen or in Sentry.
+    let verifierPresent = false;
+    let verifierLength = 0;
+    try {
+      const verifierRaw = await AsyncStorage.getItem('sb-clearpass-magiclink-pkce-code-verifier');
+      verifierPresent = verifierRaw !== null;
+      verifierLength = verifierRaw?.length ?? 0;
+    } catch {}
+    // ── end TEMPORARY DIAGNOSTIC (verifier check) ──────────────────────
+
+    try {
+      const { data: exchangeData, error: exchangeError } = await supabaseMagicLink.auth.exchangeCodeForSession(code);
+
+      if (exchangeError) {
+        // ── TEMPORARY DIAGNOSTIC — cross-check via Sentry, independent of
+        // the on-screen text below in case Sentry delivery itself fails.
+        Sentry.captureMessage('auth_callback_pkce_exchange_diagnostic', {
+          level: 'info',
+          tags: { context: 'auth_callback_pkce_exchange_diagnostic' },
+          extra: {
+            verifierPresent,
+            verifierLength,
+            errorMessage: exchangeError.message,
+            errorCode: exchangeError.code ?? null,
+            errorStatus: exchangeError.status ?? null,
+          },
+        });
+        // ── end TEMPORARY DIAGNOSTIC (Sentry cross-check) ──────────────────
+        Sentry.captureException(exchangeError, {
+          tags: { context: 'auth_callback_pkce_exchange' },
+        });
+        // TEMPORARY: verbatim error + verifier state surfaced on screen for
+        // diagnosis — revert to the generic "Sign in failed. Please try
+        // again." once resolved.
+        fail(
+          `Sign in failed: [${exchangeError.code ?? 'no-code'}] ${exchangeError.message} ` +
+          `(verifier: ${verifierPresent ? `present, ${verifierLength} chars` : 'ABSENT'})`
+        );
+        return;
+      }
+
+      if (exchangeData.session) {
+        // Fold the exchanged session into the MAIN client — supabase
+        // (src/supabase.ts) is the single source of truth for "am I
+        // logged in" throughout this app; supabaseMagicLink only ever
+        // requests and exchanges (persistSession: false), never holds a
+        // session of its own. Same setSession() shape the
+        // access_token/refresh_token branch below already uses, so
+        // goToDestination and everything downstream doesn't care which
+        // flow shape produced the tokens.
+        const { data: mainSessionData, error: setSessionError } = await supabase.auth.setSession({
+          access_token: exchangeData.session.access_token,
+          refresh_token: exchangeData.session.refresh_token,
+        });
+        if (mainSessionData.session) {
+          await goToDestination(mainSessionData.session.user.id);
+          return;
+        }
+        if (setSessionError) {
+          Sentry.captureException(setSessionError, {
+            tags: { context: 'auth_callback_pkce_setsession' },
+          });
+        }
+      }
+
+      fail('Sign in failed. Please try again.');
+    } catch (e) {
+      // Defensive: must never leave the user on a blank screen, no matter
+      // what fails above — same convention as completeSignIn's own catch.
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          await goToDestination(session.user.id);
+          return;
+        }
+      } catch {}
+      Sentry.captureException(e, { tags: { context: 'auth_callback_pkce_exchange' } });
+      fail('Sign in failed. Please try again.');
+    }
   }
 
   async function completeSignIn(url: string) {
-    // ── TEMPORARY DIAGNOSTIC — magic-link investigation, relocated ─────────
-    // Was previously only inside the ?code= branch, so it never fired for
-    // the "missing information" outcome — exactly the case this is for.
-    // Fires unconditionally, before any branching, so it captures the raw
-    // URL regardless of which branch (error / code / access_token / none)
-    // ends up running. Isolated in its own try/catch so it can never change
-    // the real sign-in logic below, including if `new URL(url)` itself
-    // throws (this codebase already has a documented quirk with this URL
-    // polyfill on non-http(s) schemes — see parseAuthRedirectParams above —
-    // so that throwing here is itself diagnostic information, not noise).
-    // Unredacted on purpose — Craig's own throwaway test taps, and the
-    // point is seeing exactly what did or didn't survive the mail-app ->
-    // OS -> app handoff. Remove this whole block once the cause is found.
-    try {
-      const diagParsed = new URL(url);
-      const diagData = {
-        url,
-        hashEmpty: !diagParsed.hash,
-        searchEmpty: !diagParsed.search,
-      };
-      // Read by fail() below and appended to whatever's shown on screen —
-      // console.log produced nothing earlier today, so this is the channel
-      // that's actually worked.
-      diagUrlRef.current = `url=${url} hashEmpty=${diagData.hashEmpty} searchEmpty=${diagData.searchEmpty}`;
-      console.log('[auth-callback-diag] raw url:', url);
-      console.log('[auth-callback-diag] hash empty:', diagData.hashEmpty, 'search empty:', diagData.searchEmpty);
-      Sentry.addBreadcrumb({
-        category: 'auth_callback_diagnostic',
-        message: 'raw incoming callback URL',
-        level: 'info',
-        data: diagData,
-      });
-      Sentry.captureMessage('auth_callback_diagnostic: raw incoming URL', {
-        level: 'info',
-        tags: { context: 'auth_callback_diagnostic' },
-        extra: diagData,
-      });
-    } catch (diagErr) {
-      diagUrlRef.current = `url=${url} (new URL() threw: ${String(diagErr)})`;
-      console.log('[auth-callback-diag] raw url (new URL() threw):', url, diagErr);
-      Sentry.captureMessage('auth_callback_diagnostic: new URL() threw on raw incoming URL', {
-        level: 'info',
-        tags: { context: 'auth_callback_diagnostic' },
-        extra: { url, error: String(diagErr) },
-      });
-    }
-    // ── end TEMPORARY DIAGNOSTIC (relocated) ────────────────────────────────
-
     try {
       const params = parseAuthRedirectParams(url);
 
@@ -175,82 +234,16 @@ export default function AuthCallbackScreen() {
 
       // PKCE shape — the magic-link request/completion pair (see
       // src/supabaseMagicLink.ts and signup.tsx's handleSendMagicLink).
-      // Google/Apple and any other implicit-flow caller never produce a
-      // `code` param, so this branch is unreached for them; the existing
+      // Normally intercepted earlier via useLocalSearchParams() in the
+      // effect above, before completeSignIn() is ever called — this stays
+      // as a fallback for whatever case makes that not fire. Google/Apple
+      // and any other implicit-flow caller never produce a `code` param,
+      // so this branch is unreached for them either way; the existing
       // access_token/refresh_token branch below is unchanged and still
       // exactly what they rely on.
       const code = params.get('code');
       if (code) {
-        // ── TEMPORARY DIAGNOSTIC — PKCE exchange failure investigation ────
-        // Remove this whole block (verifier check, captureMessage, and the
-        // verbatim-error fail() below) once the cause is found. Reports
-        // presence/length only for the stored code verifier, never its
-        // value — same convention as every other diagnostic this session:
-        // real data, no secrets on screen or in Sentry.
-        let verifierPresent = false;
-        let verifierLength = 0;
-        try {
-          const verifierRaw = await AsyncStorage.getItem('sb-clearpass-magiclink-pkce-code-verifier');
-          verifierPresent = verifierRaw !== null;
-          verifierLength = verifierRaw?.length ?? 0;
-        } catch {}
-        // ── end TEMPORARY DIAGNOSTIC (verifier check) ──────────────────────
-
-        const { data: exchangeData, error: exchangeError } = await supabaseMagicLink.auth.exchangeCodeForSession(code);
-
-        if (exchangeError) {
-          // ── TEMPORARY DIAGNOSTIC — cross-check via Sentry, independent of
-          // the on-screen text below in case Sentry delivery itself fails.
-          Sentry.captureMessage('auth_callback_pkce_exchange_diagnostic', {
-            level: 'info',
-            tags: { context: 'auth_callback_pkce_exchange_diagnostic' },
-            extra: {
-              verifierPresent,
-              verifierLength,
-              errorMessage: exchangeError.message,
-              errorCode: exchangeError.code ?? null,
-              errorStatus: exchangeError.status ?? null,
-            },
-          });
-          // ── end TEMPORARY DIAGNOSTIC (Sentry cross-check) ──────────────────
-          Sentry.captureException(exchangeError, {
-            tags: { context: 'auth_callback_pkce_exchange' },
-          });
-          // TEMPORARY: verbatim error + verifier state surfaced on screen for
-          // diagnosis — revert to the generic "Sign in failed. Please try
-          // again." once resolved.
-          fail(
-            `Sign in failed: [${exchangeError.code ?? 'no-code'}] ${exchangeError.message} ` +
-            `(verifier: ${verifierPresent ? `present, ${verifierLength} chars` : 'ABSENT'})`
-          );
-          return;
-        }
-
-        if (exchangeData.session) {
-          // Fold the exchanged session into the MAIN client — supabase
-          // (src/supabase.ts) is the single source of truth for "am I
-          // logged in" throughout this app; supabaseMagicLink only ever
-          // requests and exchanges (persistSession: false), never holds a
-          // session of its own. Same setSession() shape the
-          // access_token/refresh_token branch below already uses, so
-          // goToDestination and everything downstream doesn't care which
-          // flow shape produced the tokens.
-          const { data: mainSessionData, error: setSessionError } = await supabase.auth.setSession({
-            access_token: exchangeData.session.access_token,
-            refresh_token: exchangeData.session.refresh_token,
-          });
-          if (mainSessionData.session) {
-            await goToDestination(mainSessionData.session.user.id);
-            return;
-          }
-          if (setSessionError) {
-            Sentry.captureException(setSessionError, {
-              tags: { context: 'auth_callback_pkce_setsession' },
-            });
-          }
-        }
-
-        fail('Sign in failed. Please try again.');
+        await completeMagicLinkSignIn(code);
         return;
       }
 
