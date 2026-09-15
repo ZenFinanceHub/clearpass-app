@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/react-native';
 import * as Linking from 'expo-linking';
 import { router, Stack } from 'expo-router';
 import { supabase } from '@/src/supabase';
+import { supabaseMagicLink } from '@/src/supabaseMagicLink';
 import { resolvePostAuthRoute } from '@/src/postAuthRouting';
 import { Colors } from '@/src/constants/theme';
 
@@ -154,6 +155,52 @@ export default function AuthCallbackScreen() {
         // The provider itself reported a failure (e.g. the user cancelled
         // or denied access) — nothing to establish a session from.
         fail(params.get('error_description') || 'Google sign in was not completed. Please try again.');
+        return;
+      }
+
+      // PKCE shape — the magic-link request/completion pair (see
+      // src/supabaseMagicLink.ts and signup.tsx's handleSendMagicLink).
+      // Google/Apple and any other implicit-flow caller never produce a
+      // `code` param, so this branch is unreached for them; the existing
+      // access_token/refresh_token branch below is unchanged and still
+      // exactly what they rely on.
+      const code = params.get('code');
+      if (code) {
+        const { data: exchangeData, error: exchangeError } = await supabaseMagicLink.auth.exchangeCodeForSession(code);
+
+        if (exchangeError) {
+          Sentry.captureException(exchangeError, {
+            tags: { context: 'auth_callback_pkce_exchange' },
+          });
+          fail('Sign in failed. Please try again.');
+          return;
+        }
+
+        if (exchangeData.session) {
+          // Fold the exchanged session into the MAIN client — supabase
+          // (src/supabase.ts) is the single source of truth for "am I
+          // logged in" throughout this app; supabaseMagicLink only ever
+          // requests and exchanges (persistSession: false), never holds a
+          // session of its own. Same setSession() shape the
+          // access_token/refresh_token branch below already uses, so
+          // goToDestination and everything downstream doesn't care which
+          // flow shape produced the tokens.
+          const { data: mainSessionData, error: setSessionError } = await supabase.auth.setSession({
+            access_token: exchangeData.session.access_token,
+            refresh_token: exchangeData.session.refresh_token,
+          });
+          if (mainSessionData.session) {
+            await goToDestination(mainSessionData.session.user.id);
+            return;
+          }
+          if (setSessionError) {
+            Sentry.captureException(setSessionError, {
+              tags: { context: 'auth_callback_pkce_setsession' },
+            });
+          }
+        }
+
+        fail('Sign in failed. Please try again.');
         return;
       }
 

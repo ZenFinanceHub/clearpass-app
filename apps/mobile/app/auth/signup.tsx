@@ -15,6 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { makeRedirectUri } from 'expo-auth-session';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/src/supabase';
+import { supabaseMagicLink } from '@/src/supabaseMagicLink';
 import { signInWithApple, signInWithGoogle } from '@/src/socialAuth';
 import { resolvePostAuthRoute } from '@/src/postAuthRouting';
 import { Colors } from '@/src/constants/theme';
@@ -178,14 +179,15 @@ export default function SignUpScreen() {
     setMagicLinkError('');
     setMagicLinkSending(true);
     try {
-      const { error: otpError } = await supabase.auth.signInWithOtp({
+      // supabaseMagicLink, not the main `supabase` client — PKCE flow, see
+      // src/supabaseMagicLink.ts. Lands on the same deep link Google/Apple
+      // sign-in use (see src/socialAuth.ts); app/auth/callback.tsx handles
+      // this specific PKCE ?code= shape in its own branch, alongside the
+      // unchanged access_token/refresh_token hash branch those two still use.
+      const { error: otpError } = await supabaseMagicLink.auth.signInWithOtp({
         email: alreadyRegisteredEmail,
         options: {
           shouldCreateUser: false,
-          // Lands on the same deep link Google/Apple sign-in already use
-          // (see src/socialAuth.ts) — app/auth/callback.tsx generically
-          // completes a session from access_token/refresh_token in the
-          // redirect URL, whichever flow put them there.
           emailRedirectTo: makeRedirectUri({ scheme: 'clearpass', path: 'auth/callback' }),
         },
       });
