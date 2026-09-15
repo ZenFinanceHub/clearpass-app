@@ -49,6 +49,12 @@ export default function AuthCallbackScreen() {
   // react-native-web, which would leave a web user with no feedback at all
   // (same reasoning as paywall.tsx's own notice/error text).
   const [errorMessage, setErrorMessage] = useState('');
+  // TEMPORARY DIAGNOSTIC — set by completeSignIn's raw-URL diagnostic below,
+  // read by fail() so the raw URL shows up on screen no matter which branch
+  // calls fail(). console.log produced nothing earlier today, so this is
+  // the one channel that's actually worked — remove alongside the rest of
+  // this diagnostic once the cause is found.
+  const diagUrlRef = useRef('');
 
   useEffect(() => {
     if (ran.current) return;
@@ -101,7 +107,10 @@ export default function AuthCallbackScreen() {
   }
 
   function fail(message: string) {
-    setErrorMessage(message);
+    // TEMPORARY DIAGNOSTIC: append the raw URL captured by completeSignIn's
+    // diagnostic block, whenever one was captured — see diagUrlRef above.
+    const suffix = diagUrlRef.current ? `\n\n[diag] ${diagUrlRef.current}` : '';
+    setErrorMessage(message + suffix);
   }
 
   async function completeSignIn(url: string) {
@@ -125,6 +134,10 @@ export default function AuthCallbackScreen() {
         hashEmpty: !diagParsed.hash,
         searchEmpty: !diagParsed.search,
       };
+      // Read by fail() below and appended to whatever's shown on screen —
+      // console.log produced nothing earlier today, so this is the channel
+      // that's actually worked.
+      diagUrlRef.current = `url=${url} hashEmpty=${diagData.hashEmpty} searchEmpty=${diagData.searchEmpty}`;
       console.log('[auth-callback-diag] raw url:', url);
       console.log('[auth-callback-diag] hash empty:', diagData.hashEmpty, 'search empty:', diagData.searchEmpty);
       Sentry.addBreadcrumb({
@@ -139,6 +152,7 @@ export default function AuthCallbackScreen() {
         extra: diagData,
       });
     } catch (diagErr) {
+      diagUrlRef.current = `url=${url} (new URL() threw: ${String(diagErr)})`;
       console.log('[auth-callback-diag] raw url (new URL() threw):', url, diagErr);
       Sentry.captureMessage('auth_callback_diagnostic: new URL() threw on raw incoming URL', {
         level: 'info',
