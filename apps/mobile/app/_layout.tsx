@@ -14,7 +14,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { AccessibilityProvider } from '@/src/AccessibilityContext';
 import { NetworkProvider } from '@/src/NetworkContext';
 import { PipVisibilityProvider, usePipVisibility } from '@/src/PipVisibilityContext';
-import { handleIncomingUrl } from '@/src/deepLinks';
+import { handleIncomingUrl, getDeepLinkPath } from '@/src/deepLinks';
 import { supabase } from '@/src/supabase';
 import { configureNotificationHandler } from '@/src/notifications';
 import { configurePurchases } from '@/src/purchases';
@@ -28,6 +28,11 @@ import {
   cacheRoadSigns,
   syncWhenOnline,
 } from '@/src/offlineCache';
+// Plain CommonJS, shared with server/scripts/test-instructor-fixes.js's
+// unit-testable path — see that file's own header for why this isn't
+// inlined here. Same pattern as server/lib/earnings.js (imported by
+// app/instructor.tsx the same way).
+import { resolveBootstrapDestination } from '../server/lib/bootstrapRouting';
 
 Sentry.init({
   dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
@@ -39,18 +44,9 @@ configureNotificationHandler();
 
 const ONBOARDING_KEY = '@clearpass/hasSeenOnboarding';
 
-// Routes that must stay reachable without an account. privacy-policy/terms/
-// legal/contact: the App Store listing and the marketing site link directly
-// to these, and the legal ones are required to be public. paywall: also
-// externally linked from the marketing site, and renders pricing without a
-// session on its own — auth is only enforced reactively, inside
-// handleSubscribe(), which already redirects to sign-in itself if needed.
-// confirm-parent: reached from an email link by a parent who may have no
-// ClearPass account at all (see app/confirm-parent.tsx — no session check,
-// calls the confirm endpoint directly with just the token). Without this
-// entry, bootstrap() below bounces any of these straight to sign-in/
-// onboarding before the screen ever gets a chance to render.
-const PUBLIC_ROUTES = new Set(['privacy-policy', 'terms', 'legal', 'contact', 'confirm-parent', 'paywall']);
+// PUBLIC_ROUTES and the entry-points set bootstrap() checks below now live
+// in server/lib/bootstrapRouting.js, alongside the pure decision function
+// itself — see that file for what's in each set and why.
 
 // ── Instructor route guard ────────────────────────────────────────────────────
 // Instructor accounts get unconditional free Pro-level access (see
@@ -225,7 +221,6 @@ function RootLayout() {
 
   const navigated = useRef(false);
   const [showCachingToast, setShowCachingToast] = useState(false);
-  const segments = useSegments();
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
@@ -233,69 +228,96 @@ function RootLayout() {
 
     async function bootstrap() {
       if (navigated.current) return;
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        // Save Expo push token for cross-user notifications (challenge feature)
-        if (Platform.OS !== 'web') {
-          void (async () => {
-            try {
-              const { status } = await Notifications.getPermissionsAsync();
-              if (status === 'granted') {
-                const { data: token } = await Notifications.getExpoPushTokenAsync({
-                  projectId: 'dac8f561-57cc-4b8b-b13d-7302561d71ee',
-                });
-                await supabase
-                  .from('profiles')
-                  .update({ expo_push_token: token })
-                  .eq('id', session.user.id);
-              }
-            } catch {}
-          })();
-        }
 
-        navigated.current = true;
-        // Only redirect to home from unauthenticated entry points.
-        // If the user is already on an authenticated route (e.g. direct web
-        // navigation to /roadsigns), let it through without overriding.
-        const entryPoints = new Set(['', 'index', 'onboarding', 'landing']);
-        if (entryPoints.has(segments[0] ?? '')) {
-          // Same reasoning as app/auth/callback.tsx's goToDestination(): on
-          // repeated failure, default to the screen that creates a profile
-          // rather than the one that assumes it exists. One retry first,
-          // since the likely cause is a transient network blip — most
-          // traffic here is a returning, already-onboarded user, so this
-          // only misroutes someone in the rare case of two consecutive
-          // failures, and it's self-correcting (an existing account_type
-          // is never overwritten by choose-account-type.tsx's insert).
-          let route: string;
+      // Fired in parallel, not sequentially — none of the three depend on
+      // each other, and this is the app's cold-boot critical path.
+      //
+      // initialUrl comes from Linking.getInitialURL(), not
+      // useSegments()[0]. This used to read the current segment instead —
+      // but on a cold start via a deep link (a magic-link tap, a referral
+      // link, a confirm-parent email link), expo-router's own route
+      // resolution and this effect's async work are racing each other:
+      // segments could still reflect the app's default route, not yet the
+      // deep-linked one, by the time this check ran. That let this effect
+      // call router.replace() and silently stomp a route that was, or was
+      // about to be, exactly where the user needed to land — confirmed on
+      // device: a cold-start magic-link tap landed on plain sign-in with no
+      // error at all, while the identical tap on an already-running (warm)
+      // app worked, because on warm start this whole effect had already run
+      // once and short-circuited above via navigated.current.
+      //
+      // Linking.getInitialURL() has no such race — it's the actual launch
+      // URL, available immediately, independent of whatever expo-router has
+      // or hasn't resolved yet. getDeepLinkPath (src/deepLinks.ts) is the
+      // same normalisation handleIncomingUrl below already uses, so there's
+      // one source of truth for "what path does this URL resolve to".
+      const [{ data: { session } }, initialUrl, seenOnboarding] = await Promise.all([
+        supabase.auth.getSession(),
+        Linking.getInitialURL(),
+        AsyncStorage.getItem(ONBOARDING_KEY),
+      ]);
+      const launchedPath = initialUrl ? getDeepLinkPath(initialUrl) : null;
+      const launchedSegment = launchedPath ? launchedPath.split('/')[0] : null;
+
+      const decision = resolveBootstrapDestination({
+        hasSession: !!session,
+        launchedSegment,
+        hasSeenOnboarding: !!seenOnboarding,
+      });
+
+      if (session && Platform.OS !== 'web') {
+        // Save Expo push token for cross-user notifications (challenge feature)
+        void (async () => {
+          try {
+            const { status } = await Notifications.getPermissionsAsync();
+            if (status === 'granted') {
+              const { data: token } = await Notifications.getExpoPushTokenAsync({
+                projectId: 'dac8f561-57cc-4b8b-b13d-7302561d71ee',
+              });
+              await supabase
+                .from('profiles')
+                .update({ expo_push_token: token })
+                .eq('id', session.user.id);
+            }
+          } catch {}
+        })();
+      }
+
+      navigated.current = true;
+
+      if (decision.action === 'post-auth' && session) {
+        // Same reasoning as app/auth/callback.tsx's goToDestination(): on
+        // repeated failure, default to the screen that creates a profile
+        // rather than the one that assumes it exists. One retry first,
+        // since the likely cause is a transient network blip — most
+        // traffic here is a returning, already-onboarded user, so this
+        // only misroutes someone in the rare case of two consecutive
+        // failures, and it's self-correcting (an existing account_type
+        // is never overwritten by choose-account-type.tsx's insert).
+        let route: string;
+        try {
+          route = await resolvePostAuthRoute(session.user.id);
+        } catch {
           try {
             route = await resolvePostAuthRoute(session.user.id);
           } catch {
-            try {
-              route = await resolvePostAuthRoute(session.user.id);
-            } catch {
-              route = '/auth/choose-account-type';
-            }
+            route = '/auth/choose-account-type';
           }
-          router.replace(route);
         }
-        return;
-      }
-      navigated.current = true;
-      // /auth/* covers signin, signup, choose-account-type, testdate,
-      // forgot-password, reset-password — all valid unauthenticated
-      // destinations in their own right. Overriding them here would strip
-      // any in-flight route (and its query string, e.g. a referral link's
-      // ?ref=) by bouncing straight to /auth/signin.
-      if (PUBLIC_ROUTES.has(segments[0] ?? '') || segments[0] === 'auth') {
-        return;
-      }
-      const seen = await AsyncStorage.getItem(ONBOARDING_KEY);
-      if (seen) {
+        router.replace(route);
+      } else if (decision.action === 'signin') {
         router.replace('/auth/signin');
-      } else {
+      } else if (decision.action === 'onboarding') {
         router.replace('/onboarding');
       }
+      // 'none' — leave the current/in-flight route alone. Covers both an
+      // already-authenticated direct route (e.g. web navigation straight to
+      // /roadsigns) and every /auth/* destination (signin, signup, choose-
+      // account-type, testdate, forgot-password, reset-password, callback)
+      // plus the PUBLIC_ROUTES screens — overriding any of those here would
+      // strip an in-flight route (and its query string, e.g. a referral
+      // link's ?ref=, or a magic link's ?code=) by bouncing straight to
+      // /auth/signin.
     }
 
     void bootstrap();

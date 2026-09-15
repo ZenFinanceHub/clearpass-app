@@ -270,4 +270,63 @@ test.describe('/confirm-parent', () => {
       // may redirect — that's fine
     });
   });
+
+  // Regression guard for the _layout.tsx cold-start routing race: a fresh
+  // page load with a token param is the same shape as a cold-start deep
+  // link (a parent tapping the email link, possibly with no ClearPass
+  // account at all — see app/confirm-parent.tsx, no session check). Before
+  // the fix, bootstrap() could read a stale route and bounce this straight
+  // to /auth/signin before the screen ever rendered.
+  test('with a token param, does not get bounced to the sign-in form', async ({ page }) => {
+    await page.goto('/confirm-parent?token=e2e-test-token-not-real');
+    await page.waitForLoadState('networkidle');
+    await expect(page).not.toHaveURL(/\/auth\/signin/);
+    const signInField = page.getByPlaceholder(/email/i).or(page.getByText(/forgot password/i));
+    await expect(signInField).toHaveCount(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// /auth/callback (?code= param — the PKCE magic-link exchange)
+// ─────────────────────────────────────────────────────────────────
+// Regression guard for the same _layout.tsx race, on the exact route this
+// whole investigation started from. The code is fake — exchangeCodeForSession
+// will fail — but that's fine: the assertion is that callback.tsx's own UI
+// (loading, or its own "Sign in failed" error) is what renders, not that a
+// fake code somehow signs anyone in. Before the fix, a cold-start deep link
+// here could bounce straight to plain /auth/signin with no callback-specific
+// text at all — confirmed on device (see the commit this test ships with).
+test.describe('/auth/callback', () => {
+  test('with a code param, does not get bounced to the sign-in form', async ({ page }) => {
+    await page.goto('/auth/callback?code=e2e-test-code-not-real');
+    await page.waitForLoadState('networkidle');
+    await expect(page).not.toHaveURL(/\/auth\/signin/);
+    const signInField = page.getByPlaceholder(/email/i).or(page.getByText(/forgot password/i));
+    await expect(signInField).toHaveCount(0);
+  });
+
+  test('shows callback.tsx\'s own UI (signing in, or its own failure state)', async ({ page }) => {
+    await page.goto('/auth/callback?code=e2e-test-code-not-real');
+    const ownContent = page.getByText(/signing you in|sign in failed/i).first();
+    await expect(ownContent).toBeVisible({ timeout: 10000 });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// /contact
+// ─────────────────────────────────────────────────────────────────
+test.describe('/contact', () => {
+  test.beforeEach(async ({ page }) => { await page.goto('/contact'); });
+
+  test('loads contact page', async ({ page }) => {
+    await expect(page.getByText(/contact.*support/i).first()).toBeVisible({ timeout: 10000 });
+  });
+
+  test('shows support email link', async ({ page }) => {
+    await expect(page.getByText('support@getclearpass.co.uk')).toBeVisible({ timeout: 10000 });
+  });
+
+  test('has Back button', async ({ page }) => {
+    await expect(page.getByText(/back/i).first()).toBeVisible({ timeout: 10000 });
+  });
 });
