@@ -105,6 +105,49 @@ export default function AuthCallbackScreen() {
   }
 
   async function completeSignIn(url: string) {
+    // ── TEMPORARY DIAGNOSTIC — magic-link investigation, relocated ─────────
+    // Was previously only inside the ?code= branch, so it never fired for
+    // the "missing information" outcome — exactly the case this is for.
+    // Fires unconditionally, before any branching, so it captures the raw
+    // URL regardless of which branch (error / code / access_token / none)
+    // ends up running. Isolated in its own try/catch so it can never change
+    // the real sign-in logic below, including if `new URL(url)` itself
+    // throws (this codebase already has a documented quirk with this URL
+    // polyfill on non-http(s) schemes — see parseAuthRedirectParams above —
+    // so that throwing here is itself diagnostic information, not noise).
+    // Unredacted on purpose — Craig's own throwaway test taps, and the
+    // point is seeing exactly what did or didn't survive the mail-app ->
+    // OS -> app handoff. Remove this whole block once the cause is found.
+    try {
+      const diagParsed = new URL(url);
+      const diagData = {
+        url,
+        hashEmpty: !diagParsed.hash,
+        searchEmpty: !diagParsed.search,
+      };
+      console.log('[auth-callback-diag] raw url:', url);
+      console.log('[auth-callback-diag] hash empty:', diagData.hashEmpty, 'search empty:', diagData.searchEmpty);
+      Sentry.addBreadcrumb({
+        category: 'auth_callback_diagnostic',
+        message: 'raw incoming callback URL',
+        level: 'info',
+        data: diagData,
+      });
+      Sentry.captureMessage('auth_callback_diagnostic: raw incoming URL', {
+        level: 'info',
+        tags: { context: 'auth_callback_diagnostic' },
+        extra: diagData,
+      });
+    } catch (diagErr) {
+      console.log('[auth-callback-diag] raw url (new URL() threw):', url, diagErr);
+      Sentry.captureMessage('auth_callback_diagnostic: new URL() threw on raw incoming URL', {
+        level: 'info',
+        tags: { context: 'auth_callback_diagnostic' },
+        extra: { url, error: String(diagErr) },
+      });
+    }
+    // ── end TEMPORARY DIAGNOSTIC (relocated) ────────────────────────────────
+
     try {
       const params = parseAuthRedirectParams(url);
 
