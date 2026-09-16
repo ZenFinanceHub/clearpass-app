@@ -3,8 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/src/constants/theme';
-
-const PROXY_URL = 'https://clearpass-app-production.up.railway.app';
+import { getProxyUrl } from '@/src/proxyUrl';
 
 export default function ConfirmParentScreen() {
   const { token } = useLocalSearchParams<{ token?: string }>();
@@ -20,7 +19,7 @@ export default function ConfirmParentScreen() {
     }
     void (async () => {
       try {
-        const res = await fetch(`${PROXY_URL}/api/confirm-parent?token=${encodeURIComponent(token)}`);
+        const res = await fetch(`${getProxyUrl()}/api/confirm-parent?token=${encodeURIComponent(token)}`);
         if (res.ok) {
           setStatus('success');
         } else {
