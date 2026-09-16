@@ -190,8 +190,15 @@ export default function MockScreen() {
   // doSubmit) skipping doSubmit() already means zero credit, not partial.
   const [exitModalVisible, setExitModalVisible] = useState(false);
   const pendingExitRef = useRef<(() => void) | null>(null);
+  // Whether the test was already manually paused (see the timerGroup tap
+  // handler below) when the exit modal was requested — hardware back and the
+  // tab-press guard can both fire requestExit() regardless of isPaused, and
+  // cancelExit() must not un-pause a test the user paused on purpose.
+  const wasPausedBeforeExitRef = useRef(false);
 
   function requestExit(onConfirmed?: () => void) {
+    wasPausedBeforeExitRef.current = isPaused;
+    if (!isPaused) setIsPaused(true); // stop the clock behind the modal
     pendingExitRef.current = onConfirmed ?? null;
     setExitModalVisible(true);
   }
@@ -207,6 +214,7 @@ export default function MockScreen() {
 
   function cancelExit() {
     setExitModalVisible(false);
+    if (!wasPausedBeforeExitRef.current) setIsPaused(false);
     pendingExitRef.current = null;
   }
 
