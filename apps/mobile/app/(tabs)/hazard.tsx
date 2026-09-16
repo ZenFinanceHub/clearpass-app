@@ -242,6 +242,12 @@ export default function HazardScreen() {
   const pendingHomeRef = useRef(false);
   const lastTapAtRef = useRef<number>(0);
   const lastExitedClipIdRef = useRef<string | null>(null);
+  // Mirrors `phase` for the focus-effect below to read without being in its
+  // useCallback deps — see that effect's comment for why (mirrors mock.tsx).
+  const phaseRef = useRef<Phase>('info');
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   // Drives STYLE-only changes to the player/solution chrome around the video
@@ -281,6 +287,23 @@ export default function HazardScreen() {
   const pendingExitRef = useRef<(() => void) | null>(null);
   const inVideoPlayback = phase === 'player' || phase === 'solution';
 
+  // Also resets a stale clip-result/results screen on refocus: hazardExitGuard
+  // (see app/(tabs)/_layout.tsx's tabPress listener) only guards
+  // inVideoPlayback (phase 'player'/'solution'), so leaving via the tab bar
+  // while on 'clip-result' or 'results' isn't intercepted at all — this
+  // screen stays mounted with its old phase/clipResults and resurfaces the
+  // finished session on return, mirroring mock.tsx's equivalent fix. Reads
+  // phaseRef, not `phase` directly, and keeps this callback's deps empty:
+  // useFocusEffect re-invokes its callback the moment the callback's
+  // identity changes AND the screen is already focused, so putting `phase`
+  // in the deps here would fire the reset the instant a clip ends or a
+  // session finishes while this tab is still focused, wiping the very
+  // screen that just appeared. A stable callback only runs on genuine focus
+  // transitions (mount-while-focused, and later refocus events), by which
+  // point phaseRef.current safely reflects the latest phase. Never fires for
+  // 'player'/'solution' — those aren't among the checked values, and there's
+  // no tab-switch path back into this screen mid-playback anyway (the guard
+  // above blocks that).
   useFocusEffect(
     useCallback(() => {
       void loadUserProgress().then(p => setUserProgress(p));
@@ -288,6 +311,9 @@ export default function HazardScreen() {
         setSupabaseClips(clips);
         setClipsLoading(false);
       });
+      if (phaseRef.current === 'clip-result' || phaseRef.current === 'results') {
+        resetToStartScreen();
+      }
     }, []),
   );
 
@@ -354,6 +380,26 @@ export default function HazardScreen() {
     setPhase('solution');
   }
 
+  // Leaving the finished-session screens for good (Done, or the celebration
+  // dismiss that follows it) must clear everything those branches render, or
+  // a tab that stays mounted in the background (React Navigation tabs don't
+  // unmount on blur) shows the just-finished session again on return instead
+  // of the start screen — mirrors mock.tsx's resetToStartScreen. Also used
+  // by handleRestart so both leave-paths clear the same fields; phase is
+  // overridden to 'pre-clip' right after this call in handleRestart's
+  // singleClipMode branch, everything else applies to both.
+  function resetToStartScreen() {
+    setPhase('info');
+    setClipIndex(0);
+    setClicks([]);
+    setCurrentTime(0);
+    setClipResults([]);
+    setReviewClipIndex(null);
+    setShowShareCard(false);
+    setActiveCelebration(null);
+    setCelebQueue([]);
+  }
+
   async function handleFinish(results: HazardClipResult[]) {
     const progress = await loadUserProgress();
     if (progress) {
@@ -387,9 +433,16 @@ export default function HazardScreen() {
       } catch {}
     }
     if (singleClipMode) {
+      // Already clears the one field (phase) that causes stale-screen
+      // resurfacing — see resetToStartScreen's comment. reviewClipIndex/
+      // showShareCard/activeCelebration are never read once phase leaves
+      // 'results' (they only feed that phase's render block), and
+      // celebQueue is already empty here (the branch above returns early
+      // whenever it isn't). Nothing else to reset.
       setSingleClipMode(false);
       setPhase('info');
     } else {
+      resetToStartScreen();
       router.replace('/(tabs)/home');
     }
   }
@@ -404,9 +457,11 @@ export default function HazardScreen() {
       if (pendingHomeRef.current) {
         pendingHomeRef.current = false;
         if (singleClipMode) {
+          // Same reasoning as handleFinish's singleClipMode branch above.
           setSingleClipMode(false);
           setPhase('info');
         } else {
+          resetToStartScreen();
           router.replace('/(tabs)/home');
         }
       }
@@ -414,19 +469,10 @@ export default function HazardScreen() {
   }
 
   function handleRestart() {
+    resetToStartScreen();
     if (singleClipMode) {
-      setClipIndex(0);
-      setClicks([]);
-      setCurrentTime(0);
-      setClipResults([]);
       setWarningAcked(false);
       setPhase('pre-clip');
-    } else {
-      setPhase('info');
-      setClipIndex(0);
-      setClicks([]);
-      setCurrentTime(0);
-      setClipResults([]);
     }
   }
 
@@ -515,14 +561,37 @@ export default function HazardScreen() {
   // is a tab-root screen with no push-based back stack, so the default
   // action would silently switch to the first tab rather than emit a
   // removal event, and beforeRemove/usePreventRemove can't catch it either.
+  // Also covers 'clip-result' and 'results':
+  //   - 'clip-result' sits between 'player' (the clip that was just watched
+  //     and scored — clicks/currentTime are never reset on the way into
+  //     'clip-result', so re-entering 'player' would let the same viewing
+  //     re-tap into an already-scored clip) and whatever comes next
+  //     ('solution', the next clip's 'pre-clip', or 'results'). Unlike
+  //     mock's 'review' — a static drill-down of 'results' that's safe to
+  //     step back into — there's no earlier screen here safe to return to,
+  //     so back behaves like leaving the session: handleExitClip(), no
+  //     confirmation, matching hazardExitGuard already leaving this phase
+  //     unguarded for tab switches too (that condition is untouched here).
+  //   - 'results': unlike mock (whose score is already saved by the time
+  //     'results' renders), handleFinish() — which records xp/history and
+  //     may trigger a celebration — only runs from the "Done" button today.
+  //     Back must call it too, or leaving via hardware back would silently
+  //     drop the session's xp/history instead of just skipping a screen.
   useEffect(() => {
-    if (!inVideoPlayback || Platform.OS === 'web') return;
+    if (Platform.OS === 'web') return;
+    if (!inVideoPlayback && phase !== 'clip-result' && phase !== 'results') return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      requestExit();
+      if (inVideoPlayback) {
+        requestExit();
+      } else if (phase === 'clip-result') {
+        handleExitClip();
+      } else {
+        void handleFinish(clipResults);
+      }
       return true;
     });
     return () => sub.remove();
-  }, [inVideoPlayback]);
+  }, [inVideoPlayback, phase, clipResults]);
 
   // Registers this screen with the tab-bar tabPress guard in
   // app/(tabs)/_layout.tsx — see hazardExitGuard for why switching tabs
