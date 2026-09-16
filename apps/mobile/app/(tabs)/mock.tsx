@@ -435,6 +435,21 @@ export default function MockScreen() {
     setPhase('results');
   }
 
+  // Leaving the finished-test screens for good (currently only "Done" from
+  // results) must clear everything those branches render, or a tab that
+  // stays mounted in the background (React Navigation tabs don't unmount on
+  // blur) shows the just-finished test again on return instead of the start
+  // screen. phase alone gates which branch renders, so this is the only
+  // strictly required line — the rest just avoids holding onto a full
+  // finished result/expanded-row state indefinitely, mirroring what
+  // handleStart() already resets at the START of the next test.
+  function resetToStartScreen() {
+    setPhase('start');
+    setResultData(null);
+    setShowGrid(false);
+    setExpandedRows(new Set());
+  }
+
   function handleCelebDismiss() {
     const [next, ...rest] = celebQueue;
     if (next) {
@@ -467,7 +482,7 @@ export default function MockScreen() {
         <ResultsView
           data={resultData}
           onReview={() => { setExpandedRows(new Set()); setPhase('review'); }}
-          onDone={() => router.replace('/(tabs)/home')}
+          onDone={() => { resetToStartScreen(); router.replace('/(tabs)/home'); }}
         />
         {activeCelebration && (
           <CelebrationModal event={activeCelebration} onDismiss={handleCelebDismiss} />
