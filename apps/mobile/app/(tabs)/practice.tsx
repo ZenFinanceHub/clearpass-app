@@ -1277,6 +1277,7 @@ export default function PracticeScreen() {
               userAnswerText: selectedIndex !== null ? question.options[selectedIndex] : '',
               correctAnswerText: question.options[question.correctIndex],
               explanation: question.explanation,
+              from: '/(tabs)/practice',
             },
           })}
           activeOpacity={0.85}
@@ -1538,7 +1539,7 @@ function ResultsScreen({
               style={styles.sessionNudgeAskBtn}
               onPress={() => router.push({
                 pathname: '/(tabs)/tutor',
-                params: { topic: tutorNudge.topicKey },
+                params: { topic: tutorNudge.topicKey, from: '/(tabs)/practice' },
               })}
               activeOpacity={0.85}
             >

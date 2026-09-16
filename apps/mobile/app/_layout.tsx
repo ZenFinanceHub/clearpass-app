@@ -463,10 +463,14 @@ function PipFab({ top }: { top: number }) {
 
   if (hidden || (segments as string[]).includes('tutor')) return null;
 
+  // Derived from the current route rather than hardcoded — this FAB is
+  // reachable from nearly every screen in the app.
+  const currentPath = '/' + (segments as string[]).join('/');
+
   return (
     <TouchableOpacity
       style={[toastStyles.pipFab, { top }]}
-      onPress={() => router.push('/tutor' as any)}
+      onPress={() => router.push({ pathname: '/tutor', params: { from: currentPath } } as any)}
       accessibilityLabel="Ask Pip"
       accessibilityRole="button"
     >

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  BackHandler,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -136,6 +137,7 @@ export default function TutorScreen() {
     correctAnswerText?: string;
     explanation?: string;
     freeMessage?: string;
+    from?: string;
   }>();
 
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -186,6 +188,25 @@ export default function TutorScreen() {
       hideSub.remove();
     };
   }, []);
+
+  // Entered mid-flow from up to eight different screens (see the "from"
+  // param each call site now passes) with no back stack of its own, since
+  // this is a hidden tab root, not a pushed screen. Returns true only when
+  // it actually navigated, so it can be handed straight to BackHandler:
+  // returning false leaves hardware back to fall through to the navigator's
+  // default (whatever it did before this existed), matching entry without a
+  // "from" param exactly.
+  function handleBackToOrigin(): boolean {
+    if (!params.from) return false;
+    router.replace(params.from as any);
+    return true;
+  }
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', handleBackToOrigin);
+    return () => sub.remove();
+  }, [params.from]);
 
   useFocusEffect(
     useCallback(() => {
@@ -332,6 +353,15 @@ export default function TutorScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? tabBarHeight : 0}
     >
+      {/* Back control — only present when entered mid-flow with a "from" */}
+      {params.from && (
+        <View style={styles.backRow}>
+          <TouchableOpacity onPress={handleBackToOrigin} activeOpacity={0.7}>
+            <Text style={styles.backRowText}>{'< Back'}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Pip header */}
       <View style={styles.scopeBanner}>
         <Pip size={40} mood="wave" />
@@ -590,6 +620,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.indigo,
   },
   thinkingBarText: { fontSize: 12, color: Colors.indigo, fontWeight: '600' },
+
+  // Back control — styled like mock.tsx's '< Back to Results'
+  // (reviewHeader/reviewBackBtn)
+  backRow: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 0.5, borderBottomColor: '#E5E7EB' },
+  backRowText: { fontSize: 14, fontWeight: '600', color: Colors.indigo },
 
   // Pip header banner
   scopeBanner: {

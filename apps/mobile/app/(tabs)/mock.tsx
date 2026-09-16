@@ -151,6 +151,22 @@ export default function MockScreen() {
   const activeTotalRef = useRef(TOTAL_QUESTIONS);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Mirrors `phase` for the focus-effect below to read without being in its
+  // useCallback deps — see that effect's comment for why.
+  const phaseRef = useRef<Phase>('start');
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
+
+  // Set true immediately before navigating to Ask Pip from review, so the
+  // focus-effect below can tell "returning from a deliberate Ask Pip detour"
+  // apart from "some other reason this tab regained focus while stale" and
+  // skip the reset for the former. Cleared wherever a fresh start is
+  // guaranteed — see resetToStartScreen and handleStart — so a stale true
+  // left behind by an abandoned/incomplete round trip can't go on
+  // suppressing a legitimate reset for an unrelated, later test.
+  const returningFromTutorRef = useRef(false);
+
   // Pause tracking for the result record — refs, not state, so a re-render
   // mid-pause can't drop a partial interval. pauseCountRef only increments
   // for a deliberate timerGroup tap; pausedSecondsRef accumulates every
@@ -175,12 +191,36 @@ export default function MockScreen() {
   // than being redirected away — a forced router.replace('/paywall') on
   // focus is exactly the kind of visible external-purchase-adjacent flow
   // Apple's 3.1.1 review would hit immediately on iOS.
+  //
+  // Also resets a stale results/review screen on refocus: mockTestExitGuard
+  // (see app/(tabs)/_layout.tsx's tabPress listener) only blocks switching
+  // tabs away during phase === 'test', so leaving via the tab bar while on
+  // 'results' or 'review' isn't intercepted at all — this screen stays
+  // mounted with its old phase/resultData and resurfaces the finished test
+  // on return. Reads phaseRef, not `phase` directly, and keeps this
+  // callback's deps empty: useFocusEffect re-invokes its callback the
+  // moment the callback's identity changes AND the screen is already
+  // focused, so putting `phase` in the deps here would fire the reset the
+  // instant a test finishes while this tab is still focused, wiping the
+  // results screen the moment it appears. A stable callback only runs on
+  // genuine focus transitions (mount-while-focused, and later refocus
+  // events), by which point phaseRef.current safely reflects the latest
+  // phase. Never fires for phase === 'test' — that's not one of the two
+  // checked values, so a mid-test focus regain (there is no tab-switch path
+  // to get there without going through the guard anyway) is left alone.
   useFocusEffect(
     useCallback(() => {
       void (async () => {
         const premium = await isPremium();
         setLocked(!premium);
       })();
+      if (phaseRef.current === 'results' || phaseRef.current === 'review') {
+        if (returningFromTutorRef.current) {
+          returningFromTutorRef.current = false;
+        } else {
+          resetToStartScreen();
+        }
+      }
     }, []),
   );
 
@@ -254,10 +294,19 @@ export default function MockScreen() {
   // Android hardware back: with no push-based back stack on this tab-root
   // screen, the default action would silently switch to the first tab
   // rather than emit a removal event, so beforeRemove can't catch it either.
+  // Also covers 'review' — falling through to the default action would send
+  // the user to Home instead of back to their results, unlike 'results'
+  // itself, where Home is genuinely where "leaving" should go (same
+  // destination onDone already sends you to), so it's left unhandled here
+  // and the focus-effect above cleans up if it's ever revisited stale.
   useEffect(() => {
-    if (phase !== 'test' || Platform.OS === 'web') return;
+    if (Platform.OS === 'web' || (phase !== 'test' && phase !== 'review')) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      requestExit();
+      if (phase === 'test') {
+        requestExit();
+      } else {
+        setPhase('results');
+      }
       return true;
     });
     return () => sub.remove();
@@ -300,6 +349,7 @@ export default function MockScreen() {
     pauseCountRef.current = 0;
     pausedSecondsRef.current = 0;
     pauseStartRef.current = null;
+    returningFromTutorRef.current = false;
     const qs = buildTestQuestions(activeTotal);
     const initialAnswers: (number | null)[] = Array(qs.length).fill(null);
     questionsRef.current = qs;
@@ -448,6 +498,7 @@ export default function MockScreen() {
     setResultData(null);
     setShowGrid(false);
     setExpandedRows(new Set());
+    returningFromTutorRef.current = false;
   }
 
   function handleCelebDismiss() {
@@ -500,6 +551,7 @@ export default function MockScreen() {
         expandedRows={expandedRows}
         onToggleExpand={toggleExpand}
         onBack={() => setPhase('results')}
+        onLeaveForTutor={() => { returningFromTutorRef.current = true; }}
       />
     );
   }
@@ -850,6 +902,7 @@ function ReviewView({
   expandedRows,
   onToggleExpand,
   onBack,
+  onLeaveForTutor,
 }: {
   questions: Question[];
   userAnswers: (number | null)[];
@@ -857,6 +910,7 @@ function ReviewView({
   expandedRows: Set<number>;
   onToggleExpand: (idx: number) => void;
   onBack: () => void;
+  onLeaveForTutor: () => void;
 }) {
   const theme = useTheme();
   const [filter, setFilter] = useState<ReviewFilter>('all');
@@ -960,15 +1014,19 @@ function ReviewView({
                   </View>
                   <TouchableOpacity
                     style={styles.tutorBtn}
-                    onPress={() => router.push({
-                      pathname: '/(tabs)/tutor',
-                      params: {
-                        questionText: q.questionText,
-                        userAnswerText: userAnswer !== null ? q.options[userAnswer] : 'No answer selected',
-                        correctAnswerText: q.options[q.correctIndex],
-                        explanation: q.explanation,
-                      },
-                    })}
+                    onPress={() => {
+                      onLeaveForTutor();
+                      router.push({
+                        pathname: '/(tabs)/tutor',
+                        params: {
+                          questionText: q.questionText,
+                          userAnswerText: userAnswer !== null ? q.options[userAnswer] : 'No answer selected',
+                          correctAnswerText: q.options[q.correctIndex],
+                          explanation: q.explanation,
+                          from: '/(tabs)/mock',
+                        },
+                      });
+                    }}
                     activeOpacity={0.85}
                   >
                     <Text style={styles.tutorBtnText}>{'Ask Pip 🦔'}</Text>

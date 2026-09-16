@@ -270,6 +270,7 @@ function ResitFlow() {
       pathname: '/(tabs)/tutor',
       params: {
         freeMessage: "I just sat my theory test and didn't pass. Can you help me understand what to focus on for my resit?",
+        from: '/ipassed',
       },
     });
   }

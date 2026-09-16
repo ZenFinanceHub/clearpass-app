@@ -128,7 +128,10 @@ function NudgesSection({
                 style={[styles.nudgeAction, { backgroundColor: actionBg }]}
                 onPress={() => router.push({
                   pathname: nudge.actionRoute as any,
-                  params: nudge.actionParams,
+                  // from is accurate for every nudge destination (all
+                  // launch from Home), not just the ones routing to tutor —
+                  // harmless where the destination doesn't read it.
+                  params: { ...nudge.actionParams, from: '/(tabs)/home' },
                 })}
                 activeOpacity={0.8}
               >

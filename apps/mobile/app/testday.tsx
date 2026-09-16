@@ -497,7 +497,7 @@ function LastMinuteTab() {
                 ))}
                 <TouchableOpacity
                   style={styles.askTutorBtn}
-                  onPress={() => router.push('/(tabs)/tutor')}
+                  onPress={() => router.push({ pathname: '/(tabs)/tutor', params: { from: '/testday' } })}
                   activeOpacity={0.85}
                 >
                   <Text style={styles.askTutorBtnText}>{'Ask Pip'}</Text>

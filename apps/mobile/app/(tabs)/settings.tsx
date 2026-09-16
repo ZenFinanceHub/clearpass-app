@@ -765,7 +765,7 @@ export default function SettingsScreen() {
 
         <TouchableOpacity
           style={[styles.row, styles.rowBorder]}
-          onPress={() => router.push('/tutor' as any)}
+          onPress={() => router.push({ pathname: '/tutor', params: { from: '/(tabs)/settings' } } as any)}
           activeOpacity={0.75}
           accessibilityRole="button"
           accessibilityLabel="Ask Pip"
