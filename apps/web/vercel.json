@@ -17,5 +17,11 @@
       "destination": "https://clearpass-app.vercel.app",
       "permanent": false
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/app",
+      "destination": "/api/app"
+    }
   ]
 }
