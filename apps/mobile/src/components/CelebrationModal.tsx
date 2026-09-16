@@ -203,7 +203,7 @@ export function CelebrationModal({
               onPress={() => onDismissRef.current()}
               activeOpacity={0.85}
             >
-              <Text style={styles.dismissBtnText}>{'Awesome! 🎉'}</Text>
+              <Text style={styles.dismissBtnText}>{'Continue'}</Text>
             </TouchableOpacity>
           </Animated.View>
         </View>
