@@ -144,9 +144,19 @@ function barColor(pct: number): string {
   return '#EF4444';
 }
 
-function bestMock(history: MockTestResult[]): number {
-  if (!history.length) return 0;
-  return Math.max(...history.map(r => r.score));
+// Compares by percentage (r.score / (r.total ?? 50)), not raw score, so a
+// 25-question Quick Mock doesn't lose to — or unfairly beat — a 50-question
+// Standard Mock just because its raw score happens to be smaller or larger.
+// Ties prefer the more recent result.
+function bestMock(history: MockTestResult[]): MockTestResult | null {
+  if (!history.length) return null;
+  return history.reduce((best, r) => {
+    const rPct = r.score / (r.total ?? 50);
+    const bestPct = best.score / (best.total ?? 50);
+    if (rPct > bestPct) return r;
+    if (rPct === bestPct && new Date(r.takenAt).getTime() > new Date(best.takenAt).getTime()) return r;
+    return best;
+  });
 }
 
 function formatDate(iso: string): string {
@@ -221,7 +231,7 @@ function LearnerCard({ data, onPress }: { data: LearnerEntry; onPress: () => voi
   const color     = probColor(readiness);
   const streak    = progress?.studyStreakDays ?? 0;
   const totalQ    = progress?.totalQuestionsAnswered ?? 0;
-  const best      = progress ? bestMock(progress.mockTestHistory) : 0;
+  const best      = progress ? bestMock(progress.mockTestHistory) : null;
   const weakTopics = progress ? calculateReadiness(progress).weakTopics.slice(0, 2) : [];
   const lastActive = sharingOff ? 'Progress sharing is off' : (progress ? formatLastActive(progress.lastStudied) : 'No activity yet');
 
@@ -254,8 +264,8 @@ function LearnerCard({ data, onPress }: { data: LearnerEntry; onPress: () => voi
         <View style={styles.learnerStats}>
           <Text style={[styles.statChip, { color: theme.subTextColor }]}>{'🔥 '}{streak}{'d'}</Text>
           <Text style={[styles.statChip, { color: theme.subTextColor }]}>{'📝 '}{totalQ}{' q'}</Text>
-          {best > 0 && (
-            <Text style={[styles.statChip, { color: theme.subTextColor }]}>{'🏆 '}{best}{'/50'}</Text>
+          {best && (
+            <Text style={[styles.statChip, { color: theme.subTextColor }]}>{'🏆 '}{best.score}{'/'}{best.total ?? 50}</Text>
           )}
         </View>
       )}
@@ -357,7 +367,7 @@ function LearnerDetailView({
             {[
               { emoji: '📝', value: String(totalQ), label: 'Questions' },
               { emoji: '📋', value: String(mocks.length), label: 'Mocks Taken' },
-              { emoji: '🏆', value: best > 0 ? `${best}/50` : '—', label: 'Best Score' },
+              { emoji: '🏆', value: best ? `${best.score}/${best.total ?? 50}` : '—', label: 'Best Score' },
               { emoji: '🔥', value: String(streak), label: 'Day Streak' },
             ].map(s => (
               <View key={s.label} style={[styles.statCard, { backgroundColor: theme.cardColor }]}>
@@ -415,7 +425,10 @@ function LearnerDetailView({
                 <View key={r.id} style={styles.mockRow}>
                   <View style={styles.mockRowLeft}>
                     <Text style={[styles.mockDate, { color: theme.textColor }]}>{formatDate(r.takenAt)}</Text>
-                    <Text style={[styles.mockScore, { color: theme.subTextColor }]}>{r.score}{' / 50'}</Text>
+                    <Text style={[styles.mockScore, { color: theme.subTextColor }]}>{r.score}{' / '}{r.total ?? 50}</Text>
+                    {r.pauseCount !== undefined && r.pauseCount > 0 && (
+                      <Text style={[styles.mockScore, { color: theme.subTextColor }]}>{'Paused '}{r.pauseCount}{'×'}</Text>
+                    )}
                   </View>
                   <View style={[styles.mockBadge, { backgroundColor: r.passed ? '#F0FDF4' : '#FEF2F2', borderColor: r.passed ? '#22C55E' : '#EF4444' }]}>
                     <Text style={[styles.mockBadgeText, { color: r.passed ? '#22C55E' : '#EF4444' }]}>

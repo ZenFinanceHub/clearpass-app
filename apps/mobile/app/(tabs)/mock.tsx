@@ -119,7 +119,7 @@ function scoreTest(questions: Question[], answers: (number | null)[]): { correct
 
 type Phase = 'start' | 'test' | 'review' | 'results';
 type ReviewFilter = 'all' | 'wrong' | 'flagged';
-type ResultData = { correct: number; timeTaken: number; byTopic: ByTopic; xpEarned: number; newAchievements: Achievement[]; passed: boolean; streakDays: number; total: number; passMark: number };
+type ResultData = { correct: number; timeTaken: number; byTopic: ByTopic; xpEarned: number; newAchievements: Achievement[]; passed: boolean; streakDays: number; total: number; passMark: number; pauseCount?: number; pausedSeconds?: number };
 
 export default function MockScreen() {
   const theme = useTheme();
@@ -150,6 +150,26 @@ export default function MockScreen() {
   const activePassMarkRef = useRef(PASS_MARK);
   const activeTotalRef = useRef(TOTAL_QUESTIONS);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Pause tracking for the result record — refs, not state, so a re-render
+  // mid-pause can't drop a partial interval. pauseCountRef only increments
+  // for a deliberate timerGroup tap; pausedSecondsRef accumulates every
+  // stopped-clock interval regardless of what stopped it (tap or
+  // requestExit), via pauseStartRef marking when the current interval began.
+  const pauseCountRef = useRef(0);
+  const pausedSecondsRef = useRef(0);
+  const pauseStartRef = useRef<number | null>(null);
+
+  function beginPauseInterval() {
+    if (pauseStartRef.current === null) pauseStartRef.current = Date.now();
+  }
+
+  function endPauseInterval() {
+    if (pauseStartRef.current !== null) {
+      pausedSecondsRef.current += Math.round((Date.now() - pauseStartRef.current) / 1000);
+      pauseStartRef.current = null;
+    }
+  }
 
   // Non-Pro users see an in-place locked state on this screen (below) rather
   // than being redirected away — a forced router.replace('/paywall') on
@@ -198,13 +218,17 @@ export default function MockScreen() {
 
   function requestExit(onConfirmed?: () => void) {
     wasPausedBeforeExitRef.current = isPaused;
-    if (!isPaused) setIsPaused(true); // stop the clock behind the modal
+    if (!isPaused) {
+      beginPauseInterval(); // counts toward pausedSeconds, but NOT pauseCount —
+      setIsPaused(true);    // cancelling an exit isn't a pause the learner chose
+    }
     pendingExitRef.current = onConfirmed ?? null;
     setExitModalVisible(true);
   }
 
   function confirmExit() {
     setExitModalVisible(false);
+    endPauseInterval();
     setIsPaused(false);
     setPhase('start'); // triggers the timer effect's cleanup above
     const run = pendingExitRef.current;
@@ -214,7 +238,10 @@ export default function MockScreen() {
 
   function cancelExit() {
     setExitModalVisible(false);
-    if (!wasPausedBeforeExitRef.current) setIsPaused(false);
+    if (!wasPausedBeforeExitRef.current) {
+      endPauseInterval();
+      setIsPaused(false);
+    }
     pendingExitRef.current = null;
   }
 
@@ -270,6 +297,9 @@ export default function MockScreen() {
     activeTotalRef.current = activeTotal;
     hasSubmittedRef.current = false;
     setIsPaused(false);
+    pauseCountRef.current = 0;
+    pausedSecondsRef.current = 0;
+    pauseStartRef.current = null;
     const qs = buildTestQuestions(activeTotal);
     const initialAnswers: (number | null)[] = Array(qs.length).fill(null);
     questionsRef.current = qs;
@@ -314,6 +344,7 @@ export default function MockScreen() {
     if (hasSubmittedRef.current) return;
     hasSubmittedRef.current = true;
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    endPauseInterval(); // defensive: close out any pause interval still open
 
     const qs = questionsRef.current;
     const ans = answersRef.current;
@@ -337,6 +368,10 @@ export default function MockScreen() {
       takenAt: new Date().toISOString(),
       timeTakenSeconds: timeTaken,
       topicBreakdown,
+      pauseCount: pauseCountRef.current,
+      pausedSeconds: pausedSecondsRef.current,
+      total: activeTotalRef.current,
+      passMark: activePassMarkRef.current,
     };
 
     const existing = await loadUserProgress();
@@ -393,7 +428,7 @@ export default function MockScreen() {
       }
     } catch {}
 
-    setResultData({ correct, timeTaken, byTopic, xpEarned, newAchievements, passed, streakDays: updatedProgress.studyStreakDays ?? 0, total: activeTotalRef.current, passMark: activePassMarkRef.current });
+    setResultData({ correct, timeTaken, byTopic, xpEarned, newAchievements, passed, streakDays: updatedProgress.studyStreakDays ?? 0, total: activeTotalRef.current, passMark: activePassMarkRef.current, pauseCount: pauseCountRef.current, pausedSeconds: pausedSecondsRef.current });
     void (passed
       ? Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       : Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning));
@@ -485,7 +520,11 @@ export default function MockScreen() {
             {'Q '}{currentIndex + 1}{' / '}{questions.length}
           </Text>
         </View>
-        <TouchableOpacity style={styles.timerGroup} onPress={() => setIsPaused(true)} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={styles.timerGroup}
+          onPress={() => { pauseCountRef.current += 1; beginPauseInterval(); setIsPaused(true); }}
+          activeOpacity={0.8}
+        >
           <Text style={[styles.timerText, isWarning && styles.timerWarn]}>
             {formatTime(timeRemaining)}
           </Text>
@@ -571,10 +610,10 @@ export default function MockScreen() {
             <Text style={styles.pauseNote}>
               {'Real DVSA tests cannot be paused — this is for practice only'}
             </Text>
-            <TouchableOpacity style={styles.resumeBtn} onPress={() => setIsPaused(false)} activeOpacity={0.85}>
+            <TouchableOpacity style={styles.resumeBtn} onPress={() => { endPauseInterval(); setIsPaused(false); }} activeOpacity={0.85}>
               <Text style={styles.resumeBtnText}>{'Resume Test'}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.abandonBtn} onPress={() => { setIsPaused(false); void doSubmit(); }} activeOpacity={0.85}>
+            <TouchableOpacity style={styles.abandonBtn} onPress={() => { endPauseInterval(); setIsPaused(false); void doSubmit(); }} activeOpacity={0.85}>
               <Text style={styles.abandonBtnText}>{'Submit & End Test'}</Text>
             </TouchableOpacity>
           </View>
@@ -706,7 +745,7 @@ function ResultsView({
 }) {
   const theme = useTheme();
   const [showShareCard, setShowShareCard] = useState(false);
-  const { correct, timeTaken, byTopic, xpEarned, newAchievements, passed, streakDays, total, passMark } = data;
+  const { correct, timeTaken, byTopic, xpEarned, newAchievements, passed, streakDays, total, passMark, pauseCount, pausedSeconds } = data;
 
   const topicRows = (Object.entries(byTopic) as [TopicCategory, TopicTally][])
     .filter(([, t]) => t.total > 0)
@@ -732,6 +771,11 @@ function ResultsView({
         <Text style={styles.scoreText}>{correct}{' / '}{total}</Text>
         <Text style={styles.passMarkText}>{'Pass mark: '}{passMark}{'/'}{total}</Text>
         <Text style={styles.timeTakenText}>{'Completed in '}{formatTime(timeTaken)}</Text>
+        {pauseCount !== undefined && pauseCount > 0 && (
+          <Text style={styles.timeTakenText}>
+            {'Paused '}{pauseCount}{' times · '}{formatTime(pausedSeconds ?? 0)}
+          </Text>
+        )}
         {xpEarned > 0 && (
           <View style={styles.xpBadge}>
             <Text style={styles.xpBadgeText}>{'+'}{xpEarned}{' XP earned'}</Text>
