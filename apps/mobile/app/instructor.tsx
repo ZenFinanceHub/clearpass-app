@@ -18,6 +18,7 @@ import { Alert } from '@/src/CrossPlatformAlert';
 import { supabase } from '@/src/supabase';
 import { getAccessToken } from '@/src/getAccessToken';
 import { createFreshUserProgress, loadUserProgress } from '@/src/storage';
+import { getProxyUrl } from '@/src/proxyUrl';
 import {
   calculateReadiness,
   MockTestResult,
@@ -203,9 +204,7 @@ function payoutButtonLabel(pending: number, connectStatus: ConnectAccountRow | n
   return 'Request Payout';
 }
 
-const PROXY_URL = __DEV__
-  ? 'http://localhost:3001'
-  : 'https://clearpass-app-production.up.railway.app';
+const PROXY_URL = getProxyUrl();
 
 // Stripe Connect setup is partway: business model set to Marketplace, but
 // the platform profile and identity verification (both live-mode steps)

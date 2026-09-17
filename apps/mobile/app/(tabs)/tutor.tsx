@@ -22,12 +22,7 @@ import { handleSessionExpired } from '@/src/handleSessionExpired';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 import { roadSigns } from '@clearpass/content';
-
-function getProxyUrl(): string {
-  return __DEV__
-    ? 'http://localhost:3001'
-    : 'https://clearpass-app-production.up.railway.app';
-}
+import { getProxyUrl } from '@/src/proxyUrl';
 
 const SYSTEM_PROMPT = `
 You are Pip, the ClearPass assistant. ClearPass is a UK driving theory test preparation
