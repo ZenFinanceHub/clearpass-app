@@ -3,7 +3,7 @@ export const config = { runtime: 'edge' };
 const IOS_UA_REGEX = /iPad|iPhone|iPod/i;
 const ANDROID_UA_REGEX = /Android/i;
 
-const APPLE_APP_URL = 'https://apps.apple.com/gb/app/id6779180295';
+const APPLE_APP_URL = 'https://apps.apple.com/gb/app/id6779180259';
 const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=co.uk.getclearpass.app';
 const SITE_ROOT_URL = 'https://getclearpass.co.uk';
 
