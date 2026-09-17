@@ -350,7 +350,7 @@ export default function SettingsScreen() {
       if (error) {
         setPasswordResetNotice({ type: 'error', text: error.message });
       } else {
-        setPasswordResetNotice({ type: 'success', text: `Password reset instructions sent to ${email}` });
+        setPasswordResetNotice({ type: 'success', text: `Check your inbox — we sent password reset instructions to ${email}` });
       }
     } catch {
       // Alert.alert is a no-op on react-native-web (this screen is part of
@@ -750,7 +750,7 @@ export default function SettingsScreen() {
           disabled={sendingPasswordReset}
         >
           <View style={styles.textWrap}>
-            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Change Password'}</Text>
+            <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{'Reset Password by Email'}</Text>
             {(sendingPasswordReset || passwordResetNotice) && (
               <Text style={[
                 styles.description,
