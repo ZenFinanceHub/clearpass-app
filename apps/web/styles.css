@@ -145,7 +145,8 @@ img { max-width: 100%; display: block; }
 }
 .hero-sub { font-size: 18px; color: var(--soft); line-height: 1.75; margin-bottom: 36px; max-width: 500px; }
 .hero-btns { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
-.hero-micro { font-size: 13px; color: var(--muted); margin-bottom: 36px; }
+.hero-micro { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+.hero-store-badges { margin-bottom: 32px; }
 .hero-social {
   display: inline-flex; align-items: center; gap: 12px;
   padding: 14px 20px; background: #fff; border-radius: 14px;
@@ -507,6 +508,7 @@ footer { background: var(--dark); padding: 72px 0 44px; }
   .hero-badge { margin: 0 auto 28px; }
   .hero-social { margin: 0 auto; }
   .hero-micro { text-align: center; }
+  .hero-store-badges { justify-content: center; }
   .feature-grid, .inst-dash-grid { grid-template-columns: repeat(2, 1fr); }
   .accessibility .container, .meet-pip .container, .inst-earn .container { flex-direction: column; gap: 48px; text-align: center; }
   .access-quote { flex: none; width: 100%; max-width: 100%; }
