@@ -27,6 +27,7 @@ import { isPremium } from '@/src/subscription';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
+import { hasStreakMilestone, maybeRequestReview, ReviewTrigger } from '@/src/reviewPrompt';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { ShareCardModal } from '@/src/components/ShareableCard';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
@@ -258,6 +259,7 @@ export default function HazardScreen() {
   const isLandscape = winWidth > winHeight;
 
   const [celebQueue, setCelebQueue] = useState<CelebrationEvent[]>([]);
+  const reviewTriggerRef = useRef<ReviewTrigger | null>(null);
   const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
   const [showShareCard, setShowShareCard] = useState(false);
   // Index into clipResults/activeClips of the clip currently open in the
@@ -425,6 +427,10 @@ export default function HazardScreen() {
       try {
         const celebEvents = await checkAndTriggerCelebrations(updated);
         if (celebEvents.length > 0) {
+          // Streak review prompt only after a passed hazard session.
+          if (hasStreakMilestone(celebEvents) && newEntries.every(e => e.passed)) {
+            reviewTriggerRef.current = 'streak_milestone';
+          }
           pendingHomeRef.current = true;
           setActiveCelebration(celebEvents[0]);
           setCelebQueue(celebEvents.slice(1));
@@ -454,6 +460,9 @@ export default function HazardScreen() {
       setCelebQueue(rest);
     } else {
       setActiveCelebration(null);
+      const trigger = reviewTriggerRef.current;
+      reviewTriggerRef.current = null;
+      if (trigger) void maybeRequestReview(trigger);
       if (pendingHomeRef.current) {
         pendingHomeRef.current = false;
         if (singleClipMode) {

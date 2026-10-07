@@ -37,6 +37,7 @@ import {
 import { isPremium } from '@/src/subscription';
 import { useTheme } from '@/src/theme';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
+import { maybeRequestReview, ReviewTrigger } from '@/src/reviewPrompt';
 import * as Haptics from 'expo-haptics';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { ShareCardModal } from '@/src/components/ShareableCard';
@@ -138,6 +139,7 @@ export default function MockScreen() {
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [celebQueue, setCelebQueue] = useState<CelebrationEvent[]>([]);
   const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
+  const reviewTriggerRef = useRef<ReviewTrigger | null>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [mockMode, setMockMode] = useState<'standard' | 'quick'>('standard');
   const [locked, setLocked] = useState(false);
@@ -470,13 +472,21 @@ export default function MockScreen() {
     const { newAchievements, updatedProgress } = checkAchievements(progress);
     await saveUserProgress(updatedProgress);
 
+    // Review prompt: passed mocks only (Standard 43/50, Quick 22/25 via the
+    // same `passed` above). Held until any celebration modal is dismissed.
+    let celebrating = false;
     try {
       const celebEvents = await checkAndTriggerCelebrations(updatedProgress);
       if (celebEvents.length > 0) {
+        celebrating = true;
         setActiveCelebration(celebEvents[0]);
         setCelebQueue(celebEvents.slice(1));
       }
     } catch {}
+    if (passed) {
+      if (celebrating) reviewTriggerRef.current = 'mock_passed';
+      else void maybeRequestReview('mock_passed');
+    }
 
     setResultData({ correct, timeTaken, byTopic, xpEarned, newAchievements, passed, streakDays: updatedProgress.studyStreakDays ?? 0, total: activeTotalRef.current, passMark: activePassMarkRef.current, pauseCount: pauseCountRef.current, pausedSeconds: pausedSecondsRef.current });
     void (passed
@@ -508,6 +518,9 @@ export default function MockScreen() {
       setCelebQueue(rest);
     } else {
       setActiveCelebration(null);
+      const trigger = reviewTriggerRef.current;
+      reviewTriggerRef.current = null;
+      if (trigger) void maybeRequestReview(trigger);
     }
   }
 

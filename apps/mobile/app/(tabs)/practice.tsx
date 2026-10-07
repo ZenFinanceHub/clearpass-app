@@ -53,6 +53,7 @@ import { getAccessToken } from '@/src/getAccessToken';
 import { handleSessionExpired } from '@/src/handleSessionExpired';
 import { TOPIC_LABELS } from '@/src/tutorNudges';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
+import { hasStreakMilestone, maybeRequestReview, ReviewTrigger } from '@/src/reviewPrompt';
 import { Pip } from '@/src/components/Pip';
 import { PaywallPrompt } from '@/src/components/PaywallPrompt';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
@@ -201,6 +202,7 @@ export default function PracticeScreen() {
   const [sessionStreakDays, setSessionStreakDays] = useState(0);
   const [sessionTutorNudge, setSessionTutorNudge] = useState<{ topic: string; topicKey: string } | null>(null);
   const [celebQueue, setCelebQueue] = useState<CelebrationEvent[]>([]);
+  const reviewTriggerRef = useRef<ReviewTrigger | null>(null);
   const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
 
   const [dailyChallengeDisplay, setDailyChallengeDisplay] = useState<DailyChallenge | null>(null);
@@ -925,6 +927,7 @@ export default function PracticeScreen() {
     try {
       const celebEvents = await checkAndTriggerCelebrations(final);
       if (celebEvents.length > 0) {
+        if (hasStreakMilestone(celebEvents)) reviewTriggerRef.current = 'streak_milestone';
         setActiveCelebration(celebEvents[0]);
         setCelebQueue(celebEvents.slice(1));
       }
@@ -938,6 +941,9 @@ export default function PracticeScreen() {
       setCelebQueue(rest);
     } else {
       setActiveCelebration(null);
+      const trigger = reviewTriggerRef.current;
+      reviewTriggerRef.current = null;
+      if (trigger) void maybeRequestReview(trigger);
     }
   }
 

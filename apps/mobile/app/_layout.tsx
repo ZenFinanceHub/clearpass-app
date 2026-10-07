@@ -21,6 +21,7 @@ import { configurePurchases } from '@/src/purchases';
 import { resolvePostAuthRoute } from '@/src/postAuthRouting';
 import { CrossPlatformAlertHost } from '@/src/CrossPlatformAlert';
 import { Colors } from '@/src/constants/theme';
+import { registerAppSession } from '@/src/reviewPrompt';
 import {
   getCacheStatus,
   cacheQuestions,
@@ -369,6 +370,11 @@ function RootLayout() {
     const sub = Linking.addEventListener('url', ({ url }) => dispatch(url));
     return () => sub.remove();
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Count this launch for the store-review prompt's "never on first session" rule.
+  useEffect(() => {
+    void registerAppSession();
   }, []);
 
   // Background: cache static content on first launch or after a week

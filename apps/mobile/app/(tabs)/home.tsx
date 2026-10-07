@@ -42,6 +42,7 @@ import { loadSRState, getDueQuestions } from '@/src/spacedRepetition';
 import { computeAndSavePassProbability, PassProbabilityResult } from '@/src/passProbability';
 import { generateNudges, saveNudges, loadNudges, dismissNudge, TutorNudge, NudgeType } from '@/src/tutorNudges';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
+import { hasStreakMilestone, maybeRequestReview, ReviewTrigger } from '@/src/reviewPrompt';
 import { checkStreakToast } from '@/src/streakToasts';
 import { StreakToast } from '@/src/components/StreakToast';
 import { ScaleButton } from '@/src/components/ScaleButton';
@@ -221,6 +222,7 @@ export default function HomeScreen() {
   const [passProb, setPassProb]       = useState<PassProbabilityResult | null>(null);
   const [nudges, setNudges]           = useState<TutorNudge[]>([]);
   const [celebQueue, setCelebQueue]   = useState<CelebrationEvent[]>([]);
+  const reviewTriggerRef = useRef<ReviewTrigger | null>(null);
   const [activeCelebration, setActiveCelebration] = useState<CelebrationEvent | null>(null);
   const [streakToastDays, setStreakToastDays] = useState<number | null>(null);
   const [pendingChallenges, setPendingChallenges] = useState(0);
@@ -326,6 +328,7 @@ export default function HomeScreen() {
           try {
             const celebEvents = await checkAndTriggerCelebrations(fresh);
             if (celebEvents.length > 0) {
+              if (hasStreakMilestone(celebEvents)) reviewTriggerRef.current = 'streak_milestone';
               setActiveCelebration(celebEvents[0]);
               setCelebQueue(celebEvents.slice(1));
             }
@@ -516,6 +519,9 @@ export default function HomeScreen() {
       setCelebQueue(rest);
     } else {
       setActiveCelebration(null);
+      const trigger = reviewTriggerRef.current;
+      reviewTriggerRef.current = null;
+      if (trigger) void maybeRequestReview(trigger);
     }
   }
 
