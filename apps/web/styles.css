@@ -145,7 +145,8 @@ img { max-width: 100%; display: block; }
 }
 .hero-sub { font-size: 18px; color: var(--soft); line-height: 1.75; margin-bottom: 36px; max-width: 500px; }
 .hero-btns { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
-.hero-micro { font-size: 13px; color: var(--muted); margin-bottom: 36px; }
+.hero-micro { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+.hero-store-badges { margin-bottom: 32px; }
 .hero-social {
   display: inline-flex; align-items: center; gap: 12px;
   padding: 14px 20px; background: #fff; border-radius: 14px;
@@ -474,16 +475,12 @@ footer { background: var(--dark); padding: 72px 0 44px; }
 .footer-logo img { width: 26px; height: 26px; }
 .footer-tagline { font-size: 14px; color: #6B7280; line-height: 1.65; max-width: 260px; margin-bottom: 24px; }
 .store-badges { display: flex; gap: 10px; flex-wrap: wrap; }
-.store-badge {
-  background: #1F2937; border: 1px solid #374151; border-radius: 12px;
-  padding: 10px 16px; display: flex; align-items: center; gap: 10px; opacity: 1;
-  cursor: pointer; transition: opacity 0.2s;
-}
+.store-badge { display: inline-block; line-height: 0; cursor: pointer; transition: opacity 0.2s; }
 .store-badge:hover { opacity: 0.85; }
-.store-icon { font-size: 20px; }
-.store-text { display: flex; flex-direction: column; }
-.store-small { font-size: 9px; color: #9CA3AF; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
-.store-name { font-size: 13px; color: #fff; font-weight: 700; }
+.store-badge img { display: block; width: auto; }
+/* Google Play's official PNG has 41/250 built-in clear space on every side; it is sized up
+   (height 66) and the padding cancelled so the visible badge matches the App Store badge (44px). */
+.store-badge img[alt="Get it on Google Play"] { margin: -11px; }
 .footer-col { min-width: 140px; }
 .footer-col-title { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #9CA3AF; margin-bottom: 18px; }
 .footer-col a { display: block; font-size: 14px; color: #6B7280; margin-bottom: 11px; transition: color 0.2s; }
@@ -507,6 +504,7 @@ footer { background: var(--dark); padding: 72px 0 44px; }
   .hero-badge { margin: 0 auto 28px; }
   .hero-social { margin: 0 auto; }
   .hero-micro { text-align: center; }
+  .hero-store-badges { justify-content: center; }
   .feature-grid, .inst-dash-grid { grid-template-columns: repeat(2, 1fr); }
   .accessibility .container, .meet-pip .container, .inst-earn .container { flex-direction: column; gap: 48px; text-align: center; }
   .access-quote { flex: none; width: 100%; max-width: 100%; }

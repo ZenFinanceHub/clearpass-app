@@ -65,6 +65,14 @@
           <a href="#how" class="btn btn-outline">See How It Works</a>
         </div>
         <p class="hero-micro">No credit card needed &middot; Free to start &middot; Cancel anytime</p>
+        <div class="store-badges hero-store-badges" id="hero-store-badges">
+          <a class="store-badge" data-store="apple" href="https://apps.apple.com/gb/app/clearpass/id6779180259" target="_blank" rel="noopener">
+            <img src="assets/badges/appstore-badge.svg" alt="Download on the App Store" height="44">
+          </a>
+          <a class="store-badge" data-store="google" href="https://play.google.com/store/apps/details?id=co.uk.getclearpass.app" target="_blank" rel="noopener">
+            <img src="assets/badges/googleplay-badge.png" alt="Get it on Google Play" height="66">
+          </a>
+        </div>
         <div class="hero-social">
           <span class="hero-stars">&#11088;&#11088;&#11088;&#11088;&#11088;</span>
           <span class="hero-social-text">Trusted by learner drivers across the UK</span>
@@ -382,18 +390,10 @@
           <p class="footer-tagline">Pass your UK theory test first time. Built for every learner driver.</p>
           <div class="store-badges">
             <a class="store-badge" href="https://apps.apple.com/gb/app/clearpass/id6779180259" target="_blank" rel="noopener">
-              <span class="store-icon">&#63743;</span>
-              <div class="store-text">
-                <span class="store-small">Download on the</span>
-                <span class="store-name">App Store</span>
-              </div>
+              <img src="assets/badges/appstore-badge.svg" alt="Download on the App Store" height="44">
             </a>
             <a class="store-badge" href="https://play.google.com/store/apps/details?id=co.uk.getclearpass.app" target="_blank" rel="noopener">
-              <span class="store-icon">&#9654;</span>
-              <div class="store-text">
-                <span class="store-small">Get it on</span>
-                <span class="store-name">Google Play</span>
-              </div>
+              <img src="assets/badges/googleplay-badge.png" alt="Get it on Google Play" height="66">
             </a>
           </div>
         </div>
@@ -454,6 +454,13 @@
           link.href = url.toString();
         }
       });
+    })();
+
+    // Hero store badges: on Android, show Google Play first.
+    (function orderHeroStoreBadges() {
+      const wrap = document.getElementById('hero-store-badges');
+      const google = wrap && wrap.querySelector('[data-store="google"]');
+      if (google && /Android/i.test(navigator.userAgent)) wrap.prepend(google);
     })();
 
     // Hamburger menu
