@@ -1001,13 +1001,21 @@ function RectVis({ size, bc, fc, tc, dt }: { size: number; bc: string; fc: strin
 }
 
 function SignVisual({ sign, size }: { sign: RoadSign; size: number }) {
+  const [imageFailed, setImageFailed] = useState(false);
   const imgSrc = SIGN_IMAGES[sign.id];
-  if (imgSrc) {
+  if (imgSrc && !imageFailed) {
     const isRect = sign.shape === 'rectangle';
     const isTriangle = sign.shape === 'triangle';
     const w = isRect ? Math.round(size * 1.5) : size;
     const h = isTriangle ? Math.round(size * 0.88) : isRect ? Math.round(size * 0.85) : size;
-    return <Image source={imgSrc} style={{ width: w, height: h }} resizeMode="contain" />;
+    return (
+      <Image
+        source={imgSrc}
+        style={{ width: w, height: h }}
+        resizeMode="contain"
+        onError={() => setImageFailed(true)}
+      />
+    );
   }
   const { shape, borderColor: bc, fillColor: fc, textColor: tc, displayText: dt } = sign;
   if (shape === 'triangle')
@@ -1252,7 +1260,7 @@ export default function RoadSignsScreen() {
         </View>
 
         <View style={styles.quizSignWrapper}>
-          <SignVisual sign={q.sign} size={QUIZ_SIGN} />
+          <SignVisual key={q.sign.id} sign={q.sign} size={QUIZ_SIGN} />
         </View>
 
         <Text style={[styles.quizQuestion, { color: theme.textColor }]}>
@@ -1369,7 +1377,7 @@ export default function RoadSignsScreen() {
           activeOpacity={flashcardFlipped ? 1 : 0.85}
         >
           <View style={styles.flashSignWrapper}>
-            <SignVisual sign={sign} size={FLASH_SIGN} />
+            <SignVisual key={sign.id} sign={sign} size={FLASH_SIGN} />
           </View>
 
           {flashcardFlipped ? (
@@ -1430,7 +1438,7 @@ export default function RoadSignsScreen() {
         </TouchableOpacity>
 
         <View style={styles.detailSignWrapper}>
-          <SignVisual sign={selectedSign} size={DETAIL_SIGN} />
+          <SignVisual key={selectedSign.id} sign={selectedSign} size={DETAIL_SIGN} />
         </View>
 
         <CategoryBadge category={selectedSign.category} />
@@ -1585,7 +1593,7 @@ export default function RoadSignsScreen() {
             activeOpacity={0.8}
           >
             <View style={styles.signCardShape}>
-              <SignVisual sign={sign} size={GRID_SIGN} />
+              <SignVisual key={sign.id} sign={sign} size={GRID_SIGN} />
             </View>
             <Text
               style={[styles.signCardName, { color: theme.textColor }]}
