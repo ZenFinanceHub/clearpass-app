@@ -3,6 +3,8 @@ import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from './CrossPlatformAlert';
+import { loadUserProgress } from './storage';
+import { buildNudgePlan, type ReminderAskState } from './studyNudges';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +33,8 @@ const KEY_STREAK_TODAY      = '@clearpass/notif_streak_today';
 const KEY_TEST_COUNTDOWN    = '@clearpass/notif_test_countdown';
 const KEY_TEST_COUNTDOWN_V2 = '@clearpass/notif_test_countdown_v2';
 const KEY_WEEKLY            = '@clearpass/notif_weekly_progress';
+const KEY_STUDY_NUDGES      = '@clearpass/notif_study_nudges';
+const KEY_REMINDER_ASK      = '@clearpass/reminder_ask';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -83,35 +87,134 @@ export async function saveNotificationSettings(s: NotificationSettings): Promise
   await AsyncStorage.setItem(KEY_SETTINGS, JSON.stringify(s));
 }
 
-// ─── Daily study reminder ─────────────────────────────────────────────────────
+// ─── Daily study reminder (rolling nudges) ───────────────────────────────────
+//
+// The study reminder is a rolling set of one-off notifications built by
+// buildNudgePlan (src/studyNudges.ts), rebuilt whenever the app opens or a
+// session finishes: today's is skipped once the learner has studied, the
+// text varies (test-date countdown, streak), and it tapers off and stops if
+// they stop opening the app. KEY_STUDY_REMINDER held the old single DAILY
+// trigger; it is still cancelled so upgraded installs don't get both.
+
+export async function getNotificationPermission(): Promise<{ status: 'granted' | 'denied' | 'undetermined'; canAskAgain: boolean }> {
+  if (isWeb()) return { status: 'denied', canAskAgain: false };
+  try {
+    const p = await Notifications.getPermissionsAsync();
+    return { status: p.status as 'granted' | 'denied' | 'undetermined', canAskAgain: p.canAskAgain ?? true };
+  } catch {
+    return { status: 'undetermined', canAskAgain: true };
+  }
+}
+
+async function cancelStudyNudges(): Promise<void> {
+  const stored = await AsyncStorage.getItem(KEY_STUDY_NUDGES);
+  if (stored) {
+    let ids: string[] = [];
+    try { ids = JSON.parse(stored) as string[]; } catch {}
+    await Promise.all(ids.map(id => Notifications.cancelScheduledNotificationAsync(id).catch(() => undefined)));
+    await AsyncStorage.removeItem(KEY_STUDY_NUDGES);
+  }
+  const legacy = await AsyncStorage.getItem(KEY_STUDY_REMINDER);
+  if (legacy) {
+    try { await Notifications.cancelScheduledNotificationAsync(legacy); } catch {}
+    await AsyncStorage.removeItem(KEY_STUDY_REMINDER);
+  }
+}
+
+/** Rebuilds the study nudges from saved settings and progress. Safe to call
+ *  often (app open, end of a session); does nothing unless the learner has
+ *  turned the study reminder on and notifications are allowed. */
+// Serialised: home focus and the end of a session can both trigger this, and
+// two overlapping runs would each cancel, then each schedule a full set.
+let nudgeQueue: Promise<void> = Promise.resolve();
+
+export function rescheduleStudyNudges(override?: { hour: number; minute: number }): Promise<void> {
+  if (isWeb()) return Promise.resolve();
+  nudgeQueue = nudgeQueue.then(() => doRescheduleStudyNudges(override), () => doRescheduleStudyNudges(override));
+  return nudgeQueue;
+}
+
+async function doRescheduleStudyNudges(override?: { hour: number; minute: number }): Promise<void> {
+  try {
+    const settings = await loadNotificationSettings();
+    if (!override && !settings.studyReminder) { await cancelStudyNudges(); return; }
+    const { status } = await getNotificationPermission();
+    if (status !== 'granted') return;
+
+    const progress = await loadUserProgress();
+    const plan = buildNudgePlan({
+      now: new Date(),
+      hour: override?.hour ?? settings.reminderHour,
+      minute: override?.minute ?? settings.reminderMinute,
+      lastStudiedIso: progress?.lastStudied ?? null,
+      testDateIso: progress?.testDate ?? null,
+      streakDays: progress?.studyStreakDays ?? 0,
+      isPro: progress?.isPro ?? false,
+    });
+
+    await cancelStudyNudges();
+    const ids: string[] = [];
+    for (const n of plan) {
+      try {
+        const id = await Notifications.scheduleNotificationAsync({
+          content: { title: n.title, body: n.body, sound: true },
+          trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: n.date },
+        });
+        ids.push(id);
+      } catch {}
+    }
+    await AsyncStorage.setItem(KEY_STUDY_NUDGES, JSON.stringify(ids));
+  } catch {}
+}
 
 export async function scheduleStudyReminder(hour: number, minute: number): Promise<void> {
   if (isWeb()) return;
-  await cancelStudyReminder();
-
-  const id = await Notifications.scheduleNotificationAsync({
-    content: {
-      title: 'Time to practise! 📚',
-      body: "Your daily theory session is waiting. Keep that streak going!",
-      sound: true,
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY,
-      hour,
-      minute,
-    },
-  });
-
-  await AsyncStorage.setItem(KEY_STUDY_REMINDER, id);
+  await rescheduleStudyNudges({ hour, minute });
 }
 
 export async function cancelStudyReminder(): Promise<void> {
   if (isWeb()) return;
-  const id = await AsyncStorage.getItem(KEY_STUDY_REMINDER);
-  if (id) {
-    try { await Notifications.cancelScheduledNotificationAsync(id); } catch {}
-    await AsyncStorage.removeItem(KEY_STUDY_REMINDER);
+  await cancelStudyNudges();
+}
+
+/** One-tap opt-in from the in-app reminder offer: asks the OS, then turns on
+ *  the daily study nudges (and the test countdown if a test date is set).
+ *  Returns false if the learner declined the OS prompt. */
+export async function enableStudyReminders(hour = 19, minute = 0): Promise<boolean> {
+  if (isWeb()) return false;
+  const granted = await requestNotificationPermissions();
+  if (!granted) return false;
+  const progress = await loadUserProgress();
+  const settings = await loadNotificationSettings();
+  const testDateIso = progress?.testDate ?? null;
+  const hasFutureTest = !!testDateIso && new Date(testDateIso) > new Date();
+  await saveNotificationSettings({
+    ...settings,
+    studyReminder: true,
+    reminderHour: hour,
+    reminderMinute: minute,
+    testCountdown: settings.testCountdown || hasFutureTest,
+  });
+  await rescheduleStudyNudges();
+  if (hasFutureTest && !settings.testCountdown) {
+    try { await scheduleTestCountdown(testDateIso!, progress?.readinessScore ?? 0); } catch {}
   }
+  return true;
+}
+
+// ─── Reminder offer bookkeeping ───────────────────────────────────────────────
+
+export async function loadReminderAskState(): Promise<ReminderAskState> {
+  try {
+    const raw = await AsyncStorage.getItem(KEY_REMINDER_ASK);
+    if (raw) return { times: 0, lastIso: null, ...(JSON.parse(raw) as Partial<ReminderAskState>) };
+  } catch {}
+  return { times: 0, lastIso: null };
+}
+
+export async function recordReminderAsk(): Promise<void> {
+  const s = await loadReminderAskState();
+  await AsyncStorage.setItem(KEY_REMINDER_ASK, JSON.stringify({ times: s.times + 1, lastIso: new Date().toISOString() }));
 }
 
 // ─── Streak protection ────────────────────────────────────────────────────────
@@ -367,6 +470,7 @@ export async function cancelAllNotifications(): Promise<void> {
   await Notifications.cancelAllScheduledNotificationsAsync();
   await AsyncStorage.multiRemove([
     KEY_STUDY_REMINDER,
+    KEY_STUDY_NUDGES,
     KEY_STREAK,
     KEY_TEST_COUNTDOWN,
     KEY_WEEKLY,
@@ -377,6 +481,14 @@ export async function cancelAllNotifications(): Promise<void> {
 
 export function configureNotificationHandler(): void {
   if (isWeb()) return;
+  // Android 8+ shows nothing without a channel, and on Android 13+ the
+  // permission prompt needs one to exist.
+  if (Platform.OS === 'android') {
+    void Notifications.setNotificationChannelAsync('default', {
+      name: 'Study reminders',
+      importance: Notifications.AndroidImportance.DEFAULT,
+    }).catch(() => undefined);
+  }
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowBanner: true,

@@ -46,7 +46,8 @@ import {
 } from '@/src/storage';
 import { submitSessionStats, getComparativeStats, type ComparativeStats } from '@/src/analytics';
 import { playCorrect, playWrong } from '@/src/sounds';
-import { cancelStreakProtectionNotification } from '@/src/notifications';
+import { cancelStreakProtectionNotification, rescheduleStudyNudges } from '@/src/notifications';
+import { ReminderOffer, useReminderOffer } from '@/src/components/ReminderOffer';
 import { FREE_QUESTION_LIMIT, isPremium } from '@/src/subscription';
 import { explainAnswer } from '@clearpass/ai';
 import { getAccessToken } from '@/src/getAccessToken';
@@ -156,6 +157,7 @@ export default function PracticeScreen() {
   const { mode } = useLocalSearchParams<{ mode?: string }>();
 
   const [phase, setPhase] = useState<Phase>('start');
+  const reminderOffer = useReminderOffer(phase === 'dailyLimit');
 
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -901,6 +903,8 @@ export default function PracticeScreen() {
     userProgressRef.current = final;
     await saveUserProgress(final);
     await syncProgressToCloud(final);
+    // Today's reminder is no longer needed; rebuild the plan from now.
+    void rescheduleStudyNudges();
 
     const topicKeys = Object.keys(topicData) as TopicCategory[];
     const sessionTopic = topicKeys.length === 1 ? (TOPIC_LABELS[topicKeys[0]] ?? 'Mixed') : 'Mixed';
@@ -980,7 +984,8 @@ export default function PracticeScreen() {
 
   if (phase === 'dailyLimit') {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}>
+      <View style={[styles.centered, { backgroundColor: theme.backgroundColor, gap: 16 }]}>
+        {reminderOffer.visible && <ReminderOffer context="daily_limit" onDone={reminderOffer.hide} />}
         <PaywallPrompt
           reason="daily_limit"
           urgencyLine={testDateUrgencyLine(userProgressRef.current)}

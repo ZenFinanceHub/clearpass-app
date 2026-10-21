@@ -10,7 +10,7 @@
     "proxy": "node server/proxy.js",
     "build:web": "npx expo export --platform web",
     "ota:production": "node scripts/publish-ota.js",
-    "test:scripts": "node --test scripts/lib/*.test.js",
+    "test:scripts": "node --test scripts/lib/*.test.js && node --experimental-strip-types --no-warnings --test scripts/lib/*.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:smoke": "playwright test e2e/smoke.spec.ts",

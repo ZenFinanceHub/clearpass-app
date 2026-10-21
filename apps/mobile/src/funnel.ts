@@ -24,7 +24,11 @@ export type FunnelEvent =
   | 'purchase_failed'
   | 'free_mock_started'
   | 'free_mock_completed'
-  | 'iap_unavailable';
+  | 'iap_unavailable'
+  | 'reminder_offer_viewed'
+  | 'reminder_enabled'
+  | 'reminder_declined'
+  | 'reminder_os_denied';
 
 const ANON_ID_KEY = '@clearpass/anon_id';
 let anonIdPromise: Promise<string> | null = null;
