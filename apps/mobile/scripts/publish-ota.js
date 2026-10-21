@@ -16,6 +16,7 @@ const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { checkOtaBundles } = require('./lib/otaKeyCheck');
+const { exportCommand, updateCommand, quoteArg } = require('./lib/otaCommands');
 
 const appDir = path.resolve(__dirname, '..');
 const distDir = path.join(appDir, 'dist-ota');
@@ -26,21 +27,29 @@ if (!message) {
   process.exit(1);
 }
 
-function run(cmd, args) {
-  console.log(`\n> ${cmd} ${args.join(' ')}`);
-  const r = spawnSync(cmd, args, { cwd: appDir, stdio: 'inherit', shell: process.platform === 'win32' });
+// Each step is one complete command line, quoted by lib/otaCommands.js and
+// run through the platform shell. Never pass an args array with shell:true:
+// Node joins it unquoted, which broke this script on Windows.
+function run(commandLine) {
+  console.log(`\n> ${commandLine}`);
+  const r = spawnSync(commandLine, { cwd: appDir, stdio: 'inherit', shell: true });
   if (r.status !== 0) {
-    console.error(`\nFAILED: ${cmd} exited with ${r.status}. Nothing was published.`);
+    console.error(`\nFAILED (exit ${r.status}). Nothing was published.`);
     process.exit(r.status || 1);
   }
 }
 
+// Fail on an unusable message before doing any work.
+try {
+  quoteArg(message);
+} catch (e) {
+  console.error(e.message);
+  process.exit(1);
+}
+
 fs.rmSync(distDir, { recursive: true, force: true });
 
-run('npx', [
-  'eas-cli', 'env:exec', 'production',
-  `npx expo export --platform ios --platform android --output-dir ${path.basename(distDir)}`,
-]);
+run(exportCommand(path.basename(distDir)));
 
 const check = checkOtaBundles(distDir);
 if (!check.ok) {
@@ -51,14 +60,6 @@ if (!check.ok) {
 }
 console.log('\nKey check PASS: iOS bundle has appl_…, Android bundle has goog_…');
 
-run('npx', [
-  'eas-cli', 'update',
-  '--branch', 'production',
-  '--environment', 'production',
-  '--skip-bundler',
-  '--input-dir', path.basename(distDir),
-  '--message', message,
-  '--non-interactive',
-]);
+run(updateCommand(path.basename(distDir), message));
 
 console.log('\nPublished. Bundle was key-checked before upload.');
