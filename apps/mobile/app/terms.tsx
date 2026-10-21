@@ -37,17 +37,17 @@ export default function TermsScreen() {
       </Section>
 
       <Section title="4. Subscription and payment" theme={theme}>
-        {'ClearPass offers a one-off Pro access purchase of GBP 7.99 for three months of full access. This is a one-time payment, not a recurring subscription.\n\n'}
+        {'On our website, ClearPass offers one-off Pro access purchases: GBP 7.99 for three months, or GBP 2.99 for one month, where available. These are one-time payments, not recurring subscriptions, and there is no free trial on them. Buying again while Pro is active adds the new period to the end of your current one.\n\n'}
         {'All payments are processed securely by Stripe. ClearPass does not store your card details.\n\n'}
         {'Pro access includes: unlimited practice questions, full timed mock tests, AI tutor explanations, progress tracking, and all future features released during your access period.\n\n'}
         {'Refunds: if you experience a technical issue that prevents you from using the Pro features, contact support@getclearpass.co.uk within 14 days of purchase.\n\n'}
-        {'Where Pro access is purchased through the Apple App Store or Google Play, rather than the one-time Stripe payment described above, it is an auto-renewing subscription: GBP 7.99 for three months, renewing automatically at the same price unless cancelled at least 24 hours before the end of the current period. There is no free trial or introductory offer on this subscription. Payment is charged to your App Store or Google Play account at confirmation of purchase, and you can manage or cancel it at any time in that account’s subscription settings.'}
+        {'Where Pro access is purchased through the Apple App Store or Google Play, rather than the one-time Stripe payment described above, it is an auto-renewing subscription: GBP 7.99 every three months or GBP 2.99 every month (prices in other countries are shown in the store), renewing automatically at the same price unless cancelled at least 24 hours before the end of the current period. New subscribers may be offered a free trial, shown in the app and on the store\u2019s purchase sheet before you confirm; you are charged when the trial ends unless you cancel at least 24 hours before it does, and any unused part of a trial is forfeited if you buy a subscription. Payment is charged to your App Store or Google Play account at confirmation of purchase, and you can manage or cancel it at any time in that account’s subscription settings.'}
       </Section>
 
       <Section title="5. Free tier limitations" theme={theme}>
         {'Free accounts may practise up to 10 questions per day. This limit is checked when a practice session starts, so a session already in progress can be finished even if it takes you past the daily limit.\n\n'}
         {'Free accounts also include a limited number of AI tutor questions in total (currently 10), shared across Ask Pip, answer explanations, and study plan generation. Once this allowance is used, a Pro account is required to continue using the AI tutor; Pro accounts receive a renewed daily allowance instead.\n\n'}
-        {'Mock tests and hazard perception videos require a Pro account. The Highway Code and road signs are available to everyone, free or Pro.\n\n'}
+        {'Free accounts include one free Quick Mock test. Further mock tests and hazard perception videos require a Pro account. The Highway Code and road signs are available to everyone, free or Pro.\n\n'}
         {'We reserve the right to adjust free tier and Pro allowances at any time with reasonable notice.'}
       </Section>
 

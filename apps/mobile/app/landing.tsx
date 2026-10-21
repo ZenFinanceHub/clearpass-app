@@ -13,27 +13,6 @@ import { getProxyUrl } from '@/src/proxyUrl';
 import { Colors } from '@/src/constants/theme';
 import { ScaleButton } from '@/src/components/ScaleButton';
 
-// TODO: replace with real pass stories from pass_stories table once collected
-const TESTIMONIALS = [
-  {
-    name: 'Jamie T.',
-    score: '49/50',
-    quote: 'I failed my first attempt before I found ClearPass. The weak spot drilling completely changed how I revised. Passed second time with 49/50!',
-    location: 'Manchester',
-  },
-  {
-    name: 'Priya S.',
-    score: '47/50',
-    quote: 'As a dyslexic learner the OpenDyslexic font and text-to-speech made this the only theory app I could actually use. The AI tutor explains things so clearly.',
-    location: 'Birmingham',
-  },
-  {
-    name: 'Callum R.',
-    score: '45/50',
-    quote: 'Did 3 weeks of ClearPass practice before my test. The pass probability went from 42% to 84% by test day. Knew I was ready when I walked in.',
-    location: 'Edinburgh',
-  },
-];
 
 const FEATURES = [
   { icon: '🦔', title: 'Ask Pip', desc: 'Ask anything. Get clear explanations from real conversational AI.' },
@@ -104,8 +83,7 @@ export default function LandingPage() {
           </View>
           <Text style={styles.heroMicro}>{'No credit card · Free to start · Cancel anytime'}</Text>
           <View style={styles.heroSocial}>
-            <Text style={styles.heroStars}>{'⭐⭐⭐⭐⭐'}</Text>
-            <Text style={styles.heroSocialText}>{'Trusted by learner drivers across the UK'}</Text>
+            <Text style={styles.heroSocialText}>{'DVSA-licensed question bank · Built in Scotland'}</Text>
           </View>
         </View>
 
@@ -156,29 +134,6 @@ export default function LandingPage() {
               </View>
             </View>
           ))}
-        </View>
-
-        {/* Testimonials */}
-        <View style={[styles.section, styles.sectionAlt]}>
-          <Text style={styles.sectionLabel}>{'PASS STORIES'}</Text>
-          <Text style={styles.sectionTitle}>{'Join thousands who passed first time'}</Text>
-          <View style={styles.testimonialGrid}>
-            {TESTIMONIALS.map((t) => (
-              <View key={t.name} style={styles.testimonialCard}>
-                <Text style={styles.testimonialStars}>{'★★★★★'}</Text>
-                <Text style={styles.testimonialQuote}>{'"'}{t.quote}{'"'}</Text>
-                <View style={styles.testimonialFooter}>
-                  <View style={styles.testimonialAvatar}>
-                    <Text style={styles.testimonialAvatarText}>{t.name[0]}</Text>
-                  </View>
-                  <View>
-                    <Text style={styles.testimonialName}>{t.name}</Text>
-                    <Text style={styles.testimonialMeta}>{t.location}{' · Scored '}{t.score}</Text>
-                  </View>
-                </View>
-              </View>
-            ))}
-          </View>
         </View>
 
         {/* Email waitlist */}
@@ -322,7 +277,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB',
     paddingHorizontal: 16, paddingVertical: 12,
   },
-  heroStars: { fontSize: 14 },
   heroSocialText: { fontSize: 13, color: '#374151', fontWeight: '500' },
 
   statsStrip: { backgroundColor: TEAL, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 24, paddingHorizontal: 16 },
@@ -385,27 +339,6 @@ const styles = StyleSheet.create({
   planCtaPro: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 8, backgroundColor: TEAL },
   planCtaProText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
   planSmall: { fontSize: 12, color: '#6B7280', textAlign: 'center', marginTop: 12, lineHeight: 18 },
-
-  // ── Testimonials ──────────────────────────────────────────────────────────────
-  testimonialGrid: { gap: 14 },
-  testimonialCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    gap: 10,
-  },
-  testimonialStars: { fontSize: 14, color: TEAL, letterSpacing: 2 },
-  testimonialQuote: { fontSize: 14, color: '#374151', lineHeight: 22, fontStyle: 'italic' },
-  testimonialFooter: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
-  testimonialAvatar: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: TEAL,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  testimonialAvatarText: { fontSize: 14, fontWeight: '800', color: '#FFFFFF' },
-  testimonialName: { fontSize: 14, fontWeight: '700', color: '#111827' },
-  testimonialMeta: { fontSize: 12, color: '#6B7280' },
 
   // ── Waitlist ──────────────────────────────────────────────────────────────────
   waitlistSub: { fontSize: 15, color: '#6B7280', lineHeight: 22, marginBottom: 16 },

@@ -17,15 +17,27 @@ import { Colors } from '@/src/constants/theme';
 import { ScaleButton } from '@/src/components/ScaleButton';
 import { loadUserProgress, saveUserProgress } from '@/src/storage';
 import { Pip } from '@/src/components/Pip';
-import { usePurchaseRoute, getSubscriptionDisclosure, IAP_UNAVAILABLE_COPY } from '@/src/purchaseGate';
-import { getProPackage, purchaseProPackage, restoreProPurchases, refreshIapReady } from '@/src/purchases';
+import {
+  usePurchaseRoute,
+  getPurchaseRoute,
+  useTrialDays,
+  setTrialDays,
+  getSubscriptionDisclosure,
+  FALLBACK_PRICES,
+  IAP_UNAVAILABLE_COPY,
+  type ProPlan,
+} from '@/src/purchaseGate';
+import { getProPackage, getProPackages, purchaseProPackage, restoreProPurchases, refreshIapReady } from '@/src/purchases';
+import { testDateUrgencyLine } from '@/src/conversion';
+import { logFunnelEvent } from '@/src/funnel';
 
+// Only what Pro adds — progress tracking and streaks are free for everyone.
 const FEATURES = [
   'Unlimited practice questions',
-  'Full mock tests (50 questions, timed)',
-  'Hazard perception videos',
-  'AI tutor explains every answer',
-  'Progress tracking & streaks',
+  'Unlimited mock tests, timed like the real test',
+  'Hazard perception clips, scored like the DVSA test',
+  'Ask Pip: 20 AI explanations a day',
+  'Streak freezes so a missed day doesn\u2019t reset you',
 ];
 
 
@@ -35,7 +47,30 @@ export default function PaywallScreen() {
   // re-render when it lands rather than freezing whatever was true at
   // first paint.
   const route = usePurchaseRoute();
-  const disclosure = getSubscriptionDisclosure();
+  const [plan,         setPlan]         = useState<ProPlan>('quarterly');
+  const trialMonthly   = useTrialDays('monthly');
+  const trialQuarterly = useTrialDays('quarterly');
+  // Store price strings per plan, once offerings load (IAP only). null
+  // means "not on sale right now" — e.g. a new product still in review —
+  // and that plan's card is hidden rather than offered and then failing.
+  const [storePrices,  setStorePrices]  = useState<Record<ProPlan, string | null> | null>(null);
+  const [webMonthly,   setWebMonthly]   = useState(false);
+  const [urgencyLine,  setUrgencyLine]  = useState<string | null>(null);
+  const plansOnSale: ProPlan[] = route === 'iap'
+    ? (storePrices ? (['quarterly', 'monthly'] as ProPlan[]).filter(p => storePrices[p]) : ['quarterly'])
+    : route === 'stripe_checkout'
+      ? (webMonthly ? ['quarterly', 'monthly'] : ['quarterly'])
+      : [];
+  const activePlan: ProPlan = plansOnSale.includes(plan) ? plan : (plansOnSale[0] ?? 'quarterly');
+  // IAP shows only the store's own price string, in the buyer's currency.
+  // Until it loads there is no price and no buy button (a fixed £ price
+  // would be wrong for a non-UK account). Web uses the fixed £ prices.
+  const priceFor = (p: ProPlan): string | null =>
+    route === 'iap' ? (storePrices?.[p] ?? null) : FALLBACK_PRICES[p];
+  const pricesReady = route !== 'iap' || !!(storePrices?.monthly || storePrices?.quarterly);
+  // Trial for the plan actually selected; none on web (one-off payments).
+  const offerTrial = route === 'iap' ? (activePlan === 'monthly' ? trialMonthly : trialQuarterly) : null;
+  const disclosure = getSubscriptionDisclosure(activePlan, { priceString: priceFor(activePlan) ?? undefined, trialDays: offerTrial });
   const [loading,      setLoading]      = useState(false);
   const [retrying,     setRetrying]     = useState(false);
   const [restoring,    setRestoring]    = useState(false);
@@ -55,15 +90,50 @@ export default function PaywallScreen() {
     }).catch(() => {});
 
     fetch(`${getProxyUrl()}/api/config`)
-      .then(r => r.json() as Promise<{ stripeTestMode?: boolean }>)
-      .then(d => { if (d.stripeTestMode) setIsTestMode(true); })
+      .then(r => r.json() as Promise<{ stripeTestMode?: boolean; webMonthlyAvailable?: boolean }>)
+      .then(d => {
+        if (d.stripeTestMode) setIsTestMode(true);
+        if (d.webMonthlyAvailable) setWebMonthly(true);
+      })
       .catch(() => {});
+
+    loadUserProgress()
+      .then(p => setUrgencyLine(testDateUrgencyLine(p)))
+      .catch(() => {});
+
+    logFunnelEvent('paywall_viewed', { route: getPurchaseRoute() });
 
     // Re-check IAP readiness on arrival. Boot may have probed while the
     // network was still coming up; by the time someone reaches the paywall
     // it usually isn't. Only promotes to ready, never demotes.
     void refreshIapReady();
   }, []);
+
+  // Real store prices for both plans, refreshed whenever IAP becomes ready.
+  // Retries a few times: the buy button stays disabled until a price loads.
+  useEffect(() => {
+    if (route !== 'iap') return;
+    let cancelled = false;
+    let attempt = 0;
+    const load = () => {
+      void getProPackages().then(pkgs => {
+        if (cancelled) return;
+        const next = {
+          monthly: pkgs.monthly?.product.priceString ?? null,
+          quarterly: pkgs.quarterly?.product.priceString ?? null,
+        };
+        if (next.monthly || next.quarterly) { setStorePrices(next); return; }
+        if (attempt++ < 3) setTimeout(load, 3000);
+      });
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [route]);
+
+  function choosePlan(p: ProPlan) {
+    setPlan(p);
+    logFunnelEvent('plan_selected', { plan: p });
+  }
 
   async function handleSubscribe() {
     setError('');
@@ -75,9 +145,11 @@ export default function PaywallScreen() {
         router.replace('/auth/signin');
         return;
       }
+      logFunnelEvent('purchase_started', { plan: activePlan, rail: 'stripe' });
       const res = await fetch(`${getProxyUrl()}/api/create-checkout-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ plan: activePlan }),
       });
       const data = await res.json() as { url?: string; error?: string };
       if (data.url) {
@@ -101,15 +173,23 @@ export default function PaywallScreen() {
     setError('');
     setNotice('');
     setLoading(true);
-    const pkg = await getProPackage();
+    const pkg = await getProPackage(activePlan);
     if (!pkg) {
       setLoading(false);
       setError('In-app purchases are unavailable right now. Please try again shortly.');
+      logFunnelEvent('purchase_failed', { plan: activePlan, rail: 'iap', reason: 'no_package' });
       return;
     }
+    logFunnelEvent('purchase_started', { plan: activePlan, rail: 'iap', trialDays: offerTrial });
     const outcome = await purchaseProPackage(pkg);
     setLoading(false);
+    logFunnelEvent(
+      outcome.status === 'success' ? 'purchase_succeeded' : outcome.status === 'cancelled' ? 'purchase_cancelled' : 'purchase_failed',
+      { plan: activePlan, rail: 'iap', trialDays: offerTrial },
+    );
     if (outcome.status === 'success') {
+      // The trial is used up for this Apple ID / Google account.
+      setTrialDays(null);
       if (outcome.proEntitlementActive) {
         // Unlock the UI immediately from RC's own confirmation, without
         // waiting for the RevenueCat webhook to reach Supabase — that
@@ -211,10 +291,11 @@ export default function PaywallScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Pip size={84} mood={'celebrate'} />
-        <Text style={styles.headerTitle}>{'Go Pro'}</Text>
+        <Text style={styles.headerTitle}>{offerTrial ? `Try Pro free for ${offerTrial} days` : 'Go Pro'}</Text>
         <Text style={styles.headerSub}>
           {'Everything you need to pass first time'}
         </Text>
+        {urgencyLine ? <Text style={styles.urgencyText}>{urgencyLine}</Text> : null}
       </View>
 
       {/* Feature list */}
@@ -233,7 +314,48 @@ export default function PaywallScreen() {
           that the native purchase sheet already shows the IAP price; that
           is precisely what App Store guideline 3.1.2 rejects. The terms
           must be legible on our own screen, before the sheet opens. */}
-      {route !== 'coming_soon' && (
+      {route === 'iap' && !pricesReady && (
+        <ActivityIndicator color={Colors.indigo} />
+      )}
+
+      {plansOnSale.length > 0 && pricesReady && (
+        <View style={styles.planList}>
+          {plansOnSale.map(p => {
+            const selected = p === activePlan;
+            return (
+              <TouchableOpacity
+                key={p}
+                style={[styles.planCard, selected && styles.planCardSelected]}
+                onPress={() => choosePlan(p)}
+                activeOpacity={0.85}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+              >
+                <View style={styles.planRadio}>{selected && <View style={styles.planRadioDot} />}</View>
+                <View style={styles.planInfo}>
+                  <Text style={styles.planTitle}>{p === 'quarterly' ? '3 months' : '1 month'}</Text>
+                  <Text style={styles.planSub}>
+                    {p === 'quarterly'
+                      ? (route === 'stripe_checkout' ? 'Covers most learners up to test day' : 'Billed every 3 months')
+                      : (route === 'stripe_checkout' ? 'For a final push before your test' : 'Billed monthly, cancel any time')}
+                  </Text>
+                </View>
+                <View style={styles.planPriceCol}>
+                  <Text style={styles.planPrice}>{priceFor(p)}</Text>
+                  {p === 'quarterly' && plansOnSale.includes('monthly') && (
+                    <Text style={styles.planBadge}>{'Best value'}</Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+
+      {/* Plan name, duration and price, and full renewal terms, for the
+          selected plan — shown on every purchasable route, before the
+          purchase sheet opens (App Store guideline 3.1.2). */}
+      {route !== 'coming_soon' && pricesReady && (
         <View style={styles.pricingBox}>
           <Text style={styles.planName}>{disclosure.name}</Text>
           <Text style={styles.priceLine}>{disclosure.priceLine}</Text>
@@ -252,7 +374,7 @@ export default function PaywallScreen() {
           >
             {loading
               ? <ActivityIndicator color="#FFFFFF" />
-              : <Text style={styles.ctaBtnText}>{'Subscribe to Pro'}</Text>
+              : <Text style={styles.ctaBtnText}>{`Get Pro for ${priceFor(activePlan)}`}</Text>
             }
           </ScaleButton>
         </>
@@ -260,14 +382,14 @@ export default function PaywallScreen() {
         <>
           {error.length > 0 && <Text style={styles.errorText}>{error}</Text>}
           <ScaleButton
-            style={[styles.ctaBtn, loading && styles.ctaBtnDisabled]}
+            style={[styles.ctaBtn, (loading || !pricesReady) && styles.ctaBtnDisabled]}
             onPress={() => void handleIapPurchase()}
-            disabled={loading}
+            disabled={loading || !pricesReady}
             activeOpacity={0.85}
           >
             {loading
               ? <ActivityIndicator color="#FFFFFF" />
-              : <Text style={styles.ctaBtnText}>{'Subscribe to Pro'}</Text>
+              : <Text style={styles.ctaBtnText}>{offerTrial ? `Start ${offerTrial}-day free trial` : 'Subscribe to Pro'}</Text>
             }
           </ScaleButton>
         </>
@@ -365,6 +487,23 @@ const styles = StyleSheet.create({
   },
 
   header: { alignItems: 'center', gap: 10 },
+  urgencyText: { fontSize: 15, color: Colors.indigo, fontWeight: '700', textAlign: 'center', lineHeight: 21 },
+
+  planList: { width: '100%', gap: 10 },
+  planCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1.5, borderColor: '#E5E7EB',
+    paddingVertical: 16, paddingHorizontal: 18,
+  },
+  planCardSelected: { borderColor: Colors.indigo, borderWidth: 2.5 },
+  planRadio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: Colors.indigo, alignItems: 'center', justifyContent: 'center' },
+  planRadioDot: { width: 11, height: 11, borderRadius: 6, backgroundColor: Colors.indigo },
+  planInfo: { flex: 1, gap: 2 },
+  planTitle: { fontSize: 17, fontWeight: '800', color: '#111827' },
+  planSub: { fontSize: 13, color: '#6B7280' },
+  planPriceCol: { alignItems: 'flex-end', gap: 4 },
+  planPrice: { fontSize: 18, fontWeight: '900', color: '#111827' },
+  planBadge: { fontSize: 11, fontWeight: '800', color: '#FFFFFF', backgroundColor: Colors.indigo, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden' },
   headerTitle: { fontSize: 32, fontWeight: '900', color: '#111827', textAlign: 'center' },
   headerSub: { fontSize: 15, color: '#6B7280', textAlign: 'center', lineHeight: 22 },
 

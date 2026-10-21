@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { logFunnelEvent } from '@/src/funnel';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -96,6 +97,7 @@ export default function TestDateScreen() {
     setSaving(true);
     try {
       await saveTestDate(parsed);
+      logFunnelEvent('onboarding_completed', { testDate: true });
       router.replace('/(tabs)/home');
     } catch {
       setError('Could not save date. Continuing anyway...');
@@ -106,6 +108,7 @@ export default function TestDateScreen() {
   }
 
   function handleSkip() {
+    logFunnelEvent('onboarding_completed', { testDate: false });
     router.replace('/(tabs)/home');
   }
 

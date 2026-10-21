@@ -1,7 +1,7 @@
 'use strict';
 
 const { shouldApplyProGrant } = require('./entitlement');
-const { computeProExpiresAt } = require('./proExpiry');
+const { computeProExpiresAt, WEB_PLAN_MONTHS, PRO_DURATION_MONTHS } = require('./proExpiry');
 
 // Computes the user_progress patch for a Stripe checkout.session.completed
 // grant. Pure. Stripe's event carries no expiration timestamp of its own —
@@ -10,11 +10,24 @@ const { computeProExpiresAt } = require('./proExpiry');
 // as every other source. Returns null for "no change" (an existing grant
 // outranks stripe), same convention as resolveRevenueCatUpdate's progress
 // field.
-function resolveStripeProGrant(currentProgress) {
+//
+// plan comes from the session metadata our own create-checkout-session set.
+// Anything missing or unrecognised is the original quarterly product, so
+// sessions created before plans existed still grant exactly what they did.
+function resolveStripeProGrant(currentProgress, plan) {
   if (!shouldApplyProGrant(currentProgress.proSource, 'stripe')) {
     return null;
   }
-  return { isPro: true, proExpiresAt: computeProExpiresAt(), proSource: 'stripe' };
+  const months = WEB_PLAN_MONTHS[plan] || PRO_DURATION_MONTHS;
+  // Extend from whichever is later, now or the end of time already paid
+  // for on this same rail, so buying a month with 80 days left never
+  // shortens access.
+  const now = new Date();
+  const currentEnd = currentProgress.proSource === 'stripe' && currentProgress.proExpiresAt
+    ? new Date(currentProgress.proExpiresAt)
+    : null;
+  const from = currentEnd && !Number.isNaN(currentEnd.getTime()) && currentEnd > now ? currentEnd : now;
+  return { isPro: true, proExpiresAt: computeProExpiresAt(from, months), proSource: 'stripe' };
 }
 
 // Applies one Stripe checkout.session.completed grant end to end, using the
@@ -39,7 +52,7 @@ async function applyStripeProGrant(event, userId, db) {
     return { ok: false, retry: true };
   }
 
-  const patch = resolveStripeProGrant(currentProgress);
+  const patch = resolveStripeProGrant(currentProgress, event.data?.object?.metadata?.plan);
   const updatedProgress = { ...currentProgress, ...(patch || {}) };
 
   const { error } = await db.upsertProgress(userId, updatedProgress);

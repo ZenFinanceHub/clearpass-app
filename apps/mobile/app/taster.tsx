@@ -11,6 +11,8 @@ import { Pip } from '@/src/components/Pip';
 import { Question, TopicCategory } from '@clearpass/core';
 import { allQuestions, questionsByTopic } from '@clearpass/content';
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logFunnelEvent } from '@/src/funnel';
 
 const TASTER_COUNT = 5;
 const LABELS = ['A', 'B', 'C', 'D'];
@@ -53,6 +55,8 @@ export default function TasterScreen() {
   const [selected, setSelected] = useState<number | null>(null);
   const [answers, setAnswers] = useState<(number | null)[]>(Array(TASTER_COUNT).fill(null));
 
+  React.useEffect(() => { logFunnelEvent('taster_started'); }, []);
+
   const question = questions[index];
   const answered = selected !== null;
   const correctCount = answers.filter((a, i) => a === questions[i]?.correctIndex).length;
@@ -72,6 +76,7 @@ export default function TasterScreen() {
 
   function handleNext() {
     if (index + 1 >= TASTER_COUNT) {
+      logFunnelEvent('taster_completed', { correct: correctCount });
       setPhase('results');
     } else {
       setIndex((i) => i + 1);
@@ -100,12 +105,12 @@ export default function TasterScreen() {
         <View style={styles.upsellCard}>
           <Text style={styles.upsellTitle}>{'Create a free account to:'}</Text>
           <Text style={styles.upsellItem}>{'✓  Track your progress with spaced repetition'}</Text>
-          <Text style={styles.upsellItem}>{'✓  Get AI explanations on every question'}</Text>
-          <Text style={styles.upsellItem}>{'✓  Full mock tests in DVSA format'}</Text>
+          <Text style={styles.upsellItem}>{'✓  Ask Pip, the AI tutor, to explain any answer'}</Text>
+          <Text style={styles.upsellItem}>{'✓  Take a free mock test, scored against the pass mark'}</Text>
           <Text style={styles.upsellItem}>{'✓  Pass probability score updated daily'}</Text>
         </View>
 
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => router.replace('/auth/signup')} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => { void AsyncStorage.setItem('@clearpass/onboarding_complete', 'true'); router.replace('/auth/signup'); }} activeOpacity={0.85}>
           <Text style={styles.primaryBtnText}>{'Create Free Account'}</Text>
         </TouchableOpacity>
 

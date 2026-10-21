@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { hasFreeMockLeft } from '@/src/conversion';
+import { useTrialDays } from '@/src/purchaseGate';
 import {
   Animated,
   Modal,
@@ -213,6 +215,7 @@ function getDaysRemaining(testDateIso: string): number {
 
 export default function HomeScreen() {
   const [progress, setProgress]       = useState<UserProgress | null>(null);
+  const trialDays = useTrialDays();
   const [isLoading, setIsLoading]     = useState(true);
   const [username, setUsername]       = useState<string | null>(null);
   const [showDateModal, setShowDateModal] = useState(false);
@@ -657,19 +660,35 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Go Pro banner — shown to any non-Pro user, no trial framing */}
+      {/* Free learners: first point them at their free mock (the moment
+          that sells Pro); once it's used, the Go Pro banner. Trial wording
+          only when the store actually reports a trial (useTrialDays). */}
       {!isLoading && progress && !progress.isPro && (
-        <TouchableOpacity
-          style={styles.proBanner}
-          onPress={() => router.push('/paywall')}
-          activeOpacity={0.85}
-        >
-          <View style={styles.proBannerLeft}>
-            <Text style={styles.proBannerTitle}>{'Go Pro'}</Text>
-            <Text style={styles.proBannerSub}>{'Unlock mock tests, hazard perception & more'}</Text>
-          </View>
-          <Text style={styles.proBannerCta}>{'Upgrade →'}</Text>
-        </TouchableOpacity>
+        hasFreeMockLeft(progress) ? (
+          <TouchableOpacity
+            style={styles.proBanner}
+            onPress={() => router.push('/(tabs)/mock')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.proBannerLeft}>
+              <Text style={styles.proBannerTitle}>{'Your free mock test'}</Text>
+              <Text style={styles.proBannerSub}>{'25 questions, 28 minutes. See your score against the pass mark.'}</Text>
+            </View>
+            <Text style={styles.proBannerCta}>{'Start →'}</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.proBanner}
+            onPress={() => router.push('/paywall')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.proBannerLeft}>
+              <Text style={styles.proBannerTitle}>{trialDays ? `Try Pro free for ${trialDays} days` : 'Go Pro'}</Text>
+              <Text style={styles.proBannerSub}>{'Unlimited mock tests, hazard perception & questions'}</Text>
+            </View>
+            <Text style={styles.proBannerCta}>{'See plans →'}</Text>
+          </TouchableOpacity>
+        )
       )}
 
       {/* Today's Focus — spaced repetition due questions */}

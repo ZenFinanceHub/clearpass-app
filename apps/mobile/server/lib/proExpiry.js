@@ -2,11 +2,17 @@
 
 const PRO_DURATION_MONTHS = 3;
 
-function computeProExpiresAt(fromDate = new Date()) {
+// Web plans are one-off Stripe payments (mode: 'payment'), not
+// subscriptions: each buys a fixed number of calendar months.
+//   quarterly — £7.99, 3 months (the original web product, STRIPE_PRICE_ID)
+//   monthly   — £2.99, 1 month (STRIPE_PRICE_ID_MONTHLY)
+const WEB_PLAN_MONTHS = { quarterly: PRO_DURATION_MONTHS, monthly: 1 };
+
+function computeProExpiresAt(fromDate = new Date(), months = PRO_DURATION_MONTHS) {
   const d = new Date(fromDate);
   const expires = new Date(Date.UTC(
     d.getUTCFullYear(),
-    d.getUTCMonth() + PRO_DURATION_MONTHS,
+    d.getUTCMonth() + months,
     d.getUTCDate(),
     d.getUTCHours(),
     d.getUTCMinutes(),
@@ -28,4 +34,4 @@ function computeIapExpiresAt(fromDate = new Date()) {
   return new Date(d.getTime() + IAP_DURATION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 }
 
-module.exports = { computeProExpiresAt, PRO_DURATION_MONTHS, computeIapExpiresAt, IAP_DURATION_DAYS };
+module.exports = { computeProExpiresAt, PRO_DURATION_MONTHS, WEB_PLAN_MONTHS, computeIapExpiresAt, IAP_DURATION_DAYS };

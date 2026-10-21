@@ -27,7 +27,7 @@
       <div class="nav-center">
         <a href="#features" class="nav-link">Features</a>
         <a href="#pricing" class="nav-link">Pricing</a>
-        <a href="#stories" class="nav-link">Stories</a>
+        <a href="#stories" class="nav-link stories-link" hidden>Stories</a>
         <a href="/instructors" class="nav-link">Instructors</a>
       </div>
       <div class="nav-right">
@@ -44,7 +44,7 @@
   <div class="mobile-menu" id="mobile-menu">
     <a href="#features" onclick="closeMenu()">Features</a>
     <a href="#pricing" onclick="closeMenu()">Pricing</a>
-    <a href="#stories" onclick="closeMenu()">Stories</a>
+    <a href="#stories" class="stories-link" onclick="closeMenu()" hidden>Stories</a>
     <a href="/instructors" onclick="closeMenu()">Instructors</a>
     <a href="https://clearpass-app.vercel.app" onclick="closeMenu()">Sign In</a>
     <a href="https://clearpass-app.vercel.app" class="mobile-cta">Start Free Today &#8594;</a>
@@ -74,8 +74,7 @@
           </a>
         </div>
         <div class="hero-social">
-          <span class="hero-stars">&#11088;&#11088;&#11088;&#11088;&#11088;</span>
-          <span class="hero-social-text">Trusted by learner drivers across the UK</span>
+          <span class="hero-social-text">DVSA-licensed question bank &middot; Built in Scotland</span>
         </div>
       </div>
       <div class="hero-visual fade-up delay-2">
@@ -121,8 +120,8 @@
   <div class="stats-bar">
     <div class="container">
       <div class="stat-item">
-        <div class="stat-val" id="stat-passes">Join thousands of learners</div>
-        <div class="stat-lbl">who have passed with ClearPass</div>
+        <div class="stat-val">DVSA-licensed</div>
+        <div class="stat-lbl">revision questions, plus the Highway Code and road signs</div>
       </div>
       <div class="stat-item">
         <div class="stat-val">54% of learners fail first time</div>
@@ -309,7 +308,7 @@
   </section>
 
   <!-- PASS STORIES -->
-  <section class="section stories" id="stories">
+  <section class="section stories" id="stories" hidden>
     <div class="container">
       <div class="stories-header">
         <span class="section-label">Pass stories</span>
@@ -318,41 +317,6 @@
       <div class="stories-counter fade-up delay-1">
         <div class="stories-num" id="stories-count">&#8212;</div>
         <div class="stories-num-lbl" id="stories-count-lbl">learners have passed using ClearPass</div>
-      </div>
-      <div class="testimonials">
-        <div class="testimonial-card fade-up">
-          <div class="testimonial-stars">&#11088;&#11088;&#11088;&#11088;&#11088;</div>
-          <p class="testimonial-text">&#8220;I failed twice before finding ClearPass. Passed with 47/50 on my third attempt. Ask Pip made everything click.&#8221;</p>
-          <div class="testimonial-author">
-            <div class="testimonial-avatar" style="background:linear-gradient(135deg,#F472B6,#818CF8);">S</div>
-            <div>
-              <div class="testimonial-name">Sarah</div>
-              <div class="testimonial-loc">Manchester</div>
-            </div>
-          </div>
-        </div>
-        <div class="testimonial-card fade-up delay-1">
-          <div class="testimonial-stars">&#11088;&#11088;&#11088;&#11088;&#11088;</div>
-          <p class="testimonial-text">&#8220;Pip explained everything I got wrong in plain English. No more staring at a textbook. Worth every penny.&#8221;</p>
-          <div class="testimonial-author">
-            <div class="testimonial-avatar" style="background:linear-gradient(135deg,#34D399,#0D9488);">J</div>
-            <div>
-              <div class="testimonial-name">James</div>
-              <div class="testimonial-loc">London</div>
-            </div>
-          </div>
-        </div>
-        <div class="testimonial-card fade-up delay-2">
-          <div class="testimonial-stars">&#11088;&#11088;&#11088;&#11088;&#11088;</div>
-          <p class="testimonial-text">&#8220;I have dyslexia and this is the first revision app I&#8217;ve actually been able to use. The font toggle and read-aloud are amazing.&#8221;</p>
-          <div class="testimonial-author">
-            <div class="testimonial-avatar" style="background:linear-gradient(135deg,#FBBF24,#F97316);">P</div>
-            <div>
-              <div class="testimonial-name">Priya</div>
-              <div class="testimonial-loc">Birmingham</div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   </section>
@@ -402,7 +366,7 @@
           <a href="#features">Features</a>
           <a href="#pricing">Pricing</a>
           <a href="#how">How it works</a>
-          <a href="#stories">Pass stories</a>
+          <a href="#stories" class="stories-link" hidden>Pass stories</a>
         </div>
         <div class="footer-col">
           <div class="footer-col-title">Company</div>
@@ -496,19 +460,18 @@
         const res = await fetch('https://clearpass-app-production.up.railway.app/api/stats', { signal: controller.signal });
         clearTimeout(timer);
         const data = await res.json();
+        // Only ever show a real, counted number. No fallback claims:
+        // with nothing to count, the section and its nav links stay hidden.
         if (data.totalPasses && data.totalPasses > 0) {
           const n = Number(data.totalPasses).toLocaleString('en-GB');
-          document.getElementById('stat-passes').textContent = n + ' learners have passed';
           document.getElementById('stories-count').textContent = n;
-        } else {
-          document.getElementById('stat-passes').textContent = 'Join thousands of learners';
-          document.getElementById('stories-count').textContent = 'Thousands';
-          document.getElementById('stories-count-lbl').textContent = 'of learners are revising with ClearPass right now';
+          document.getElementById('stories-count-lbl').textContent =
+            data.totalPasses === 1 ? 'learner has passed using ClearPass' : 'learners have passed using ClearPass';
+          document.getElementById('stories').hidden = false;
+          document.querySelectorAll('.stories-link').forEach(el => { el.hidden = false; });
         }
       } catch {
-        document.getElementById('stat-passes').textContent = 'Join thousands of learners';
-        document.getElementById('stories-count').textContent = 'Thousands';
-        document.getElementById('stories-count-lbl').textContent = 'of learners are revising with ClearPass right now';
+        // Leave the section hidden.
       }
     })();
 

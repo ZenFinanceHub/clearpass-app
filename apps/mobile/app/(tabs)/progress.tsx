@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTrialDays } from '@/src/purchaseGate';
 import { loadSRState, SpacedRepetitionState } from '@/src/spacedRepetition';
 import { computeAndSavePassProbability, PassProbabilityResult } from '@/src/passProbability';
 import { allQuestions } from '@clearpass/content';
@@ -96,6 +97,7 @@ function getRank(score: number): { label: string; color: string } {
 const DISPLAY_ACHIEVEMENTS = ACHIEVEMENTS.filter((a) => !a.id.endsWith('_eligible'));
 
 export default function ProgressScreen() {
+  const trialDays = useTrialDays();
   const [progress, setProgress] = useState<UserProgress | null>(null);
   const [srState,  setSrState]  = useState<SpacedRepetitionState | null>(null);
   const [passProb, setPassProb] = useState<PassProbabilityResult | null>(null);
@@ -243,8 +245,8 @@ export default function ProgressScreen() {
       {!(progress.isPro ?? false) && (
         <TouchableOpacity style={styles.proBanner} onPress={handleUpgrade} activeOpacity={0.85}>
           <View style={styles.proBannerContent}>
-            <Text style={styles.proBannerTitle}>Go Pro for £7.99</Text>
-            <Text style={styles.proBannerSub}>Unlock unlimited questions, AI tutor and more</Text>
+            <Text style={styles.proBannerTitle}>{trialDays ? `Try Pro free for ${trialDays} days` : 'Go Pro'}</Text>
+            <Text style={styles.proBannerSub}>Unlimited mock tests, hazard perception and questions</Text>
           </View>
           <Text style={styles.proBannerArrow}>{'→'}</Text>
         </TouchableOpacity>

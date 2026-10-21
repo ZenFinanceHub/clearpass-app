@@ -62,6 +62,7 @@ const {
   computeDailyStats,
   formatDailyStatsMessage,
 } = require('./lib/dailyStats');
+const { computeFunnelStats, formatFunnelLines, FUNNEL_LOOKBACK_DAYS } = require('./lib/funnelStats');
 
 // Conference campaign tag reported in the daily stats post. Matches the QR
 // at getclearpass.co.uk/instructors?ref=adinjc26 (27 Sep 2026).
@@ -117,7 +118,7 @@ const PORT = 3001;
 
 // Required env vars:
 //   SUPABASE_URL, SUPABASE_SERVICE_KEY
-//   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID
+//   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID, STRIPE_PRICE_ID_MONTHLY (optional)
 //   STRIPE_SEAT_PRICE_ID  — separate £5.99 one-time Price for instructor-purchased seats (not yet created — see phase 2 PR)
 //   STRIPE_CONNECT_WEBHOOK_SECRET  — separate signing secret for the Connect webhook (Connected-account events, not the platform webhook)
 //   ANTHROPIC_API_KEY
@@ -900,14 +901,24 @@ app.post('/api/create-checkout-session', async (req, res) => {
   if (!auth) return;
   const { userId } = auth;
 
+  // Web plans are one-off payments, not subscriptions (see WEB_PLAN_MONTHS
+  // in lib/proExpiry.js). Monthly only exists once its Stripe price is set;
+  // until then a monthly request is refused rather than silently sold as
+  // the quarterly product.
+  const plan = req.body?.plan === 'monthly' ? 'monthly' : 'quarterly';
+  const priceId = plan === 'monthly' ? process.env.STRIPE_PRICE_ID_MONTHLY : process.env.STRIPE_PRICE_ID;
+  if (!priceId) {
+    return res.status(400).json({ error: 'That plan is not available right now.' });
+  }
+
   try {
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
-      line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
+      line_items: [{ price: priceId, quantity: 1 }],
       mode: 'payment',
       success_url: 'https://clearpass-app.vercel.app/payment-success?session_id={CHECKOUT_SESSION_ID}',
-      cancel_url: 'https://clearpass-app.vercel.app/landing',
-      metadata: { userId },
+      cancel_url: 'https://clearpass-app.vercel.app/paywall',
+      metadata: { userId, plan },
       currency: 'gbp',
     });
     res.json({ url: session.url });
@@ -2532,7 +2543,10 @@ app.post('/api/send-challenge-notification', async (req, res) => {
 
 app.get('/api/config', (req, res) => {
   const sk = process.env.STRIPE_SECRET_KEY || '';
-  res.json({ stripeTestMode: sk.startsWith('sk_test_') });
+  res.json({
+    stripeTestMode: sk.startsWith('sk_test_'),
+    webMonthlyAvailable: !!process.env.STRIPE_PRICE_ID_MONTHLY,
+  });
 });
 
 // ── Public stats ──────────────────────────────────────────────────────────────
@@ -3311,7 +3325,26 @@ app.post('/api/cron/daily-stats', async (req, res) => {
       refCode: CONFERENCE_REF_CODE,
     });
 
-    const posted = await postToSlack(formatDailyStatsMessage(stats, CONFERENCE_REF_CODE));
+    // Funnel section. Optional: if the funnel_events table isn't there yet
+    // or the read fails, the main stats still post.
+    let funnelLines = [];
+    try {
+      const sinceIso = new Date(Date.now() - FUNNEL_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
+      const { data: events, error: eventsErr } = await supabaseAdmin
+        .from('funnel_events')
+        .select('user_id, anon_id, event, created_at')
+        .gte('created_at', sinceIso)
+        .order('created_at', { ascending: false })
+        .limit(MAX_STATS_ROWS);
+      if (eventsErr) throw eventsErr;
+      const excludedUserIds = (profiles || []).filter(p => p.exclude_from_stats === true).map(p => p.id);
+      funnelLines = formatFunnelLines(computeFunnelStats({ events: events || [], excludedUserIds, nowIso: new Date().toISOString() }));
+    } catch (funnelErr) {
+      console.error('[daily-stats] funnel section skipped:', funnelErr);
+      funnelLines = ['', '_Funnel: unavailable today (see server logs)._'];
+    }
+
+    const posted = await postToSlack([formatDailyStatsMessage(stats, CONFERENCE_REF_CODE), ...funnelLines].join('\n'));
     console.log('[daily-stats]', JSON.stringify(stats), 'posted:', posted);
 
     // posted:false is reported rather than thrown — the numbers were computed

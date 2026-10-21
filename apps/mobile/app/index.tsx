@@ -93,20 +93,22 @@ export default function OnboardingScreen() {
       </View>
 
       <View style={[styles.actions, { paddingBottom: 48 + insets.bottom }]}>
+        {/* Value before the account wall: the 5-question taster is the
+            primary action, signing up the secondary one. */}
         <TouchableOpacity
           style={styles.primaryButton}
-          onPress={() => void handleGetStarted()}
+          onPress={() => router.push('/taster' as never)}
           activeOpacity={0.85}
         >
-          <Text style={styles.primaryButtonText}>{'Get Started'}</Text>
+          <Text style={styles.primaryButtonText}>{'Try 5 questions free'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.tryButton}
-          onPress={() => router.push('/taster' as never)}
+          onPress={() => void handleGetStarted()}
           activeOpacity={0.85}
         >
-          <Text style={styles.tryButtonText}>{'Try 5 questions — no signup needed'}</Text>
+          <Text style={styles.tryButtonText}>{'Create a free account'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => void handleSignIn()} activeOpacity={0.75}>

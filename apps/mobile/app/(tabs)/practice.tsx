@@ -56,6 +56,8 @@ import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebration
 import { hasStreakMilestone, maybeRequestReview, ReviewTrigger } from '@/src/reviewPrompt';
 import { Pip } from '@/src/components/Pip';
 import { PaywallPrompt } from '@/src/components/PaywallPrompt';
+import { testDateUrgencyLine } from '@/src/conversion';
+import { logFunnelEvent } from '@/src/funnel';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { ShareCardModal } from '@/src/components/ShareableCard';
 import { MarkdownText } from '@/src/components/MarkdownText';
@@ -315,6 +317,7 @@ export default function PracticeScreen() {
     setChallengeJustCompletedFlash(false);
 
     if (!(progress.isPro ?? false) && dailyCountRef.current >= FREE_QUESTION_LIMIT) {
+      logFunnelEvent('daily_limit_hit', { at: 'session_start' });
       setPhase('dailyLimit');
       return;
     }
@@ -769,6 +772,7 @@ export default function PracticeScreen() {
       const premium = await isPremium();
       if (!premium) {
         await finaliseSession();
+        logFunnelEvent('daily_limit_hit', { at: 'mid_session' });
         setPhase('dailyLimit');
         return;
       }
@@ -978,6 +982,8 @@ export default function PracticeScreen() {
     return (
       <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}>
         <PaywallPrompt
+          reason="daily_limit"
+          urgencyLine={testDateUrgencyLine(userProgressRef.current)}
           onUpgrade={handleProUpgrade}
           onDismiss={() => setPhase('start')}
           dismissLabel="Back"
