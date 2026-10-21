@@ -17,6 +17,7 @@ const FUNNEL_STEPS = [
   ['purchase_cancelled', 'Cancelled purchase'],
   ['purchase_failed', 'Purchase failed'],
   ['purchase_succeeded', 'Purchased'],
+  ['iap_unavailable', ':warning: Store unavailable (could not buy)'],
 ];
 
 const FUNNEL_LOOKBACK_DAYS = 7;

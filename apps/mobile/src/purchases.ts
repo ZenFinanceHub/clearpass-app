@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/react-native';
 import Purchases, { type PurchasesError, type PurchasesPackage } from 'react-native-purchases';
 import { setIapReady, setTrialDays, type ProPlan } from './purchaseGate';
 import { supabase } from './supabase';
+import { logFunnelEvent } from './funnel';
 
 const REVENUECAT_API_KEY_IOS = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_IOS;
 const REVENUECAT_API_KEY_ANDROID = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID;
@@ -60,6 +61,9 @@ function reportIapUnavailable(
   context: { source: 'boot' | 'refresh'; attempts?: number; detail?: Record<string, unknown> },
 ): void {
   console.warn('[purchases] IAP unavailable', { mode, ...context });
+  // Also counted in the daily Slack stats, so a store outage or a keyless
+  // bundle shows up the next morning instead of two months later.
+  logFunnelEvent('iap_unavailable', { mode, source: context.source });
   Sentry.captureMessage(`IAP unavailable: ${mode}`, {
     level: 'warning',
     tags: { iap_failure_mode: mode, iap_source: context.source, platform: Platform.OS },

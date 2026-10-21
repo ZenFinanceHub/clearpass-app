@@ -23,7 +23,8 @@ export type FunnelEvent =
   | 'purchase_cancelled'
   | 'purchase_failed'
   | 'free_mock_started'
-  | 'free_mock_completed';
+  | 'free_mock_completed'
+  | 'iap_unavailable';
 
 const ANON_ID_KEY = '@clearpass/anon_id';
 let anonIdPromise: Promise<string> | null = null;
