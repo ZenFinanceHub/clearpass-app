@@ -288,7 +288,7 @@ function ResitFlow() {
         <Text style={[styles.resitIcon, { color: Colors.indigo }]}>{'[OK]'}</Text>
         <Text style={[styles.resitHeading, { color: theme.textColor }]}>{"Don't worry"}</Text>
         <Text style={[styles.resitStat, { color: Colors.indigo }]}>
-          {'54% of people need more than one attempt'}
+          {'More than half of car theory tests end in a fail. Resits are common.'}
         </Text>
         <Text style={[styles.resitBody, { color: theme.subTextColor }]}>
           {"Let's look at what went wrong and make a plan for your resit."}

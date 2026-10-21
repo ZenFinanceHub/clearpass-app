@@ -90,13 +90,13 @@ export default function LandingPage() {
         {/* Stats strip */}
         <View style={styles.statsStrip}>
           <View style={styles.statItem}>
-            <Text style={styles.statVal}>{'54%'}</Text>
-            <Text style={styles.statLbl}>{'of learners fail first time'}</Text>
+            <Text style={styles.statVal}>{'55%'}</Text>
+            <Text style={styles.statLbl}>{'of car theory tests failed in 2025\u201326 (DVSA)'}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statVal}>{'2.8M'}</Text>
-            <Text style={styles.statLbl}>{'theory tests per year in the UK'}</Text>
+            <Text style={styles.statVal}>{'2.9M'}</Text>
+            <Text style={styles.statLbl}>{'car theory tests a year in Great Britain'}</Text>
           </View>
         </View>
 
