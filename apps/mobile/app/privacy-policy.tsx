@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 
-const LAST_UPDATED = '11 September 2026';
+const LAST_UPDATED = '21 October 2026';
 
 export default function PrivacyPolicyScreen() {
   const theme = useTheme();
@@ -71,12 +71,18 @@ export default function PrivacyPolicyScreen() {
         {'We collect anonymous aggregate accuracy statistics per topic (e.g., "70% of users answered Hazard Awareness questions correctly"). These statistics cannot be linked back to any individual user and are used solely to show comparative performance within the app.'}
       </Section>
 
+      <Section title="Website cookies and advertising" theme={theme}>
+        {'Our marketing website (getclearpass.co.uk) asks before setting any cookies. If you choose "Accept", it loads the Google tag so we can measure which of our Google Ads lead people to tap an App Store, Google Play or "Start free" button. Google may set advertising cookies for this purpose. We do not use this for personalised advertising, and nothing is sent to Google if you choose "Reject" or make no choice. You can change your choice by clearing this site\'s data in your browser.\n\n'}
+        {'Links from the website to the App Store and Google Play include a campaign name (for example "gads" for Google Ads) so the stores can tell us, in aggregate, how many downloads each campaign brought. These links contain no personal information.'}
+      </Section>
+
       <Section title="Data sharing" theme={theme}>
         {'We do not sell, trade or rent your personal information to third parties. We share data only with:\n\n'}
         {'- Supabase (database and authentication provider)\n'}
         {'- Stripe (payment processing)\n'}
         {'- Anthropic (AI tutor explanations, question text only; and, for instructors, automated checking of an uploaded ADI/PDI document photo before payouts)\n'}
-        {'- Resend (email delivery for parent notifications)\n\n'}
+        {'- Resend (email delivery for parent notifications)\n'}
+        {'- Google (advertising measurement on our website, only if you accept cookies there)\n\n'}
         {'All third-party providers are bound by their own privacy policies and data processing agreements.'}
       </Section>
 
