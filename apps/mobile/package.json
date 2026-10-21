@@ -9,6 +9,8 @@
     "web": "expo start --web",
     "proxy": "node server/proxy.js",
     "build:web": "npx expo export --platform web",
+    "ota:production": "node scripts/publish-ota.js",
+    "test:scripts": "node --test scripts/lib/*.test.js",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:smoke": "playwright test e2e/smoke.spec.ts",
