@@ -91,3 +91,20 @@ test('applyStripeProGrant: a failing deleteWebhookEvent does not crash the handl
   assert.deepEqual(result, { ok: false, retry: true });
   assert.deepEqual(db.deletedEvents, []);
 });
+
+test('resolveStripeProGrant: monthly plan grants 1 calendar month', () => {
+  const before = Date.now();
+  const patch = resolveStripeProGrant({}, 'monthly');
+  const days = (Date.parse(patch.proExpiresAt) - before) / 86400000;
+  assert.ok(days >= 28 && days <= 31.1, `expected ~1 month, got ${days} days`);
+  assert.equal(patch.proSource, 'stripe');
+});
+
+test('resolveStripeProGrant: missing or unknown plan keeps the original 3 months', () => {
+  for (const plan of [undefined, 'quarterly', 'lifetime']) {
+    const before = Date.now();
+    const patch = resolveStripeProGrant({}, plan);
+    const days = (Date.parse(patch.proExpiresAt) - before) / 86400000;
+    assert.ok(days >= 89 && days <= 92.1, `plan ${plan}: expected ~3 months, got ${days} days`);
+  }
+});

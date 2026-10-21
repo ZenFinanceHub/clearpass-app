@@ -132,16 +132,20 @@ export const IAP_UNAVAILABLE_COPY_COMPACT = {
  * sentence and the terms link cannot be hardcoded to Apple's — an Android
  * user must not be told their payment is charged to an Apple ID.
  *
- * Price is stated here as a fixed string rather than read from the
- * RevenueCat package: it must render before offerings load and in the
- * stripe_checkout branch where there is no RevenueCat at all. It matches
- * Pro Quarterly on both stores and PRO_DURATION_MONTHS in
- * server/lib/proExpiry.js. If the store price ever changes, change it here.
+ * Two plans: monthly and quarterly. Prices come from the store package
+ * (priceString) when it has loaded, falling back to the fixed UK prices
+ * below so the disclosure renders before offerings load. On web there is
+ * no store: those plans are one-off Stripe payments that do not renew (see
+ * WEB_PLAN_MONTHS in server/lib/proExpiry.js), and the copy says exactly
+ * that — the old web copy described auto-renewal that never happened.
  *
- * There is deliberately no trial wording. Pro Quarterly has no
- * introductory offer configured on either store — the paywall previously
- * advertised "7 days free", which was a false claim on every platform.
+ * Trial wording only when the caller passes trialDays, which must come
+ * from useTrialDays() — i.e. from the store, never assumed.
  */
+export type ProPlan = 'monthly' | 'quarterly';
+
+export const FALLBACK_PRICES: Record<ProPlan, string> = { monthly: '£2.99', quarterly: '£7.99' };
+
 const APPLE_EULA_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 const CLEARPASS_TERMS_URL = 'https://clearpass-app.vercel.app/terms';
 const CLEARPASS_PRIVACY_URL = 'https://clearpass-app.vercel.app/privacy-policy';
@@ -155,47 +159,47 @@ export interface SubscriptionDisclosure {
   privacyUrl: string;
 }
 
-export function getSubscriptionDisclosure(): SubscriptionDisclosure {
-  const base = {
-    name: 'ClearPass Pro',
-    priceLine: '£7.99 for 3 months, auto-renewing',
-    privacyUrl: CLEARPASS_PRIVACY_URL,
-  };
+export function getSubscriptionDisclosure(
+  plan: ProPlan = 'quarterly',
+  opts: { priceString?: string | null; trialDays?: number | null } = {},
+): SubscriptionDisclosure {
+  const price = opts.priceString || FALLBACK_PRICES[plan];
+  const name = plan === 'monthly' ? 'ClearPass Pro Monthly' : 'ClearPass Pro Quarterly';
 
-  if (Platform.OS === 'ios') {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    // Web / Stripe: one-off payment, no renewal, no trial.
     return {
-      ...base,
+      name,
+      priceLine: plan === 'monthly' ? `${price} for 1 month` : `${price} for 3 months`,
       renewalTerms:
-        'Payment is charged to your Apple ID account at confirmation of purchase. '
-        + 'The subscription renews automatically unless cancelled at least 24 hours '
-        + 'before the end of the current period. You can manage and cancel '
-        + 'subscriptions in your Apple ID account settings.',
-      // Apple's standard EULA, as linked from the App Store description.
-      termsUrl: APPLE_EULA_URL,
-    };
-  }
-
-  if (Platform.OS === 'android') {
-    return {
-      ...base,
-      renewalTerms:
-        'Payment is charged to your Google Play account at confirmation of purchase. '
-        + 'The subscription renews automatically unless cancelled at least 24 hours '
-        + 'before the end of the current period. You can manage and cancel '
-        + 'subscriptions in your Google Play account settings.',
+        'One-off payment by card. It does not renew: nothing more is charged unless you choose to buy again.',
       termsUrl: CLEARPASS_TERMS_URL,
+      privacyUrl: CLEARPASS_PRIVACY_URL,
     };
   }
 
-  // Web / Stripe: same product and terms, but the store-account wording
-  // above applies to neither, and cancellation is via the billing portal.
+  const period = plan === 'monthly' ? 'per month' : 'every 3 months';
+  const trial = opts.trialDays && opts.trialDays > 0 ? opts.trialDays : null;
+  const priceLine = trial
+    ? `${trial} days free, then ${price} ${period}, auto-renewing`
+    : `${price} ${period}, auto-renewing`;
+
+  const account = Platform.OS === 'ios' ? 'Apple ID' : 'Google Play';
+  const trialTerms = trial
+    ? `After the ${trial}-day free trial, payment is charged to your ${account} account unless you cancel at least 24 hours before the trial ends. `
+    + (Platform.OS === 'ios' ? 'Any unused part of a free trial is forfeited when you buy a subscription. ' : '')
+    : `Payment is charged to your ${account} account at confirmation of purchase. `;
+
   return {
-    ...base,
+    name,
+    priceLine,
     renewalTerms:
-      'Payment is charged to your card at confirmation of purchase. The '
-      + 'subscription renews automatically unless cancelled at least 24 hours '
-      + 'before the end of the current period. You can manage and cancel your '
-      + 'subscription from your account settings.',
-    termsUrl: CLEARPASS_TERMS_URL,
+      trialTerms
+      + 'The subscription renews automatically unless cancelled at least 24 hours '
+      + 'before the end of the current period. You can manage and cancel '
+      + `subscriptions in your ${account} account settings.`,
+    // Apple's standard EULA, as linked from the App Store description.
+    termsUrl: Platform.OS === 'ios' ? APPLE_EULA_URL : CLEARPASS_TERMS_URL,
+    privacyUrl: CLEARPASS_PRIVACY_URL,
   };
 }

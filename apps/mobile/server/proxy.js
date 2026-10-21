@@ -118,7 +118,7 @@ const PORT = 3001;
 
 // Required env vars:
 //   SUPABASE_URL, SUPABASE_SERVICE_KEY
-//   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID
+//   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID, STRIPE_PRICE_ID_MONTHLY (optional)
 //   STRIPE_SEAT_PRICE_ID  — separate £5.99 one-time Price for instructor-purchased seats (not yet created — see phase 2 PR)
 //   STRIPE_CONNECT_WEBHOOK_SECRET  — separate signing secret for the Connect webhook (Connected-account events, not the platform webhook)
 //   ANTHROPIC_API_KEY
@@ -901,14 +901,24 @@ app.post('/api/create-checkout-session', async (req, res) => {
   if (!auth) return;
   const { userId } = auth;
 
+  // Web plans are one-off payments, not subscriptions (see WEB_PLAN_MONTHS
+  // in lib/proExpiry.js). Monthly only exists once its Stripe price is set;
+  // until then a monthly request is refused rather than silently sold as
+  // the quarterly product.
+  const plan = req.body?.plan === 'monthly' ? 'monthly' : 'quarterly';
+  const priceId = plan === 'monthly' ? process.env.STRIPE_PRICE_ID_MONTHLY : process.env.STRIPE_PRICE_ID;
+  if (!priceId) {
+    return res.status(400).json({ error: 'That plan is not available right now.' });
+  }
+
   try {
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
-      line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
+      line_items: [{ price: priceId, quantity: 1 }],
       mode: 'payment',
       success_url: 'https://clearpass-app.vercel.app/payment-success?session_id={CHECKOUT_SESSION_ID}',
-      cancel_url: 'https://clearpass-app.vercel.app/landing',
-      metadata: { userId },
+      cancel_url: 'https://clearpass-app.vercel.app/paywall',
+      metadata: { userId, plan },
       currency: 'gbp',
     });
     res.json({ url: session.url });
@@ -2533,7 +2543,10 @@ app.post('/api/send-challenge-notification', async (req, res) => {
 
 app.get('/api/config', (req, res) => {
   const sk = process.env.STRIPE_SECRET_KEY || '';
-  res.json({ stripeTestMode: sk.startsWith('sk_test_') });
+  res.json({
+    stripeTestMode: sk.startsWith('sk_test_'),
+    webMonthlyAvailable: !!process.env.STRIPE_PRICE_ID_MONTHLY,
+  });
 });
 
 // ── Public stats ──────────────────────────────────────────────────────────────

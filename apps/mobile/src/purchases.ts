@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import * as Sentry from '@sentry/react-native';
 import Purchases, { type PurchasesError, type PurchasesPackage } from 'react-native-purchases';
-import { setIapReady } from './purchaseGate';
+import { setIapReady, setTrialDays, type ProPlan } from './purchaseGate';
 import { supabase } from './supabase';
 
 const REVENUECAT_API_KEY_IOS = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_IOS;
@@ -86,15 +86,61 @@ async function probeIapReadiness(): Promise<ReadinessProbe> {
       currentOfferingId: offeringId,
       packageIdentifiers,
     });
-    // Readiness is specifically "the quarterly package is available", not
-    // just "some package exists" — that's the one getProPackage() below
-    // actually buys, so the gate shouldn't claim readiness for a product
-    // mix that doesn't include it.
-    if (offerings.current?.threeMonth) return { ready: true };
+    // Ready when either Pro package is sellable: quarterly ($rc_three_month)
+    // or monthly ($rc_monthly). A new monthly product can still be in App
+    // Review while quarterly is live, so neither alone is required.
+    if (offerings.current?.threeMonth || offerings.current?.monthly) {
+      void refreshTrialDays([offerings.current.threeMonth, offerings.current.monthly]);
+      return { ready: true };
+    }
     return { ready: false, mode: 'no_quarterly_package', offeringId, packageIdentifiers };
   } catch (e) {
     const err = e as PurchasesError;
     return { ready: false, mode: 'get_offerings_threw', message: err?.message || String(e) };
+  }
+}
+
+/** Free-trial length, in days, of one package's store product, or null.
+ *  iOS exposes it as a zero-priced introPrice; Android as the free phase
+ *  of the default subscription option. */
+export function trialDaysForPackage(pkg: PurchasesPackage | null | undefined): number | null {
+  if (!pkg) return null;
+  const product = pkg.product as PurchasesPackage['product'] & {
+    defaultOption?: { freePhase?: { billingPeriod?: { unit?: string; value?: number } } | null } | null;
+  };
+  const intro = product.introPrice;
+  if (intro && intro.price === 0) {
+    const n = intro.periodNumberOfUnits * (intro.cycles || 1);
+    if (intro.periodUnit === 'DAY') return n;
+    if (intro.periodUnit === 'WEEK') return n * 7;
+  }
+  const free = product.defaultOption?.freePhase?.billingPeriod;
+  if (free?.value) {
+    if (free.unit === 'DAY') return free.value;
+    if (free.unit === 'WEEK') return free.value * 7;
+  }
+  return null;
+}
+
+/** Publishes the trial on offer (if any) to purchaseGate. On iOS, also
+ *  checks this Apple ID is eligible. Only a definite ELIGIBLE counts —
+ *  RevenueCat's advice for UNKNOWN is to show the normal price, and
+ *  someone who has already had the trial must not be promised it again. */
+async function refreshTrialDays(pkgs: (PurchasesPackage | null | undefined)[]): Promise<void> {
+  try {
+    const withTrial = pkgs.filter((p): p is PurchasesPackage => !!p && trialDaysForPackage(p) !== null);
+    if (withTrial.length === 0) { setTrialDays(null); return; }
+    if (Platform.OS === 'ios') {
+      const ids = withTrial.map(p => p.product.identifier);
+      const eligibility = await Purchases.checkTrialOrIntroductoryPriceEligibility(ids);
+      const eligible = withTrial.filter(p => eligibility[p.product.identifier]?.status === Purchases.INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_ELIGIBLE);
+      setTrialDays(eligible.length ? Math.max(...eligible.map(p => trialDaysForPackage(p) ?? 0)) : null);
+      return;
+    }
+    setTrialDays(Math.max(...withTrial.map(p => trialDaysForPackage(p) ?? 0)));
+  } catch {
+    // Unknown means no promise: never advertise a trial we couldn't confirm.
+    setTrialDays(null);
   }
 }
 
@@ -266,13 +312,27 @@ export async function refreshIapReady(): Promise<void> {
 // configured too). Returns null if it isn't available. Callers should
 // only reach this once getPurchaseRoute() is 'iap', but returning null
 // rather than throwing keeps this safe to call defensively regardless.
-export async function getProPackage(): Promise<PurchasesPackage | null> {
+export type { ProPlan };
+
+export async function getProPackage(plan: ProPlan = 'quarterly'): Promise<PurchasesPackage | null> {
   if (configuredUserId === null) return null;
   try {
     const offerings = await Purchases.getOfferings();
-    return offerings.current?.threeMonth ?? null;
+    return (plan === 'monthly' ? offerings.current?.monthly : offerings.current?.threeMonth) ?? null;
   } catch {
     return null;
+  }
+}
+
+/** Both Pro packages as currently offered by the store (either may be null,
+ *  e.g. a new product still in review). Used to render real store prices. */
+export async function getProPackages(): Promise<Record<ProPlan, PurchasesPackage | null>> {
+  if (configuredUserId === null) return { monthly: null, quarterly: null };
+  try {
+    const offerings = await Purchases.getOfferings();
+    return { monthly: offerings.current?.monthly ?? null, quarterly: offerings.current?.threeMonth ?? null };
+  } catch {
+    return { monthly: null, quarterly: null };
   }
 }
 
