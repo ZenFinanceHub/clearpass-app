@@ -14,6 +14,7 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/src/supabase';
 import { loadUserProgress, saveUserProgress } from '@/src/storage';
+import { testDateError } from '@/src/testDateRules';
 
 // Inserts '/' immediately after the 2nd and 4th digit, as they're typed —
 // '12' becomes '12/' the instant the 2nd digit lands, not on the next one.
@@ -94,6 +95,8 @@ export default function TestDateScreen() {
   async function handleSave() {
     const parsed = parseDdMmYyyy(dateInput.trim());
     if (!parsed) { setError('Enter a valid date in DD/MM/YYYY format'); return; }
+    const rangeError = testDateError(parsed, new Date());
+    if (rangeError) { setError(rangeError); return; }
     setSaving(true);
     try {
       await saveTestDate(parsed);
@@ -117,7 +120,7 @@ export default function TestDateScreen() {
       <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <Text style={styles.emoji}>{'📅'}</Text>
         <Text style={styles.title}>{'When is your theory test?'}</Text>
-        <Text style={styles.subtitle}>{"We'll help you prepare in time"}</Text>
+        <Text style={styles.subtitle}>{"Your booked test date. We'll help you prepare in time"}</Text>
 
         <View style={styles.form}>
           <TextInput

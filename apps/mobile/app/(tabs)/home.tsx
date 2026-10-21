@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { hasFreeMockLeft } from '@/src/conversion';
+import { testDateError } from '@/src/testDateRules';
+import { ReminderOffer, useReminderOffer } from '@/src/components/ReminderOffer';
 import { useTrialDays } from '@/src/purchaseGate';
 import {
   Animated,
@@ -38,6 +40,7 @@ import {
   cancelMockTestReminder,
   scheduleStreakProtectionNotification,
   scheduleTestCountdownNotifications,
+  rescheduleStudyNudges,
 } from '@/src/notifications';
 import { buildTodaySummary } from '../studyplan';
 import { loadSRState, getDueQuestions } from '@/src/spacedRepetition';
@@ -217,6 +220,7 @@ export default function HomeScreen() {
   const [progress, setProgress]       = useState<UserProgress | null>(null);
   const trialDays = useTrialDays();
   const [isLoading, setIsLoading]     = useState(true);
+  const reminderOffer = useReminderOffer(!isLoading);
   const [username, setUsername]       = useState<string | null>(null);
   const [showDateModal, setShowDateModal] = useState(false);
   const [dateInput, setDateInput]     = useState('');
@@ -324,6 +328,8 @@ export default function HomeScreen() {
 
       void (async () => {
         await syncPendingUsername();
+        // Keep the rolling study nudges current (skips today once studied).
+        void rescheduleStudyNudges();
 
         const fresh = await loadUserProgress();
         if (fresh) {
@@ -502,12 +508,16 @@ export default function HomeScreen() {
       setDateError('Enter a valid date in DD/MM/YYYY format');
       return;
     }
+    const rangeError = testDateError(parsed, new Date());
+    if (rangeError) { setDateError(rangeError); return; }
     setDateError('');
     const updated = { ...(progress!), testDate: parsed };
     setProgress(updated);
     await saveUserProgress(updated);
     setShowDateModal(false);
     void scheduleTestCountdownNotifications(new Date(parsed));
+    // Nudge copy counts down to the test, so rebuild with the new date.
+    void rescheduleStudyNudges();
   }
 
   async function handleDismissNudge(id: string) {
@@ -689,6 +699,13 @@ export default function HomeScreen() {
             <Text style={styles.proBannerCta}>{'See plans →'}</Text>
           </TouchableOpacity>
         )
+      )}
+
+      {/* Daily reminder offer: nothing else brings a learner back tomorrow. */}
+      {!isLoading && reminderOffer.visible && (
+        <View style={{ marginHorizontal: 16, marginBottom: 12 }}>
+          <ReminderOffer context="home" onDone={reminderOffer.hide} />
+        </View>
       )}
 
       {/* Today's Focus — spaced repetition due questions */}

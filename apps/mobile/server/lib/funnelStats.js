@@ -9,6 +9,8 @@
 const FUNNEL_STEPS = [
   ['taster_completed', 'Finished taster'],
   ['onboarding_completed', 'Finished onboarding'],
+  ['reminder_offer_viewed', 'Offered daily reminder'],
+  ['reminder_enabled', 'Turned on daily reminder'],
   ['daily_limit_hit', 'Hit daily limit'],
   ['free_mock_completed', 'Finished free mock'],
   ['paywall_prompt_viewed', 'Saw upgrade prompt'],
