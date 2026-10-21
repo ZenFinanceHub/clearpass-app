@@ -797,6 +797,7 @@ export default function HazardScreen() {
         <Modal visible={showPaywall} transparent animationType="fade" onRequestClose={() => setShowPaywall(false)}>
           <View style={styles.paywallOverlay}>
             <PaywallPrompt
+              reason="hazard"
               onUpgrade={() => { setShowPaywall(false); router.push('/paywall'); }}
               onDismiss={() => setShowPaywall(false)}
             />

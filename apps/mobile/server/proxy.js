@@ -62,6 +62,7 @@ const {
   computeDailyStats,
   formatDailyStatsMessage,
 } = require('./lib/dailyStats');
+const { computeFunnelStats, formatFunnelLines, FUNNEL_LOOKBACK_DAYS } = require('./lib/funnelStats');
 
 // Conference campaign tag reported in the daily stats post. Matches the QR
 // at getclearpass.co.uk/instructors?ref=adinjc26 (27 Sep 2026).
@@ -3311,7 +3312,25 @@ app.post('/api/cron/daily-stats', async (req, res) => {
       refCode: CONFERENCE_REF_CODE,
     });
 
-    const posted = await postToSlack(formatDailyStatsMessage(stats, CONFERENCE_REF_CODE));
+    // Funnel section. Optional: if the funnel_events table isn't there yet
+    // or the read fails, the main stats still post.
+    let funnelLines = [];
+    try {
+      const sinceIso = new Date(Date.now() - FUNNEL_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
+      const { data: events, error: eventsErr } = await supabaseAdmin
+        .from('funnel_events')
+        .select('user_id, anon_id, event, created_at')
+        .gte('created_at', sinceIso)
+        .limit(MAX_STATS_ROWS);
+      if (eventsErr) throw eventsErr;
+      const excludedUserIds = (profiles || []).filter(p => p.exclude_from_stats === true).map(p => p.id);
+      funnelLines = formatFunnelLines(computeFunnelStats({ events: events || [], excludedUserIds, nowIso: new Date().toISOString() }));
+    } catch (funnelErr) {
+      console.error('[daily-stats] funnel section skipped:', funnelErr);
+      funnelLines = ['', '_Funnel: unavailable today (see server logs)._'];
+    }
+
+    const posted = await postToSlack([formatDailyStatsMessage(stats, CONFERENCE_REF_CODE), ...funnelLines].join('\n'));
     console.log('[daily-stats]', JSON.stringify(stats), 'posted:', posted);
 
     // posted:false is reported rather than thrown — the numbers were computed

@@ -54,6 +54,31 @@ function subscribeToPurchaseRoute(listener: () => void): () => void {
   return () => { listeners.delete(listener); };
 }
 
+/**
+ * Length of the free trial actually on offer right now, or null if there
+ * isn't one. Read from the store (RevenueCat introPrice on the package) or,
+ * on web, from /api/config — never assumed. The paywall previously
+ * advertised "7 days free" with no trial configured anywhere; any trial
+ * wording must come from this value so that can't happen again.
+ */
+let trialDays: number | null = null;
+
+export function setTrialDays(days: number | null): void {
+  const next = days && days > 0 ? days : null;
+  if (trialDays === next) return;
+  trialDays = next;
+  listeners.forEach(listener => listener());
+}
+
+function getTrialDays(): number | null {
+  return trialDays;
+}
+
+/** Reactive: re-renders when the store reports (or stops reporting) a trial. */
+export function useTrialDays(): number | null {
+  return useSyncExternalStore(subscribeToPurchaseRoute, getTrialDays, getTrialDays);
+}
+
 /** Non-reactive read, for callers outside a render (event handlers,
  *  effects, module scope). Inside a component, use usePurchaseRoute(). */
 export function getPurchaseRoute(): PurchaseRoute {

@@ -46,6 +46,9 @@ import { Pip } from '@/src/components/Pip';
 import { AnswerOptions, LABELS } from '@/src/components/AnswerOptions';
 import { Colors } from '@/src/constants/theme';
 import { PaywallPrompt } from '@/src/components/PaywallPrompt';
+import { hasFreeMockLeft, testDateUrgencyLine } from '@/src/conversion';
+import { logFunnelEvent } from '@/src/funnel';
+import { useTrialDays } from '@/src/purchaseGate';
 
 const TOTAL_QUESTIONS = 50;
 const TIME_LIMIT_SECONDS = 57 * 60;
@@ -120,7 +123,7 @@ function scoreTest(questions: Question[], answers: (number | null)[]): { correct
 
 type Phase = 'start' | 'test' | 'review' | 'results';
 type ReviewFilter = 'all' | 'wrong' | 'flagged';
-type ResultData = { correct: number; timeTaken: number; byTopic: ByTopic; xpEarned: number; newAchievements: Achievement[]; passed: boolean; streakDays: number; total: number; passMark: number; pauseCount?: number; pausedSeconds?: number };
+type ResultData = { correct: number; timeTaken: number; byTopic: ByTopic; xpEarned: number; newAchievements: Achievement[]; passed: boolean; streakDays: number; total: number; passMark: number; pauseCount?: number; pausedSeconds?: number; freeRun?: boolean };
 
 export default function MockScreen() {
   const theme = useTheme();
@@ -143,6 +146,11 @@ export default function MockScreen() {
   const [isPaused, setIsPaused] = useState(false);
   const [mockMode, setMockMode] = useState<'standard' | 'quick'>('standard');
   const [locked, setLocked] = useState(false);
+  // Free learners get one Quick Mock. freeRun marks the test in progress as
+  // that free one, so its results screen carries the upgrade card.
+  const [freeMockAvailable, setFreeMockAvailable] = useState(false);
+  const freeRunRef = useRef(false);
+  const [urgencyLine, setUrgencyLine] = useState<string | null>(null);
 
   const questionsRef = useRef<Question[]>([]);
   const answersRef = useRef<(number | null)[]>([]);
@@ -213,8 +221,11 @@ export default function MockScreen() {
   useFocusEffect(
     useCallback(() => {
       void (async () => {
-        const premium = await isPremium();
-        setLocked(!premium);
+        const [premium, progress] = await Promise.all([isPremium(), loadUserProgress()]);
+        const freeLeft = !premium && hasFreeMockLeft(progress);
+        setFreeMockAvailable(freeLeft);
+        setLocked(!premium && !freeLeft);
+        setUrgencyLine(premium ? null : testDateUrgencyLine(progress));
       })();
       if (phaseRef.current === 'results' || phaseRef.current === 'review') {
         if (returningFromTutorRef.current) {
@@ -339,6 +350,14 @@ export default function MockScreen() {
   }, [phase, setPipHidden]);
 
   function handleStart(mode: 'standard' | 'quick') {
+    // The free mock is the Quick Mock only; Standard stays Pro.
+    if (freeMockAvailable && mode === 'standard') {
+      logFunnelEvent('paywall_prompt_tapped', { reason: 'mock_standard_locked' });
+      router.push('/paywall');
+      return;
+    }
+    freeRunRef.current = freeMockAvailable;
+    if (freeRunRef.current) logFunnelEvent('free_mock_started', { mode });
     const activeTotal = mode === 'quick' ? QUICK_QUESTIONS : TOTAL_QUESTIONS;
     const activeTime = mode === 'quick' ? QUICK_TIME_SECONDS : TIME_LIMIT_SECONDS;
     const activeMark = mode === 'quick' ? QUICK_PASS_MARK : PASS_MARK;
@@ -488,7 +507,11 @@ export default function MockScreen() {
       else void maybeRequestReview('mock_passed');
     }
 
-    setResultData({ correct, timeTaken, byTopic, xpEarned, newAchievements, passed, streakDays: updatedProgress.studyStreakDays ?? 0, total: activeTotalRef.current, passMark: activePassMarkRef.current, pauseCount: pauseCountRef.current, pausedSeconds: pausedSecondsRef.current });
+    if (freeRunRef.current) {
+      logFunnelEvent('free_mock_completed', { passed, correct, total: activeTotalRef.current });
+      setFreeMockAvailable(false);
+    }
+    setResultData({ correct, timeTaken, byTopic, xpEarned, newAchievements, passed, streakDays: updatedProgress.studyStreakDays ?? 0, total: activeTotalRef.current, passMark: activePassMarkRef.current, pauseCount: pauseCountRef.current, pausedSeconds: pausedSecondsRef.current, freeRun: freeRunRef.current });
     void (passed
       ? Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       : Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning));
@@ -529,11 +552,12 @@ export default function MockScreen() {
       <OfflineBanner />
       {locked ? (
         <View style={[styles.lockedWrap, { backgroundColor: theme.backgroundColor }]}>
-          <PaywallPrompt onUpgrade={() => router.push('/paywall')} />
+          <PaywallPrompt reason="mock" urgencyLine={urgencyLine} onUpgrade={() => router.push('/paywall')} />
         </View>
       ) : (
         <StartView
           onStart={handleStart}
+          freeMockAvailable={freeMockAvailable}
         />
       )}
     </>
@@ -545,6 +569,7 @@ export default function MockScreen() {
         <OfflineBanner />
         <ResultsView
           data={resultData}
+          urgencyLine={urgencyLine}
           onReview={() => { setExpandedRows(new Set()); setPhase('review'); }}
           onDone={() => { resetToStartScreen(); router.replace('/(tabs)/home'); }}
         />
@@ -765,7 +790,7 @@ export default function MockScreen() {
 }
 
 // ── START VIEW ──
-function StartView({ onStart }: { onStart: (mode: 'standard' | 'quick') => void }) {
+function StartView({ onStart, freeMockAvailable }: { onStart: (mode: 'standard' | 'quick') => void; freeMockAvailable: boolean }) {
   const theme = useTheme();
   return (
     <ScrollView style={[styles.scroll, { backgroundColor: theme.backgroundColor }]} contentContainerStyle={styles.content}>
@@ -773,13 +798,13 @@ function StartView({ onStart }: { onStart: (mode: 'standard' | 'quick') => void 
         {'Mock Theory Test'}
       </Text>
       <Text style={[styles.screenSub, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, color: theme.subTextColor }]}>
-        {'Choose your session length'}
+        {freeMockAvailable ? 'Your first Quick Mock is free — see where you stand today' : 'Choose your session length'}
       </Text>
 
       <TouchableOpacity style={[styles.modeCard, { backgroundColor: theme.cardColor, borderColor: Colors.indigo }]} onPress={() => onStart('standard')} activeOpacity={0.85}>
         <View style={styles.modeCardHeader}>
           <Text style={styles.modeCardTitle}>{'Standard Mock'}</Text>
-          <View style={styles.modeCardBadge}><Text style={styles.modeCardBadgeText}>{'DVSA Format'}</Text></View>
+          <View style={styles.modeCardBadge}><Text style={styles.modeCardBadgeText}>{freeMockAvailable ? 'Pro' : 'DVSA Format'}</Text></View>
         </View>
         <View style={styles.modeCardStats}>
           <View style={styles.modeStat}><Text style={styles.modeStatEmoji}>{'📝'}</Text><Text style={[styles.modeStatText, { color: theme.textColor }]}>{'50 questions'}</Text></View>
@@ -787,14 +812,14 @@ function StartView({ onStart }: { onStart: (mode: 'standard' | 'quick') => void 
           <View style={styles.modeStat}><Text style={styles.modeStatEmoji}>{'✅'}</Text><Text style={[styles.modeStatText, { color: theme.textColor }]}>{'Pass: 43/50'}</Text></View>
         </View>
         <View style={styles.modeCardBtn}>
-          <Text style={styles.modeCardBtnText}>{'Start Standard Test'}</Text>
+          <Text style={styles.modeCardBtnText}>{freeMockAvailable ? 'Unlock with Pro' : 'Start Standard Test'}</Text>
         </View>
       </TouchableOpacity>
 
       <TouchableOpacity style={[styles.modeCard, styles.modeCardQuick, { backgroundColor: theme.cardColor }]} onPress={() => onStart('quick')} activeOpacity={0.85}>
         <View style={styles.modeCardHeader}>
           <Text style={styles.modeCardTitle}>{'Quick Mock'}</Text>
-          <View style={[styles.modeCardBadge, styles.modeCardBadgeQuick]}><Text style={styles.modeCardBadgeText}>{'~28 min'}</Text></View>
+          <View style={[styles.modeCardBadge, styles.modeCardBadgeQuick]}><Text style={styles.modeCardBadgeText}>{freeMockAvailable ? 'Free' : '~28 min'}</Text></View>
         </View>
         <View style={styles.modeCardStats}>
           <View style={styles.modeStat}><Text style={styles.modeStatEmoji}>{'📝'}</Text><Text style={[styles.modeStatText, { color: theme.textColor }]}>{'25 questions'}</Text></View>
@@ -802,7 +827,7 @@ function StartView({ onStart }: { onStart: (mode: 'standard' | 'quick') => void 
           <View style={styles.modeStat}><Text style={styles.modeStatEmoji}>{'✅'}</Text><Text style={[styles.modeStatText, { color: theme.textColor }]}>{'Pass: 22/25'}</Text></View>
         </View>
         <View style={[styles.modeCardBtn, styles.modeCardBtnQuick]}>
-          <Text style={styles.modeCardBtnText}>{'Start Quick Mock'}</Text>
+          <Text style={styles.modeCardBtnText}>{freeMockAvailable ? 'Start Free Quick Mock' : 'Start Quick Mock'}</Text>
         </View>
       </TouchableOpacity>
 
@@ -816,14 +841,17 @@ function StartView({ onStart }: { onStart: (mode: 'standard' | 'quick') => void 
 // ── RESULTS VIEW ──
 function ResultsView({
   data,
+  urgencyLine,
   onReview,
   onDone,
 }: {
   data: ResultData;
+  urgencyLine: string | null;
   onReview: () => void;
   onDone: () => void;
 }) {
   const theme = useTheme();
+  const trialDays = useTrialDays();
   const [showShareCard, setShowShareCard] = useState(false);
   const { correct, timeTaken, byTopic, xpEarned, newAchievements, passed, streakDays, total, passMark, pauseCount, pausedSeconds } = data;
 
@@ -862,6 +890,29 @@ function ResultsView({
           </View>
         )}
       </View>
+
+      {data.freeRun && (
+        <View style={styles.upsellCard}>
+          <Text style={styles.upsellTitle}>
+            {data.passed
+              ? 'That\u2019s a pass. Can you do it again?'
+              : `${data.passMark - data.correct} more right and you\u2019d have passed`}
+          </Text>
+          <Text style={styles.upsellBody}>
+            {data.passed
+              ? 'One pass can be luck. Pro gives you unlimited mock tests and hazard perception, so you walk in knowing you\u2019re ready.'
+              : 'Pro gives you unlimited mock tests, unlimited practice on your weak topics below, and hazard perception clips.'}
+          </Text>
+          {urgencyLine ? <Text style={styles.upsellUrgency}>{urgencyLine}</Text> : null}
+          <TouchableOpacity
+            style={styles.upsellBtn}
+            onPress={() => { logFunnelEvent('paywall_prompt_tapped', { reason: 'mock_result', passed: data.passed }); router.push('/paywall'); }}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.upsellBtnText}>{trialDays ? `Try Pro free for ${trialDays} days` : 'See Pro plans'}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <Text style={styles.sectionLabel}>{'TOPIC BREAKDOWN'}</Text>
       <View style={styles.topicTable}>
@@ -1056,6 +1107,12 @@ function ReviewView({
 
 // ── STYLES ──
 const styles = StyleSheet.create({
+  upsellCard: { backgroundColor: '#EEF2FF', borderRadius: 16, padding: 20, marginBottom: 20, gap: 10, borderWidth: 1, borderColor: Colors.indigo },
+  upsellTitle: { fontSize: 18, fontWeight: '800', color: '#111827' },
+  upsellBody: { fontSize: 14, color: '#374151', lineHeight: 20 },
+  upsellUrgency: { fontSize: 14, color: Colors.indigo, fontWeight: '700', lineHeight: 20 },
+  upsellBtn: { backgroundColor: Colors.indigo, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4 },
+  upsellBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   flex: { flex: 1 },
   scroll: { flex: 1 },
   content: { padding: 16, paddingBottom: 48, gap: 12 },
