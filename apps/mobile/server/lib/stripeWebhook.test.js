@@ -108,3 +108,17 @@ test('resolveStripeProGrant: missing or unknown plan keeps the original 3 months
     assert.ok(days >= 89 && days <= 92.1, `plan ${plan}: expected ~3 months, got ${days} days`);
   }
 });
+
+test('resolveStripeProGrant: a new purchase extends an unexpired stripe grant instead of shortening it', () => {
+  const in80Days = new Date(Date.now() + 80 * 86400000).toISOString();
+  const patch = resolveStripeProGrant({ isPro: true, proSource: 'stripe', proExpiresAt: in80Days }, 'monthly');
+  const days = (Date.parse(patch.proExpiresAt) - Date.now()) / 86400000;
+  assert.ok(days >= 80 + 27 && days <= 80 + 32, `expected ~110 days, got ${days}`);
+});
+
+test('resolveStripeProGrant: an expired stripe grant restarts from now', () => {
+  const past = new Date(Date.now() - 10 * 86400000).toISOString();
+  const patch = resolveStripeProGrant({ isPro: false, proSource: 'stripe', proExpiresAt: past }, 'monthly');
+  const days = (Date.parse(patch.proExpiresAt) - Date.now()) / 86400000;
+  assert.ok(days >= 27 && days <= 32, `expected ~1 month, got ${days}`);
+});

@@ -19,7 +19,15 @@ function resolveStripeProGrant(currentProgress, plan) {
     return null;
   }
   const months = WEB_PLAN_MONTHS[plan] || PRO_DURATION_MONTHS;
-  return { isPro: true, proExpiresAt: computeProExpiresAt(new Date(), months), proSource: 'stripe' };
+  // Extend from whichever is later, now or the end of time already paid
+  // for on this same rail, so buying a month with 80 days left never
+  // shortens access.
+  const now = new Date();
+  const currentEnd = currentProgress.proSource === 'stripe' && currentProgress.proExpiresAt
+    ? new Date(currentProgress.proExpiresAt)
+    : null;
+  const from = currentEnd && !Number.isNaN(currentEnd.getTime()) && currentEnd > now ? currentEnd : now;
+  return { isPro: true, proExpiresAt: computeProExpiresAt(from, months), proSource: 'stripe' };
 }
 
 // Applies one Stripe checkout.session.completed grant end to end, using the

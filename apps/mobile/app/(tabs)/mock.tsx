@@ -9,6 +9,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useNavigation, useRoute, usePreventRemove } from '@react-navigation/native';
@@ -149,6 +150,9 @@ export default function MockScreen() {
   // Free learners get one Quick Mock. freeRun marks the test in progress as
   // that free one, so its results screen carries the upgrade card.
   const [freeMockAvailable, setFreeMockAvailable] = useState(false);
+  // Nothing startable is shown until the Pro / free-mock check has
+  // finished: otherwise a free user could tap Standard during the read.
+  const [gateReady, setGateReady] = useState(false);
   const freeRunRef = useRef(false);
   const [urgencyLine, setUrgencyLine] = useState<string | null>(null);
 
@@ -226,6 +230,7 @@ export default function MockScreen() {
         setFreeMockAvailable(freeLeft);
         setLocked(!premium && !freeLeft);
         setUrgencyLine(premium ? null : testDateUrgencyLine(progress));
+        setGateReady(true);
       })();
       if (phaseRef.current === 'results' || phaseRef.current === 'review') {
         if (returningFromTutorRef.current) {
@@ -550,7 +555,11 @@ export default function MockScreen() {
   if (phase === 'start') return (
     <>
       <OfflineBanner />
-      {locked ? (
+      {!gateReady ? (
+        <View style={[styles.lockedWrap, { backgroundColor: theme.backgroundColor }]}>
+          <ActivityIndicator color={Colors.indigo} />
+        </View>
+      ) : locked ? (
         <View style={[styles.lockedWrap, { backgroundColor: theme.backgroundColor }]}>
           <PaywallPrompt reason="mock" urgencyLine={urgencyLine} onUpgrade={() => router.push('/paywall')} />
         </View>

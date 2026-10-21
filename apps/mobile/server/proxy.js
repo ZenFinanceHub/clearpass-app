@@ -3334,6 +3334,7 @@ app.post('/api/cron/daily-stats', async (req, res) => {
         .from('funnel_events')
         .select('user_id, anon_id, event, created_at')
         .gte('created_at', sinceIso)
+        .order('created_at', { ascending: false })
         .limit(MAX_STATS_ROWS);
       if (eventsErr) throw eventsErr;
       const excludedUserIds = (profiles || []).filter(p => p.exclude_from_stats === true).map(p => p.id);

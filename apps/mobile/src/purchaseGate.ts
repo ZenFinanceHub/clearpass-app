@@ -61,22 +61,34 @@ function subscribeToPurchaseRoute(listener: () => void): () => void {
  * advertised "7 days free" with no trial configured anywhere; any trial
  * wording must come from this value so that can't happen again.
  */
-let trialDays: number | null = null;
+// Per plan: a trial on quarterly says nothing about monthly, and the
+// paywall must describe the plan actually selected (3.1.2).
+let trialDaysMonthly: number | null = null;
+let trialDaysQuarterly: number | null = null;
 
-export function setTrialDays(days: number | null): void {
-  const next = days && days > 0 ? days : null;
-  if (trialDays === next) return;
-  trialDays = next;
+export function setTrialDays(days: { monthly: number | null; quarterly: number | null } | null): void {
+  const clean = (n: number | null | undefined) => (n && n > 0 ? n : null);
+  const m = clean(days?.monthly);
+  const q = clean(days?.quarterly);
+  if (m === trialDaysMonthly && q === trialDaysQuarterly) return;
+  trialDaysMonthly = m;
+  trialDaysQuarterly = q;
   listeners.forEach(listener => listener());
 }
 
-function getTrialDays(): number | null {
-  return trialDays;
-}
+const getMonthly = () => trialDaysMonthly;
+const getQuarterly = () => trialDaysQuarterly;
+// Generic "try Pro free" banners: only when EVERY plan on sale has the
+// same trial isn't knowable here, so use the shortest trial that exists on
+// both, or null if either plan lacks one. Never overstates.
+const getCommon = () =>
+  trialDaysMonthly && trialDaysQuarterly ? Math.min(trialDaysMonthly, trialDaysQuarterly) : (trialDaysMonthly ?? trialDaysQuarterly);
 
-/** Reactive: re-renders when the store reports (or stops reporting) a trial. */
-export function useTrialDays(): number | null {
-  return useSyncExternalStore(subscribeToPurchaseRoute, getTrialDays, getTrialDays);
+/** Reactive trial length for one plan, or — with no plan — for generic
+ *  "try Pro free" entry points. */
+export function useTrialDays(plan?: ProPlan): number | null {
+  const getter = plan === 'monthly' ? getMonthly : plan === 'quarterly' ? getQuarterly : getCommon;
+  return useSyncExternalStore(subscribeToPurchaseRoute, getter, getter);
 }
 
 /** Non-reactive read, for callers outside a render (event handlers,

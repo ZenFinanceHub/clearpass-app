@@ -47,8 +47,9 @@ export default function PaywallScreen() {
   // re-render when it lands rather than freezing whatever was true at
   // first paint.
   const route = usePurchaseRoute();
-  const trialDays = useTrialDays();
   const [plan,         setPlan]         = useState<ProPlan>('quarterly');
+  const trialMonthly   = useTrialDays('monthly');
+  const trialQuarterly = useTrialDays('quarterly');
   // Store price strings per plan, once offerings load (IAP only). null
   // means "not on sale right now" — e.g. a new product still in review —
   // and that plan's card is hidden rather than offered and then failing.
@@ -61,10 +62,15 @@ export default function PaywallScreen() {
       ? (webMonthly ? ['quarterly', 'monthly'] : ['quarterly'])
       : [];
   const activePlan: ProPlan = plansOnSale.includes(plan) ? plan : (plansOnSale[0] ?? 'quarterly');
-  const priceFor = (p: ProPlan) => (route === 'iap' ? storePrices?.[p] : null) || FALLBACK_PRICES[p];
-  // No trial on web: those plans are one-off payments.
-  const offerTrial = route === 'iap' ? trialDays : null;
-  const disclosure = getSubscriptionDisclosure(activePlan, { priceString: priceFor(activePlan), trialDays: offerTrial });
+  // IAP shows only the store's own price string, in the buyer's currency.
+  // Until it loads there is no price and no buy button (a fixed £ price
+  // would be wrong for a non-UK account). Web uses the fixed £ prices.
+  const priceFor = (p: ProPlan): string | null =>
+    route === 'iap' ? (storePrices?.[p] ?? null) : FALLBACK_PRICES[p];
+  const pricesReady = route !== 'iap' || !!(storePrices?.monthly || storePrices?.quarterly);
+  // Trial for the plan actually selected; none on web (one-off payments).
+  const offerTrial = route === 'iap' ? (activePlan === 'monthly' ? trialMonthly : trialQuarterly) : null;
+  const disclosure = getSubscriptionDisclosure(activePlan, { priceString: priceFor(activePlan) ?? undefined, trialDays: offerTrial });
   const [loading,      setLoading]      = useState(false);
   const [retrying,     setRetrying]     = useState(false);
   const [restoring,    setRestoring]    = useState(false);
@@ -104,16 +110,23 @@ export default function PaywallScreen() {
   }, []);
 
   // Real store prices for both plans, refreshed whenever IAP becomes ready.
+  // Retries a few times: the buy button stays disabled until a price loads.
   useEffect(() => {
     if (route !== 'iap') return;
     let cancelled = false;
-    void getProPackages().then(pkgs => {
-      if (cancelled) return;
-      setStorePrices({
-        monthly: pkgs.monthly?.product.priceString ?? null,
-        quarterly: pkgs.quarterly?.product.priceString ?? null,
+    let attempt = 0;
+    const load = () => {
+      void getProPackages().then(pkgs => {
+        if (cancelled) return;
+        const next = {
+          monthly: pkgs.monthly?.product.priceString ?? null,
+          quarterly: pkgs.quarterly?.product.priceString ?? null,
+        };
+        if (next.monthly || next.quarterly) { setStorePrices(next); return; }
+        if (attempt++ < 3) setTimeout(load, 3000);
       });
-    });
+    };
+    load();
     return () => { cancelled = true; };
   }, [route]);
 
@@ -301,7 +314,11 @@ export default function PaywallScreen() {
           that the native purchase sheet already shows the IAP price; that
           is precisely what App Store guideline 3.1.2 rejects. The terms
           must be legible on our own screen, before the sheet opens. */}
-      {plansOnSale.length > 0 && (
+      {route === 'iap' && !pricesReady && (
+        <ActivityIndicator color={Colors.indigo} />
+      )}
+
+      {plansOnSale.length > 0 && pricesReady && (
         <View style={styles.planList}>
           {plansOnSale.map(p => {
             const selected = p === activePlan;
@@ -338,7 +355,7 @@ export default function PaywallScreen() {
       {/* Plan name, duration and price, and full renewal terms, for the
           selected plan — shown on every purchasable route, before the
           purchase sheet opens (App Store guideline 3.1.2). */}
-      {route !== 'coming_soon' && (
+      {route !== 'coming_soon' && pricesReady && (
         <View style={styles.pricingBox}>
           <Text style={styles.planName}>{disclosure.name}</Text>
           <Text style={styles.priceLine}>{disclosure.priceLine}</Text>
@@ -365,9 +382,9 @@ export default function PaywallScreen() {
         <>
           {error.length > 0 && <Text style={styles.errorText}>{error}</Text>}
           <ScaleButton
-            style={[styles.ctaBtn, loading && styles.ctaBtnDisabled]}
+            style={[styles.ctaBtn, (loading || !pricesReady) && styles.ctaBtnDisabled]}
             onPress={() => void handleIapPurchase()}
-            disabled={loading}
+            disabled={loading || !pricesReady}
             activeOpacity={0.85}
           >
             {loading

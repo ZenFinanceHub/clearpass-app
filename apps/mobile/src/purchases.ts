@@ -90,7 +90,7 @@ async function probeIapReadiness(): Promise<ReadinessProbe> {
     // or monthly ($rc_monthly). A new monthly product can still be in App
     // Review while quarterly is live, so neither alone is required.
     if (offerings.current?.threeMonth || offerings.current?.monthly) {
-      void refreshTrialDays([offerings.current.threeMonth, offerings.current.monthly]);
+      void refreshTrialDays(offerings.current.threeMonth, offerings.current.monthly);
       return { ready: true };
     }
     return { ready: false, mode: 'no_quarterly_package', offeringId, packageIdentifiers };
@@ -126,18 +126,19 @@ export function trialDaysForPackage(pkg: PurchasesPackage | null | undefined): n
  *  checks this Apple ID is eligible. Only a definite ELIGIBLE counts —
  *  RevenueCat's advice for UNKNOWN is to show the normal price, and
  *  someone who has already had the trial must not be promised it again. */
-async function refreshTrialDays(pkgs: (PurchasesPackage | null | undefined)[]): Promise<void> {
+async function refreshTrialDays(quarterly: PurchasesPackage | null | undefined, monthly: PurchasesPackage | null | undefined): Promise<void> {
   try {
-    const withTrial = pkgs.filter((p): p is PurchasesPackage => !!p && trialDaysForPackage(p) !== null);
-    if (withTrial.length === 0) { setTrialDays(null); return; }
-    if (Platform.OS === 'ios') {
-      const ids = withTrial.map(p => p.product.identifier);
+    let q = trialDaysForPackage(quarterly);
+    let m = trialDaysForPackage(monthly);
+    if (Platform.OS === 'ios' && (q || m)) {
+      const ids = [quarterly, monthly].filter((p): p is PurchasesPackage => !!p).map(p => p.product.identifier);
       const eligibility = await Purchases.checkTrialOrIntroductoryPriceEligibility(ids);
-      const eligible = withTrial.filter(p => eligibility[p.product.identifier]?.status === Purchases.INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_ELIGIBLE);
-      setTrialDays(eligible.length ? Math.max(...eligible.map(p => trialDaysForPackage(p) ?? 0)) : null);
-      return;
+      const ok = (p: PurchasesPackage | null | undefined) =>
+        !!p && eligibility[p.product.identifier]?.status === Purchases.INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_ELIGIBLE;
+      if (!ok(quarterly)) q = null;
+      if (!ok(monthly)) m = null;
     }
-    setTrialDays(Math.max(...withTrial.map(p => trialDaysForPackage(p) ?? 0)));
+    setTrialDays({ quarterly: q, monthly: m });
   } catch {
     // Unknown means no promise: never advertise a trial we couldn't confirm.
     setTrialDays(null);
