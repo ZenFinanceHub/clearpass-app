@@ -21,9 +21,9 @@
   'use strict';
 
   // ── Config ────────────────────────────────────────────────────────────────
-  var ADS_ID = 'AW-REPLACE_ME';                 // Google Ads tag ID
-  var LABEL_STORE_TAP = 'REPLACE_ME';           // conversion: store button tap
-  var LABEL_WEB_START = 'REPLACE_ME';           // conversion: web app start
+  var ADS_ID = 'AW-18499569453';                // Google Ads tag ID (ClearPass account)
+  var LABEL_STORE_TAP = 'G1q6CJ-x6KQdEK2OpPVE'; // conversion: "Store button tap" (Outbound click)
+  var LABEL_WEB_START = 'OnUGCJyx6KQdEK2OpPVE'; // conversion: "Web app start" (Sign-up)
   var APPLE_APP_ID = '6779180259';
   var APPLE_PROVIDER_TOKEN = '129017368';
   var PLAY_PACKAGE = 'co.uk.getclearpass.app';
