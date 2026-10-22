@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/react-native';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Linking } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { Stack, useSegments } from 'expo-router';
@@ -13,7 +13,8 @@ import NetInfo from '@react-native-community/netinfo';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AccessibilityProvider } from '@/src/AccessibilityContext';
 import { NetworkProvider } from '@/src/NetworkContext';
-import { PipVisibilityProvider, usePipVisibility } from '@/src/PipVisibilityContext';
+import { PipVisibilityProvider } from '@/src/PipVisibilityContext';
+import { PipFab } from '@/src/components/PipFab';
 import { handleIncomingUrl, getDeepLinkPath } from '@/src/deepLinks';
 import { supabase } from '@/src/supabase';
 import { configureNotificationHandler } from '@/src/notifications';
@@ -448,7 +449,7 @@ function RootLayout() {
               in-content bottom controls — e.g. Mock Test's Prev/Next row, or any
               other screen's bottom CTA — which a fixed bottom-right FAB would
               otherwise sit on top of and intercept taps for. */}
-          <PipFab top={insets.top + 56} />
+          <PipFab defaultTop={insets.top + 56} />
           <InstructorRouteGuardOverlay />
           <CrossPlatformAlertHost />
           {showCachingToast && (
@@ -461,32 +462,6 @@ function RootLayout() {
       </NetworkProvider>
       </AccessibilityProvider>
     </Sentry.ErrorBoundary>
-  );
-}
-
-// Tightly cropped from pip-neutral@3x: the shared Pip art has a lot of empty
-// margin, which shrinks him to a speck inside a 52px button.
-const PIP_FAB_IMAGE = require('../assets/pip/pip-fab.png');
-
-function PipFab({ top }: { top: number }) {
-  const segments = useSegments();
-  const { hidden } = usePipVisibility();
-
-  if (hidden || (segments as string[]).includes('tutor')) return null;
-
-  // Derived from the current route rather than hardcoded — this FAB is
-  // reachable from nearly every screen in the app.
-  const currentPath = '/' + (segments as string[]).join('/');
-
-  return (
-    <TouchableOpacity
-      style={[toastStyles.pipFab, { top }]}
-      onPress={() => router.push({ pathname: '/tutor', params: { from: currentPath } } as any)}
-      accessibilityLabel="Ask Pip"
-      accessibilityRole="button"
-    >
-      <Image source={PIP_FAB_IMAGE} style={{ width: 40, height: 40 }} resizeMode="contain" />
-    </TouchableOpacity>
   );
 }
 
@@ -507,27 +482,6 @@ const toastStyles = StyleSheet.create({
     elevation: 6,
   },
   text: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
-  pipFab: {
-    position: 'absolute',
-    right: 20,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    // White behind the current Pip artwork: the navy character disappears
-    // on the old indigo fill at this size. The indigo ring keeps the brand.
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: '#4F46E5',
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 8,
-    zIndex: 999,
-  },
 });
 
 function RootLayoutWithSafeArea() {
