@@ -50,6 +50,9 @@ export function PipFab({ defaultTop }: { defaultTop: number }) {
   const current = React.useRef(fromStored(defaultStored, bounds));
   const pos = React.useRef(new Animated.ValueXY(current.current)).current;
   const dragStart = React.useRef({ x: 0, y: 0 });
+  // Set when a touch turned into a drag, so the press that web fires on release
+  // (a click on the same element) doesn't also open Pip.
+  const dragged = React.useRef(false);
 
   const place = React.useCallback((p: { x: number; y: number }) => {
     current.current = p;
@@ -86,9 +89,10 @@ export function PipFab({ defaultTop }: { defaultTop: number }) {
     };
     return PanResponder.create({
       onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => { dragged.current = false; return false; },
       onMoveShouldSetPanResponder: (_e, g) => moved(g),
       onMoveShouldSetPanResponderCapture: (_e, g) => moved(g),
-      onPanResponderGrant: () => { dragStart.current = { ...current.current }; },
+      onPanResponderGrant: () => { dragged.current = true; dragStart.current = { ...current.current }; },
       onPanResponderMove: (_e, g) => {
         pos.setValue({ x: dragStart.current.x + g.dx, y: dragStart.current.y + g.dy });
       },
@@ -111,7 +115,10 @@ export function PipFab({ defaultTop }: { defaultTop: number }) {
     >
       <TouchableOpacity
         style={styles.button}
-        onPress={() => router.push({ pathname: '/tutor', params: { from: currentPath } } as any)}
+        onPress={() => {
+          if (dragged.current) { dragged.current = false; return; }
+          router.push({ pathname: '/tutor', params: { from: currentPath } } as any);
+        }}
         accessibilityLabel="Ask Pip"
         accessibilityHint="Opens Pip. You can drag this button to move it."
         accessibilityRole="button"
