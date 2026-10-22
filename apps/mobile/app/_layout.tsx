@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/react-native';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Linking } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { Stack, useSegments } from 'expo-router';
@@ -464,6 +464,10 @@ function RootLayout() {
   );
 }
 
+// Tightly cropped from pip-neutral@3x: the shared Pip art has a lot of empty
+// margin, which shrinks him to a speck inside a 52px button.
+const PIP_FAB_IMAGE = require('../assets/pip/pip-fab.png');
+
 function PipFab({ top }: { top: number }) {
   const segments = useSegments();
   const { hidden } = usePipVisibility();
@@ -481,7 +485,7 @@ function PipFab({ top }: { top: number }) {
       accessibilityLabel="Ask Pip"
       accessibilityRole="button"
     >
-      <Text style={toastStyles.pipFabIcon}>{'🦔'}</Text>
+      <Image source={PIP_FAB_IMAGE} style={{ width: 40, height: 40 }} resizeMode="contain" />
     </TouchableOpacity>
   );
 }
@@ -509,7 +513,12 @@ const toastStyles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#4F46E5',
+    // White behind the current Pip artwork: the navy character disappears
+    // on the old indigo fill at this size. The indigo ring keeps the brand.
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#4F46E5',
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -519,7 +528,6 @@ const toastStyles = StyleSheet.create({
     elevation: 8,
     zIndex: 999,
   },
-  pipFabIcon: { fontSize: 24 },
 });
 
 function RootLayoutWithSafeArea() {

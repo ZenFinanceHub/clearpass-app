@@ -65,7 +65,7 @@ TONE
 `.trim();
 
 const WELCOME =
-  "Hi! I'm Pip 🦔 Ask me anything about the Highway Code, road signs, or theory test questions — I only use official DVSA materials.";
+  "Hi! I'm Pip 🦔 Ask me anything about the Highway Code, road signs, or theory test questions — I stick to the Highway Code and ClearPass's DVSA-licensed question bank.";
 
 const STARTER_PROMPTS = [
   'How does hazard perception work?',
