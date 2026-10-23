@@ -31,6 +31,8 @@ function SignupForm() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sentEmail, setSentEmail] = useState<string | null>(null);
+  // PECR soft opt-in: the chance to refuse tips/offer emails at signup.
+  const [noMarketing, setNoMarketing] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -42,7 +44,7 @@ function SignupForm() {
       const res = await fetch(`${API_URL}/api/instructor/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: targetEmail, ref }),
+        body: JSON.stringify({ email: targetEmail, ref, marketingOptOut: noMarketing }),
       });
 
       if (!res.ok) {
@@ -130,11 +132,20 @@ function SignupForm() {
               autoComplete="email"
             />
           </div>
+          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.9rem", cursor: "pointer" }} className="muted">
+            <input type="checkbox" checked={noMarketing} onChange={(e) => setNoMarketing(e.target.checked)} />
+            Don&apos;t email me tips or offers
+          </label>
           <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
             {submitting ? "Sending…" : "Create account"}
           </button>
           <p className="muted" style={{ margin: 0, textAlign: "center" }}>
             We&apos;ll email you a link to get started — no password needed.
+          </p>
+          <p className="muted" style={{ margin: 0, textAlign: "center", fontSize: "0.8rem" }}>
+            After you sign up we&apos;ll send a few emails on getting your pupils set up, including
+            Pro seats. Every email has an unsubscribe link.{" "}
+            <a href="https://clearpass-app.vercel.app/privacy-policy">Privacy policy</a>
           </p>
         </form>
 

@@ -43,6 +43,8 @@ export default function SignUpScreen() {
   const [resendMessage,   setResendMessage]   = useState('');
   const [socialLoading,   setSocialLoading]   = useState(false);
   const [socialError,     setSocialError]     = useState('');
+  // PECR soft opt-in: the chance to refuse tips/offer emails at signup.
+  const [noMarketing,     setNoMarketing]     = useState(false);
 
   const [alreadyRegisteredEmail, setAlreadyRegisteredEmail] = useState<string | null>(null);
   const [magicLinkSending,       setMagicLinkSending]       = useState(false);
@@ -81,6 +83,8 @@ export default function SignUpScreen() {
       const { data: { user, session }, error: authError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
+        // Read by the server's lifecycle and weekly email crons.
+        options: noMarketing ? { data: { marketing_opt_out: true } } : undefined,
       });
       if (authError) {
         if (isAlreadyRegisteredError(authError)) {
@@ -379,6 +383,19 @@ export default function SignUpScreen() {
           )}
 
           <TouchableOpacity
+            style={styles.optOutRow}
+            onPress={() => setNoMarketing(v => !v)}
+            activeOpacity={0.75}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: noMarketing }}
+          >
+            <View style={[styles.optOutBox, noMarketing && styles.optOutBoxOn]}>
+              {noMarketing && <Text style={styles.optOutTick}>{'✓'}</Text>}
+            </View>
+            <Text style={styles.optOutText}>{"Don't email me study tips or offers"}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
             onPress={() => void handleSignUp()}
             disabled={loading}
@@ -387,6 +404,11 @@ export default function SignUpScreen() {
             {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.submitBtnText}>{'Create Account'}</Text>}
           </TouchableOpacity>
         </View>
+
+        <Text style={styles.emailNotice}>
+          {"We'll email you a few study tips and the occasional offer after you sign up. Every email has an unsubscribe link. "}
+          <Text style={styles.emailNoticeLink} onPress={() => router.push('/privacy-policy' as any)}>{'Privacy policy'}</Text>
+        </Text>
 
         <TouchableOpacity style={styles.switchLink} onPress={() => router.replace('/auth/signin')} activeOpacity={0.75}>
           <Text style={styles.switchText}>{'Already have an account? '}<Text style={styles.switchAccent}>{'Sign in'}</Text></Text>
@@ -457,6 +479,17 @@ const styles = StyleSheet.create({
   },
   submitBtnDisabled: { opacity: 0.6 },
   submitBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+
+  optOutRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 2 },
+  optOutBox: {
+    width: 20, height: 20, borderRadius: 5, borderWidth: 1.5, borderColor: '#9CA3AF',
+    alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF',
+  },
+  optOutBoxOn: { backgroundColor: Colors.indigo, borderColor: Colors.indigo },
+  optOutTick: { color: '#FFFFFF', fontSize: 13, fontWeight: '800', lineHeight: 16 },
+  optOutText: { fontSize: 13, color: '#6B7280', flex: 1 },
+  emailNotice: { fontSize: 12, color: '#9CA3AF', lineHeight: 17, textAlign: 'center', marginTop: -8, marginBottom: 12 },
+  emailNoticeLink: { color: Colors.indigo, textDecorationLine: 'underline' },
 
   switchLink: { alignItems: 'center', paddingVertical: 8 },
   switchText: { fontSize: 14, color: '#6B7280' },

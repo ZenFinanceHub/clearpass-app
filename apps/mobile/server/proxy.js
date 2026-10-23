@@ -41,6 +41,7 @@ const {
 const { grantInstructorProForUser } = require('./lib/grantInstructorPro');
 const { deleteInstructorDocuments } = require('./lib/instructorDocuments');
 const { isE2EUser } = require('./lib/e2e');
+const lifecycleEmails = require('./lib/lifecycleEmails');
 const {
   ALLOWED_DIRECT_MIME_TYPES,
   MAX_FILE_SIZE_BYTES,
@@ -1618,6 +1619,8 @@ app.post('/api/instructor/signup', async (req, res) => {
       user_metadata: {
         instructor_signup_intent: true,
         signup_ref: signupRef,
+        // "Don't email me tips" ticked on the signup form (PECR opt-out).
+        ...(req.body?.marketingOptOut === true ? { marketing_opt_out: true } : {}),
       },
     });
 
@@ -2246,14 +2249,18 @@ app.get('/api/instructor/payout-proof', async (req, res) => {
 
 // ─── Resend email helper ──────────────────────────────────────────────────────
 
-async function sendEmail({ to, subject, html }) {
+async function sendEmail({ to, subject, html, text, from: fromOverride, replyTo, headers }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) throw new Error('RESEND_API_KEY not set');
-  const from = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+  const from = fromOverride || process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+  const payload = { from, to: [to], subject, html };
+  if (text) payload.text = text;
+  if (replyTo) payload.reply_to = replyTo;
+  if (headers) payload.headers = headers;
   const resp = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ from, to: [to], subject, html }),
+    body: JSON.stringify(payload),
   });
   if (!resp.ok) {
     const body = await resp.text();
@@ -2638,7 +2645,7 @@ const TOPIC_LABELS = {
   VehicleLoading: 'Vehicle Loading',
 };
 
-function buildWeeklyEmailHtml({ streak, totalQuestions, readinessScore, weakestTopic }) {
+function buildWeeklyEmailHtml({ streak, totalQuestions, readinessScore, weakestTopic, unsubUrl }) {
   const passPct = Math.round(readinessScore);
   const weakLabel = weakestTopic ? (TOPIC_LABELS[weakestTopic] || weakestTopic) : 'Keep going!';
   return `<!DOCTYPE html>
@@ -2689,7 +2696,7 @@ function buildWeeklyEmailHtml({ streak, totalQuestions, readinessScore, weakestT
         </td></tr>
         <tr><td style="padding:0 32px 24px;text-align:center;">
           <p style="color:#9ca3af;font-size:12px;margin:0;">You're receiving this because you have a ClearPass account.<br>
-          <a href="https://clearpass-app.vercel.app" style="color:#9ca3af;">Unsubscribe</a></p>
+          <a href="${unsubUrl}" style="color:#9ca3af;">Unsubscribe</a></p>
         </td></tr>
       </table>
     </td></tr>
@@ -2725,11 +2732,12 @@ app.post('/api/cron/weekly-email', async (req, res) => {
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
     if (authError) throw authError;
     const emailById = Object.fromEntries((authData.users || []).map(u => [u.id, u.email]));
+    const optedOut = await loadEmailOptOuts(supabaseAdmin, authData.users || []);
 
     let sent = 0;
     for (const row of activeRows) {
       const email = emailById[row.id];
-      if (!email) continue;
+      if (!email || optedOut.has(row.id)) continue;
 
       const p = row.progress || {};
       const streak = p.studyStreakDays || 0;
@@ -2742,7 +2750,8 @@ app.post('/api/cron/weekly-email', async (req, res) => {
         ? attempted.reduce((a, b) => (a[1] < b[1] ? a : b))[0]
         : null;
 
-      const html = buildWeeklyEmailHtml({ streak, totalQuestions, readinessScore, weakestTopic });
+      const unsubUrl = lifecycleEmails.unsubscribeUrl(PUBLIC_API_URL, row.id, process.env.SUPABASE_SERVICE_KEY);
+      const html = buildWeeklyEmailHtml({ streak, totalQuestions, readinessScore, weakestTopic, unsubUrl });
 
       const emailRes = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -2755,6 +2764,10 @@ app.post('/api/cron/weekly-email', async (req, res) => {
           to: email,
           subject: 'Your weekly theory test progress 📊',
           html,
+          headers: {
+            'List-Unsubscribe': `<${unsubUrl}>`,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          },
         }),
       });
 
@@ -2771,6 +2784,258 @@ app.post('/api/cron/weekly-email', async (req, res) => {
   } catch (err) {
     console.error('[weekly-email] error:', err);
     res.status(500).json({ error: 'Weekly email failed', detail: String(err) });
+  }
+});
+
+// ── Lifecycle emails ─────────────────────────────────────────────────────────
+// The short welcome sequence for new learners and instructors. Which email is
+// due, and what it says, lives in lib/lifecycleEmails.js; this is the I/O.
+
+const PUBLIC_API_URL = process.env.PUBLIC_API_URL || 'https://clearpass-app-production.up.railway.app';
+const LIFECYCLE_FROM = 'ClearPass <hello@getclearpass.co.uk>';
+const LIFECYCLE_FROM_CRAIG = 'Craig at ClearPass <hello@getclearpass.co.uk>';
+
+// Everyone who has opted out: the unsubscribe link (email_preferences) or the
+// "don't email me" tick at signup (user_metadata.marketing_opt_out).
+async function loadEmailOptOuts(supabaseAdmin, users) {
+  const out = new Set();
+  for (const u of users) {
+    if (u.user_metadata?.marketing_opt_out === true) out.add(u.id);
+  }
+  const { data, error } = await supabaseAdmin
+    .from('email_preferences')
+    .select('user_id')
+    .eq('marketing_opt_out', true);
+  if (error) throw error;
+  for (const r of data || []) out.add(r.user_id);
+  return out;
+}
+
+async function listAllAuthUsers(supabaseAdmin) {
+  const users = [];
+  for (let page = 1; page <= 50; page++) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw error;
+    const batch = data?.users || [];
+    users.push(...batch);
+    if (batch.length < 1000) break;
+  }
+  return users;
+}
+
+function countBy(rows, key) {
+  const m = new Map();
+  for (const r of rows || []) m.set(r[key], (m.get(r[key]) || 0) + 1);
+  return m;
+}
+
+// POST /api/cron/lifecycle-emails   (cron-job.org, daily ~10:00 Europe/London)
+// ?dryRun=1 returns what would be sent (counts per email) without sending.
+app.post('/api/cron/lifecycle-emails', async (req, res) => {
+  if (!requireCronAuth(req, res)) return;
+  const dryRun = req.query.dryRun === '1';
+  if (!dryRun && !process.env.RESEND_API_KEY) return res.status(500).json({ error: 'RESEND_API_KEY not set' });
+
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+    const now = new Date();
+    const cohortStart = new Date(Math.min(
+      new Date(lifecycleEmails.LEARNER_COHORT_START).getTime(),
+      new Date(lifecycleEmails.INSTRUCTOR_COHORT_START).getTime(),
+    ));
+
+    const allUsers = await listAllAuthUsers(supabaseAdmin);
+    const optedOut = await loadEmailOptOuts(supabaseAdmin, allUsers);
+    const userById = new Map(allUsers.map(u => [u.id, u]));
+    const recent = allUsers.filter(u => new Date(u.created_at) >= cohortStart && !isE2EUser(u.user_metadata));
+
+    const { data: instructorRows, error: isErr } = await supabaseAdmin
+      .from('instructor_signups')
+      .select('user_id, created_at')
+      .gte('created_at', lifecycleEmails.INSTRUCTOR_COHORT_START);
+    if (isErr) throw isErr;
+
+    const ids = [...new Set([...recent.map(u => u.id), ...(instructorRows || []).map(r => r.user_id)])];
+    if (ids.length === 0) return res.json({ dryRun, due: {}, sent: 0 });
+
+    const [{ data: profiles, error: pErr }, { data: progressRows, error: upErr }, { data: logRows, error: lErr }] = await Promise.all([
+      supabaseAdmin.from('profiles').select('id, username, account_type, instructor_code').in('id', ids),
+      supabaseAdmin.from('user_progress').select('id, progress').in('id', ids),
+      supabaseAdmin.from('email_log').select('user_id, email_key').in('user_id', ids),
+    ]);
+    if (pErr) throw pErr;
+    if (upErr) throw upErr;
+    if (lErr) throw lErr;
+
+    const profileById = new Map((profiles || []).map(r => [r.id, r]));
+    const progressById = new Map((progressRows || []).map(r => [r.id, r.progress || {}]));
+    const sentById = new Map();
+    for (const r of logRows || []) {
+      if (!sentById.has(r.user_id)) sentById.set(r.user_id, new Set());
+      sentById.get(r.user_id).add(r.email_key);
+    }
+
+    const instructorIds = (instructorRows || []).map(r => r.user_id);
+    let pupilsBy = new Map();
+    let seatsBy = new Map();
+    if (instructorIds.length) {
+      const [{ data: rels, error: rErr }, { data: seats, error: sErr }] = await Promise.all([
+        supabaseAdmin.from('instructor_relationships').select('instructor_id').eq('status', 'accepted').in('instructor_id', instructorIds),
+        supabaseAdmin.from('instructor_seats').select('instructor_id').in('instructor_id', instructorIds),
+      ]);
+      if (rErr) throw rErr;
+      if (sErr) throw sErr;
+      pupilsBy = countBy(rels, 'instructor_id');
+      seatsBy = countBy(seats, 'instructor_id');
+    }
+
+    // [{ userId, key, ctx }]
+    const queue = [];
+    const instructorSet = new Set(instructorIds);
+
+    for (const r of instructorRows || []) {
+      const user = userById.get(r.user_id);
+      const profile = profileById.get(r.user_id);
+      if (!user?.email || isE2EUser(user.user_metadata) || profile?.account_type !== 'instructor') continue;
+      const key = lifecycleEmails.dueInstructorEmail({
+        signedUpAt: r.created_at,
+        pupils: pupilsBy.get(r.user_id) || 0,
+        seatsBought: seatsBy.get(r.user_id) || 0,
+        optedOut: optedOut.has(r.user_id),
+        sent: sentById.get(r.user_id) || new Set(),
+      }, now);
+      if (key) queue.push({ user, key, ctx: { name: profile.username, instructorCode: profile.instructor_code, pupils: pupilsBy.get(r.user_id) || 0 } });
+    }
+
+    for (const user of recent) {
+      const profile = profileById.get(user.id);
+      if (!user.email || instructorSet.has(user.id)) continue;
+      if (profile?.account_type === 'instructor' || user.user_metadata?.instructor_signup_intent) continue;
+      // Email signups must have confirmed their address (social sign-ins are
+      // confirmed automatically), so nothing goes to a mistyped address.
+      if (!user.email_confirmed_at) continue;
+      const progress = progressById.get(user.id) || {};
+      const key = lifecycleEmails.dueLearnerEmail({
+        signedUpAt: user.created_at,
+        progress,
+        optedOut: optedOut.has(user.id),
+        sent: sentById.get(user.id) || new Set(),
+      }, now);
+      if (key) queue.push({ user, key, ctx: { name: profile?.username, progress } });
+    }
+
+    const due = {};
+    for (const q of queue) due[q.key] = (due[q.key] || 0) + 1;
+    if (dryRun) return res.json({ dryRun: true, due, enrolled: { learners: recent.length, instructors: instructorIds.length } });
+
+    let sent = 0;
+    let failed = 0;
+    for (const { user, key, ctx } of queue) {
+      // Claim first: the primary key makes a concurrent or repeated run a no-op.
+      const { data: claimed, error: claimErr } = await supabaseAdmin
+        .from('email_log')
+        .upsert({ user_id: user.id, email_key: key }, { onConflict: 'user_id,email_key', ignoreDuplicates: true })
+        .select('user_id');
+      if (claimErr) { console.error(`[lifecycle-emails] claim failed ${key}:`, claimErr.message); failed++; continue; }
+      if (!claimed || claimed.length === 0) continue;
+
+      const unsubUrl = lifecycleEmails.unsubscribeUrl(PUBLIC_API_URL, user.id, process.env.SUPABASE_SERVICE_KEY);
+      const email = lifecycleEmails.buildLifecycleEmail(key, { ...ctx, unsubUrl, now });
+      const isInstructor = key.startsWith('instructor_');
+      try {
+        const result = await sendEmail({
+          to: user.email,
+          subject: email.subject,
+          html: email.html,
+          text: email.text,
+          from: isInstructor ? LIFECYCLE_FROM_CRAIG : LIFECYCLE_FROM,
+          replyTo: process.env.LIFECYCLE_REPLY_TO || undefined,
+          headers: {
+            'List-Unsubscribe': `<${unsubUrl}>`,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          },
+        });
+        sent++;
+        if (result?.id) {
+          await supabaseAdmin.from('email_log').update({ resend_id: result.id }).eq('user_id', user.id).eq('email_key', key);
+        }
+      } catch (err) {
+        failed++;
+        console.error(`[lifecycle-emails] send failed ${key} for ${user.id}:`, err.message || err);
+        // Release the claim so tomorrow's run can try again inside the window.
+        await supabaseAdmin.from('email_log').delete().eq('user_id', user.id).eq('email_key', key);
+      }
+      // Resend's default limit is 2 requests a second.
+      await new Promise(r => setTimeout(r, 600));
+    }
+
+    console.log(`[lifecycle-emails] sent ${sent}, failed ${failed}`, due);
+    if (sent > 0 || failed > 0) {
+      const parts = Object.entries(due).map(([k, n]) => `${k} ${n}`).join(', ');
+      await postToSlack(`Lifecycle emails: sent ${sent}${failed ? `, failed ${failed}` : ''} (${parts})`);
+    }
+    res.json({ sent, failed, due });
+  } catch (err) {
+    console.error('[lifecycle-emails] error:', err);
+    res.status(500).json({ error: 'Lifecycle emails failed', detail: String(err) });
+  }
+});
+
+function unsubscribePageHtml({ title, body, form }) {
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ClearPass emails</title></head>
+<body style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:480px;margin:72px auto;padding:24px;text-align:center;color:#1f2937">
+  <div style="font-size:24px;font-weight:900;letter-spacing:1px;color:#4F46E5">ClearPass</div>
+  <h2 style="margin:28px 0 10px">${title}</h2>
+  <p style="color:#4b5563;line-height:1.6">${body}</p>
+  ${form || ''}
+</body></html>`;
+}
+
+// GET shows a confirm button rather than unsubscribing straight away: mail
+// security scanners open links in emails, and a GET that unsubscribed would
+// quietly opt people out. Mail apps' one-click unsubscribe (RFC 8058) POSTs
+// to the same URL.
+app.get('/api/email/unsubscribe', (req, res) => {
+  const { u, t } = req.query;
+  if (!lifecycleEmails.verifyUnsubscribeToken(u, t, process.env.SUPABASE_SERVICE_KEY)) {
+    return res.status(400).send(unsubscribePageHtml({
+      title: 'This link has expired',
+      body: 'Email <a href="mailto:privacy@getclearpass.co.uk">privacy@getclearpass.co.uk</a> and we’ll take you off our list.',
+    }));
+  }
+  const action = `/api/email/unsubscribe?u=${encodeURIComponent(u)}&t=${encodeURIComponent(t)}`;
+  res.send(unsubscribePageHtml({
+    title: 'Unsubscribe from ClearPass emails?',
+    body: 'You’ll stop getting tips, reminders, offers and weekly progress emails. Account emails such as password resets will still reach you.',
+    form: `<form method="post" action="${action}"><button type="submit" style="background:#4F46E5;color:#fff;border:0;border-radius:10px;padding:13px 26px;font-size:15px;font-weight:700;cursor:pointer">Unsubscribe</button></form>`,
+  }));
+});
+
+app.post('/api/email/unsubscribe', express.urlencoded({ extended: false }), async (req, res) => {
+  const { u, t } = req.query;
+  if (!lifecycleEmails.verifyUnsubscribeToken(u, t, process.env.SUPABASE_SERVICE_KEY)) {
+    return res.status(400).send(unsubscribePageHtml({
+      title: 'This link has expired',
+      body: 'Email <a href="mailto:privacy@getclearpass.co.uk">privacy@getclearpass.co.uk</a> and we’ll take you off our list.',
+    }));
+  }
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+    const { error } = await supabaseAdmin
+      .from('email_preferences')
+      .upsert({ user_id: u, marketing_opt_out: true, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+    if (error) throw error;
+    res.send(unsubscribePageHtml({
+      title: 'You’re unsubscribed',
+      body: 'You won’t get any more of these emails. Good luck with your test!',
+    }));
+  } catch (err) {
+    console.error('[unsubscribe] failed:', err.message || err);
+    res.status(500).send(unsubscribePageHtml({
+      title: 'Something went wrong',
+      body: 'Please try again, or email <a href="mailto:privacy@getclearpass.co.uk">privacy@getclearpass.co.uk</a> and we’ll take you off our list.',
+    }));
   }
 });
 
