@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 
-const LAST_UPDATED = '21 October 2026';
+const LAST_UPDATED = '23 October 2026';
 
 export default function PrivacyPolicyScreen() {
   const theme = useTheme();
@@ -46,6 +46,7 @@ export default function PrivacyPolicyScreen() {
         {'- To generate AI tutor explanations (questions are sent to Anthropic for processing -- no conversation history is retained by ClearPass)\n'}
         {'- To process payments via Stripe (we receive only a confirmation of payment, not card data)\n'}
         {'- To send weekly progress emails to a parent or guardian, if you have opted in\n'}
+        {'- To email you after you sign up: a welcome, study tips, reminders if you haven\'t been back, your weekly progress, and occasional offers for ClearPass Pro (instructors: tips on using ClearPass with pupils and buying Pro seats for them). You can say no when you sign up, and every email has an unsubscribe link\n'}
         {'- To produce anonymous aggregate statistics showing platform-wide accuracy by topic\n'}
         {'- To automatically check an uploaded ADI/PDI document against your declared licence details before unlocking instructor payouts (using Anthropic\'s AI -- see below)'}
       </Section>
@@ -54,7 +55,8 @@ export default function PrivacyPolicyScreen() {
         {'We process your data under the following legal bases:\n\n'}
         {'- Contract: to provide the service you have signed up for\n'}
         {'- Legitimate interest: to improve app quality and identify popular features\n'}
-        {'- Consent: for marketing communications and parent progress emails (you can withdraw at any time)'}
+        {'- Legitimate interest and the "soft opt-in" under PECR: for tips and offers about ClearPass emailed to people who have signed up, with the chance to refuse at signup and in every email\n'}
+        {'- Consent: for parent progress emails (you can withdraw at any time)'}
       </Section>
 
       <Section title="Data storage" theme={theme}>
@@ -81,7 +83,7 @@ export default function PrivacyPolicyScreen() {
         {'- Supabase (database and authentication provider)\n'}
         {'- Stripe (payment processing)\n'}
         {'- Anthropic (AI tutor explanations, question text only; and, for instructors, automated checking of an uploaded ADI/PDI document photo before payouts)\n'}
-        {'- Resend (email delivery for parent notifications)\n'}
+        {'- Resend (email delivery for account, progress, tips and parent emails)\n'}
         {'- Google (advertising measurement on our website, only if you accept cookies there)\n\n'}
         {'All third-party providers are bound by their own privacy policies and data processing agreements.'}
       </Section>
