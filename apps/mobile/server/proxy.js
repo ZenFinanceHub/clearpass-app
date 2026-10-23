@@ -125,7 +125,7 @@ const PORT = 3001;
 //   ANTHROPIC_API_KEY
 //   RESEND_API_KEY
 //   CRON_SECRET  — shared secret for /api/cron/* endpoints (set in Railway dashboard)
-//     Suggested value: r8Kp3Nq7Zm2Xt5Yb4Vw9As1Dc6Ef0Gh
+//     Generate a long random value; never commit it. Same value goes in each cron-job.org job header.
 //   REVENUECAT_WEBHOOK_SECRET  — shared secret for POST /api/revenuecat-webhook.
 //     Set the exact same value as the "Authorization header value" field in
 //     the RevenueCat dashboard's webhook configuration (app.revenuecat.com >
