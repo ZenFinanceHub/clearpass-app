@@ -171,3 +171,30 @@ test('study reminder copy: varies, Pro-aware, last one says it is the last, unsu
     assert.ok(e.subject.length > 0 && e.subject.length < 70);
   }
 });
+
+// ─── Instructor payouts announcement ─────────────────────────────────────────
+const { dueInstructorAnnouncement, INSTRUCTOR_PAYOUTS_ANNOUNCEMENT } = require('./lifecycleEmails');
+
+test('payouts announcement: once, to existing instructors, inside its window', () => {
+  const now = new Date('2026-11-05T10:10:00Z');
+  const base = { signedUpAt: '2026-09-20T10:00:00Z', optedOut: false, sent: new Set() };
+  assert.equal(dueInstructorAnnouncement(base, now), 'instructor_payouts_live');
+  assert.equal(dueInstructorAnnouncement({ ...base, sent: new Set(['instructor_payouts_live']) }, now), null);
+  assert.equal(dueInstructorAnnouncement({ ...base, optedOut: true }, now), null);
+  // Signed up after the announcement: they learn about payouts in the app.
+  assert.equal(dueInstructorAnnouncement({ ...base, signedUpAt: '2026-11-06T09:00:00Z' }, now), null);
+  // Window closed.
+  assert.equal(dueInstructorAnnouncement(base, new Date(INSTRUCTOR_PAYOUTS_ANNOUNCEMENT.sendUntil)), null);
+});
+
+test('payouts announcement copy: code, steps, dashboard link, unsubscribe', () => {
+  const e = buildLifecycleEmail('instructor_payouts_live', { name: 'Sam', instructorCode: 'ADISAM1', unsubUrl: 'https://api.example/u' });
+  assert.equal(e.subject, 'You can now get paid for ClearPass referrals');
+  assert.match(e.html, /ADISAM1/);
+  assert.match(e.text, /30% of what ClearPass receives/);
+  assert.match(e.text, /Set up payouts/);
+  assert.match(e.text, /instructors\.getclearpass\.co\.uk\/dashboard/);
+  assert.match(e.text, /Unsubscribe: https:\/\/api\.example\/u/);
+  const noCode = buildLifecycleEmail('instructor_payouts_live', { unsubUrl: 'https://api.example/u' });
+  assert.match(noCode.text, /Your code is on your dashboard/);
+});

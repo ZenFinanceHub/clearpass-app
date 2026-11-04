@@ -112,6 +112,28 @@ function dueInstructorEmail(instructor, now) {
   return null;
 }
 
+// ─── One-off announcements ──────────────────────────────────────────────────
+// Sent once to existing accounts, inside a date window, through the same
+// daily job (so the same opt-outs, unsubscribe link and email_log dedupe).
+// Accounts created after `signedUpBefore` don't get it: they hear about the
+// feature when they sign up.
+const INSTRUCTOR_PAYOUTS_ANNOUNCEMENT = {
+  key: 'instructor_payouts_live',
+  signedUpBefore: '2026-11-05T00:00:00Z',
+  sendUntil: '2026-11-19T00:00:00Z',
+};
+
+/** The instructor announcement due now, or null.
+ *  instructor: { signedUpAt, optedOut, sent: Set<string> } */
+function dueInstructorAnnouncement(instructor, now) {
+  const a = INSTRUCTOR_PAYOUTS_ANNOUNCEMENT;
+  if (instructor.optedOut) return null;
+  if (!instructor.signedUpAt || new Date(instructor.signedUpAt) >= new Date(a.signedUpBefore)) return null;
+  if (now >= new Date(a.sendUntil)) return null;
+  if (instructor.sent.has(a.key)) return null;
+  return a.key;
+}
+
 // ─── Study reminder emails ─────────────────────────────────────────────────
 // For learners who have stopped studying, on web or phone. Runs alongside the
 // welcome sequence above (which always wins on the day it has something due)
@@ -369,6 +391,28 @@ function buildLifecycleEmail(key, ctx) {
       });
     }
 
+    case 'instructor_payouts_live':
+      return finish({
+        subject: 'You can now get paid for ClearPass referrals',
+        preheader: '30% of every Pro sale from pupils who use your code.',
+        bodyHtml: [
+          p(hi),
+          p('Good news: instructor payouts are now live on ClearPass.'),
+          p('You earn <b>30% of what ClearPass receives</b> every time a pupil who signed up with your instructor code goes Pro. Earnings are tracked automatically, so anything already owed is counted.'),
+          p('<b>To get paid:</b>'),
+          list([
+            `<b>Upload your ADI certificate or trainee licence</b> on your dashboard. We need it once, before your first payout.`,
+            '<b>Open the ClearPass app</b>, go to the instructor screen and tap <b>Set up payouts</b>. Stripe will ask a few questions and your bank details. It takes about 5 minutes.',
+            '<b>Request a payout</b> from the same screen whenever you have earnings.',
+          ]),
+          p(`${ctx.instructorCode ? `Your code is <b style="font-size:17px;letter-spacing:1px;">${esc(ctx.instructorCode)}</b>.` : 'Your code is on your dashboard.'} Share it with pupils so their sign-ups count towards you.`),
+          p('Any questions, just reply.'),
+          p('Craig<br>ClearPass'),
+        ].join(''),
+        cta: { label: 'Open my dashboard', href: INSTRUCTOR_DASHBOARD_URL },
+        unsubUrl, footerNote: instructorFooter,
+      });
+
     case 'instructor_checkin':
       return finish({
         subject: 'Quick question',
@@ -510,6 +554,8 @@ module.exports = {
   dueLearnerEmail,
   dueInstructorEmail,
   dueStudyNudgeEmail,
+  dueInstructorAnnouncement,
+  INSTRUCTOR_PAYOUTS_ANNOUNCEMENT,
   buildStudyNudgeEmail,
   NUDGE_EMAIL_DAYS,
   unsubscribeToken,
