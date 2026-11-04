@@ -2829,7 +2829,20 @@ function countBy(rows, key) {
   return m;
 }
 
+// `.in()` filters go in the URL, so long id lists are split up.
+async function selectInChunks(supabaseAdmin, table, columns, idColumn, ids, size = 150) {
+  const out = [];
+  for (let i = 0; i < ids.length; i += size) {
+    const { data, error } = await supabaseAdmin.from(table).select(columns).in(idColumn, ids.slice(i, i + size));
+    if (error) throw error;
+    out.push(...(data || []));
+  }
+  return out;
+}
+
 // POST /api/cron/lifecycle-emails   (cron-job.org, daily ~10:00 Europe/London)
+// Sends the welcome sequences and the study reminder emails (one per person
+// per run at most; see lib/lifecycleEmails.js for the schedules).
 // ?dryRun=1 returns what would be sent (counts per email) without sending.
 app.post('/api/cron/lifecycle-emails', async (req, res) => {
   if (!requireCronAuth(req, res)) return;
@@ -2839,43 +2852,48 @@ app.post('/api/cron/lifecycle-emails', async (req, res) => {
   try {
     const supabaseAdmin = getSupabaseAdmin();
     const now = new Date();
-    const cohortStart = new Date(Math.min(
-      new Date(lifecycleEmails.LEARNER_COHORT_START).getTime(),
-      new Date(lifecycleEmails.INSTRUCTOR_COHORT_START).getTime(),
-    ));
 
     const allUsers = await listAllAuthUsers(supabaseAdmin);
     const optedOut = await loadEmailOptOuts(supabaseAdmin, allUsers);
     const userById = new Map(allUsers.map(u => [u.id, u]));
-    const recent = allUsers.filter(u => new Date(u.created_at) >= cohortStart && !isE2EUser(u.user_metadata));
+    const learnerCohortStart = new Date(lifecycleEmails.LEARNER_COHORT_START);
 
     const { data: instructorRows, error: isErr } = await supabaseAdmin
       .from('instructor_signups')
       .select('user_id, created_at')
       .gte('created_at', lifecycleEmails.INSTRUCTOR_COHORT_START);
     if (isErr) throw isErr;
+    const instructorIds = (instructorRows || []).map(r => r.user_id);
+    const instructorSet = new Set(instructorIds);
 
-    const ids = [...new Set([...recent.map(u => u.id), ...(instructorRows || []).map(r => r.user_id)])];
+    // Every learner can get study reminder emails, not just the welcome
+    // cohort. Email signups must have confirmed their address (social
+    // sign-ins are confirmed automatically), so nothing goes to a typo.
+    const learners = allUsers.filter(u =>
+      u.email && u.email_confirmed_at && !isE2EUser(u.user_metadata)
+      && !instructorSet.has(u.id) && !u.user_metadata?.instructor_signup_intent
+      && !optedOut.has(u.id));
+
+    const ids = [...new Set([...learners.map(u => u.id), ...instructorIds])];
     if (ids.length === 0) return res.json({ dryRun, due: {}, sent: 0 });
 
-    const [{ data: profiles, error: pErr }, { data: progressRows, error: upErr }, { data: logRows, error: lErr }] = await Promise.all([
-      supabaseAdmin.from('profiles').select('id, username, account_type, instructor_code').in('id', ids),
-      supabaseAdmin.from('user_progress').select('id, progress').in('id', ids),
-      supabaseAdmin.from('email_log').select('user_id, email_key').in('user_id', ids),
+    const [profiles, progressRows, logRows] = await Promise.all([
+      selectInChunks(supabaseAdmin, 'profiles', 'id, username, account_type, instructor_code', 'id', ids),
+      selectInChunks(supabaseAdmin, 'user_progress', 'id, progress', 'id', ids),
+      selectInChunks(supabaseAdmin, 'email_log', 'user_id, email_key, sent_at', 'user_id', ids),
     ]);
-    if (pErr) throw pErr;
-    if (upErr) throw upErr;
-    if (lErr) throw lErr;
 
-    const profileById = new Map((profiles || []).map(r => [r.id, r]));
-    const progressById = new Map((progressRows || []).map(r => [r.id, r.progress || {}]));
+    const profileById = new Map(profiles.map(r => [r.id, r]));
+    const progressById = new Map(progressRows.map(r => [r.id, r.progress || {}]));
     const sentById = new Map();
-    for (const r of logRows || []) {
+    const lastEmailAtById = new Map();
+    for (const r of logRows) {
       if (!sentById.has(r.user_id)) sentById.set(r.user_id, new Set());
       sentById.get(r.user_id).add(r.email_key);
+      const prev = lastEmailAtById.get(r.user_id);
+      if (r.sent_at && (!prev || r.sent_at > prev)) lastEmailAtById.set(r.user_id, r.sent_at);
     }
 
-    const instructorIds = (instructorRows || []).map(r => r.user_id);
     let pupilsBy = new Map();
     let seatsBy = new Map();
     if (instructorIds.length) {
@@ -2889,9 +2907,8 @@ app.post('/api/cron/lifecycle-emails', async (req, res) => {
       seatsBy = countBy(seats, 'instructor_id');
     }
 
-    // [{ userId, key, ctx }]
+    // [{ user, key, label, ctx, step? }] — at most one email per person per run.
     const queue = [];
-    const instructorSet = new Set(instructorIds);
 
     for (const r of instructorRows || []) {
       const user = userById.get(r.user_id);
@@ -2904,33 +2921,39 @@ app.post('/api/cron/lifecycle-emails', async (req, res) => {
         optedOut: optedOut.has(r.user_id),
         sent: sentById.get(r.user_id) || new Set(),
       }, now);
-      if (key) queue.push({ user, key, ctx: { name: profile.username, instructorCode: profile.instructor_code, pupils: pupilsBy.get(r.user_id) || 0 } });
+      if (key) queue.push({ user, key, label: key, ctx: { name: profile.username, instructorCode: profile.instructor_code, pupils: pupilsBy.get(r.user_id) || 0 } });
     }
 
-    for (const user of recent) {
+    for (const user of learners) {
       const profile = profileById.get(user.id);
-      if (!user.email || instructorSet.has(user.id)) continue;
-      if (profile?.account_type === 'instructor' || user.user_metadata?.instructor_signup_intent) continue;
-      // Email signups must have confirmed their address (social sign-ins are
-      // confirmed automatically), so nothing goes to a mistyped address.
-      if (!user.email_confirmed_at) continue;
+      if (profile?.account_type === 'instructor') continue;
       const progress = progressById.get(user.id) || {};
-      const key = lifecycleEmails.dueLearnerEmail({
+      const sent = sentById.get(user.id) || new Set();
+      const ctx = { name: profile?.username, progress };
+
+      // The welcome sequence wins on any day it has something due.
+      if (new Date(user.created_at) >= learnerCohortStart) {
+        const key = lifecycleEmails.dueLearnerEmail({ signedUpAt: user.created_at, progress, optedOut: false, sent }, now);
+        if (key) { queue.push({ user, key, label: key, ctx }); continue; }
+      }
+
+      const nudge = lifecycleEmails.dueStudyNudgeEmail({
         signedUpAt: user.created_at,
         progress,
-        optedOut: optedOut.has(user.id),
-        sent: sentById.get(user.id) || new Set(),
+        optedOut: false,
+        sent,
+        lastEmailAt: lastEmailAtById.get(user.id) || null,
       }, now);
-      if (key) queue.push({ user, key, ctx: { name: profile?.username, progress } });
+      if (nudge) queue.push({ user, key: nudge.key, label: `nudge_d${nudge.step}`, step: nudge.step, ctx });
     }
 
     const due = {};
-    for (const q of queue) due[q.key] = (due[q.key] || 0) + 1;
-    if (dryRun) return res.json({ dryRun: true, due, enrolled: { learners: recent.length, instructors: instructorIds.length } });
+    for (const q of queue) due[q.label] = (due[q.label] || 0) + 1;
+    if (dryRun) return res.json({ dryRun: true, due, enrolled: { learners: learners.length, instructors: instructorIds.length } });
 
     let sent = 0;
     let failed = 0;
-    for (const { user, key, ctx } of queue) {
+    for (const { user, key, ctx, step } of queue) {
       // Claim first: the primary key makes a concurrent or repeated run a no-op.
       const { data: claimed, error: claimErr } = await supabaseAdmin
         .from('email_log')
@@ -2940,7 +2963,9 @@ app.post('/api/cron/lifecycle-emails', async (req, res) => {
       if (!claimed || claimed.length === 0) continue;
 
       const unsubUrl = lifecycleEmails.unsubscribeUrl(PUBLIC_API_URL, user.id, process.env.SUPABASE_SERVICE_KEY);
-      const email = lifecycleEmails.buildLifecycleEmail(key, { ...ctx, unsubUrl, now });
+      const email = step
+        ? lifecycleEmails.buildStudyNudgeEmail(step, { ...ctx, unsubUrl, now })
+        : lifecycleEmails.buildLifecycleEmail(key, { ...ctx, unsubUrl, now });
       const isInstructor = key.startsWith('instructor_');
       try {
         const result = await sendEmail({

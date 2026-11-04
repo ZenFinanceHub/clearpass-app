@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from './CrossPlatformAlert';
 import { loadUserProgress } from './storage';
-import { buildNudgePlan, type ReminderAskState } from './studyNudges';
+import { buildNudgePlan, reminderDefaultsToApply, type ReminderAskState } from './studyNudges';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -16,10 +16,13 @@ export type NotificationSettings = {
   reminderMinute:   number;
 };
 
+// Study reminder and test countdown are on by default (Nov 2026): learners
+// can switch them off in Settings. See ensureReminderDefaults.
+// Web has no push notifications, so they stay off there.
 export const DEFAULT_NOTIF_SETTINGS: NotificationSettings = {
-  studyReminder:    false,
+  studyReminder:    Platform.OS !== 'web',
   streakProtection: false,
-  testCountdown:    false,
+  testCountdown:    Platform.OS !== 'web',
   reminderHour:     19,
   reminderMinute:   0,
 };
@@ -35,6 +38,7 @@ const KEY_TEST_COUNTDOWN_V2 = '@clearpass/notif_test_countdown_v2';
 const KEY_WEEKLY            = '@clearpass/notif_weekly_progress';
 const KEY_STUDY_NUDGES      = '@clearpass/notif_study_nudges';
 const KEY_REMINDER_ASK      = '@clearpass/reminder_ask';
+const KEY_REMINDER_DEFAULT  = '@clearpass/reminder_default_v1';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -96,14 +100,32 @@ export async function saveNotificationSettings(s: NotificationSettings): Promise
 // they stop opening the app. KEY_STUDY_REMINDER held the old single DAILY
 // trigger; it is still cancelled so upgraded installs don't get both.
 
-export async function getNotificationPermission(): Promise<{ status: 'granted' | 'denied' | 'undetermined'; canAskAgain: boolean }> {
-  if (isWeb()) return { status: 'denied', canAskAgain: false };
+export type NotificationPermission = {
+  status: 'granted' | 'denied' | 'undetermined';
+  canAskAgain: boolean;
+  /** iOS "deliver quietly": allowed without a prompt, shown in Notification
+   *  Centre only (no banner or sound). Expo reports it as 'undetermined', so
+   *  the in-app offer still asks for full alerts. */
+  provisional: boolean;
+};
+
+export async function getNotificationPermission(): Promise<NotificationPermission> {
+  if (isWeb()) return { status: 'denied', canAskAgain: false, provisional: false };
   try {
     const p = await Notifications.getPermissionsAsync();
-    return { status: p.status as 'granted' | 'denied' | 'undetermined', canAskAgain: p.canAskAgain ?? true };
+    return {
+      status: p.status as NotificationPermission['status'],
+      canAskAgain: p.canAskAgain ?? true,
+      provisional: p.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL,
+    };
   } catch {
-    return { status: 'undetermined', canAskAgain: true };
+    return { status: 'undetermined', canAskAgain: true, provisional: false };
   }
+}
+
+/** Notifications will be delivered: fully allowed, or iOS quiet delivery. */
+export function canDeliver(p: NotificationPermission): boolean {
+  return p.status === 'granted' || p.provisional;
 }
 
 async function cancelStudyNudges(): Promise<void> {
@@ -138,8 +160,7 @@ async function doRescheduleStudyNudges(override?: { hour: number; minute: number
   try {
     const settings = await loadNotificationSettings();
     if (!override && !settings.studyReminder) { await cancelStudyNudges(); return; }
-    const { status } = await getNotificationPermission();
-    if (status !== 'granted') return;
+    if (!canDeliver(await getNotificationPermission())) return;
 
     const progress = await loadUserProgress();
     const plan = buildNudgePlan({
@@ -200,6 +221,67 @@ export async function enableStudyReminders(hour = 19, minute = 0): Promise<boole
     try { await scheduleTestCountdown(testDateIso!, progress?.readinessScore ?? 0); } catch {}
   }
   return true;
+}
+
+/**
+ * Reminders on by default. Called on every home-screen focus; cheap after the
+ * first run. Steps:
+ *  1. Once per install, switch the study reminder (and the test countdown, if
+ *     a future test date is set) on. After that the Settings toggle wins.
+ *  2. On iOS, if the learner hasn't been asked yet, take "deliver quietly"
+ *     (provisional) permission. It needs no prompt, so reminders start
+ *     straight away in Notification Centre; the in-app offer and the
+ *     onboarding prompt can still upgrade them to banners with sound.
+ *     Android 13+ has no equivalent, so there it waits for the prompt.
+ *  3. Rebuild the rolling nudges, and the test countdown if it's on.
+ */
+export async function ensureReminderDefaults(): Promise<void> {
+  if (isWeb()) return;
+  try {
+    const progress = await loadUserProgress();
+    let settings = await loadNotificationSettings();
+    const applied = (await AsyncStorage.getItem(KEY_REMINDER_DEFAULT)) === '1';
+    const defaults = reminderDefaultsToApply({
+      alreadyApplied: applied,
+      settings,
+      testDateIso: progress?.testDate ?? null,
+      now: new Date(),
+    });
+    if (defaults) {
+      settings = { ...settings, ...defaults };
+      await saveNotificationSettings(settings);
+      await AsyncStorage.setItem(KEY_REMINDER_DEFAULT, '1');
+    }
+    if (!settings.studyReminder && !settings.testCountdown) return;
+
+    let perm = await getNotificationPermission();
+    if (Platform.OS === 'ios' && perm.status === 'undetermined' && !perm.provisional) {
+      try {
+        await Notifications.requestPermissionsAsync({
+          ios: { allowAlert: true, allowBadge: true, allowSound: true, allowProvisional: true },
+        });
+      } catch {}
+      perm = await getNotificationPermission();
+    }
+    if (!canDeliver(perm)) return;
+
+    await rescheduleStudyNudges();
+    const testDateIso = progress?.testDate ?? null;
+    if (settings.testCountdown && testDateIso && new Date(testDateIso) > new Date()
+        && !(await AsyncStorage.getItem(KEY_TEST_COUNTDOWN))) {
+      try { await scheduleTestCountdown(testDateIso, progress?.readinessScore ?? 0); } catch {}
+    }
+  } catch {}
+}
+
+/** The full permission prompt (banners and sound) with reminders on, from
+ *  the post-onboarding screen. Returns false if the learner declined, in
+ *  which case the OS allows nothing and the Settings toggle explains how to
+ *  turn notifications back on. */
+export async function askForFullReminders(): Promise<boolean> {
+  if (isWeb()) return false;
+  await AsyncStorage.setItem(KEY_REMINDER_DEFAULT, '1');
+  return enableStudyReminders(19, 0).catch(() => false);
 }
 
 // ─── Reminder offer bookkeeping ───────────────────────────────────────────────

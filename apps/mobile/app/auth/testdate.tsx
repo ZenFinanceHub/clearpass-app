@@ -75,6 +75,11 @@ async function saveTestDate(isoDate: string) {
   }
 }
 
+// Phones go on to the reminders step; web has no push notifications.
+function finishOnboarding() {
+  router.replace(Platform.OS === 'web' ? '/(tabs)/home' : ('/auth/reminders' as any));
+}
+
 export default function TestDateScreen() {
   const params = useLocalSearchParams<{ pendingInstructor?: string }>();
   const [dateInput, setDateInput] = useState('');
@@ -101,10 +106,10 @@ export default function TestDateScreen() {
     try {
       await saveTestDate(parsed);
       logFunnelEvent('onboarding_completed', { testDate: true });
-      router.replace('/(tabs)/home');
+      finishOnboarding();
     } catch {
       setError('Could not save date. Continuing anyway...');
-      setTimeout(() => router.replace('/(tabs)/home'), 1200);
+      setTimeout(finishOnboarding, 1200);
     } finally {
       setSaving(false);
     }
@@ -112,7 +117,7 @@ export default function TestDateScreen() {
 
   function handleSkip() {
     logFunnelEvent('onboarding_completed', { testDate: false });
-    router.replace('/(tabs)/home');
+    finishOnboarding();
   }
 
   return (

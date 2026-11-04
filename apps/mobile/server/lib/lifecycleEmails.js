@@ -112,6 +112,55 @@ function dueInstructorEmail(instructor, now) {
   return null;
 }
 
+// ─── Study reminder emails ─────────────────────────────────────────────────
+// For learners who have stopped studying, on web or phone. Runs alongside the
+// welcome sequence above (which always wins on the day it has something due)
+// and covers everyone, not just the 22 Oct cohort, as long as they studied
+// (or signed up) in the last two months.
+//
+// Days since they last studied (UK days). Each step has a window up to the
+// next one, so a missed cron run sends the step late within its window, and
+// a learner who comes back resets the whole schedule (the key includes the
+// day they last studied). After day 60 we stop.
+const NUDGE_EMAIL_DAYS = [2, 3, 5, 7, 10, 14, 21, 30, 45, 60];
+const NUDGE_EMAIL_LAST_WINDOW_END = 67;
+// Never two emails to the same person within this long, whatever sent them.
+const MIN_HOURS_BETWEEN_EMAILS = 20;
+
+function londonDayIndex(dateOrIso) {
+  const [y, m, d] = londonDay(dateOrIso).split('-').map(Number);
+  return Math.round(Date.UTC(y, m - 1, d) / DAY_MS);
+}
+
+/**
+ * The study reminder email due now, or null.
+ * learner: { signedUpAt, progress, optedOut, sent: Set<string>, lastEmailAt?: string|null }
+ * Returns { key, step } — key is unique per break (e.g. nudge_2026-11-01_d3).
+ */
+function dueStudyNudgeEmail(learner, now) {
+  if (learner.optedOut) return null;
+  const p = learner.progress || {};
+  const lastActive = p.lastStudied || learner.signedUpAt;
+  if (!lastActive || isNaN(new Date(lastActive).getTime())) return null;
+
+  // Nothing once the test has been and gone.
+  if (p.testDate && !isNaN(new Date(p.testDate).getTime()) && londonDayIndex(p.testDate) < londonDayIndex(now)) return null;
+
+  if (learner.lastEmailAt && now.getTime() - new Date(learner.lastEmailAt).getTime() < MIN_HOURS_BETWEEN_EMAILS * 3_600_000) return null;
+
+  const inactive = londonDayIndex(now) - londonDayIndex(lastActive);
+  let i = -1;
+  for (let j = 0; j < NUDGE_EMAIL_DAYS.length; j++) if (NUDGE_EMAIL_DAYS[j] <= inactive) i = j;
+  if (i === -1) return null;
+  const windowEnd = NUDGE_EMAIL_DAYS[i + 1] ?? NUDGE_EMAIL_LAST_WINDOW_END;
+  if (inactive >= windowEnd) return null;
+
+  const step = NUDGE_EMAIL_DAYS[i];
+  const key = `nudge_${londonDay(lastActive)}_d${step}`;
+  if (learner.sent.has(key)) return null;
+  return { key, step };
+}
+
 // ─── Unsubscribe tokens ─────────────────────────────────────────────────────
 // Derived from the service key rather than a separate secret, so there is no
 // extra variable to manage. Rotating the service key invalidates old links,
@@ -340,6 +389,98 @@ function buildLifecycleEmail(key, ctx) {
   }
 }
 
+/**
+ * A study reminder email. ctx: { name, progress, unsubUrl, now }
+ * Copy rotates by step so nobody gets the same email twice in a row.
+ */
+function buildStudyNudgeEmail(step, ctx) {
+  const hi = ctx.name ? `Hi ${esc(ctx.name)},` : 'Hi,';
+  const now = ctx.now || new Date();
+  const progress = ctx.progress || {};
+  const isPro = progress.isPro === true;
+  const toTest = daysToTest(progress.testDate, now);
+  const answered = progress.totalQuestionsAnswered || 0;
+  const footerNote = 'You’re getting study reminders because you signed up to ClearPass.';
+  const cta = (label, campaign) => ({ label, href: appLink(`email-nudge-d${step}-${campaign}`) });
+  const sign = p('The ClearPass team');
+  const testLine = toTest === null ? '' : toTest === 0 ? ' Your theory test is today, good luck!' : toTest === 1 ? ' Your theory test is tomorrow.' : ` Your theory test is ${toTest} days away.`;
+  const last = step === NUDGE_EMAIL_DAYS[NUDGE_EMAIL_DAYS.length - 1];
+
+  if (last) {
+    return finish({
+      subject: 'Still preparing for your theory test?',
+      preheader: 'Your progress is saved whenever you’re ready.',
+      bodyHtml: [
+        p(hi),
+        p(`It’s been a while since your last ClearPass session.${testLine} Everything you’ve done so far is saved${answered ? `, including the ${answered} questions you’ve answered` : ''}.`),
+        p('This is the last reminder we’ll send unless you pick it back up. Whenever you’re ready, ten minutes is all it takes to get going again.'),
+        sign,
+      ].join(''),
+      cta: cta('Pick up where I left off', 'last'), unsubUrl: ctx.unsubUrl, footerNote,
+    });
+  }
+
+  const variants = [
+    () => ({
+      subject: isPro ? 'Today’s theory practice is ready' : 'Your 10 free questions are ready',
+      preheader: 'Five minutes today keeps what you learned fresh.',
+      bodyHtml: [
+        p(hi),
+        p(`${isPro ? 'Today’s practice is' : 'Today’s 10 free questions are'} ready for you.${testLine}`),
+        p('A short session now does more than a long one next week. ClearPass brings back the questions you got wrong, so every session works on your weak spots.'),
+        sign,
+      ].join(''),
+      cta: cta('Do today’s questions', 'ready'),
+    }),
+    () => (toTest !== null && toTest > 1
+      ? {
+        subject: `${toTest} days to your theory test`,
+        preheader: 'Ten questions a day adds up fast.',
+        bodyHtml: [
+          p(hi),
+          p(`Your theory test is <b>${toTest} days away</b>. Ten questions a day between now and then covers a lot of ground, and it’s much easier than cramming the night before.`),
+          sign,
+        ].join(''),
+        cta: cta('Practise now', 'countdown'),
+      }
+      : {
+        subject: 'Road signs: the easiest marks on the test',
+        preheader: 'A quick session on signs is an easy win.',
+        bodyHtml: [
+          p(hi),
+          p('Road signs come up in every theory test, and they’re some of the easiest marks to pick up. A quick session on them today is an easy win.'),
+          sign,
+        ].join(''),
+        cta: cta('Practise road signs', 'signs'),
+      }),
+    () => ({
+      subject: 'Pick up where you left off',
+      preheader: 'Your progress is saved.',
+      bodyHtml: [
+        p(hi),
+        p(`Your ClearPass progress is saved${answered ? `: ${answered} questions answered so far` : ''}.${testLine}`),
+        p('Little and often is the best way to prepare. Ten minutes today keeps you on track.'),
+        sign,
+      ].join(''),
+      cta: cta('Carry on practising', 'progress'),
+    }),
+    () => ({
+      subject: 'How would you do on the real test?',
+      preheader: 'A quick mock shows where you stand.',
+      bodyHtml: [
+        p(hi),
+        p(`A mock test is the quickest way to see where you stand: timed and marked like the real thing.${isPro ? '' : ' Your first Quick Mock is free.'}`),
+        p('At the end you’ll see exactly which topics to work on.'),
+        sign,
+      ].join(''),
+      cta: cta('Take a mock test', 'mock'),
+    }),
+  ];
+  const idx = NUDGE_EMAIL_DAYS.indexOf(step);
+  const v = variants[(idx < 0 ? 0 : idx) % variants.length]();
+  return finish({ ...v, unsubUrl: ctx.unsubUrl, footerNote });
+}
+
 function htmlToText(html) {
   return html
     .replace(/<br\s*\/?>/gi, '\n')
@@ -368,6 +509,9 @@ module.exports = {
   WEB_APP_URL,
   dueLearnerEmail,
   dueInstructorEmail,
+  dueStudyNudgeEmail,
+  buildStudyNudgeEmail,
+  NUDGE_EMAIL_DAYS,
   unsubscribeToken,
   verifyUnsubscribeToken,
   unsubscribeUrl,

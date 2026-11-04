@@ -1,7 +1,7 @@
 // Run: node --experimental-strip-types --test scripts/lib/studyNudges.test.mjs
 import test from 'node:test';
 import assert from 'node:assert';
-import { buildNudgePlan, shouldOfferReminder, daysUntilTest, MAX_REMINDER_ASKS } from '../../src/studyNudges.ts';
+import { buildNudgePlan, shouldOfferReminder, daysUntilTest, reminderDefaultsToApply, MAX_REMINDER_ASKS } from '../../src/studyNudges.ts';
 import { testDateError } from '../../src/testDateRules.ts';
 
 const at = (y, m, d, h = 12, min = 0) => new Date(y, m - 1, d, h, min);
@@ -23,11 +23,18 @@ test('skips today when reminder time has passed', () => {
   assert.equal(plan[0].date.getDate(), 23);
 });
 
-test('daily for a week then tapering, at most 12', () => {
+test('daily for two weeks, then every other day, then weekly to day 56', () => {
   const plan = buildNudgePlan({ now: at(2026, 10, 22, 8), hour: 19, minute: 0 });
-  assert.equal(plan.length, 12);
+  assert.equal(plan.length, 24);
+  assert.ok(plan.length < 64, 'iOS keeps at most 64 pending notifications');
   const offsets = plan.map(p => Math.round((p.date - at(2026, 10, 22, 19)) / 86400000));
-  assert.deepEqual(offsets, [0, 1, 2, 3, 4, 5, 6, 7, 9, 11, 14, 21]);
+  assert.deepEqual(offsets, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 21, 28, 35, 42, 49, 56]);
+});
+
+test('first two weeks use the everyday copy, later ones the gentle copy', () => {
+  const plan = buildNudgePlan({ now: at(2026, 10, 22, 8), hour: 19, minute: 0 });
+  for (const n of plan.slice(0, 15)) assert.doesNotMatch(n.body, /progress is saved/);
+  for (const n of plan.slice(15)) assert.match(n.body, /progress is saved/);
 });
 
 test('stops after the test date and uses test-day copy', () => {
@@ -77,4 +84,21 @@ test('test date rules', () => {
   assert.equal(testDateError(new Date(2026, 9, 21).toISOString(), now), null);
   assert.equal(testDateError(new Date(2026, 11, 20).toISOString(), now), null);
   assert.match(testDateError(new Date(2029, 0, 1).toISOString(), now), /2 years/);
+});
+
+test('reminders switch on by default exactly once', () => {
+  const now = at(2026, 11, 4);
+  const off = { studyReminder: false, testCountdown: false };
+  assert.deepEqual(reminderDefaultsToApply({ alreadyApplied: false, settings: off, now }), { studyReminder: true, testCountdown: false });
+  // After that the Settings toggle wins, even if it was turned back off.
+  assert.equal(reminderDefaultsToApply({ alreadyApplied: true, settings: off, now }), null);
+});
+
+test('default also turns on the test countdown when a future test is set', () => {
+  const now = at(2026, 11, 4);
+  const off = { studyReminder: false, testCountdown: false };
+  const future = new Date(2026, 11, 1).toISOString();
+  const past = new Date(2026, 9, 1).toISOString();
+  assert.equal(reminderDefaultsToApply({ alreadyApplied: false, settings: off, testDateIso: future, now }).testCountdown, true);
+  assert.equal(reminderDefaultsToApply({ alreadyApplied: false, settings: off, testDateIso: past, now }).testCountdown, false);
 });
