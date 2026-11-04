@@ -51,6 +51,9 @@ import {
   cancelTestCountdown,
   showWebAlert,
   showPermissionDeniedAlert,
+  getNotificationPermission,
+  canDeliver,
+  rescheduleStudyNudges,
 } from '@/src/notifications';
 import * as Sentry from '@sentry/react-native';
 import { getBuildInfo, buildInfoClipboardText } from '@/src/buildInfo';
@@ -203,6 +206,9 @@ export default function SettingsScreen() {
 
   // Notification state
   const [notifSettings, setNotifSettings]   = useState<NotificationSettings>(DEFAULT_NOTIF_SETTINGS);
+  // Reminders are on by default, but the phone may not be letting them
+  // through yet (Android 13+ before the prompt, or turned off in Settings).
+  const [notifBlocked, setNotifBlocked]     = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [pickerHour, setPickerHour]         = useState(19);
   const [pickerMinute, setPickerMinute]     = useState(0);
@@ -262,6 +268,9 @@ export default function SettingsScreen() {
       // Load notification settings
       const ns = await loadNotificationSettings();
       setNotifSettings(ns);
+      if (Platform.OS !== 'web') {
+        setNotifBlocked(!canDeliver(await getNotificationPermission()));
+      }
       setPickerHour(ns.reminderHour);
       setPickerMinute(ns.reminderMinute);
 
@@ -489,6 +498,14 @@ export default function SettingsScreen() {
     const granted = await requestNotificationPermissions();
     if (!granted) { showPermissionDeniedAlert(); return false; }
     return true;
+  }
+
+  async function handleAllowNotifications() {
+    const ok = await ensurePermission();
+    if (!ok) return;
+    setNotifBlocked(false);
+    await rescheduleStudyNudges();
+    showSavedToast();
   }
 
   async function handleToggleStudyReminder(val: boolean) {
@@ -859,6 +876,13 @@ export default function SettingsScreen() {
                 ? formatTime(notifSettings.reminderHour, notifSettings.reminderMinute)
                 : 'Get a daily nudge to practise'}
             </Text>
+            {notifSettings.studyReminder && notifBlocked && (
+              <TouchableOpacity onPress={() => void handleAllowNotifications()} activeOpacity={0.7}>
+                <Text style={[styles.description, { fontSize: theme.fontSize(12), color: '#DC2626', fontWeight: '700' }]}>
+                  {'Notifications are off on this phone. Tap to allow'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
           <Switch
             value={notifSettings.studyReminder}

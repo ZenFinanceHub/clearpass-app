@@ -26,8 +26,15 @@ export type NudgeInput = {
 export type PlannedNudge = { date: Date; title: string; body: string };
 
 /** Days from today on which a nudge fires. 0 = today (if not yet studied and
- *  the reminder time is still ahead). Daily for a week, then tapering. */
-export const NUDGE_DAY_OFFSETS = [0, 1, 2, 3, 4, 5, 6, 7, 9, 11, 14, 21];
+ *  the reminder time is still ahead). Daily for two weeks, then every other
+ *  day to day 21, then weekly to day 56, then stops. Counted from the last
+ *  time the app was opened, because the plan is rebuilt on every open.
+ *  24 entries, well under iOS's 64 pending-notification limit. */
+export const NUDGE_DAY_OFFSETS = [
+  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+  16, 18, 20, 21,
+  28, 35, 42, 49, 56,
+];
 
 function sameLocalDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -52,8 +59,8 @@ function copyFor(dayOffset: number, fireDate: Date, input: NudgeInput): { title:
   if (toTest === 0) return { title: "Today's the day 🚗", body: 'Good luck with your theory test. A few warm-up questions?' };
   if (toTest === 1) return { title: 'Your theory test is tomorrow', body: 'A short warm-up session now, then an early night.' };
 
-  // After a week away, a gentler "your progress is saved" message.
-  if (dayOffset >= 9) {
+  // After two weeks away, a gentler "your progress is saved" message.
+  if (dayOffset >= 15) {
     return toTest !== null
       ? { title: `${toTest} days until your theory test`, body: 'Pick up where you left off. Your progress is saved.' }
       : { title: 'Still preparing for your theory test?', body: 'Pick up where you left off. Your progress is saved.' };
@@ -98,7 +105,7 @@ export function buildNudgePlan(input: NudgeInput): PlannedNudge[] {
 
 export type ReminderAskState = { times: number; lastIso: string | null };
 
-export const MAX_REMINDER_ASKS = 3;
+export const MAX_REMINDER_ASKS = 5;
 export const MIN_DAYS_BETWEEN_ASKS = 2;
 
 export function shouldOfferReminder(args: {
@@ -118,4 +125,27 @@ export function shouldOfferReminder(args: {
     if (daysSince < MIN_DAYS_BETWEEN_ASKS) return false;
   }
   return true;
+}
+
+// ─── Reminders on by default ─────────────────────────────────────────────────
+
+/**
+ * One-time switch to reminders-on-by-default (Nov 2026). Before this, every
+ * install started with reminders off and almost nobody turned them on, so a
+ * stored `false` almost always means "never touched" rather than "chose
+ * off". Each install is switched on once; after that the Settings toggle
+ * wins, including turning it back off.
+ */
+export function reminderDefaultsToApply(args: {
+  alreadyApplied: boolean;
+  settings: { studyReminder: boolean; testCountdown: boolean };
+  testDateIso?: string | null;
+  now: Date;
+}): { studyReminder: boolean; testCountdown: boolean } | null {
+  if (args.alreadyApplied) return null;
+  const hasFutureTest = daysUntilTest(args.testDateIso, args.now) !== null;
+  return {
+    studyReminder: true,
+    testCountdown: args.settings.testCountdown || hasFutureTest,
+  };
 }

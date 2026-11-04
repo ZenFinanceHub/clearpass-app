@@ -41,6 +41,7 @@ import {
   scheduleStreakProtectionNotification,
   scheduleTestCountdownNotifications,
   rescheduleStudyNudges,
+  ensureReminderDefaults,
 } from '@/src/notifications';
 import { buildTodaySummary } from '../studyplan';
 import { loadSRState, getDueQuestions } from '@/src/spacedRepetition';
@@ -328,8 +329,10 @@ export default function HomeScreen() {
 
       void (async () => {
         await syncPendingUsername();
-        // Keep the rolling study nudges current (skips today once studied).
-        void rescheduleStudyNudges();
+        // Reminders are on by default: switch them on once, take iOS quiet
+        // delivery if never asked, and keep the rolling nudges current
+        // (skips today once studied).
+        void ensureReminderDefaults();
 
         const fresh = await loadUserProgress();
         if (fresh) {

@@ -100,3 +100,74 @@ test('every email builds, escapes names and carries an unsubscribe link', () => 
   }
   assert.throws(() => buildLifecycleEmail('nope', {}));
 });
+
+// ─── Study reminder emails ──────────────────────────────────────────────────
+const { dueStudyNudgeEmail, buildStudyNudgeEmail, NUDGE_EMAIL_DAYS } = require('./lifecycleEmails');
+
+const LAST = '2026-11-01T18:00:00Z'; // last studied, a Sunday evening (UK)
+const day = n => new Date(Date.UTC(2026, 10, 1 + n, 10, 0)); // 10:00 UTC, n UK days later
+const nudger = over => ({ signedUpAt: '2026-09-01T10:00:00Z', progress: { lastStudied: LAST }, optedOut: false, sent: new Set(), lastEmailAt: null, ...over });
+
+test('study reminder emails follow the schedule from the last study day', () => {
+  const steps = [];
+  const sent = new Set();
+  for (let n = 0; n <= 80; n++) {
+    const due = dueStudyNudgeEmail(nudger({ sent }), day(n));
+    if (due) { steps.push(n); sent.add(due.key); }
+  }
+  assert.deepEqual(steps, NUDGE_EMAIL_DAYS);
+});
+
+test('nothing on the day they studied or the day after', () => {
+  assert.equal(dueStudyNudgeEmail(nudger(), day(0)), null);
+  assert.equal(dueStudyNudgeEmail(nudger(), day(1)), null);
+  assert.deepEqual(dueStudyNudgeEmail(nudger(), day(2)), { key: 'nudge_2026-11-01_d2', step: 2 });
+});
+
+test('a missed run sends the step late inside its window, once', () => {
+  // Day 4 is inside the d3 window (3–4); d5 starts the next.
+  assert.equal(dueStudyNudgeEmail(nudger({ sent: new Set(['nudge_2026-11-01_d2']) }), day(4)).step, 3);
+  assert.equal(dueStudyNudgeEmail(nudger({ sent: new Set(['nudge_2026-11-01_d3']) }), day(4)), null);
+});
+
+test('coming back resets the schedule', () => {
+  const back = nudger({ progress: { lastStudied: '2026-11-08T09:00:00Z' }, sent: new Set(['nudge_2026-11-01_d2', 'nudge_2026-11-01_d3']) });
+  // Studied 8 Nov (day 7): nothing that day or the next, then d2 on 10 Nov.
+  assert.equal(dueStudyNudgeEmail(back, day(7)), null);
+  assert.equal(dueStudyNudgeEmail(back, day(8)), null);
+  assert.equal(dueStudyNudgeEmail(back, day(9)).key, 'nudge_2026-11-08_d2');
+});
+
+test('stops after day 60, after the test date, and when opted out', () => {
+  assert.equal(dueStudyNudgeEmail(nudger(), day(70)), null);
+  assert.equal(dueStudyNudgeEmail(nudger({ progress: { lastStudied: LAST, testDate: '2026-11-04T00:00:00Z' } }), day(5)), null);
+  assert.notEqual(dueStudyNudgeEmail(nudger({ progress: { lastStudied: LAST, testDate: '2026-11-06T00:00:00Z' } }), day(5)), null);
+  assert.equal(dueStudyNudgeEmail(nudger({ optedOut: true }), day(2)), null);
+});
+
+test('never within 20 hours of another email', () => {
+  const recent = new Date(day(2).getTime() - 5 * 3_600_000).toISOString();
+  assert.equal(dueStudyNudgeEmail(nudger({ lastEmailAt: recent }), day(2)), null);
+  const older = new Date(day(2).getTime() - 24 * 3_600_000).toISOString();
+  assert.equal(dueStudyNudgeEmail(nudger({ lastEmailAt: older }), day(2)).step, 2);
+});
+
+test('falls back to the signup time for someone who never studied', () => {
+  const fresh = nudger({ signedUpAt: LAST, progress: {} });
+  assert.equal(dueStudyNudgeEmail(fresh, day(2)).key, 'nudge_2026-11-01_d2');
+});
+
+test('study reminder copy: varies, Pro-aware, last one says it is the last, unsubscribe in every one', () => {
+  const ctx = { name: 'Sam', progress: {}, unsubUrl: 'https://api.example/u', now: day(2) };
+  const subjects = NUDGE_EMAIL_DAYS.map(s => buildStudyNudgeEmail(s, ctx).subject);
+  for (let i = 1; i < subjects.length; i++) assert.notEqual(subjects[i], subjects[i - 1]);
+  assert.match(buildStudyNudgeEmail(2, ctx).subject, /10 free questions/);
+  assert.doesNotMatch(buildStudyNudgeEmail(2, { ...ctx, progress: { isPro: true } }).subject, /free/);
+  assert.match(buildStudyNudgeEmail(60, ctx).text, /last reminder/);
+  for (const s of NUDGE_EMAIL_DAYS) {
+    const e = buildStudyNudgeEmail(s, ctx);
+    assert.match(e.html, /https:\/\/api\.example\/u/);
+    assert.match(e.text, /Unsubscribe: https:\/\/api\.example\/u/);
+    assert.ok(e.subject.length > 0 && e.subject.length < 70);
+  }
+});
