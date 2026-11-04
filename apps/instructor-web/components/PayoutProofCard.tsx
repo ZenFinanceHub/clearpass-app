@@ -21,12 +21,10 @@ type ApiResponse = {
 // against what was declared at verification, auto-approved only when it
 // clearly matches; anything else needs Craig to review it by hand.
 //
-// Payouts themselves stay off (PAYOUT_FEATURES_LIVE = false in
-// apps/mobile/app/instructor.tsx) until after the ADI conference on 27
-// Sept — see docs/BACKLOG.md's "Switch on instructor payouts" item. This
-// card still collects proof now (so verified instructors are ready the
-// moment payouts open) but its copy must never imply a payout can
-// actually be requested yet.
+// Payouts are live (PAYOUT_FEATURES_LIVE = true in
+// apps/mobile/app/instructor.tsx since 4 Nov 2026). Setting up Stripe and
+// requesting a payout happen in the ClearPass app's instructor screen; this
+// website has no payout request flow, so the copy points there.
 export default function PayoutProofCard() {
   const [status, setStatus] = useState<Status>("loading");
   const [reviewNote, setReviewNote] = useState<string | null>(null);
@@ -107,7 +105,7 @@ export default function PayoutProofCard() {
   if (status === "approved") {
     return (
       <span className="badge badge-redeemed" style={{ marginBottom: "1rem" }}>
-        Certificate approved ✓ — payouts open soon
+        Certificate approved ✓ — request payouts in the ClearPass app
       </span>
     );
   }
@@ -117,7 +115,7 @@ export default function PayoutProofCard() {
       <div className="section-card">
         <p style={{ margin: 0, fontWeight: 600 }}>Thanks, we&apos;re checking your document</p>
         <p className="muted" style={{ marginTop: "0.4rem" }}>
-          We&apos;ll let you know once it&apos;s approved. Payouts open soon — you&apos;ll be ready as soon as they do.
+          We&apos;ll let you know once it&apos;s approved. You can then set up payouts in the ClearPass app.
         </p>
       </div>
     );
@@ -125,11 +123,10 @@ export default function PayoutProofCard() {
 
   return (
     <div className="section-card">
-      <p style={{ margin: 0, fontWeight: 600 }}>Payouts open soon</p>
+      <p style={{ margin: 0, fontWeight: 600 }}>Get paid for your referrals</p>
       <p className="muted" style={{ marginTop: "0.4rem" }}>
-        Your referral earnings are tracked automatically from day one — nothing to do there. When payouts open,
-        we&apos;ll ask for a photo of your ADI certificate or trainee licence before your first one. Upload it now
-        to be ready.
+        Your referral earnings are tracked automatically. Before your first payout we need a photo of your ADI
+        certificate or trainee licence. Upload it here, then set up payouts in the ClearPass app.
       </p>
       {status === "rejected" && reviewNote && (
         <p className="muted" style={{ marginTop: "0.4rem" }}>

@@ -206,13 +206,12 @@ function payoutButtonLabel(pending: number, connectStatus: ConnectAccountRow | n
 
 const PROXY_URL = getProxyUrl();
 
-// Stripe Connect setup is partway: business model set to Marketplace, but
-// the platform profile and identity verification (both live-mode steps)
-// aren't done yet. The backend endpoints
-// (/api/instructor/connect/onboarding-link, /api/instructor/payout-request)
-// stay as they are; this just keeps the UI that assumes they work out of
-// reach until Connect is actually approved. Flip to true when it is.
-const PAYOUT_FEATURES_LIVE = false;
+// Payout UI (Stripe Connect onboarding, payout requests, payout history).
+// Switched on 4 Nov 2026 once live Connect setup was finished: identity
+// verified, Marketplace model, and a live "Connected accounts" webhook for
+// account.updated feeding /api/stripe/connect-webhook. A first payout still
+// needs an approved ADI certificate or trainee licence (payout-proof).
+const PAYOUT_FEATURES_LIVE = true;
 
 // ─── LearnerCard ──────────────────────────────────────────────────────────────
 
