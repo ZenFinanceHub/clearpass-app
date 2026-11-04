@@ -2864,7 +2864,16 @@ app.post('/api/cron/lifecycle-emails', async (req, res) => {
       && !instructorSet.has(u.id) && !u.user_metadata?.instructor_signup_intent
       && !optedOut.has(u.id));
 
-    const ids = [...new Set([...learners.map(u => u.id), ...instructorIds])];
+    // Every instructor account, for one-off announcements (not only the
+    // 22 Oct welcome cohort in instructor_signups).
+    const { data: instructorProfiles, error: ipErr } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('account_type', 'instructor');
+    if (ipErr) throw ipErr;
+    const allInstructorIds = (instructorProfiles || []).map(r => r.id);
+
+    const ids = [...new Set([...learners.map(u => u.id), ...instructorIds, ...allInstructorIds])];
     if (ids.length === 0) return res.json({ dryRun, due: {}, sent: 0 });
 
     const [profiles, progressRows, logRows] = await Promise.all([
@@ -2912,6 +2921,22 @@ app.post('/api/cron/lifecycle-emails', async (req, res) => {
         sent: sentById.get(r.user_id) || new Set(),
       }, now);
       if (key) queue.push({ user, key, label: key, ctx: { name: profile.username, instructorCode: profile.instructor_code, pupils: pupilsBy.get(r.user_id) || 0 } });
+    }
+
+    // One-off instructor announcement, for anyone not already getting an
+    // email in this run (the welcome sequence goes first).
+    const queued = new Set(queue.map(q => q.user.id));
+    for (const id of allInstructorIds) {
+      if (queued.has(id)) continue;
+      const user = userById.get(id);
+      const profile = profileById.get(id);
+      if (!user?.email || isE2EUser(user.user_metadata) || profile?.account_type !== 'instructor') continue;
+      const key = lifecycleEmails.dueInstructorAnnouncement({
+        signedUpAt: user.created_at,
+        optedOut: optedOut.has(id),
+        sent: sentById.get(id) || new Set(),
+      }, now);
+      if (key) queue.push({ user, key, label: key, ctx: { name: profile.username, instructorCode: profile.instructor_code } });
     }
 
     for (const user of learners) {
