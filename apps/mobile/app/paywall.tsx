@@ -29,6 +29,7 @@ import {
 } from '@/src/purchaseGate';
 import { getProPackage, getProPackages, purchaseProPackage, restoreProPurchases, refreshIapReady } from '@/src/purchases';
 import { testDateUrgencyLine } from '@/src/conversion';
+import { mockScoreLine, orderPlans } from '@/src/paywallCopy';
 import { logFunnelEvent } from '@/src/funnel';
 
 // Only what Pro adds — progress tracking and streaks are free for everyone.
@@ -47,7 +48,7 @@ export default function PaywallScreen() {
   // re-render when it lands rather than freezing whatever was true at
   // first paint.
   const route = usePurchaseRoute();
-  const [plan,         setPlan]         = useState<ProPlan>('quarterly');
+  const [plan,         setPlan]         = useState<ProPlan>('monthly');
   const trialMonthly   = useTrialDays('monthly');
   const trialQuarterly = useTrialDays('quarterly');
   // Store price strings per plan, once offerings load (IAP only). null
@@ -56,11 +57,14 @@ export default function PaywallScreen() {
   const [storePrices,  setStorePrices]  = useState<Record<ProPlan, string | null> | null>(null);
   const [webMonthly,   setWebMonthly]   = useState(false);
   const [urgencyLine,  setUrgencyLine]  = useState<string | null>(null);
-  const plansOnSale: ProPlan[] = route === 'iap'
-    ? (storePrices ? (['quarterly', 'monthly'] as ProPlan[]).filter(p => storePrices[p]) : ['quarterly'])
+  const [scoreLine,    setScoreLine]    = useState<string | null>(null);
+  // Monthly first and selected by default: £2.99 is the easier yes. The
+  // 3-month plan keeps its "Best value" badge.
+  const plansOnSale: ProPlan[] = orderPlans(route === 'iap'
+    ? (storePrices ? (['monthly', 'quarterly'] as ProPlan[]).filter(p => storePrices[p]) : ['quarterly'])
     : route === 'stripe_checkout'
-      ? (webMonthly ? ['quarterly', 'monthly'] : ['quarterly'])
-      : [];
+      ? (webMonthly ? ['monthly', 'quarterly'] : ['quarterly'])
+      : []);
   const activePlan: ProPlan = plansOnSale.includes(plan) ? plan : (plansOnSale[0] ?? 'quarterly');
   // IAP shows only the store's own price string, in the buyer's currency.
   // Until it loads there is no price and no buy button (a fixed £ price
@@ -98,7 +102,7 @@ export default function PaywallScreen() {
       .catch(() => {});
 
     loadUserProgress()
-      .then(p => setUrgencyLine(testDateUrgencyLine(p)))
+      .then(p => { setUrgencyLine(testDateUrgencyLine(p)); setScoreLine(mockScoreLine(p)); })
       .catch(() => {});
 
     logFunnelEvent('paywall_viewed', { route: getPurchaseRoute() });
@@ -295,6 +299,7 @@ export default function PaywallScreen() {
         <Text style={styles.headerSub}>
           {'Everything you need to pass first time'}
         </Text>
+        {scoreLine ? <Text style={styles.urgencyText}>{scoreLine}</Text> : null}
         {urgencyLine ? <Text style={styles.urgencyText}>{urgencyLine}</Text> : null}
       </View>
 

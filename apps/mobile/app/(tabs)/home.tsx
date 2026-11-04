@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { hasFreeMockLeft } from '@/src/conversion';
 import { testDateError } from '@/src/testDateRules';
 import { ReminderOffer, useReminderOffer } from '@/src/components/ReminderOffer';
+import { homeProBannerSub } from '@/src/paywallCopy';
 import { useTrialDays } from '@/src/purchaseGate';
 import {
   Animated,
@@ -697,7 +698,7 @@ export default function HomeScreen() {
           >
             <View style={styles.proBannerLeft}>
               <Text style={styles.proBannerTitle}>{trialDays ? `Try Pro free for ${trialDays} days` : 'Go Pro'}</Text>
-              <Text style={styles.proBannerSub}>{'Unlimited mock tests, hazard perception & questions'}</Text>
+              <Text style={styles.proBannerSub}>{homeProBannerSub(progress, new Date())}</Text>
             </View>
             <Text style={styles.proBannerCta}>{'See plans →'}</Text>
           </TouchableOpacity>
