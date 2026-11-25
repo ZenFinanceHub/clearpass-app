@@ -6,6 +6,7 @@ Last updated 2026-11-25 (rev 2, after Craig's plan approval). Step-by-step instr
 
 | # | Action | Needed for | Blocking? | Status |
 |---|---|---|---|---|
+| **A0** | **URGENT: stop Vercel PR previews from using production.** Vercel builds a preview for every PR branch (seen on #106–#110), and the app hardcodes production Supabase, so previews read and write the production DB (sign-ins, progress sync, `funnel_events`). Until staging Preview env vars exist (A1), in Vercel open **clearpass-app → Settings → Git → Ignored Build Step**, choose **"Only build production"** (or the custom command `[ "$VERCEL_ENV" != "production" ]`, which skips non-production builds), and do the same for **clearpass-instructor-web**. `clearpass-web` is static and harmless. Also confirm **Deployment Protection** is on for previews. Until then, please don't open PR preview links | All PRs | **Yes, for preview safety** | ⬜ |
 | A1 | Create the **hosted staging Supabase project** and enter its keys into Vercel Preview, EAS `preview` and Railway staging (guide §1–§3) | P0-4 hosted part; hosted review of M1 | Blocks hosted staging only. Local development continues | ⬜ |
 | A2 | **Enable GitHub Actions** (guide §4) | P0-1 CI | — | ✅ Already enabled; CI ran green on #109. Optional: apply the §4 hardening settings and make `ci` a required check |
 | A3 | **Stripe test mode and RevenueCat sandbox** set up for staging (guide §5–§6) | P5-4, P7 purchase testing | Phase 5 testing | ⬜ (approved to prepare) |
