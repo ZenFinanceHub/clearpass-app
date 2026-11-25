@@ -127,7 +127,7 @@ In console.anthropic.com:
 
 ## §4. GitHub Actions (A2)
 
-1. Go to GitHub → `ZenFinanceHub/clearpass` → **Settings → Actions → General**.
+1. Go to GitHub → `ZenFinanceHub/clearpass-app` → **Settings → Actions → General**.
 2. Set **Actions permissions** to **Allow ZenFinanceHub, and select non-ZenFinanceHub, actions and reusable workflows**, then tick **Allow actions created by GitHub**. The workflow only needs `actions/checkout`, `actions/setup-node` and `actions/cache`.
 3. Set **Fork pull request workflows** to **Require approval for all outside collaborators**. This matters because the repo is public.
 4. Set **Workflow permissions** to **Read repository contents and packages permissions**, and leave **Allow GitHub Actions to create and approve pull requests** unticked.
