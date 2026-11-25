@@ -18,6 +18,7 @@ import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from '@/src/CrossPlatformAlert';
 import { supabase } from '@/src/supabase';
+import { logFunnelEvent } from '@/src/funnel';
 import { getAccessToken } from '@/src/getAccessToken';
 import { useAccessibility } from '@/src/AccessibilityContext';
 import type { AccessibilitySettings } from '@/src/AccessibilityContext';
@@ -416,20 +417,23 @@ export default function SettingsScreen() {
 
   async function handleShareReferralCode() {
     if (!myReferralCode) return;
-    await Share.share({
+    const shared = await Share.share({
       message: `Use my code ${myReferralCode} on ClearPass to get started with your UK driving theory test prep! Download: getclearpass.co.uk`,
     });
+    if (shared.action === Share.sharedAction) logFunnelEvent('referral_shared', { method: 'share', surface: 'settings' });
   }
 
   async function handleCopyReferralCode() {
     if (!myReferralCode) return;
     await Clipboard.setStringAsync(myReferralCode);
+    logFunnelEvent('referral_shared', { method: 'copy', surface: 'settings' });
     Alert.alert('Copied!', `Code ${myReferralCode} copied to clipboard.`);
   }
 
   async function handleCopyInstructorCode() {
     if (!myInstructorCode) return;
     await Clipboard.setStringAsync(myInstructorCode);
+    logFunnelEvent('instructor_invite_sent', { method: 'copy_code' });
     Alert.alert('Copied!', `Code ${myInstructorCode} copied to clipboard.`);
   }
 
