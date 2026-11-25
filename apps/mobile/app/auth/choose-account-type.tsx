@@ -11,6 +11,7 @@ import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
 import { Colors } from '@/src/constants/theme';
 import { generateInstructorCode, generateReferralCode } from '@/src/accountCodes';
+import { logFunnelEvent } from '@/src/funnel';
 
 const PENDING_USERNAME_KEY = '@clearpass/pending_username';
 const REFERRAL_CODE_KEY    = 'referral_code';
@@ -28,6 +29,7 @@ export default function ChooseAccountTypeScreen() {
   const [error, setError]       = useState('');
 
   useEffect(() => {
+    logFunnelEvent('onboarding_step_viewed', { step: 'choose_account_type' });
     void resolveReferral();
   }, []);
 

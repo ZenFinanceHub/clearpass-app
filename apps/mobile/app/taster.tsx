@@ -12,7 +12,7 @@ import { Question, TopicCategory } from '@clearpass/core';
 import { allQuestions, questionsByTopic } from '@clearpass/content';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { logFunnelEvent } from '@/src/funnel';
+import { logFunnelEvent, logFunnelEventOnce } from '@/src/funnel';
 
 const TASTER_COUNT = 5;
 const LABELS = ['A', 'B', 'C', 'D'];
@@ -63,6 +63,7 @@ export default function TasterScreen() {
 
   function handleSelect(optionIndex: number) {
     if (answered) return;
+    logFunnelEventOnce('first_question_answered', { source: 'taster' });
     setSelected(optionIndex);
     const next = [...answers];
     next[index] = optionIndex;

@@ -58,7 +58,8 @@ import { hasStreakMilestone, maybeRequestReview, ReviewTrigger } from '@/src/rev
 import { Pip } from '@/src/components/Pip';
 import { PaywallPrompt } from '@/src/components/PaywallPrompt';
 import { testDateUrgencyLine } from '@/src/conversion';
-import { logFunnelEvent } from '@/src/funnel';
+import { logFunnelEvent, logFunnelEventOnce } from '@/src/funnel';
+import { practicePhaseEvents } from '@/src/analyticsEvents';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { ShareCardModal } from '@/src/components/ShareableCard';
 import { MarkdownText } from '@/src/components/MarkdownText';
@@ -294,6 +295,23 @@ export default function PracticeScreen() {
     setCurrentBookmarked(nowBookmarked);
   }
 
+  // Analytics: mode entered (feature_used), results shown, session finished.
+  // Derived from phase changes so the session flow itself is untouched.
+  const prevPhaseRef = useRef<Phase>(phase);
+  useEffect(() => {
+    const prev = prevPhaseRef.current;
+    prevPhaseRef.current = phase;
+    const ev = practicePhaseEvents(prev, phase, {
+      modeParam: mode,
+      isPro: userProgressRef.current?.isPro ?? false,
+      dailyCount: dailyCountRef.current,
+      freeLimit: FREE_QUESTION_LIMIT,
+    });
+    if (ev.featureUsed) logFunnelEvent('feature_used', { feature: ev.featureUsed });
+    if (ev.resultsViewed) logFunnelEvent('practice_results_viewed', ev.resultsViewed);
+    if (ev.sessionCompleted) logFunnelEventOnce('first_session_completed', ev.sessionCompleted);
+  }, [phase, mode]);
+
   // Routes to the paywall screen, which is the single place that decides
   // (via src/purchaseGate) whether that means Stripe Checkout or an iOS
   // coming-soon state.
@@ -402,6 +420,7 @@ export default function PracticeScreen() {
   function handleBattleAnswer(optionIndex: number) {
     if (battleAnsweredRef.current) return;
     battleAnsweredRef.current = true;
+    logFunnelEventOnce('first_question_answered', { source: 'battle' });
 
     const capturedIdx = battleIdxRef.current;
     const q = battleQsRef.current[capturedIdx];
@@ -510,6 +529,7 @@ export default function PracticeScreen() {
   function handleSpeedAnswer(optionIndex: number) {
     if (speedAnsweredRef2.current || speedEndedRef.current) return;
     speedAnsweredRef2.current = true;
+    logFunnelEventOnce('first_question_answered', { source: 'speed_round' });
 
     const q = speedQsRef.current[speedIdxRef.current];
     if (!q) return;
@@ -595,6 +615,7 @@ export default function PracticeScreen() {
   function handleWeakAnswer(optionIndex: number) {
     if (weakAnsweredRef3.current) return;
     weakAnsweredRef3.current = true;
+    logFunnelEventOnce('first_question_answered', { source: 'weak_spots' });
     weakAttemptsRef.current += 1;
 
     const item = weakQueueRef.current[0];
@@ -706,6 +727,7 @@ export default function PracticeScreen() {
   const handleAnswer = useCallback(
     async (optionIndex: number) => {
       if (selectedIndex !== null) return;
+      logFunnelEventOnce('first_question_answered', { source: 'practice' });
       Speech.stop();
 
       const question = questions[currentIndex];

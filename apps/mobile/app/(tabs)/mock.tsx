@@ -48,7 +48,7 @@ import { AnswerOptions, LABELS } from '@/src/components/AnswerOptions';
 import { Colors } from '@/src/constants/theme';
 import { PaywallPrompt } from '@/src/components/PaywallPrompt';
 import { hasFreeMockLeft, testDateUrgencyLine } from '@/src/conversion';
-import { logFunnelEvent } from '@/src/funnel';
+import { logFunnelEvent, logFunnelEventOnce } from '@/src/funnel';
 import { useTrialDays } from '@/src/purchaseGate';
 
 const TOTAL_QUESTIONS = 50;
@@ -363,6 +363,7 @@ export default function MockScreen() {
     }
     freeRunRef.current = freeMockAvailable;
     if (freeRunRef.current) logFunnelEvent('free_mock_started', { mode });
+    logFunnelEvent('feature_used', { feature: mode === 'quick' ? 'mock_quick' : 'mock_full' });
     const activeTotal = mode === 'quick' ? QUICK_QUESTIONS : TOTAL_QUESTIONS;
     const activeTime = mode === 'quick' ? QUICK_TIME_SECONDS : TIME_LIMIT_SECONDS;
     const activeMark = mode === 'quick' ? QUICK_PASS_MARK : PASS_MARK;
@@ -393,6 +394,7 @@ export default function MockScreen() {
   }
 
   function handleSelect(optionIndex: number) {
+    logFunnelEventOnce('first_question_answered', { source: 'mock' });
     const next = [...answersRef.current];
     next[currentIndex] = optionIndex;
     answersRef.current = next;
