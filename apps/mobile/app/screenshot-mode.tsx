@@ -7,12 +7,14 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Redirect } from 'expo-router';
 import { Alert } from '@/src/CrossPlatformAlert';
 import { allQuestions } from '@clearpass/content';
 import { TopicCategory } from '@clearpass/core';
 import type { UserProgress, MockTestResult } from '@clearpass/core';
 import { USER_SPECIFIC_KEYS, type SessionHistoryEntry } from '@/src/storage';
 import { Colors } from '@/src/constants/theme';
+import { isScreenshotModeAllowed } from '@/src/screenshotModeGuard';
 
 // ── Demo data ─────────────────────────────────────────────────────────────────
 
@@ -74,7 +76,16 @@ function makeDemoSessions(): SessionHistoryEntry[] {
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
+// Decided at build time: EXPO_PUBLIC_* is inlined into the bundle.
+const ALLOWED = isScreenshotModeAllowed({ isDev: __DEV__, appEnv: process.env.EXPO_PUBLIC_APP_ENV });
+
 export default function ScreenshotModeScreen() {
+  // Overwrites local progress with demo data: never in production.
+  if (!ALLOWED) return <Redirect href="/" />;
+  return <ScreenshotModeSeeder />;
+}
+
+function ScreenshotModeSeeder() {
   const [status, setStatus] = useState('');
 
   async function handleSeed() {
