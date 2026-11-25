@@ -1,40 +1,34 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Defs, G, LinearGradient, Path, Stop, Text as SvgText } from 'react-native-svg';
+import React, { useEffect, useId, useRef, useState } from 'react';
+import { AccessibilityInfo, Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import Svg, {
+  Circle, Defs, Ellipse, G, Line, LinearGradient, Path, Polygon, RadialGradient, Rect, Stop,
+} from 'react-native-svg';
 import { Pip, PipMood } from './Pip';
 import type { UserProgress } from '@clearpass/core';
 import { Colors } from '@/src/constants/theme';
 
-// ─── Viewbox & geometry ──────────────────────────────────────────────────────
+// ─── Driver's-view roadmap ───────────────────────────────────────────────────
+// The learner looks out through a windscreen at a road running to the horizon.
+// Milestones are roadside landmarks: each one starts small in the distance,
+// becomes the highlighted "Next" landmark as it gets close, and turns into a
+// green tick in the rear-view mirror once passed. The finish arch on the
+// horizon is "Test ready". Pass probability drives the dashboard gauge and the
+// sky, which moves from night towards sunrise as the learner gets closer.
+//
+// Everything is laid out in real pixels from width/height (no stretched
+// viewBox), so nothing distorts on wide screens.
 
-// Extra horizontal margin (beyond the 200-wide road layout) so side labels
-// like "HAZARD" have room to render without clipping against the SVG edge.
-const LABEL_MARGIN = 14;
-const VBOX_W = 200 + LABEL_MARGIN * 2;
-const VBOX_H = 300;
-const ROAD_W = 18;
-const NODE_R = 18;
-const CENTER_X = VBOX_W / 2;
+// ─── Palette (scene-only colours; brand colours come from the theme) ─────────
 
-// Five milestones in viewbox coordinates (x, y) — bottom to top
-const NODES = [
-  { x: 100 + LABEL_MARGIN, y: 275, label: 'Start',            emoji: '🚗', short: 'START' },
-  { x:  52 + LABEL_MARGIN, y: 215, label: 'Road Signs',        emoji: '🚦', short: 'SIGNS' },
-  { x: 148 + LABEL_MARGIN, y: 155, label: 'Rules of the Road', emoji: '📋', short: 'RULES' },
-  { x:  52 + LABEL_MARGIN, y:  95, label: 'Hazard Aware',      emoji: '⚠️', short: 'HAZARD' },
-  { x: 100 + LABEL_MARGIN, y:  28, label: 'Test Ready',        emoji: '🏆', short: 'READY' },
-] as const;
-
-// Smooth cubic-bezier road path connecting the 5 nodes
-const ROAD_PATH =
-  `M ${100 + LABEL_MARGIN} 275 C ${100 + LABEL_MARGIN} 252 ${52 + LABEL_MARGIN} 238 ${52 + LABEL_MARGIN} 215 ` +
-  `C ${52 + LABEL_MARGIN} 192 ${148 + LABEL_MARGIN} 172 ${148 + LABEL_MARGIN} 155 ` +
-  `C ${148 + LABEL_MARGIN} 132 ${52 + LABEL_MARGIN} 115 ${52 + LABEL_MARGIN} 95 ` +
-  `C ${52 + LABEL_MARGIN} 72 ${100 + LABEL_MARGIN} 52 ${100 + LABEL_MARGIN} 28`;
+const INK        = '#0F0D2E';   // dashboard, mirror, traffic-light housing
+const INK_DEEP   = '#06051A';
+const LILAC      = '#A5B4FC';
+const LILAC_PALE = '#C7D2FE';
+const GOLD       = '#FBBF24';
+const GOLD_DEEP  = '#B45309';
 
 // ─── Milestone progress from UserProgress ────────────────────────────────────
-// Drives the node badges (complete/current/upcoming) and the road highlight —
-// NOT Pip's position, which tracks pass probability instead (see below).
+// 0 = nothing reached yet, 1 = Road signs, 2 = Rules, 3 = Hazards, 4 = Test ready.
 
 function computeProgress(p: UserProgress | null): number {
   if (!p || p.totalQuestionsAnswered < 1) return 0;
@@ -49,38 +43,206 @@ function computeProgress(p: UserProgress | null): number {
   return 4;
 }
 
-// ─── Pip's position from pass probability ────────────────────────────────────
-// Pip walks continuously along the same cubic-bezier segments used for
-// ROAD_PATH, so 0% sits exactly at the Start node and 100% at Test Ready.
+type LandmarkKind = 'sign' | 'lights' | 'hazard';
 
-function cubicBezierPoint(
-  p0: { x: number; y: number },
-  c1: { x: number; y: number },
-  c2: { x: number; y: number },
-  p1: { x: number; y: number },
-  t: number,
-): { x: number; y: number } {
-  const mt = 1 - t;
-  return {
-    x: mt * mt * mt * p0.x + 3 * mt * mt * t * c1.x + 3 * mt * t * t * c2.x + t * t * t * p1.x,
-    y: mt * mt * mt * p0.y + 3 * mt * mt * t * c1.y + 3 * mt * t * t * c2.y + t * t * t * p1.y,
-  };
+const LANDMARKS: ReadonlyArray<{ label: string; kind: LandmarkKind; side: -1 | 1 }> = [
+  { label: 'Road signs', kind: 'sign',   side: -1 },
+  { label: 'Rules',      kind: 'lights', side:  1 },
+  { label: 'Hazards',    kind: 'hazard', side: -1 },
+];
+const TOTAL_MILESTONES = LANDMARKS.length + 1; // + the finish arch
+
+// How far ahead the next, second and third roadside landmarks sit.
+const AHEAD_Z = [1, 2.4, 4.4] as const;
+
+// ─── Small helpers ───────────────────────────────────────────────────────────
+
+/** Perspective: distance ahead (0 = at the bonnet) → on-screen scale (1 → 0). */
+const depthScale = (z: number) => 1 / (1 + 0.55 * z);
+
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+function mix(a: string, b: string, t: number): string {
+  const pa = parseInt(a.slice(1), 16);
+  const pb = parseInt(b.slice(1), 16);
+  const ch = (shift: number) =>
+    Math.round(lerp((pa >> shift) & 255, (pb >> shift) & 255, t)).toString(16).padStart(2, '0');
+  return `#${ch(16)}${ch(8)}${ch(0)}`;
 }
 
-const ROAD_CURVES = [
-  { p0: NODES[0], c1: { x: 100 + LABEL_MARGIN, y: 252 }, c2: { x: 52 + LABEL_MARGIN, y: 238 }, p1: NODES[1] },
-  { p0: NODES[1], c1: { x:  52 + LABEL_MARGIN, y: 192 }, c2: { x: 148 + LABEL_MARGIN, y: 172 }, p1: NODES[2] },
-  { p0: NODES[2], c1: { x: 148 + LABEL_MARGIN, y: 132 }, c2: { x:  52 + LABEL_MARGIN, y: 115 }, p1: NODES[3] },
-  { p0: NODES[3], c1: { x:  52 + LABEL_MARGIN, y:  72 }, c2: { x: 100 + LABEL_MARGIN, y:  52 }, p1: NODES[4] },
-] as const;
+function useReduceMotion(): boolean {
+  const [reduce, setReduce] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(v => { if (alive) setReduce(v); })
+      .catch(() => {});
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduce);
+    return () => { alive = false; sub?.remove?.(); };
+  }, []);
+  return reduce;
+}
 
-function pointAtPassProbability(pct: number): { x: number; y: number } {
-  const clamped  = Math.max(0, Math.min(100, pct));
-  const scaled   = (clamped / 100) * ROAD_CURVES.length;
-  const segIndex = Math.min(ROAD_CURVES.length - 1, Math.floor(scaled));
-  const t        = scaled - segIndex;
-  const seg      = ROAD_CURVES[segIndex]!;
-  return cubicBezierPoint(seg.p0, seg.c1, seg.c2, seg.p1, t);
+// ─── Centre-line dashes (the only part that re-renders on a timer) ───────────
+
+const DASH_SPACING = 0.9;
+const DASH_LENGTH  = 0.35;
+const DASH_COUNT   = 8;
+
+const CentreDashes = React.memo(function CentreDashes({
+  cx, horizonY, nearY, width, height, hwFar, hwNear, animate,
+}: {
+  cx: number; horizonY: number; nearY: number; width: number; height: number;
+  hwFar: number; hwNear: number; animate: boolean;
+}) {
+  const [phase, setPhase] = useState(0.5);
+
+  useEffect(() => {
+    if (!animate) return;
+    const id = setInterval(() => setPhase(p => (p - 0.05 + 1) % 1), 90);
+    return () => clearInterval(id);
+  }, [animate]);
+
+  const dashes = [];
+  for (let k = 0; k < DASH_COUNT; k++) {
+    const z     = (k + phase) * DASH_SPACING;
+    const sNear = depthScale(z);
+    const sFar  = depthScale(z + DASH_LENGTH);
+    const yN    = lerp(horizonY, nearY, sNear);
+    const yF    = lerp(horizonY, nearY, sFar);
+    const wN    = sNear * width * 0.011;
+    const wF    = sFar  * width * 0.011;
+    dashes.push(
+      <Polygon
+        key={k}
+        points={`${cx - wF},${yF} ${cx + wF},${yF} ${cx + wN},${yN} ${cx - wN},${yN}`}
+        fill="#FFFFFF"
+        opacity={Math.min(1, sNear * 2.2)}
+      />,
+    );
+
+    // Roadside marker posts move with the dashes, which is what sells the motion.
+    const edge  = lerp(hwFar, hwNear, sNear) + width * 0.025 * sNear;
+    const postH = sNear * height * 0.075;
+    const postW = Math.max(1, sNear * width * 0.012);
+    for (const side of [-1, 1]) {
+      const px = cx + side * edge;
+      dashes.push(
+        <G key={`${k}-${side}`} opacity={Math.min(1, sNear * 2.6)}>
+          <Rect x={px - postW / 2} y={yN - postH} width={postW} height={postH} rx={postW / 2} fill={LILAC_PALE} />
+          <Rect x={px - postW / 2} y={yN - postH} width={postW} height={postH * 0.28} rx={postW / 2} fill={side < 0 ? Colors.red : '#FFFFFF'} />
+        </G>,
+      );
+    }
+  }
+  return <G>{dashes}</G>;
+});
+
+// ─── Landmark drawings ───────────────────────────────────────────────────────
+// (bx, by) is where the landmark meets the ground; u is its full height in px.
+
+function Landmark({ kind, bx, by, u, dim, uid }: { kind: LandmarkKind; bx: number; by: number; u: number; dim: boolean; uid: string }) {
+  const pole = (topFrac: number) => (
+    <Rect x={bx - u * 0.022} y={by - u * topFrac} width={u * 0.044} height={u * topFrac} rx={u * 0.01} fill={`url(#${uid}Pole)`} />
+  );
+
+  return (
+    <G opacity={dim ? 0.72 : 1}>
+      <Ellipse cx={bx} cy={by} rx={u * 0.17} ry={u * 0.035} fill={INK_DEEP} opacity={0.55} />
+
+      {kind === 'sign' && (
+        <G>
+          {pole(0.6)}
+          <Circle cx={bx + u * 0.02} cy={by - u * 0.76} r={u * 0.235} fill="#7F1D1D" />
+          <Circle cx={bx} cy={by - u * 0.78} r={u * 0.235} fill={Colors.red} />
+          <Circle cx={bx} cy={by - u * 0.78} r={u * 0.16} fill="#FFFFFF" />
+          <Path
+            d={`M ${bx} ${by - u * 0.7} V ${by - u * 0.86} M ${bx - u * 0.06} ${by - u * 0.8} L ${bx} ${by - u * 0.87} L ${bx + u * 0.06} ${by - u * 0.8}`}
+            stroke={Colors.textPrimary}
+            strokeWidth={Math.max(1.5, u * 0.035)}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+          />
+        </G>
+      )}
+
+      {kind === 'lights' && (
+        <G>
+          {pole(0.52)}
+          <Rect x={bx - u * 0.1} y={by - u * 0.985} width={u * 0.25} height={u * 0.5} rx={u * 0.06} fill={INK_DEEP} />
+          <Rect
+            x={bx - u * 0.125} y={by - u} width={u * 0.25} height={u * 0.5} rx={u * 0.06}
+            fill={INK} stroke="#4B4F7A" strokeWidth={Math.max(1, u * 0.015)}
+          />
+          {[Colors.red, Colors.amber, Colors.emerald].map((c, i) => {
+            const cy = by - u * (0.91 - i * 0.16);
+            return (
+              <G key={c}>
+                <Circle cx={bx} cy={cy} r={u * 0.062} fill={c} />
+                <Circle cx={bx - u * 0.02} cy={cy - u * 0.02} r={u * 0.018} fill="#FFFFFF" opacity={0.6} />
+              </G>
+            );
+          })}
+        </G>
+      )}
+
+      {kind === 'hazard' && (
+        <G>
+          {pole(0.58)}
+          <Polygon
+            points={`${bx + u * 0.02},${by - u * 0.98} ${bx - u * 0.23},${by - u * 0.54} ${bx + u * 0.27},${by - u * 0.54}`}
+            fill="#7F1D1D"
+          />
+          <Polygon
+            points={`${bx},${by - u} ${bx - u * 0.25},${by - u * 0.56} ${bx + u * 0.25},${by - u * 0.56}`}
+            fill="#FFFFFF"
+            stroke={Colors.red}
+            strokeWidth={Math.max(2, u * 0.05)}
+            strokeLinejoin="round"
+          />
+          <Line
+            x1={bx} y1={by - u * 0.84} x2={bx} y2={by - u * 0.71}
+            stroke={Colors.textPrimary} strokeWidth={Math.max(1.5, u * 0.045)} strokeLinecap="round"
+          />
+          <Circle cx={bx} cy={by - u * 0.64} r={Math.max(1, u * 0.026)} fill={Colors.textPrimary} />
+        </G>
+      )}
+    </G>
+  );
+}
+
+function FinishArch({ cx, by, half, postH, uid }: { cx: number; by: number; half: number; postH: number; uid: string }) {
+  const postW   = Math.max(2, postH * 0.07);
+  const bannerH = Math.max(5, postH * 0.3);
+  const cols    = 8;
+  const cellW   = (half * 2) / cols;
+  const cellH   = bannerH / 2;
+  const top     = by - postH;
+
+  const checks = [];
+  for (let r = 0; r < 2; r++) {
+    for (let c = 0; c < cols; c++) {
+      if ((r + c) % 2 === 0) {
+        checks.push(
+          <Rect key={`${r}-${c}`} x={cx - half + c * cellW} y={top + r * cellH} width={cellW} height={cellH} fill={Colors.textPrimary} />,
+        );
+      }
+    }
+  }
+
+  return (
+    <G>
+      <Rect x={cx - half - postW / 2} y={top} width={postW} height={postH} fill={`url(#${uid}Gold)`} />
+      <Rect x={cx + half - postW / 2} y={top} width={postW} height={postH} fill={`url(#${uid}Gold)`} />
+      <Rect x={cx - half} y={top} width={half * 2} height={bannerH} fill="#FFFFFF" />
+      {checks}
+      <Rect
+        x={cx - half} y={top} width={half * 2} height={bannerH}
+        fill="none" stroke={GOLD} strokeWidth={Math.max(1, postH * 0.03)}
+      />
+    </G>
+  );
 }
 
 // ─── RoadmapPath ─────────────────────────────────────────────────────────────
@@ -93,171 +255,310 @@ interface RoadmapPathProps {
   height?: number;
 }
 
+const STARS: ReadonlyArray<readonly [number, number, number]> = [
+  [0.08, 0.22, 1.4], [0.2, 0.1, 1], [0.31, 0.3, 1.2], [0.69, 0.12, 1.2],
+  [0.78, 0.27, 1.5], [0.9, 0.16, 1], [0.94, 0.34, 1.2], [0.05, 0.38, 1],
+];
+
+const LABEL_W = 150;
+
 export default function RoadmapPath({ progress, passProbability, pipMood = 'happy', width, height: heightProp }: RoadmapPathProps) {
-  const current    = computeProgress(progress);
-  const height     = heightProp ?? Math.round(width * VBOX_H / VBOX_W);
-  const scaleX     = width  / VBOX_W;
-  const scaleY     = height / VBOX_H;
-  // The SVG stretches x/y independently to fill width×height (preserveAspectRatio
-  // "none"), so text glyphs get stretched by scaleX/scaleY too. Fine when the two
-  // are close (phones), but scaleX grows much faster than scaleY on wide screens
-  // (width tracks the device, height is a fixed prop) — at iPad widths scaleX can
-  // be 4-5x scaleY, squashing letters into unreadable shapes. Each label below is
-  // wrapped in a counter-scale transform anchored at its own position so its net
-  // scale is always scaleY in both axes, keeping glyphs undistorted at any width.
-  const labelXScale = scaleY / scaleX;
+  const current = computeProgress(progress);
+  const height  = heightProp ?? Math.round(width * 0.82);
+  const pct     = Math.round(Math.max(0, Math.min(100, passProbability)));
+  const f       = pct / 100;
 
-  // Pulsing glow for current node
-  const pulseAnim = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useReduceMotion();
+  // Gradient ids must be unique per instance or two roadmaps on one page share them (web).
+  const uid = `rd${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+
+  // ── Scene geometry ──
+  const cx       = width / 2;
+  const horizonY = height * 0.44;
+  const nearY    = height * 0.9;
+  const hwFar    = width * 0.035;
+  const hwNear   = width * 0.37;
+  const groundY  = (s: number) => lerp(horizonY, nearY, s);
+  const roadHalf = (s: number) => lerp(hwFar, hwNear, s);
+  const unitMax  = height * 0.6;
+
+  const dashSideY = height * 0.87;
+  const dashMidY  = height * 0.81;
+
+  // ── Roadside landmarks still ahead, far → near ──
+  const ahead = LANDMARKS
+    .map((lm, i) => ({ ...lm, i }))
+    .filter(lm => lm.i >= current)
+    .map((lm, n) => {
+      const s  = depthScale(AHEAD_Z[n] ?? 6);
+      const u  = s * unitMax;
+      const raw = cx + lm.side * (roadHalf(s) + width * 0.09 * s + u * 0.2);
+      const bx  = Math.max(u * 0.3, Math.min(width - u * 0.3, raw));
+      return { ...lm, n, s, u, bx, by: groundY(s) };
+    });
+  const next = ahead[0];
+
+  // ── Finish arch: on the horizon until it's the next thing, then it looms ──
+  const arrived      = current >= TOTAL_MILESTONES;
+  const finishIsNext = current === LANDMARKS.length;
+  const finishS      = arrived ? depthScale(0.9) : finishIsNext ? depthScale(1.7) : 0.1;
+  const finishBy     = groundY(finishS);
+  const finishPostH  = Math.max(14, finishS * height * 0.62);
+  const finishHalf   = roadHalf(finishS) * 1.08;
+  const finishLabel  = arrived ? "You're test ready" : finishIsNext ? 'Next: Test ready' : 'Test ready';
+
+  // ── Ambient motion ──
+  const pulse = useRef(new Animated.Value(0)).current;
+  const bob   = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
-        Animated.timing(pulseAnim, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [pulseAnim]);
+    if (reduceMotion) return;
+    const mk = (v: Animated.Value, duration: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(v, { toValue: 1, duration, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(v, { toValue: 0, duration, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        ]),
+      );
+    const a = mk(pulse, 1000);
+    const b = mk(bob, 1400);
+    a.start();
+    b.start();
+    return () => { a.stop(); b.stop(); };
+  }, [pulse, bob, reduceMotion]);
 
-  const glowOpacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.55] });
-  const glowScale   = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1.0, 1.35] });
+  // Glow sits behind whatever is next: a roadside landmark, or the finish arch.
+  const glow = next
+    ? { x: next.bx, y: next.by - next.u * 0.76, r: next.u * 0.5 }
+    : { x: cx, y: finishBy - finishPostH * 0.85, r: Math.max(26, finishPostH * 0.55) };
 
-  const pipPoint    = pointAtPassProbability(passProbability);
-  const pipPixelX   = pipPoint.x * scaleX;
-  const pipPixelY   = pipPoint.y * scaleY;
-  const pipSize     = 28;
+  // ── Dashboard ──
+  const pipSize = Math.round(height * 0.13);
+  const pipH    = Math.round(pipSize * 1.2);
+  const gaugeR  = Math.min(height * 0.1, 30);
+  const gaugeX  = width * 0.76;
+  const gaugeY  = height - 8;
+  const theta   = Math.PI * f;
+  const gaugeEnd = { x: gaugeX - gaugeR * Math.cos(theta), y: gaugeY - gaugeR * Math.sin(theta) };
+
+  const labelLeft = (x: number) => Math.max(0, Math.min(width - LABEL_W, x - LABEL_W / 2));
+  const labelTop  = (y: number) => Math.max(42, y - 26);
+
+  const passed = Math.min(current, TOTAL_MILESTONES);
+  const a11y =
+    `Your progress. ${pct} percent ready. ${passed} of ${TOTAL_MILESTONES} milestones passed. ` +
+    (arrived ? 'You are test ready.' : `Next: ${next ? next.label : 'Test ready'}.`);
 
   return (
-    <View style={[styles.container, { width, height }]}>
-      <Svg
-        width={width}
-        height={height}
-        viewBox={`0 0 ${VBOX_W} ${VBOX_H}`}
-        preserveAspectRatio="none"
-      >
+    <View
+      style={[styles.container, { width, height }]}
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel={a11y}
+    >
+      {/* ── Layer 1: sky, ground, road ── */}
+      <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
         <Defs>
-          <LinearGradient id="roadGrad" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0%" stopColor={Colors.navy} stopOpacity="1" />
-            <Stop offset="100%" stopColor="#1E1B4B" stopOpacity="1" />
+          <LinearGradient id={`${uid}Sky`} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0%"   stopColor={mix('#14123A', '#3730A3', f)} />
+            <Stop offset="60%"  stopColor={mix('#1E1B4B', '#6D5BD0', f)} />
+            <Stop offset="100%" stopColor={mix('#3B348F', '#FDBA74', f)} />
+          </LinearGradient>
+          <RadialGradient id={`${uid}Glow`} cx="50%" cy="50%" r="50%">
+            <Stop offset="0%"   stopColor={GOLD}              stopOpacity={0.55 + 0.4 * f} />
+            <Stop offset="45%"  stopColor={Colors.indigoDark} stopOpacity={0.45} />
+            <Stop offset="100%" stopColor={Colors.indigo}     stopOpacity={0} />
+          </RadialGradient>
+          <LinearGradient id={`${uid}Ground`} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0%"   stopColor="#1F1B57" />
+            <Stop offset="100%" stopColor="#0E0C2B" />
+          </LinearGradient>
+          <LinearGradient id={`${uid}Road`} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0%"   stopColor="#565A8C" />
+            <Stop offset="100%" stopColor="#2A2D4D" />
           </LinearGradient>
         </Defs>
 
-        {/* Road tarmac */}
-        <Path
-          d={ROAD_PATH}
-          stroke="url(#roadGrad)"
-          strokeWidth={ROAD_W}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill="none"
+        <Rect x={0} y={0} width={width} height={horizonY + 1} fill={`url(#${uid}Sky)`} />
+
+        {STARS.map(([sx, sy, sr], i) => (
+          <Circle key={i} cx={sx * width} cy={sy * height} r={sr} fill={LILAC_PALE} opacity={0.85 * (1 - f * 0.9)} />
+        ))}
+
+        <Ellipse
+          cx={cx} cy={horizonY}
+          rx={width * (0.24 + 0.2 * f)} ry={height * (0.13 + 0.1 * f)}
+          fill={`url(#${uid}Glow)`}
         />
 
-        {/* Road centre line — dashed amber */}
+        {/* Distant hills */}
         <Path
-          d={ROAD_PATH}
-          stroke={Colors.amber}
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeDasharray="8 6"
-          fill="none"
-          opacity={0.7}
+          d={
+            `M 0 ${horizonY} Q ${width * 0.16} ${horizonY - height * 0.075} ${width * 0.36} ${horizonY} Z ` +
+            `M ${width * 0.6} ${horizonY} Q ${width * 0.84} ${horizonY - height * 0.06} ${width} ${horizonY - height * 0.01} L ${width} ${horizonY} Z`
+          }
+          fill={mix('#27236B', '#4338CA', f * 0.5)}
         />
 
-        {/* Completed road segment highlight */}
-        {current > 0 && (
-          <Path
-            d={ROAD_PATH}
-            stroke={Colors.indigo}
-            strokeWidth={ROAD_W * 0.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-            strokeDasharray={`${current * 60} 999`}
-            opacity={0.35}
-          />
-        )}
+        <Rect x={0} y={horizonY} width={width} height={height - horizonY} fill={`url(#${uid}Ground)`} />
 
-        {/* Milestone nodes */}
-        {NODES.map((node, i) => {
-          const state = i < current ? 'complete' : i === current ? 'current' : 'upcoming';
-          const fill  = state === 'complete' ? Colors.indigo : state === 'current' ? '#FFFFFF' : '#F3F4F6';
-          const stroke = state === 'complete' ? Colors.indigo : state === 'current' ? Colors.indigo : Colors.border;
-          const opacity = state === 'upcoming' ? 0.55 : 1;
-          const labelX  = node.x >= CENTER_X ? node.x + NODE_R + 4 : node.x - NODE_R - 4;
-          const labelY  = node.y + 4;
+        {/* Road */}
+        <Polygon
+          points={`${cx - hwFar},${horizonY} ${cx + hwFar},${horizonY} ${cx + hwNear},${nearY} ${cx - hwNear},${nearY}`}
+          fill={`url(#${uid}Road)`}
+        />
+        {[-1, 1].map(side => (
+          <G key={side}>
+            <Line
+              x1={cx + side * hwFar} y1={horizonY} x2={cx + side * hwNear} y2={nearY}
+              stroke={Colors.indigoDark} strokeWidth={7} opacity={0.22}
+            />
+            <Line
+              x1={cx + side * hwFar} y1={horizonY} x2={cx + side * hwNear} y2={nearY}
+              stroke={LILAC} strokeWidth={2}
+            />
+          </G>
+        ))}
 
-          return (
-            <G key={i} opacity={opacity}>
-              {/* Node circle */}
-              <Circle
-                cx={node.x}
-                cy={node.y}
-                r={NODE_R}
-                fill={fill}
-                stroke={stroke}
-                strokeWidth={state === 'current' ? 2.5 : 1.5}
-              />
-              {/* Emoji / checkmark */}
-              <SvgText
-                x={node.x}
-                y={node.y + 5}
-                textAnchor="middle"
-                fontSize={state === 'complete' ? 11 : 14}
-                fill={state === 'complete' ? '#FFFFFF' : '#111827'}
-              >
-                {state === 'complete' ? '✓' : node.emoji}
-              </SvgText>
-              {/* Label — always offset to a side so it never sits on top of the icon.
-                  Wrapped in a counter-scale transform anchored at its own (x,y) so
-                  the glyphs render at a uniform scale (see labelXScale above) no
-                  matter how wide the container is. */}
-              <G transform={`translate(${labelX} ${labelY}) scale(${labelXScale} 1) translate(${-labelX} ${-labelY})`}>
-                <SvgText
-                  x={labelX}
-                  y={labelY}
-                  textAnchor={node.x >= CENTER_X ? 'start' : 'end'}
-                  fontSize={7.5}
-                  fontWeight="700"
-                  fill={state === 'current' ? Colors.indigo : state === 'complete' ? Colors.indigo : Colors.mutedText}
-                  letterSpacing={0.3}
-                >
-                  {node.short}
-                </SvgText>
-              </G>
-            </G>
-          );
-        })}
+        <CentreDashes
+          cx={cx} horizonY={horizonY} nearY={nearY} width={width} height={height}
+          hwFar={hwFar} hwNear={hwNear} animate={!reduceMotion}
+        />
       </Svg>
 
-      {/* Pulsing glow ring around current node (native Animated, overlaid) */}
-      <Animated.View
-        style={[
-          styles.glowRing,
-          {
-            left:    pipPixelX - NODE_R * scaleX * 0.8,
-            top:     pipPixelY - NODE_R * scaleY * 0.8,
-            width:   NODE_R * scaleX * 1.6,
-            height:  NODE_R * scaleY * 1.6,
-            borderRadius: NODE_R * scaleX * 0.8,
-            opacity: glowOpacity,
-            transform: [{ scale: glowScale }],
-          },
-        ]}
-      />
+      {/* ── Pulsing glow behind the next landmark ── */}
+      {!arrived && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.glow,
+            {
+              left: glow.x - glow.r,
+              top: glow.y - glow.r,
+              width: glow.r * 2,
+              height: glow.r * 2,
+              opacity: reduceMotion ? 0.6 : pulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.8] }),
+              transform: [{ scale: reduceMotion ? 1.1 : pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.28] }) }],
+            },
+          ]}
+        >
+          <Svg width={glow.r * 2} height={glow.r * 2}>
+            <Defs>
+              <RadialGradient id={`${uid}Halo`} cx="50%" cy="50%" r="50%">
+                <Stop offset="0%"   stopColor={GOLD} stopOpacity={0.95} />
+                <Stop offset="55%"  stopColor={GOLD} stopOpacity={0.35} />
+                <Stop offset="100%" stopColor={GOLD} stopOpacity={0} />
+              </RadialGradient>
+            </Defs>
+            <Circle cx={glow.r} cy={glow.r} r={glow.r} fill={`url(#${uid}Halo)`} />
+          </Svg>
+        </Animated.View>
+      )}
 
-      {/* Pip avatar at current position */}
-      <View
+      {/* ── Layer 2: landmarks, finish arch, dashboard ── */}
+      <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
+        <Defs>
+          <LinearGradient id={`${uid}Pole`} x1="0" y1="0" x2="1" y2="0">
+            <Stop offset="0%"   stopColor={LILAC_PALE} />
+            <Stop offset="100%" stopColor="#6B6FA0" />
+          </LinearGradient>
+          <LinearGradient id={`${uid}Gold`} x1="0" y1="0" x2="1" y2="0">
+            <Stop offset="0%"   stopColor={GOLD} />
+            <Stop offset="100%" stopColor={GOLD_DEEP} />
+          </LinearGradient>
+          <LinearGradient id={`${uid}Dash`} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0%"   stopColor="#1B1846" />
+            <Stop offset="100%" stopColor={INK_DEEP} />
+          </LinearGradient>
+        </Defs>
+
+        <FinishArch cx={cx} by={finishBy} half={finishHalf} postH={finishPostH} uid={uid} />
+
+        {[...ahead].reverse().map(lm => (
+          <Landmark key={lm.label} kind={lm.kind} bx={lm.bx} by={lm.by} u={lm.u} dim={lm.n > 0} uid={uid} />
+        ))}
+
+        {/* Dashboard */}
+        <Path
+          d={`M 0 ${dashSideY} Q ${cx} ${2 * dashMidY - dashSideY} ${width} ${dashSideY} V ${height} H 0 Z`}
+          fill={`url(#${uid}Dash)`}
+        />
+        <Path
+          d={`M 0 ${dashSideY} Q ${cx} ${2 * dashMidY - dashSideY} ${width} ${dashSideY}`}
+          stroke={Colors.indigoDark} strokeWidth={1.5} opacity={0.5} fill="none"
+        />
+
+        {/* Steering wheel */}
+        <Circle cx={width * 0.24} cy={height * 1.13} r={height * 0.24} stroke="#2E3158" strokeWidth={height * 0.036} fill="none" />
+        <Circle cx={width * 0.24} cy={height * 1.13} r={height * 0.252} stroke="#4B4F7A" strokeWidth={1.5} fill="none" />
+
+        {/* Readiness gauge */}
+        <Path
+          d={`M ${gaugeX - gaugeR} ${gaugeY} A ${gaugeR} ${gaugeR} 0 0 1 ${gaugeX + gaugeR} ${gaugeY}`}
+          stroke="#2E3158" strokeWidth={6} strokeLinecap="round" fill="none"
+        />
+        {f > 0.01 && (
+          <Path
+            d={`M ${gaugeX - gaugeR} ${gaugeY} A ${gaugeR} ${gaugeR} 0 0 1 ${gaugeEnd.x} ${gaugeEnd.y}`}
+            stroke={f >= 0.8 ? Colors.emerald : Colors.indigoDark}
+            strokeWidth={6} strokeLinecap="round" fill="none"
+          />
+        )}
+      </Svg>
+
+      {/* ── Labels ── */}
+      <View pointerEvents="none" style={[styles.labelWrap, { left: labelLeft(cx), top: labelTop(finishBy - finishPostH) }]}>
+        <View style={[styles.pill, styles.pillGold]}>
+          <Text style={[styles.pillText, styles.pillTextGold]}>{finishLabel}</Text>
+        </View>
+      </View>
+
+      {ahead.filter(lm => lm.n < 2).map(lm => (
+        <View key={lm.label} pointerEvents="none" style={[styles.labelWrap, { left: labelLeft(lm.bx), top: labelTop(lm.by - lm.u) }]}>
+          <View style={[styles.pill, lm.n === 0 ? styles.pillNext : styles.pillLater]}>
+            <Text style={[styles.pillText, lm.n === 0 ? styles.pillTextNext : styles.pillTextLater]}>
+              {lm.n === 0 ? `Next: ${lm.label}` : lm.label}
+            </Text>
+          </View>
+        </View>
+      ))}
+
+      {/* ── Rear-view mirror: milestones already passed ── */}
+      <View pointerEvents="none" style={[styles.mirrorStem, { left: cx - 2 }]} />
+      <View pointerEvents="none" style={[styles.mirrorWrap, { width }]}>
+        <View style={styles.mirror}>
+          {Array.from({ length: passed }).map((_, i) => (
+            <View key={i} style={styles.tick}>
+              <Svg width={8} height={8} viewBox="0 0 8 8">
+                <Path d="M 1 4.2 L 3.2 6.4 L 7 1.8" stroke="#FFFFFF" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              </Svg>
+            </View>
+          ))}
+          <Text style={[styles.mirrorText, passed === 0 && styles.mirrorTextIdle]}>
+            {`${passed}/${TOTAL_MILESTONES} passed`}
+          </Text>
+        </View>
+      </View>
+
+      {/* ── Gauge readout ── */}
+      <Text style={[styles.gaugeValue, { left: gaugeX - gaugeR, width: gaugeR * 2, top: gaugeY - gaugeR * 0.68 }]}>
+        {`${pct}%`}
+      </Text>
+      <Text style={[styles.gaugeCaption, { left: gaugeX + gaugeR + 7, top: gaugeY - 15 }]}>{'ready'}</Text>
+
+      {/* ── Pip rides on the dashboard ── */}
+      <Animated.View
+        pointerEvents="none"
         style={[
-          styles.pipWrap,
+          styles.pip,
           {
-            left: pipPixelX - pipSize / 2,
-            top:  pipPixelY - Math.round(pipSize * 1.2) / 2 - 2,
+            left: cx - pipSize / 2,
+            top: dashMidY + 9 - pipH,
+            transform: [{ translateY: reduceMotion ? 0 : bob.interpolate({ inputRange: [0, 1], outputRange: [0, -3] }) }],
           },
         ]}
       >
         <Pip size={pipSize} mood={pipMood} />
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -265,12 +566,86 @@ export default function RoadmapPath({ progress, passProbability, pipMood = 'happ
 const styles = StyleSheet.create({
   container: {
     position: 'relative',
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: '#1E1B4B',
   },
-  glowRing: {
+  glow: {
     position: 'absolute',
-    backgroundColor: Colors.indigo,
   },
-  pipWrap: {
+  labelWrap: {
+    position: 'absolute',
+    width: LABEL_W,
+    alignItems: 'center',
+  },
+  pill: {
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  pillNext:  { backgroundColor: '#FFFFFF' },
+  pillLater: { backgroundColor: '#2E2B6B' },
+  pillGold:  { backgroundColor: '#78350F' },
+  pillText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  pillTextNext:  { color: '#312E81' },
+  pillTextLater: { color: LILAC_PALE },
+  pillTextGold:  { color: '#FDE68A' },
+  mirrorStem: {
+    position: 'absolute',
+    top: 0,
+    width: 4,
+    height: 10,
+    backgroundColor: INK,
+  },
+  mirrorWrap: {
+    position: 'absolute',
+    top: 8,
+    left: 0,
+    alignItems: 'center',
+  },
+  mirror: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    height: 26,
+    paddingHorizontal: 10,
+    borderRadius: 9,
+    backgroundColor: INK,
+    borderWidth: 1.5,
+    borderColor: '#6B6FA0',
+  },
+  tick: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: Colors.emerald,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mirrorText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#A7F3D0',
+    marginLeft: 2,
+  },
+  mirrorTextIdle: { color: LILAC },
+  gaugeValue: {
+    position: 'absolute',
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  gaugeCaption: {
+    position: 'absolute',
+    fontSize: 10,
+    fontWeight: '600',
+    color: LILAC,
+  },
+  pip: {
     position: 'absolute',
   },
 });
