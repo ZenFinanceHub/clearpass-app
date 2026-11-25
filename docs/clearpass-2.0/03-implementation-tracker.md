@@ -1,0 +1,240 @@
+# ClearPass 2.0 — Daily Coach: Implementation Tracker
+
+Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Spec: `01-design-spec.md` · Navigation: `02-navigation-mapping.md` · Decisions: `04-craig-actions.md` · Setup: `05-setup-guide.md`
+
+**Status legend:** ⬜ not started · 🟦 in progress · 🟨 in review (PR open) · ✅ merged · 🚀 released · ⏸ blocked
+
+**Release path legend:**
+- **OTA:** JS only, shipped with `npm run ota:production` to 1.1.3 binaries.
+- **WEB:** Vercel deploy.
+- **SRV:** Railway deploy.
+- **NATIVE:** EAS store build and store review.
+- **DB:** migration, needs approval.
+- **NONE:** tests, CI or docs only.
+
+**Nothing is merged, deployed, migrated or released without Craig's approval.**
+
+---
+
+## Rev 2 changes (2026-11-25, after Craig's review)
+
+- Consolidated from ~53 PRs into **24 PRs**, grouped by coherent outcome. Each PR keeps separate, reviewable commits.
+- Reviews are batched per phase.
+- Re-estimated active development effort, now shown separately from elapsed time and time waiting for approval.
+- Added a **static Home preview** (milestone M0.5) built on stubbed data with no backend, so it doesn't depend on staging credentials.
+
+## Repository status
+
+- `main` = `origin/main` @ `d791923`. Local `main` holds 2 **unpushed** marketing-video commits (`4c08d4b`, `d3417de`). These are **preserved**: all programme branches start from `origin/main`, and nothing rewrites local `main`.
+- Open PRs, reviewed in `04-craig-actions.md` §PR review:
+  - **#79:** recommend merge.
+  - **#19:** recommend close as superseded.
+  - Neither will be actioned without approval.
+- No code changes since the audit. No CI. No staging. Playwright defaults to the production URL.
+
+## Global constraints [APPROVED]
+
+- No rewrites.
+- No lost functionality.
+- No production DB changes, deploys or releases without approval.
+- No changes to prices, products, entitlements, readiness calculations, AI limits or models.
+- No changes to Pip artwork or the PR #105 road artwork or animation.
+- No real purchases.
+- No secrets in source or docs.
+- No previews connected to production.
+- No unapproved destructive migrations.
+
+**`ui_v2` flag [APPROVED]:**
+- Every visual change from Phase 1 onward renders only when `ui_v2` is on.
+- The flag is a **build-time env value per environment**: on in local, CI and staging, off in production.
+- It controls **presentation only**:
+  - no stored data changes shape;
+  - new data is additive, device-local keys;
+  - old and new UI read the same progress data.
+- Rollback is a flag-off update shipped through the normal `npm run ota:production` path, or the flag left off.
+- The flag is removed after release (Phase 7).
+
+---
+
+## Consolidated PR plan
+
+**Effort columns:**
+- **Active:** focused development days for implementation, self-testing and fixing review comments.
+- **Wait:** time blocked on Craig (credentials, approvals, device time). Wait time isn't counted in Active.
+
+### Phase 0 — Safety and foundations (4 PRs, active 4–5 d)
+
+| PR | Title | Contents | Release | Active | Needs from Craig | Status |
+|---|---|---|---|---|---|---|
+| **P0-1** | Test safety and CI | **Network guard:** Playwright default → local web export, a shared stub harness, and a test that **fails on any production host**. Existing e2e specs moved onto the harness. **GitHub Actions:** tsc (mobile and instructor-web), core vitest, server node tests, scripts tests, instructor-web vitest, and a stubbed Playwright smoke run. | NONE | 1.5–2 d | Actions enabled (A2, approved) | ⬜ |
+| **P0-2** | Live bug fixes | Separate commits for:<br>• one onboarding-state key, with fallback reads of both old keys;<br>• free learners see results and review at the daily limit (entitlement unchanged);<br>• Pip FAB no longer covers page titles and is hidden on hazard playback and `/aitutor`;<br>• the unused 0-byte dyslexia `.ttf` removed, with the working `.otf` fonts verified;<br>• `/screenshot-mode` blocked in production builds.<br>Tests for each. | OTA + WEB | 1–1.5 d | Production release needs separate approval | ⬜ |
+| **P0-3** | Analytics foundation | Event taxonomy plus the new events, written via the existing `funnel_events` table (no migration). `app_opened` once per day. Read-only retention and funnel SQL kept in the repo. No content or PII. | OTA + WEB | 1 d | Confirm the privacy stance (A6) | ⬜ |
+| **P0-4** | Local and staging environments | Local Supabase in Docker, replaying `schema.sql` and migrations. Environment config so local, staging and production are selected by env var. Seed and reset scripts for synthetic accounts, all `exclude_from_stats`. Staging docs. The hosted staging wiring lands when A1/A3 arrive, as a follow-up commit on the same PR or a small config PR. | NONE | 1–1.5 d (+0.5 d when credentials arrive) | A1, A3 | ⬜ |
+
+### Phase 1 + 2 — Design foundation, Home and navigation (4 PRs, active 7–9 d) ★ M1
+
+| PR | Title | Contents | Release | Active | Status |
+|---|---|---|---|---|---|
+| **P1-1** | Design foundation | Semantic light and dark tokens, with a test that enforces AA contrast for every pair. Inter loaded at runtime (OTA-safe). Type scale. `ThemeProvider` with in-app dark mode, the existing setting. In-app Reduced Motion combined with the OS setting. The `ui_v2` flag. Old theme modules become aliases. | OTA + WEB | 2 d | ⬜ |
+| **P1-2** | Core components | Text, Button, Card, ListRow, Badge, Input (with label and error), ScreenHeader, IconButton, ProgressBar, Icon (Ionicons). 44/48pt targets, roles and labels. A dev/staging component gallery with screenshot tests. Wraps existing `ScaleButton`, `SkeletonBox` and `AnswerOptions` rather than duplicating them. | OTA + WEB | 1.5–2 d | ⬜ |
+| **P2-1** | Daily Coach Home | Recommendation engine in `packages/core` (pure, unit-tested; readiness untouched). Daily plan and daily goal, stored locally. `PipCard` with the rule-based message library (existing poses only). New Home following the approved hierarchy, with the **existing `RoadmapPath` unchanged**. States: new, established, free, Pro, no test date, offline, loading. Desktop width handled. | OTA + WEB | 2.5–3 d | ⬜ |
+| **P2-2** | Five-tab navigation | Home, Learn, Tests, Progress, Profile. Hubs link to the **existing** screens. Settings content moved into Profile. Every route alias and redirect follows `02-navigation-mapping.md`, with an e2e route-coverage test. Battle, Challenge, the AI study plan and Bookmarks made discoverable. Ask Pip entry points added. **PipFab removed.** | OTA + WEB | 1.5–2 d | ⬜ |
+| — | (P0-2 and P0-1 must be merged first) | | | | |
+
+### Phase 3 — Learning experience (3 PRs, active 5–7 d)
+
+| PR | Title | Contents | Release | Active |
+|---|---|---|---|---|
+| **P3-1** | Practice loop | Learn hub final. Topic picker. Question presentation (with image alt text). Accessible feedback and explanations. Pip tips. Results and review of incorrect answers. Next activity. `AnswerOptions` changes are regression-tested in mock too. | OTA + WEB | 2.5–3 d |
+| **P3-2** | Road signs and Highway Code | Restyle browse, quiz, flashcards and reader (after #79). | OTA + WEB | 1.5–2 d |
+| **P3-3** | Speed Round, Weak Spots, Battle and Challenge | Restyle and integrate into the hub. Gating unchanged; post-purchase copy fixed (D11). | OTA + WEB | 1–2 d |
+
+### Phase 4 — Tests and progress (3 PRs, active 5–6 d)
+
+| PR | Title | Contents | Release | Active |
+|---|---|---|---|---|
+| **P4-1** | Tests hub and mock tests | Hub (real Quick-mock values; hazard card says "available in the app" on web). Mock intro, questions, overview and result. Exit guard and timer preserved. Results history. | OTA + WEB | 2–2.5 d |
+| **P4-2** | Hazard perception | Restyle intro, results and timeline. **Scoring untouched.** Device test on iOS and Android. | OTA | 1.5 d |
+| **P4-3** | Progress | Readiness presented per D9 (presentation only). Mastery, achievements, streaks, leaderboard (label fix, error state). Detailed road progression. | OTA + WEB | 1.5–2 d |
+
+### Phase 5 — Onboarding and commercial (4 PRs, active 5–6 d)
+
+| PR | Title | Contents | Release | Active |
+|---|---|---|---|---|
+| **P5-1** | Onboarding and auth | Four steps or fewer, test date optional, resumable. Labelled auth inputs. 8+ character password for new passwords (D13). Onboarding events. | OTA + WEB | 1.5–2 d |
+| **P5-2** | Ask Pip allowance endpoint | Additive, read-only `GET`. **No change to limits or models.** Server tests. Deploy needs approval, followed by the instructor smoke test. | **SRV** | 0.5 d |
+| **P5-3** | Ask Pip UI | Chat restyle, suggested questions, remaining allowance (from P5-2), accessible controls, loading and error states. No feedback buttons. | OTA + WEB | 1–1.5 d |
+| **P5-4** | Pro upgrade and subscription | Outcome-led paywall with **monthly first**, the same products, prices and disclosures, restore and "continue free". My subscription screen (store management on native, info screen on web). Transparent free-limit counters. `plan_selected` on all platforms and placement taxonomy. Sandbox and test-mode e2e. | OTA + WEB | 2 d |
+
+### Phase 6 — Remaining experience (3 PRs, active 5–6 d)
+
+| PR | Title | Contents | Release | Active |
+|---|---|---|---|---|
+| **P6-1** | Profile, settings and accessibility | Profile sections. Every accessibility setting applied on every screen, with a coverage test. Account deletion honours the server response. | OTA + WEB | 2 d |
+| **P6-2** | Instructor experience | App dashboard: the **existing 3 tiers**, no invented stats, invites and referrals unchanged. Tokens applied to `apps/instructor-web`. | OTA + WEB (+ portal deploy) | 2 d |
+| **P6-3** | Remaining screens and polish | Test Day, I Passed, linked instructors, legal, contact, taster, landing copy. Desktop and dark-mode sweep. Deletion of dead styles and duplicate components. | OTA + WEB | 1.5–2 d |
+
+### Phase 7 — Release preparation (2 PRs + test campaign, active 4–5 d)
+
+| PR | Title | Contents | Release | Active |
+|---|---|---|---|---|
+| **P7-1** | Regression and accessibility suites | Full stubbed web e2e. Maestro flows (Android). iOS simulator runs. axe. Purchase sandbox scripts. | NONE | 2 d |
+| **P7-2** | Release: flag on and remove legacy | OTA compatibility check (fingerprint against 1.1.3). Flag on per environment. Release notes and rollback runbook. Legacy UI removed in a follow-up once stable. | OTA/WEB (+NATIVE only if D14 requires) | 1.5–2 d |
+| — | Test campaign (Craig's devices) | VoiceOver and TalkBack walkthroughs, sandbox purchases, device spot checks | — | Craig's time |
+
+### Totals
+
+| | PRs | Active dev (days) |
+|---|---|---|
+| Phase 0 | 4 | 4–5 |
+| Phases 1+2 | 4 | 7–9 |
+| Phase 3 | 3 | 5–7 |
+| Phase 4 | 3 | 5–6 |
+| Phase 5 | 4 | 5–6 |
+| Phase 6 | 3 | 5–6 |
+| Phase 7 | 2 | 4–5 |
+| **Total** | **23** | **35–44** |
+
+The table lists **23 implementation PRs**. With the docs PR, the programme is **24 PRs**.
+
+### Why the estimate fell from 58–78 to 35–44 days, and where it can't go lower
+
+- **Fewer PRs** removes about 30 × (branching, PR write-up, CI wait, review-fix round) ≈ 8–12 days of overhead.
+- **Components first.** Accessibility, dark mode, dyslexia and large-text support live in the P1-2 primitives, so later screens inherit them rather than each implementing them. This saves about 6–10 days across Phases 3–6.
+- **Parallel work** after P2-2: Phases 3, 4 and 5 (and P6-2) touch separate screens and can be built at the same time in separate worktrees. This cuts **elapsed** time, not active effort.
+- **Not reduced, deliberately:** Phase 0 safety (the guard, CI, local DB), Phase 7 device and accessibility testing, and sandbox purchase testing. Cutting any of these to hit a number would compromise isolation or release safety. The 35-day floor assumes the large screens (`practice` 2.8k lines, `instructor` 2.2k) restyle without needing structural refactors. If they do need them, Phases 3 and 6 grow by 2–4 days.
+
+## Milestones and targets
+
+| Milestone | Definition | Active dev from start | Realistic? |
+|---|---|---|---|
+| **M0.5 — Static Home preview** | Daily Coach Home rendered from the real app code on **stubbed data**, with no backend at all. Uses PR #105 road artwork, original Pip assets and the 5-tab bar (visual only). Delivered as 390px and 1440px screenshots plus a local run command. **No hosted preview until staging exists**, because a hosted preview built today would carry production env vars. | **~3 d** (P1-1 minimal tokens, a subset of P1-2, the P2-1 layout with a stub recommendation) | ✅ Within the 2–4 day target |
+| **M1 — Working Daily Coach Home** | Real Home and 5-tab navigation behind `ui_v2`, running against **local Supabase** with seeded accounts, on web and an Android/iOS dev build. Real recommendation engine, all states. | **~9–11 d** (P0-1, P0-2, P0-4 local part, P1-1, P1-2, P2-1, P2-2) | ⚠️ 10 days is achievable; 7 is not without cutting the Phase 0 guard and CI, which isn't recommended. **Reviewing it on hosted staging** additionally needs A1 |
+| M2 — Learning loop | Phases 3 and 4 | +~8–10 d (parallel) | |
+| M3 — Commercial | Phase 5 including sandbox purchases | parallel with M2 | needs A3 |
+| M4 — Release candidate | Phases 6 and 7, sign-off | ~35–44 d total | |
+
+### Elapsed time (calendar), separated
+
+| Component | Estimate | Notes |
+|---|---|---|
+| Active development | 35–44 days | Can be compressed in calendar terms by parallel work after M1 (to roughly 25–32 working days elapsed) |
+| Waiting on credentials | 0–5 days | A1 (Supabase staging), A3 (Stripe test mode and RevenueCat sandbox). Phase 0 continues without them |
+| Waiting on reviews | ~7 review batches × 1–3 days = **7–21 days** | One batch per phase plus M0.5 and M1. The largest variable |
+| Craig's device and accessibility testing | 2–4 days | Phase 7 |
+| Store review (only if D14 = store build) | 1–7 days | Not needed for OTA-only |
+| **Overall calendar** | **≈ 7–11 weeks** | Depends mainly on review turnaround |
+
+## Dependencies and parallelism
+
+```
+P0-1 ─┬─► P1-1 ─► P1-2 ─► P2-1 ─► P2-2 ─┬─► P3-1..3 ─┐
+P0-2 ─┤   (M0.5 static preview off P1-1/P1-2/P2-1)  ├─► P4-1..3 ─┼─► P7-1 ─► P7-2
+P0-3  │ (independent)                               ├─► P5-1,3,4 ┤
+P0-4 ─┘ (M1 local run)          P5-2 (server, any time after approval)
+                                P6-2 instructor after P1-2 ──────────┤
+                                P6-1, P6-3 after P2-2 ───────────────┘
+```
+
+- **Independent now:** P0-1, P0-2, P0-3 and the local part of P0-4. P5-2 can be built at any time.
+- **Sequential spine:** P1-1 → P1-2 → P2-1 → P2-2.
+- **Parallel after P2-2:** Phases 3, 4, 5 and 6.
+- **External dependencies:**
+  - A1 for hosted staging review.
+  - A3 for purchase testing.
+  - Approval for the P5-2 deploy.
+  - Phase 7 device time.
+
+## Risks and blockers
+
+| # | Risk | Likelihood / impact | Mitigation |
+|---|---|---|---|
+| R1 | **No staging today.** Previews and e2e default to production | High / High | P0-1 blocks redesign work; a guard test fails on any production host |
+| R2 | Very large screen files (`practice` 2.8k, `instructor` 2.2k, `home`, `settings`, `roadsigns` ~1.6–1.9k lines) | High / Med | Extract sub-components first (behaviour-preserving PRs with tests), then restyle |
+| R3 | Shared components (`AnswerOptions`, `PaywallPrompt`, `CelebrationModal`, theme) affect several screens at once | Med / Med | Regression e2e across all consumers before merging |
+| R4 | Progress sync is last-write-wins on one JSON blob; new fields (daily goal, onboarding step) could clash across devices | Med / Med | Keep new state device-local unless approved; add any synced fields additively |
+| R5 | OTA reach: only 1.1.3 binaries receive updates (`appVersion` policy); older installs stay on the old UI | Certain / Low–Med | Accept; or store-build 1.2.0 with a forced-update prompt (D14) |
+| R6 | Flagged code paths double the UI surface temporarily | Med / Low | Phase 6 deletion sweep; flag removed after release |
+| R7 | Purchase flows (RevenueCat/Stripe) regress during the paywall restyle | Low / **High** | No logic change; sandbox e2e; Craig approves P5-4 separately |
+| R8 | Hazard playback is WebView/device-specific | Med / Med | Device tests in P4-2; scoring untouched |
+| R9 | Pip artwork resolution limits for hero-size use (largest @3x ≈ 240px) | Med / Low | Use within limits; request higher-res originals (A7), never redraw |
+| R10 | Mockup assumptions conflict with reality (Pip design, Quick mock values, instructor tiers, bell, logo) | Certain / Low | Documented in spec §3, §6; decisions D1–D10 |
+| R11 | Small user base makes conversion and retention changes statistically unmeasurable for months | Certain / Med | Instrument now (P0-3); judge on qualitative testing plus leading indicators |
+| R12 | Supabase project is shared with Zen Footy | — / High if mishandled | No production DB changes in this programme without approval; staging isolates development |
+| R13 | Accessibility settings coverage requires touching every screen | High / Med | Settings enforced in primitives (P1-1/P1-2), so migrated screens inherit them automatically |
+
+## Staging and automated testing approach [REC]
+
+**Environments:**
+
+| Env | Backend | Web | Mobile | Payments |
+|---|---|---|---|---|
+| Local | Local Supabase (Docker, `supabase start`, replay `schema.sql` + migrations) **or** staging | `expo start --web` | Dev client (`development` profile) | Stubbed |
+| Staging | Separate Supabase project (D12) + Railway staging service + staging Anthropic key with a low spend cap | Vercel **Preview** env vars → staging | EAS `preview` channel (internal distribution) | Stripe **test mode**, RevenueCat **sandbox** |
+| Production | Unchanged | Vercel Production | `production` channel via `npm run ota:production` | Live (no testing) |
+
+**Test layers:**
+1. **Unit** (vitest / node:test): tokens contrast, recommendation engine, entitlement and readiness (unchanged; existing tests stay green), onboarding state, nav mapping table.
+2. **Web e2e** (Playwright, stubbed network, CI): route coverage, critical journeys (onboarding → first practice → results; free limit → results → paywall; mock; Ask Pip with a stubbed reply; Profile settings), screenshot comparisons for primitives and key screens at 390/1440, axe accessibility scan. **Hard fail on any production host.**
+3. **Staging e2e** (Playwright against the staging backend, manual trigger): real auth and sync with seeded accounts.
+4. **Native** (Maestro on Android emulator/device locally; iOS simulator): onboarding, practice, mock exit guard, hazard playback, purchase sheet up to sandbox confirmation.
+5. **Server**: existing `node --test` suite. `npm run smoke:instructor` after any approved Railway deploy (per `CLAUDE.md`).
+
+## Analytics plan (P0-3 + P5-4) [APPROVED events; REC naming]
+
+| Requirement | Event(s) | Notes |
+|---|---|---|
+| Registration started / completed | `signup_started`, `signup_completed` | |
+| Onboarding started / completed | `onboarding_started`, `onboarding_step_viewed{step}`, `onboarding_completed` (exists) | |
+| First question answered | `first_question_answered` | once per account (local flag + server de-duplication in the query) |
+| First practice session completed | `first_session_completed` | |
+| Daily plan viewed / started | `daily_plan_viewed`, `daily_plan_item_started{item}` | |
+| Practice results viewed | `practice_results_viewed{mode, limit_reached}` | |
+| Daily free limit | `daily_limit_hit` (exists) | |
+| Paywall viewed | `paywall_viewed{placement}` (exists; add placement) | |
+| Purchase started / completed | `purchase_started`, `purchase_succeeded` (exist) | |
+| Feature usage | `feature_used{feature}`, enumerated features | no content |
+| D1 / D7 / D30 retention | `app_opened` (max 1/day/actor) | retention computed by read-only SQL |
+| Instructor invites / referrals | `instructor_invite_sent`, `instructor_invite_accepted`, `referral_shared` | server-side where the action happens |
+
+Every event carries `platform` (already captured: web/ios/android). Genuine vs test is derived at query time from `profiles.exclude_from_stats` / `account_class`; comp accounts from `progress.proSource = 'comp'`. **No question text, answers, chat content, emails or names in `props`.** [REC] Consider moving off `funnel_events` RLS-insert-from-client only if abuse appears; no change now.
