@@ -18,6 +18,10 @@ export async function explainAnswer(
   selectedIndex: number,
   apiKey: string,
   accessToken: string | null,
+  // The app passes getProxyUrl() (apps/mobile/src/proxyUrl.ts), which is
+  // environment-aware (local/staging/production). Omitted: the old
+  // __DEV__ fallback below, identical to production's getProxyUrl().
+  proxyUrl?: string,
 ): Promise<ExplainResult> {
   const correctOption = options[correctIndex];
   const selectedOption = options[selectedIndex];
@@ -46,9 +50,10 @@ export async function explainAnswer(
   // Consolidating all of them into packages/core is the right fix but is
   // separate work, not done here — this is deliberately the minimal,
   // targeted fix for the hang.
-  const PROXY_URL = __DEV__
-    ? 'http://localhost:3001'
-    : 'https://clearpass-app-production.up.railway.app';
+  const PROXY_URL = proxyUrl
+    ?? (__DEV__
+      ? 'http://localhost:3001'
+      : 'https://clearpass-app-production.up.railway.app');
 
   try {
     const response = await fetch(`${PROXY_URL}/api/explain`, {

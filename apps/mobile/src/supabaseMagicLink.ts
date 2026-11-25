@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 
+import { appConfig } from './appConfig';
+
 // Dedicated PKCE client used ONLY for the magic-link request/completion
 // pair (app/auth/signup.tsx's handleSendMagicLink -> app/auth/callback.tsx's
 // ?code= branch). src/supabase.ts's main client deliberately stays on
@@ -39,9 +41,10 @@ import { Platform } from 'react-native';
 // in-memory store and discarded). It stays inert: nothing reads it back,
 // and autoRefreshToken: false means this client never runs a refresh
 // ticker against it.
-const SUPABASE_URL = 'https://secavejbaapapvvqbwed.supabase.co';
-const SUPABASE_ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlY2F2ZWpiYWFwYXB2dnFid2VkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3NjY2NTcsImV4cCI6MjA5MzM0MjY1N30.pu0LhnRdup6ZpQWBgcBYP1Z8tQu-BzPl2JmY50e5zfU';
+// Same project as the main client: production values pinned in src/appEnv.ts,
+// local/staging from EXPO_PUBLIC_SUPABASE_URL / _ANON_KEY.
+const SUPABASE_URL = appConfig.supabaseUrl;
+const SUPABASE_ANON_KEY = appConfig.supabaseAnonKey;
 
 // Same web-vs-native split as src/supabase.ts: on web, no window.localStorage
 // substitute is needed, so leave `storage` unset and let supabase-js use its
