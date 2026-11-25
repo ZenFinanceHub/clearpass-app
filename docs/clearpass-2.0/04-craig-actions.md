@@ -7,7 +7,7 @@ Last updated 2026-11-25 (rev 2, after Craig's plan approval). Step-by-step instr
 | # | Action | Needed for | Blocking? | Status |
 |---|---|---|---|---|
 | A1 | Create the **hosted staging Supabase project** and enter its keys into Vercel Preview, EAS `preview` and Railway staging (guide §1–§3) | P0-4 hosted part; hosted review of M1 | Blocks hosted staging only. Local development continues | ⬜ |
-| A2 | **Enable GitHub Actions** (guide §4) | P0-1 CI | Blocks CI runs only | ⬜ (approved) |
+| A2 | **Enable GitHub Actions** (guide §4) | P0-1 CI | — | ✅ Already enabled; CI ran green on #109. Optional: apply the §4 hardening settings and make `ci` a required check |
 | A3 | **Stripe test mode and RevenueCat sandbox** set up for staging (guide §5–§6) | P5-4, P7 purchase testing | Phase 5 testing | ⬜ (approved to prepare) |
 | A4 | ~~Unpushed commits~~ **Decided: preserve.** Programme branches start from `origin/main`; local `main` is left untouched | — | — | ✅ |
 | A5 | Approve the PR #79 / #19 recommendations below | Before P3-2 | No | ⬜ |
@@ -64,6 +64,17 @@ Last updated 2026-11-25 (rev 2, after Craig's plan approval). Step-by-step instr
 - Since then, `main` has gone a different way: instructors get unconditional, non-expiring free Pro (`server/lib/entitlement.js:72-76`, `proSource: 'instructor'`), plus paid seats and referral payouts (PRs #103/#104). The PR also references `proSource === 'stripe'`, which is a legacy source.
 - Merging it would **change entitlements and the database**, both outside this programme's approved scope.
 - If conditional instructor Pro is still wanted as a business policy, it should be re-specified against today's model as a separate project. The PR's plan doc (`docs/superpowers/plans/2026-07-08-instructor-free-pro.md`, on the branch) is a useful starting point.
+
+## F. Findings from Phase 0 work (2026-11-25), needing a decision
+
+| # | Finding | Evidence | Recommendation | Needs |
+|---|---|---|---|---|
+| F1 | **Sandbox (test) purchases grant real Pro in production and count as paying.** The RevenueCat webhook never checks `environment` (sandbox vs production). This affects TestFlight and App Review purchases, and it skews the "paying" figures in the audit | `server/lib/revenuecatWebhook.js:38` grants; `:429` is the only filter (PR #108 investigation) | (a) A **separate RevenueCat project for staging** (no code change; guide §6). (b) Production **ignores or flags sandbox events**: a small server change, needing approval and a Railway deploy. Decide whether App Review sandbox purchases *should* unlock Pro. They usually should, so prefer **flagging** (e.g. `proSource:'iap_sandbox'` excluded from stats) over ignoring | Decision + approval for (b) |
+| F2 | **`/api/send-weekly-parent-emails` allows requests when `CRON_SECRET` is unset.** Production presumably sets it, so the live risk is low, but it fails open | `proxy.js:2359` (PR #108) | Switch it to the existing `requireCronAuth` (fail closed). A tiny server PR, needing a Railway deploy and approval | Approval |
+| F3 | **Schema drift.** Production has objects missing from `schema.sql`: `profiles.account_class` and the `update_aggregate_stats` RPC. Local and staging replay therefore differ from production | PR #108 replay; live table listing | A docs/schema-only PR that adds them to `schema.sql` (no production change), derived from a read-only schema dump | Approval to read production schema (read-only) |
+| F4 | **Past test dates are accepted** in onboarding | P0-1 marked the e2e check `fixme` | Fix in P5-1 (onboarding) | — (planned) |
+| F5 | **`/aitutor` redirects to `/` on web** (on `main` too) | P0-2 verification | Investigate in P2-2 when Ask Pip entry points are rebuilt | — (planned) |
+| F6 | **Tab bar labels clipped** at 390px on web | Audit screenshots; P0-2 screenshots | Fixed by the new tab bar in P1-2/P2-2 | — (planned) |
 
 ## Things Claude Code will not do without explicit approval
 
