@@ -445,11 +445,12 @@ function RootLayout() {
               PipVisibilityContext reports the current screen wants it hidden
               (e.g. the hazard perception player, so it doesn't sit over the
               video or steal taps meant for hazard scoring).
-              Anchored below the header (not bottom-right) so it never overlaps
+              Anchored just below the header (not bottom-right; see
+              src/pipFabPosition.ts fabBounds) so it never overlaps
               in-content bottom controls — e.g. Mock Test's Prev/Next row, or any
               other screen's bottom CTA — which a fixed bottom-right FAB would
               otherwise sit on top of and intercept taps for. */}
-          <PipFab defaultTop={insets.top + 56} />
+          <PipFab />
           <InstructorRouteGuardOverlay />
           <CrossPlatformAlertHost />
           {showCachingToast && (

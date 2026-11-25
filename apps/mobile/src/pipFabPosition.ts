@@ -9,13 +9,34 @@
 
 export const FAB_SIZE = 52;
 export const FAB_EDGE = 16;
+// Room kept clear below the safe area for screen headers/titles (a 64px bar
+// plus a small gap). Without it the button sat over the title ("…ce").
+export const HEADER_CLEARANCE = 72;
+// Room kept clear at the bottom for the tab bar.
+export const BOTTOM_RESERVED = 90;
 
 export type FabBounds = { width: number; minY: number; maxY: number };
 export type FabSide = 'left' | 'right';
 export type StoredFabPos = { side: FabSide; yRatio: number };
 
+/** Right edge, just below the header. A ratio, so it doesn't depend on the
+ *  window size at first render (0x0 on web before layout). */
+export const DEFAULT_FAB_POS: StoredFabPos = { side: 'right', yRatio: 0 };
+
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(Math.max(v, lo), hi);
+}
+
+/** Where the button may sit: below the header and safe area, above the tab bar. */
+export function fabBounds(p: { width: number; height: number; insetTop: number; insetBottom: number }): FabBounds {
+  const minY = p.insetTop + HEADER_CLEARANCE;
+  return { width: p.width, minY, maxY: Math.max(minY, p.height - p.insetBottom - FAB_SIZE - BOTTOM_RESERVED) };
+}
+
+/** Hidden on the tutor screens (it opens the tutor) and whenever a screen
+ *  asks via PipVisibilityContext (hazard clip playback, a mock test). */
+export function shouldHideFab(segments: readonly string[], hiddenByScreen: boolean): boolean {
+  return hiddenByScreen || segments.includes('tutor') || segments.includes('aitutor');
 }
 
 export function xForSide(side: FabSide, b: FabBounds): number {
