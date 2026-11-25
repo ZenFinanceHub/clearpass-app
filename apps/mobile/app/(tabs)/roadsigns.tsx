@@ -35,6 +35,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { CelebrationEvent } from '@/src/celebrations';
 import * as Haptics from 'expo-haptics';
+import { useFeatureUsed } from '@/src/useFeatureUsed';
 
 type ViewMode = 'grid' | 'detail' | 'quiz' | 'flashcard';
 
@@ -1041,6 +1042,7 @@ function CategoryBadge({ category }: { category: SignCategory }) {
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function RoadSignsScreen() {
+  useFeatureUsed('road_signs');
   const theme = useTheme();
 
   const [viewMode, setViewMode] = useState<ViewMode>('grid');

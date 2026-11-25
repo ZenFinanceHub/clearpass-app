@@ -13,6 +13,7 @@ import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
+import { useFeatureUsed } from '@/src/useFeatureUsed';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -583,6 +584,7 @@ function ChecklistTab() {
 // ─── TestDayScreen ────────────────────────────────────────────────────────────
 
 export default function TestDayScreen() {
+  useFeatureUsed('test_day');
   const [activeTab, setActiveTab] = useState<TabId>('breathe');
   const theme = useTheme();
 

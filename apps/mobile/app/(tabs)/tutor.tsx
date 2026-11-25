@@ -23,6 +23,7 @@ import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 import { roadSigns } from '@clearpass/content';
 import { getProxyUrl } from '@/src/proxyUrl';
+import { useFeatureUsed } from '@/src/useFeatureUsed';
 
 const SYSTEM_PROMPT = `
 You are Pip, the ClearPass assistant. ClearPass is a UK driving theory test preparation
@@ -124,6 +125,7 @@ function windowMessages(all: Msg[]): Msg[] {
 }
 
 export default function TutorScreen() {
+  useFeatureUsed('ask_pip');
   const theme = useTheme();
   const tabBarHeight = useBottomTabBarHeight();
   const params = useLocalSearchParams<{

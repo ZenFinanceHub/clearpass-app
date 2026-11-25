@@ -35,6 +35,7 @@ import { Pip } from '@/src/components/Pip';
 import { HazardTimeline } from '@/src/components/HazardTimeline';
 import { PaywallPrompt } from '@/src/components/PaywallPrompt';
 import { usePipVisibility } from '@/src/PipVisibilityContext';
+import { useFeatureUsed } from '@/src/useFeatureUsed';
 
 type Phase = 'info' | 'pre-clip' | 'player' | 'clip-result' | 'solution' | 'results';
 
@@ -234,6 +235,7 @@ function ClipResultDetail({ clip, result }: { clip: HazardClip; result: HazardCl
 }
 
 export default function HazardScreen() {
+  useFeatureUsed('hazard');
   const [phase, setPhase] = useState<Phase>('info');
   const [clipIndex, setClipIndex] = useState(0);
   const [clicks, setClicks] = useState<number[]>([]);

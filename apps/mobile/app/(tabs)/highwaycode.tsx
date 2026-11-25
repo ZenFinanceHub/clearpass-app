@@ -19,6 +19,7 @@ import {
 import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { Colors } from '@/src/constants/theme';
 import { Pip } from '@/src/components/Pip';
+import { useFeatureUsed } from '@/src/useFeatureUsed';
 
 type ViewMode = 'list' | 'chapter' | 'rule';
 
@@ -26,6 +27,7 @@ const TEAL = Colors.indigo;
 const TEAL_LIGHT = Colors.indigoBg;
 
 export default function HighwayCodeScreen() {
+  useFeatureUsed('highway_code');
   const params = useLocalSearchParams<{ ruleNumber?: string }>();
   const theme = useTheme();
 
