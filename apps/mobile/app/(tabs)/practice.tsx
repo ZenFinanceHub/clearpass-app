@@ -49,6 +49,7 @@ import { playCorrect, playWrong } from '@/src/sounds';
 import { cancelStreakProtectionNotification, rescheduleStudyNudges } from '@/src/notifications';
 import { ReminderOffer, useReminderOffer } from '@/src/components/ReminderOffer';
 import { FREE_QUESTION_LIMIT, isPremium } from '@/src/subscription';
+import { afterAnswer, canStartSession } from '@/src/practiceFlow';
 import { explainAnswer } from '@clearpass/ai';
 import { getAccessToken } from '@/src/getAccessToken';
 import { handleSessionExpired } from '@/src/handleSessionExpired';
@@ -157,7 +158,10 @@ export default function PracticeScreen() {
   const { mode } = useLocalSearchParams<{ mode?: string }>();
 
   const [phase, setPhase] = useState<Phase>('start');
-  const reminderOffer = useReminderOffer(phase === 'dailyLimit');
+  // Set when this session ended because the free daily limit was reached:
+  // the results screen then also shows the limit message + upgrade CTA.
+  const [limitReached, setLimitReached] = useState(false);
+  const reminderOffer = useReminderOffer(phase === 'dailyLimit' || (phase === 'results' && limitReached));
 
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -318,7 +322,8 @@ export default function PracticeScreen() {
     setDailyChallengeDisplay(progress.dailyChallenge ?? null);
     setChallengeJustCompletedFlash(false);
 
-    if (!(progress.isPro ?? false) && dailyCountRef.current >= FREE_QUESTION_LIMIT) {
+    setLimitReached(false);
+    if (!canStartSession({ answeredToday: dailyCountRef.current, limit: FREE_QUESTION_LIMIT, isPremium: progress.isPro ?? false })) {
       logFunnelEvent('daily_limit_hit', { at: 'session_start' });
       setPhase('dailyLimit');
       return;
@@ -770,18 +775,20 @@ export default function PracticeScreen() {
     setShowSRButtons(false);
 
     dailyCountRef.current += 1;
-    if (dailyCountRef.current >= FREE_QUESTION_LIMIT) {
-      const premium = await isPremium();
-      if (!premium) {
-        await finaliseSession();
-        logFunnelEvent('daily_limit_hit', { at: 'mid_session' });
-        setPhase('dailyLimit');
-        return;
-      }
-    }
-    const isLast = currentIndex + 1 >= questions.length;
-    if (isLast) {
+    // isPremium() only matters once the free limit is reached.
+    const premium = dailyCountRef.current >= FREE_QUESTION_LIMIT ? await isPremium() : false;
+    const next = afterAnswer({
+      answeredToday: dailyCountRef.current,
+      limit: FREE_QUESTION_LIMIT,
+      isPremium: premium,
+      isLastQuestion: currentIndex + 1 >= questions.length,
+    });
+    if (next.phase === 'results') {
       await finaliseSession();
+      if (next.limitReached) {
+        logFunnelEvent('daily_limit_hit', { at: 'mid_session' });
+        setLimitReached(true);
+      }
       setPhase('results');
     } else {
       setCurrentIndex((i) => i + 1);
@@ -1025,6 +1032,16 @@ export default function PracticeScreen() {
           streakDays={sessionStreakDays}
           sessionTopic={sessionTopic}
           userAccuracyPct={sessionPct}
+          limitNotice={limitReached ? (
+            <View style={styles.limitNotice}>
+              {reminderOffer.visible && <ReminderOffer context="daily_limit" onDone={reminderOffer.hide} />}
+              <PaywallPrompt
+                reason="daily_limit"
+                urgencyLine={testDateUrgencyLine(userProgressRef.current)}
+                onUpgrade={handleProUpgrade}
+              />
+            </View>
+          ) : null}
         />
         {activeCelebration && (
           <CelebrationModal event={activeCelebration} onDismiss={handleCelebDismiss} />
@@ -1463,6 +1480,7 @@ function ResultsScreen({
   streakDays,
   sessionTopic,
   userAccuracyPct,
+  limitNotice,
 }: {
   results: SessionResult[];
   onPlayAgain: () => void;
@@ -1472,6 +1490,8 @@ function ResultsScreen({
   streakDays?: number;
   sessionTopic?: string | null;
   userAccuracyPct?: number;
+  /** Shown under the score when the free daily limit ended the session. */
+  limitNotice?: React.ReactNode;
 }) {
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const [showShareCard, setShowShareCard] = useState(false);
@@ -1536,6 +1556,8 @@ function ResultsScreen({
       <Text style={[styles.motivationalMsg, { color: cfg.accentColor }]}>
         {motivationalMessage(correct, total)}
       </Text>
+
+      {limitNotice}
 
       {tutorNudge && !nudgeDismissed && (
         <View style={styles.sessionNudgeCard}>
@@ -2583,6 +2605,7 @@ const styles = StyleSheet.create({
   limitTitle: { fontSize: 22, fontWeight: '800', color: Colors.amber, textAlign: 'center' },
   limitBody: { fontSize: 15, color: Colors.mutedText, textAlign: 'center', lineHeight: 22 },
   limitBackBtn: { paddingVertical: 8 },
+  limitNotice: { alignItems: 'center', gap: 16, marginBottom: 20 },
   limitBackText: { color: Colors.mutedText, fontSize: 14, fontWeight: '600' },
 
   // Weak Spot Drill
