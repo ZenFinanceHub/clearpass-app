@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support';
 
 // Fast smoke tests — verify the app loads and key routes respond
 

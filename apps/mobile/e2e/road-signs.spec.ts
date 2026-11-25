@@ -1,4 +1,10 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, seedLearner, signInAs } from './support';
+
+// /roadsigns is behind sign-in: run as a synthetic, onboarded learner.
+test.beforeEach(async ({ page, network }) => {
+  await seedLearner(page);
+  await signInAs(page, network);
+});
 
 test.describe('Road Signs', () => {
   test.beforeEach(async ({ page }) => {
@@ -20,23 +26,19 @@ test.describe('Road Signs', () => {
     await page.waitForLoadState('networkidle');
     const brokenImages = await page.evaluate(() => {
       const imgs = Array.from(document.querySelectorAll('img'));
-      return imgs.filter(img => !img.complete || img.naturalWidth === 0).map(img => img.src);
+      // Only images that finished loading and failed: lazy, off-screen images aren't complete yet.
+      return imgs.filter(img => img.complete && img.naturalWidth === 0).map(img => img.src);
     });
     expect(brokenImages).toHaveLength(0);
   });
 
   test('crossroads sign is visible', async ({ page }) => {
-    await expect(page.getByText('Crossroads')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Crossroads', { exact: true }).first()).toBeVisible({ timeout: 10000 });
   });
 
-  test('tapping a sign shows its name', async ({ page }) => {
-    await page.waitForLoadState('networkidle');
-    // Click the first sign card
-    const firstSign = page.locator('[role="button"]').first();
-    if (await firstSign.isVisible()) {
-      await firstSign.click();
-      // Some kind of detail or label should appear
-      await expect(page.locator('text=/[A-Z][a-z]+/')).toBeVisible();
-    }
+  test('tapping a sign opens its detail', async ({ page }) => {
+    await page.getByText('Crossroads', { exact: true }).first().click();
+    // Detail view shows the sign's meaning from @clearpass/content.
+    await expect(page.getByText(/crossroads junction lies ahead/i).first()).toBeVisible();
   });
 });

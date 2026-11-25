@@ -1,4 +1,10 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, seedLearner, signInAs } from './support';
+
+// /roadsigns is behind sign-in: run as a synthetic, onboarded learner.
+test.beforeEach(async ({ page, network }) => {
+  await seedLearner(page);
+  await signInAs(page, network);
+});
 
 test.describe('Road Signs — full feature test', () => {
   test.beforeEach(async ({ page }) => {
@@ -18,7 +24,7 @@ test.describe('Road Signs — full feature test', () => {
     await page.waitForLoadState('networkidle');
     const broken = await page.evaluate(() =>
       Array.from(document.querySelectorAll('img'))
-        .filter(img => !img.complete || img.naturalWidth === 0)
+        .filter(img => img.complete && img.naturalWidth === 0) // lazy off-screen images aren't complete yet
         .map(img => img.src)
     );
     if (broken.length > 0) console.warn('Broken images:', broken);
@@ -89,14 +95,14 @@ test.describe('Road Signs — full feature test', () => {
   });
 
   test('Crossroads sign is visible', async ({ page }) => {
-    await expect(page.getByText('Crossroads')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Crossroads', { exact: true }).first()).toBeVisible({ timeout: 10000 });
   });
 
   test('Roundabout sign is visible', async ({ page }) => {
-    await expect(page.getByText(/roundabout/i)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Roundabout', { exact: true }).first()).toBeVisible({ timeout: 10000 });
   });
 
   test('No entry sign is visible', async ({ page }) => {
-    await expect(page.getByText(/no entry/i)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/no entry/i).first()).toBeVisible({ timeout: 10000 });
   });
 });

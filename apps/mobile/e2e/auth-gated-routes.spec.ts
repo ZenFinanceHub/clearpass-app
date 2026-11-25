@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support';
 
 // Auth-gated routes: verify they either redirect to auth or show
 // appropriate content for unauthenticated users.

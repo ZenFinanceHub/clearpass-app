@@ -1,19 +1,8 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect, seedLearner, signInAs } from './support';
 
-// Hazard perception tests
-// Public tests run always. Auth tests require TEST_EMAIL + TEST_PASSWORD + TEST_IS_PREMIUM=1 env vars.
-
-const EMAIL = process.env.TEST_EMAIL ?? '';
-const PASSWORD = process.env.TEST_PASSWORD ?? '';
-const IS_PREMIUM = process.env.TEST_IS_PREMIUM === '1';
-
-async function signIn(page: Page) {
-  await page.goto('/auth/signin');
-  await page.locator('[data-testid="email-input"]').fill(EMAIL);
-  await page.locator('[data-testid="password-input"]').fill(PASSWORD);
-  await page.getByRole('button', { name: /sign in/i }).click();
-  await page.waitForURL(/\/(tabs\/)?home/, { timeout: 15000 });
-}
+// Hazard perception. Everything runs against the local export with the
+// stubbed backend; there is no real-account sign-in any more (the old
+// TEST_EMAIL/TEST_PASSWORD path signed in against production).
 
 // ─────────────────────────────────────────────────────────────────
 // Public (no auth required)
@@ -32,47 +21,33 @@ test.describe('Hazard Perception — public', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// Authenticated — skipped when TEST_EMAIL is not set
+// Signed in (synthetic learner)
 // ─────────────────────────────────────────────────────────────────
-test.describe('Hazard Perception — authenticated', () => {
-  test.skip(!EMAIL || !PASSWORD, 'Set TEST_EMAIL + TEST_PASSWORD to run auth tests');
-
-  test.beforeEach(async ({ page }) => {
-    await signIn(page);
+test.describe('Hazard Perception — signed in', () => {
+  test.beforeEach(async ({ page, network }) => {
+    await seedLearner(page);
+    await signInAs(page, network);
   });
 
-  test('hazard info screen loads', async ({ page }) => {
+  test('web shows the "Mobile app only" screen', async ({ page }) => {
     await page.goto('/hazard');
-    await page.waitForLoadState('networkidle');
-    await expect(page.getByText('Hazard Perception').first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Mobile app only')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Get it on Google Play')).toBeVisible();
   });
 
-  test('shows clips from Supabase — not "coming soon"', async ({ page }) => {
+  // Hazard perception is disabled on web (app/(tabs)/hazard.tsx returns the
+  // "Mobile app only" screen before any clip is loaded), so clip loading and
+  // playback can't be exercised by this web suite. They need a device run.
+  test.skip('shows clips — not "coming soon" (web build has no hazard player)', async ({ page }) => {
     await page.goto('/hazard');
-    await page.waitForLoadState('networkidle');
-
-    // Wait for loading spinner to disappear (clips are fetching)
     await expect(page.getByText('Loading...')).not.toBeVisible({ timeout: 15000 });
-
-    // "coming soon" means DB returned 0 clips — this is the bug we're catching
-    const comingSoon = page.getByText('Videos coming soon');
-    await expect(comingSoon).not.toBeVisible({ timeout: 5000 });
-
-    // At least a clip count or start button should be visible
-    const startBtn = page.getByRole('button', { name: /start|begin|practice/i });
-    await expect(startBtn).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Videos coming soon')).not.toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/start|begin|practice/i).first()).toBeVisible({ timeout: 10000 });
   });
 
-  test.skip(!IS_PREMIUM, 'Requires a premium test account');
-  test('premium user can start practice and first clip appears', async ({ page }) => {
+  test.skip('premium user can start practice and first clip appears (web build has no hazard player)', async ({ page }) => {
     await page.goto('/hazard');
-    await page.waitForLoadState('networkidle');
-    await expect(page.getByText('Loading...')).not.toBeVisible({ timeout: 15000 });
-
-    const startBtn = page.getByRole('button', { name: /start/i }).first();
-    await startBtn.click();
-
-    // Should move past the info screen into pre-clip or player phase
+    await page.getByText(/start/i).first().click();
     await expect(page.getByText(/clip 1|hazard 1|get ready/i)).toBeVisible({ timeout: 15000 });
   });
 });
