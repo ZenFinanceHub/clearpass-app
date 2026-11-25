@@ -3,20 +3,25 @@
 -- Daily limit -> upgrade prompt -> paywall -> purchase funnel by platform,
 -- for people who hit the daily free limit in the window. Each later step
 -- counts distinct actors who reached it at or after their first limit hit
--- in the window. Genuine only, and comp accounts
+-- in the window. Counted only (exclude_from_stats = false), and comp accounts
 -- (user_progress.progress->>'proSource' = 'comp') are excluded because they
 -- never needed to buy. Stripe purchases complete on the web checkout page, so
 -- for rail = 'stripe' purchase_started is the last step the app records;
 -- confirm payment from Stripe / user_progress, not from this table.
 
+-- Counted = profiles.exclude_from_stats = false. Set by_class = true in
+-- params to split results by profiles.account_class (genuine, internal, junk,
+-- reviewer, unclassified; 'unclassified' = counted but not yet triaged;
+-- 'no_account' = install that never signed up). account_class exists in
+-- production but not yet in the repo schema (drift, see the taxonomy doc).
+
 with params as (
-  select (now() - interval '30 days') as since
+  select (now() - interval '30 days') as since, false as by_class
 ),
 excluded_users as (
   select p.id as user_id
   from public.profiles p
   where p.exclude_from_stats
-  -- or p.account_class <> 'genuine'   -- once profiles.account_class exists
   union
   select up.id
   from public.user_progress up
@@ -35,6 +40,7 @@ anon_owner as (
 ),
 ev as (
   select
+    case when params.by_class then coalesce(pr.account_class, 'no_account') else 'all' end as account_class,
     fe.event,
     fe.platform,
     fe.props,
@@ -42,6 +48,7 @@ ev as (
     coalesce(fe.user_id::text, ao.user_id::text, 'anon:' || fe.anon_id) as actor
   from public.funnel_events fe
   left join anon_owner ao on ao.anon_id = fe.anon_id
+  left join public.profiles pr on pr.id = coalesce(fe.user_id, ao.user_id)
   cross join params
   where fe.created_at >= params.since
     and fe.event in ('daily_limit_hit', 'paywall_prompt_viewed', 'paywall_prompt_tapped',
@@ -50,13 +57,14 @@ ev as (
     and not exists (select 1 from excluded_anon xa where xa.anon_id = fe.anon_id)
 ),
 limit_hit as (
-  select actor, min(created_at) as first_hit, (array_agg(platform order by created_at))[1] as platform
+  select actor, min(created_at) as first_hit, (array_agg(platform order by created_at))[1] as platform,
+         max(account_class) as account_class
   from ev
   where event = 'daily_limit_hit'
   group by actor
 ),
 reached as (
-  select l.platform, l.actor,
+  select l.platform, l.account_class, l.actor,
     exists (select 1 from ev e where e.actor = l.actor and e.created_at >= l.first_hit
             and e.event = 'paywall_prompt_viewed' and e.props->>'reason' = 'daily_limit') as prompt_viewed,
     exists (select 1 from ev e where e.actor = l.actor and e.created_at >= l.first_hit
@@ -70,6 +78,7 @@ reached as (
   from limit_hit l
 )
 select
+  account_class,
   platform,
   count(*)                                   as daily_limit_hit,
   count(*) filter (where prompt_viewed)      as limit_prompt_viewed,
@@ -79,5 +88,5 @@ select
   count(*) filter (where purchase_succeeded) as purchase_succeeded_iap,
   round(100.0 * count(*) filter (where purchase_started) / nullif(count(*), 0), 1) as limit_to_purchase_start_pct
 from reached
-group by rollup (platform)
-order by platform nulls last;
+group by grouping sets ((account_class, platform), (account_class))
+order by account_class, platform nulls last;

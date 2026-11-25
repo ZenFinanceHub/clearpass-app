@@ -43,9 +43,18 @@ Source of truth for names and props: `apps/mobile/src/analyticsEvents.ts`
 
 Nothing is filtered on the device. Every query decides who counts:
 
-- **Test / internal accounts**: `profiles.exclude_from_stats = true`. Excluded
-  from every metric. When `profiles.account_class` is added (planned), treat
-  any non-genuine class the same way; the queries carry a commented line for it.
+- **Counted**: `profiles.exclude_from_stats = false`. Accounts with `true`
+  (test / internal) are excluded from every metric.
+- **Breakdown by `profiles.account_class`** (optional): set `by_class = true`
+  in a query's `params` CTE to split results by class. Values seen in
+  production: `genuine`, `internal`, `junk`, `reviewer`, `unclassified`
+  (text, NOT NULL, default `'unclassified'`). `unclassified` means counted but
+  not yet triaged. Pre-signup installs that never created an account show as
+  `no_account`. Inclusion is still decided by `exclude_from_stats`, not by class.
+- **Schema drift:** `account_class` exists in the production database but is
+  not in `apps/mobile/supabase/schema.sql` or any migration (it was added
+  outside the repo). Reconciling that is separate work. Do not add a
+  migration for it from this doc.
 - **Their pre-signup installs**: any `anon_id` that ever appears on a row with
   an excluded `user_id` is excluded too, so the founder's own taster run on a
   fresh install does not count. Same rule as `server/lib/funnelStats.js`.

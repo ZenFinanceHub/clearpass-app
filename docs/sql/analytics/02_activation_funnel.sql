@@ -5,16 +5,21 @@
 -- first session completed -> practice results viewed. Each step counts
 -- distinct actors who reached it at any time (pre-signup taster answers
 -- count, via the install's anon_id). Platform = platform of the signup.
--- Genuine only: excludes profiles.exclude_from_stats and their anon installs.
+-- Counted only: excludes profiles.exclude_from_stats and their anon installs.
+
+-- Counted = profiles.exclude_from_stats = false. Set by_class = true in
+-- params to split results by profiles.account_class (genuine, internal, junk,
+-- reviewer, unclassified; 'unclassified' = counted but not yet triaged;
+-- 'no_account' = install that never signed up). account_class exists in
+-- production but not yet in the repo schema (drift, see the taxonomy doc).
 
 with params as (
-  select (now() - interval '30 days') as since
+  select (now() - interval '30 days') as since, false as by_class
 ),
 excluded_users as (
   select p.id as user_id
   from public.profiles p
   where p.exclude_from_stats
-  -- or p.account_class <> 'genuine'   -- once profiles.account_class exists
 ),
 excluded_anon as (
   select distinct fe.anon_id
@@ -29,26 +34,30 @@ anon_owner as (
 ),
 ev as (
   select
+    case when params.by_class then coalesce(pr.account_class, 'no_account') else 'all' end as account_class,
     fe.event,
     fe.platform,
     fe.created_at,
     coalesce(fe.user_id::text, ao.user_id::text, 'anon:' || fe.anon_id) as actor
   from public.funnel_events fe
   left join anon_owner ao on ao.anon_id = fe.anon_id
+  left join public.profiles pr on pr.id = coalesce(fe.user_id, ao.user_id)
+  cross join params
   where fe.event in ('signup_started', 'signup_completed', 'onboarding_completed',
                      'first_question_answered', 'first_session_completed', 'practice_results_viewed')
     and not exists (select 1 from excluded_users x where x.user_id = coalesce(fe.user_id, ao.user_id))
     and not exists (select 1 from excluded_anon xa where xa.anon_id = fe.anon_id)
 ),
 signups as (
-  select actor, min(created_at) as signed_up_at, (array_agg(platform order by created_at))[1] as platform
+  select actor, min(created_at) as signed_up_at, (array_agg(platform order by created_at))[1] as platform,
+         max(account_class) as account_class
   from ev
   where event = 'signup_completed'
   group by actor
   having min(created_at) >= (select since from params)
 ),
 reached as (
-  select s.platform, s.actor,
+  select s.platform, s.account_class, s.actor,
     true as signup_completed,
     exists (select 1 from ev e where e.actor = s.actor and e.event = 'onboarding_completed')    as onboarding_completed,
     exists (select 1 from ev e where e.actor = s.actor and e.event = 'first_question_answered') as first_question_answered,
@@ -57,6 +66,7 @@ reached as (
   from signups s
 )
 select
+  account_class,
   platform,
   count(*)                                              as signup_completed,
   count(*) filter (where onboarding_completed)          as onboarding_completed,
@@ -65,8 +75,8 @@ select
   count(*) filter (where practice_results_viewed)       as practice_results_viewed,
   round(100.0 * count(*) filter (where first_session_completed) / nullif(count(*), 0), 1) as activated_pct
 from reached
-group by rollup (platform)
-order by platform nulls last;
+group by grouping sets ((account_class, platform), (account_class))
+order by account_class, platform nulls last;
 
 -- Top of funnel (people who saw signup in the window, signed up or not):
 -- replace the final select above with
