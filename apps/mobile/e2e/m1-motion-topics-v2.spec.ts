@@ -10,11 +10,15 @@ import { test, expect, type BrowserContext, type Page } from '@playwright/test';
  * synthetic local progress are written to localStorage before the app loads.
  *
  *   BASE_URL=http://127.0.0.1:8113 npx playwright test e2e/m1-motion-topics-v2.spec.ts --project=chromium
+ *
+ * With E2E_UI_V2=0 against a flag-off local export, it checks instead that
+ * neither feature appears (the flag-off screens are unchanged).
  */
 
 const BASE = process.env.BASE_URL ?? '';
 const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/.test(BASE);
 test.skip(!isLocal, 'runs only against a localhost BASE_URL (never production)');
+const FLAG_OFF = process.env.E2E_UI_V2 === '0';
 
 const USER = {
   id: '00000000-0000-4000-8000-000000000e2e',
@@ -94,60 +98,82 @@ async function dismissCelebrations(page: Page) {
   }
 }
 
-test('Learn: Topic revision opens a picker; a topic starts the existing topic practice', async ({ page, context }) => {
-  const contacted: string[] = [];
-  await stubBackend(context, contacted);
-  await seed(page);
-  await page.goto('/learn');
-  await dismissCelebrations(page);
-  const entry = page.getByTestId('hub-topic-revision');
-  await expect(entry).toBeVisible({ timeout: 20000 });
-  await expect(page.getByTestId('topic-picker')).toHaveCount(0);
-  await entry.click();
-  const picker = page.getByTestId('topic-picker');
-  await expect(picker).toBeVisible();
-  await expect(picker.getByTestId('topic-pick-MotorwayRules')).toContainText('Weakest');
-  await expect(picker.getByTestId('topic-pick-MotorwayRules')).toContainText('41%');
-  await expect(picker.getByTestId('topic-pick-HazardAwareness')).toContainText('Not started');
-  await picker.getByTestId('topic-pick-HazardAwareness').click();
-  await expect(page).toHaveURL(/\/practice/);
-  // The existing topic launcher started a session (it leaves the start screen).
-  await expect(page.getByText(/Question 1 of|1\s*\/\s*\d+/).first()).toBeVisible({ timeout: 15000 });
+test.describe('ui_v2 on', () => {
+  test.skip(FLAG_OFF, 'flag-off build');
+
+  test('Learn: Topic revision opens a picker; a topic starts the existing topic practice', async ({ page, context }) => {
+    const contacted: string[] = [];
+    await stubBackend(context, contacted);
+    await seed(page);
+    await page.goto('/learn');
+    await dismissCelebrations(page);
+    const entry = page.getByTestId('hub-topic-revision');
+    await expect(entry).toBeVisible({ timeout: 20000 });
+    await expect(page.getByTestId('topic-picker')).toHaveCount(0);
+    await entry.click();
+    const picker = page.getByTestId('topic-picker');
+    await expect(picker).toBeVisible();
+    await expect(picker.getByTestId('topic-pick-MotorwayRules')).toContainText('Weakest');
+    await expect(picker.getByTestId('topic-pick-MotorwayRules')).toContainText('41%');
+    await expect(picker.getByTestId('topic-pick-HazardAwareness')).toContainText('Not started');
+    await picker.getByTestId('topic-pick-HazardAwareness').click();
+    await expect(page).toHaveURL(/\/practice/);
+    // The existing topic launcher started a session (it leaves the start screen).
+    await expect(page.getByText(/Question 1 of|1\s*\/\s*\d+/).first()).toBeVisible({ timeout: 15000 });
+  });
+
+  test('Home: weak-topic coach card links to the topic picker', async ({ page, context }) => {
+    const contacted: string[] = [];
+    await stubBackend(context, contacted);
+    await seed(page);
+    await page.goto('/home');
+    await dismissCelebrations(page);
+    const link = page.getByTestId('coach-choose-topic');
+    await expect(link).toBeVisible({ timeout: 20000 });
+    // Home queues the existing celebration modals for this synthetic progress.
+    await page.waitForTimeout(2500);
+    await dismissCelebrations(page);
+    await link.click();
+    await expect(page).toHaveURL(/\/learn/);
+    await expect(page.getByTestId('topic-picker')).toBeVisible();
+  });
+
+  test('Profile: Reduce Motion toggle defaults to the OS setting and is saved locally', async ({ page, context }) => {
+    const contacted: string[] = [];
+    await stubBackend(context, contacted);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await seed(page);
+    await page.goto('/settings');
+    await dismissCelebrations(page);
+    await expect(page.getByText('Reduce Motion', { exact: true })).toBeVisible({ timeout: 20000 });
+    const sw = reduceMotionSwitch(page);
+    // The OS asks for reduced motion and nothing is stored yet: shown on.
+    await expect(sw).toBeChecked();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('accessibility_settings') ?? '{}').reduceMotion)).toBeUndefined();
+    await sw.click();
+    await expect(sw).not.toBeChecked();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('accessibility_settings') ?? '{}').reduceMotion)).toBe(false);
+    // Persisted: survives a reload.
+    await page.reload();
+    await expect(page.getByText('Reduce Motion', { exact: true })).toBeVisible({ timeout: 20000 });
+    await expect(reduceMotionSwitch(page)).not.toBeChecked();
+  });
 });
 
-test('Home: weak-topic coach card links to the topic picker', async ({ page, context }) => {
-  const contacted: string[] = [];
-  await stubBackend(context, contacted);
-  await seed(page);
-  await page.goto('/home');
-  await dismissCelebrations(page);
-  const link = page.getByTestId('coach-choose-topic');
-  await expect(link).toBeVisible({ timeout: 20000 });
-  // Home queues the existing celebration modals for this synthetic progress.
-  await page.waitForTimeout(2500);
-  await dismissCelebrations(page);
-  await link.click();
-  await expect(page).toHaveURL(/\/learn/);
-  await expect(page.getByTestId('topic-picker')).toBeVisible();
-});
+test.describe('ui_v2 off (unchanged)', () => {
+  test.skip(!FLAG_OFF, 'set E2E_UI_V2=0 against a flag-off export');
 
-test('Profile: Reduce Motion toggle defaults to the OS setting and is saved locally', async ({ page, context }) => {
-  const contacted: string[] = [];
-  await stubBackend(context, contacted);
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await seed(page);
-  await page.goto('/settings');
-  await dismissCelebrations(page);
-  await expect(page.getByText('Reduce Motion', { exact: true })).toBeVisible({ timeout: 20000 });
-  const sw = reduceMotionSwitch(page);
-  // The OS asks for reduced motion and nothing is stored yet: shown on.
-  await expect(sw).toBeChecked();
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('accessibility_settings') ?? '{}').reduceMotion)).toBeUndefined();
-  await sw.click();
-  await expect(sw).not.toBeChecked();
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('accessibility_settings') ?? '{}').reduceMotion)).toBe(false);
-  // Persisted: survives a reload.
-  await page.reload();
-  await expect(page.getByText('Reduce Motion', { exact: true })).toBeVisible({ timeout: 20000 });
-  await expect(reduceMotionSwitch(page)).not.toBeChecked();
+  test('no Reduce Motion row in Settings, no Topic revision in the Study hub', async ({ page, context }) => {
+    const contacted: string[] = [];
+    await stubBackend(context, contacted);
+    await seed(page);
+    await page.goto('/settings');
+    await dismissCelebrations(page);
+    await expect(page.getByText('Cream Background', { exact: true })).toBeVisible({ timeout: 20000 });
+    await expect(page.getByText('Reduce Motion', { exact: true })).toHaveCount(0);
+    await page.goto('/learn');
+    await page.waitForTimeout(2500);
+    await expect(page.getByTestId('learn-hub')).toHaveCount(0);
+    await expect(page.getByText('Topic revision', { exact: true })).toHaveCount(0);
+  });
 });
