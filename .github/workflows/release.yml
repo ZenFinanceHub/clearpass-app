@@ -130,8 +130,11 @@ jobs:
           # Public-repo hygiene: no workflow on main may run untrusted PR code
           # with secrets, and only the gated workflows may reference secrets.
           if grep -rlE '^\s*pull_request_target\s*:' .github/workflows/ >/dev/null 2>&1; then fail "a workflow on main uses pull_request_target"; fi
-          others=$(grep -rlE 'secrets\.' .github/workflows/ | grep -vxE '\.github/workflows/release\.yml' || true)
+          gated='\.github/workflows/(release|ota-production|ota-rollback|migrate-production)\.yml'
+          others=$(grep -rlE 'secrets\.' .github/workflows/ | grep -vxE "$gated" || true)
           [ -z "$others" ] || fail "workflows other than the gated ones reference secrets: $others"
+          others=$(grep -rlE '^\s*environment:\s*(production-|ota-build)' .github/workflows/ | grep -vxE "$gated" || true)
+          [ -z "$others" ] || fail "workflows other than the gated ones use a production environment: $others"
 
           echo "target=$TARGET" >> "$GITHUB_OUTPUT"
           git fetch --quiet origin main "$TARGET"

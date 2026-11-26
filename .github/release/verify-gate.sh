@@ -9,6 +9,12 @@
 # creates a pending approval request on a mode=test run; the owner may see a
 # notification for it. Do NOT approve that one, because this script cancels it.
 #
+# G12-G15 cover the OTA and database gates: environment settings, the bot
+# being unable to read their secrets or approve their runs, and a workflow on
+# another branch being unable to reach them. G14 creates a pending approval
+# on an OTA rollback run for a non-existent update group ("gate self-approval
+# probe"); do NOT approve it either; this script cancels it.
+#
 # The release workflow has no rollback mode and never force-pushes (rollbacks
 # are revert commits released normally). G5b still checks that a force-push
 # to a production-protected branch is refused, and G11 checks that the
@@ -151,6 +157,120 @@ if grep -vE '^\s*#' <<< "$wf" | grep -qE -- '--force|force-with-lease|push[^#]*\
   bad "G11b release workflow on main contains a force-push or rollback path"
 else
   ok "G11b release workflow on main has no force-push or rollback path"
+fi
+
+# ---- OTA and database gates (ota-production.yml, ota-rollback.yml, migrate-production.yml)
+
+# G12 environment settings (read-only): each approval environment has exactly
+# the owner as reviewer, no admin bypass, and accepts `main` only; ota-build
+# has no reviewer but is also `main` only.
+check_env() { # name expected-reviewers
+  local name="$1" want="$2" j revs bypass pol branches
+  if ! j=$(gh api "repos/$REPO/environments/$name" 2>/dev/null); then bad "G12 environment $name is missing"; return; fi
+  revs=$(jq -r '[.protection_rules[]? | select(.type == "required_reviewers") | .reviewers[].reviewer.login] | sort | join(",")' <<< "$j")
+  bypass=$(jq -r '.can_admins_bypass' <<< "$j")
+  pol=$(jq -r '.deployment_branch_policy | "\(.protected_branches)/\(.custom_branch_policies)"' <<< "$j")
+  branches=$(gh api "repos/$REPO/environments/$name/deployment-branch-policies" --jq '[.branch_policies[] | "\(.type // "branch"):\(.name)"] | join(",")' 2>/dev/null)
+  if [ "$revs" = "$want" ] && [ "$bypass" = false ] && [ "$pol" = false/true ] && [ "$branches" = branch:main ]; then
+    ok "G12 $name: reviewers='${revs:-none}', admins cannot bypass, main only"
+  else
+    bad "G12 $name: reviewers='${revs:-none}' (want '${want:-none}'), can_admins_bypass=$bypass, policy=$pol, branches=$branches"
+  fi
+  if [ -n "$revs" ] && grep -qx "$login" <<< "${revs//,/$'\n'}"; then bad "G12 $name lists the bot ($login) as a reviewer"; fi
+}
+check_env production-release "$owner"
+check_env production-ota "$owner"
+check_env production-db "$owner"
+check_env ota-build ""
+
+# G13 the bot cannot read or change these environments' secrets and settings.
+denied "G13a list production-ota secrets" gh api "repos/$REPO/environments/production-ota/secrets"
+denied "G13b list production-db secrets" gh api "repos/$REPO/environments/production-db/secrets"
+denied "G13c change production-db" gh api -X PUT "repos/$REPO/environments/production-db" -F wait_timer=0
+denied "G13d change production-ota" gh api -X PUT "repos/$REPO/environments/production-ota" -F wait_timer=0
+denied "G13e list ota-build values" gh api "repos/$REPO/environments/ota-build/secrets"
+if gh secret set GATE_PROBE --repo "$REPO" --env ota-build --body x >/dev/null 2>&1; then
+  bad "G13f bot could ADD a value to ota-build"
+  gh secret delete GATE_PROBE --repo "$REPO" --env ota-build >/dev/null 2>&1 || true
+else
+  ok "G13f bot cannot add or change ota-build values"
+fi
+
+# G14 the bot cannot approve a production-ota request. Uses the OTA rollback
+# workflow with a group ID that does not exist: even if someone approved it,
+# the job would stop at "group not found" before republishing anything.
+# Owner: do NOT approve "gate self-approval probe"; this script cancels it.
+gh workflow run ota-rollback.yml --repo "$REPO" --ref main -f group=00000000-0000-4000-8000-000000000000 \
+  -f reason="gate self-approval probe (owner: do NOT approve)" >/dev/null 2>&1
+sleep 8
+orun=$(gh run list --repo "$REPO" --workflow ota-rollback.yml --limit 1 --json databaseId --jq '.[0].databaseId')
+st=unknown
+for _ in $(seq 1 40); do
+  st=$(gh run view "$orun" --repo "$REPO" --json status --jq .status)
+  if [ "$st" = waiting ] || [ "$st" = completed ]; then break; fi
+  sleep 6
+done
+if [ "$st" = waiting ]; then
+  env_id=$(gh api "repos/$REPO/actions/runs/$orun/pending_deployments" --jq '.[0].environment.id')
+  can=$(gh api "repos/$REPO/actions/runs/$orun/pending_deployments" --jq '.[0].current_user_can_approve')
+  if [ "$can" = false ]; then ok "G14a GitHub reports the bot cannot approve production-ota"; else bad "G14a current_user_can_approve=$can for production-ota"; fi
+  denied "G14b bot approves a production-ota request" gh api -X POST "repos/$REPO/actions/runs/$orun/pending_deployments" -F "environment_ids[]=$env_id" -f state=approved -f comment=probe
+else
+  bad "G14 OTA rollback probe did not reach 'waiting' (status: $st)"
+fi
+gh run cancel "$orun" --repo "$REPO" >/dev/null 2>&1 || true
+
+# G15 a workflow added on another branch cannot reach EXPO_TOKEN,
+# SUPABASE_DB_URL or the ota-build variables (environments accept main only).
+git checkout -q -B gate-probe-envs "$main"
+cat > .github/workflows/gate-probe-envs.yml <<'YML'
+name: gate probe envs
+on:
+  push:
+    branches: [gate-probe-envs]
+jobs:
+  ota:
+    runs-on: ubuntu-latest
+    environment: production-ota
+    steps:
+      - env:
+          K: ${{ secrets.EXPO_TOKEN }}
+        run: if [ -n "$K" ]; then echo SECRET_AVAILABLE; else echo NO_SECRET; fi
+  db:
+    runs-on: ubuntu-latest
+    environment: production-db
+    steps:
+      - env:
+          K: ${{ secrets.SUPABASE_DB_URL }}
+        run: if [ -n "$K" ]; then echo SECRET_AVAILABLE; else echo NO_SECRET; fi
+  build:
+    runs-on: ubuntu-latest
+    environment: ota-build
+    steps:
+      - env:
+          K: ${{ secrets.EXPO_PUBLIC_REVENUECAT_API_KEY_IOS }}
+        run: if [ -n "$K" ]; then echo VARS_AVAILABLE; else echo NO_VARS; fi
+YML
+git add .github/workflows/gate-probe-envs.yml
+git commit -q -m "gate probe: workflow on a branch asks for production environments (must be refused)"
+if git push -q origin HEAD:refs/heads/gate-probe-envs 2>/dev/null; then
+  sleep 12
+  erun=$(gh run list --repo "$REPO" --branch gate-probe-envs --event push --limit 1 --json databaseId --jq '.[0].databaseId')
+  st=unknown
+  for _ in $(seq 1 40); do
+    st=$(gh run view "$erun" --repo "$REPO" --json status --jq .status 2>/dev/null)
+    if [ "$st" = completed ] || [ "$st" = waiting ]; then break; fi
+    sleep 6
+  done
+  log=$(gh run view "$erun" --repo "$REPO" --log 2>/dev/null || true)
+  if grep -qE 'SECRET_AVAILABLE|VARS_AVAILABLE' <<< "$log"; then bad "G15 a workflow on another branch READ a production secret or the ota-build values"
+  elif [ "$st" = waiting ]; then bad "G15 a run from another branch reached an approval step (branch policy not enforced)"
+  elif [ -z "$erun" ]; then bad "G15 no run found for the probe branch"
+  else ok "G15 a workflow on another branch could not reach production-ota, production-db or ota-build"; fi
+  gh run cancel "$erun" --repo "$REPO" >/dev/null 2>&1 || true
+  git push -q origin :refs/heads/gate-probe-envs 2>/dev/null || true
+else
+  bad "G15 could not push the probe branch (needs the 'workflow' scope on the bot login)"
 fi
 
 echo

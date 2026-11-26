@@ -1,0 +1,415 @@
+name: OTA update to production (native apps)
+
+# Publishes an over-the-air JS update to every installed ClearPass app, for a
+# commit that has ALREADY been released (is on `production`). Replaces running
+# `npm run ota:production` from a machine that holds an Expo session.
+#
+#   1. build   - NO credentials, no approval. Checks out the commit, `npm ci`,
+#                exports the iOS and Android bundles exactly as
+#                apps/mobile/scripts/publish-ota.js does (--clear, the
+#                EXPO_PUBLIC_APP_ENV guard and scripts/check-build-env.js when
+#                present), runs the repository's RevenueCat key check
+#                (scripts/lib/otaKeyCheck.js), and uploads the result as an
+#                artifact. Its SHA-256 digest goes in the summary.
+#   2. upload  - runs in the `production-ota` GitHub Environment: the owner's
+#                approval, admins cannot bypass, `main` only. Holds EXPO_TOKEN.
+#                Re-verifies the digest and the key check with inline shell,
+#                checks the build used the same EXPO_PUBLIC_* values as the EAS
+#                production environment, then uploads that exact bundle with a
+#                pinned eas-cli (`eas update --skip-bundler --input-dir`).
+#
+# Why two jobs: the build runs repository code and ~1,000 npm dependencies.
+# In the same job, any of that code could tamper with the later credentialed
+# steps: append to $GITHUB_ENV / $GITHUB_PATH (e.g. a fake `eas` or `node`
+# first on PATH, NODE_OPTIONS=--require ...), replace binaries or files on
+# disk, or leave a background process that reads the token from the next
+# step's environment. A separate job gets a fresh VM, so the only thing that
+# crosses over is the artifact, which is data, digest-checked, and never
+# executed by the upload job.
+#
+# The upload job therefore executes NO repository code and NO repository
+# dependency. Its inputs are:
+#   - the artifact (the bundle: what the phones run, which is the point);
+#   - apps/mobile/app.json and apps/mobile/eas.json at the released commit,
+#     read by eas-cli as configuration (both in CODEOWNERS, and app.json is
+#     pinned to this EAS project below);
+#   - .github/ota/eas-cli/package-lock.json (the pinned eas-cli, CODEOWNERS);
+#   - a package.json it writes itself with only the `expo` and `expo-updates`
+#     version strings (validated), so eas-cli can tell the SDK version.
+# There is no node_modules in the project directory, so eas-cli cannot find
+# and run the project's `expo` CLI or config plugins; it falls back to its own
+# bundled config reader (verified in eas-cli 27.7.2: projectUtils.isExpoInstalled
+# and resolveRuntimeVersionAsync). A dynamic app.config.* is refused.
+#
+# Where the EXPO_PUBLIC_* values come from: `npm run ota:production` reads them
+# from the EAS `production` environment with `eas env:exec`, which needs the
+# Expo token. The build job must not hold that token, so the owner copies the
+# public client values (RevenueCat SDK keys, Sentry DSN, Supabase URL/anon key,
+# API URL) into the `ota-build` GitHub Environment (no reviewers, `main`
+# only). They are public: they ship inside every app bundle and grant
+# nothing. They are stored as environment SECRETS rather than variables for
+# one reason: GitHub prints a step's env in the public log, masking secrets
+# but not variables, and CLAUDE.md says the key values are never printed.
+# The upload job compares them, by SHA-256, with the EAS production
+# environment and refuses on any difference, so the two copies cannot
+# silently drift.
+#
+# Rollback: .github/workflows/ota-rollback.yml republishes an earlier update
+# group, in the same approved environment.
+#
+# Security notes:
+# - Inputs reach the shell only through env vars, never via ${{ }} inside `run`.
+# - Official GitHub actions only, pinned by commit SHA. eas-cli is pinned by
+#   lockfile with integrity hashes and installed with --ignore-scripts.
+# - The token is only in the env of the two steps that run eas-cli.
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Full 40-character commit SHA that is already on production (released)"
+        required: true
+        type: string
+      message:
+        description: "Update message shown in EAS, e.g. 'Fix paywall copy (PR #123)'"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ota-production
+  cancel-in-progress: false
+
+env:
+  # This app's EAS project. app.json at the released commit must match.
+  EAS_PROJECT_ID: dac8f561-57cc-4b8b-b13d-7302561d71ee
+  EXPO_ACCOUNT: craigyp1982
+  EAS_CLI_VERSION: 27.7.2
+  NODE_VERSION: '22'
+
+jobs:
+  build:
+    name: Build and check the bundle (no credentials)
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    # Only the public EXPO_PUBLIC_* client values (see header); no credential,
+    # no reviewers.
+    environment: ota-build
+    timeout-minutes: 40
+    outputs:
+      digest: ${{ steps.pack.outputs.digest }}
+      runtime: ${{ steps.pack.outputs.runtime }}
+    steps:
+      - name: Validate the request
+        env:
+          SHA: ${{ inputs.sha }}
+          MESSAGE: ${{ inputs.message }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; echo "### ❌ OTA refused: $1" >> "$GITHUB_STEP_SUMMARY"; exit 1; }
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || fail "sha must be a full 40-character lowercase commit SHA"
+          if [ "${#MESSAGE}" -lt 3 ] || [ "${#MESSAGE}" -gt 200 ]; then fail "message must be 3-200 characters"; fi
+          if [[ "$MESSAGE" == *$'\n'* || "$MESSAGE" == *$'\r'* ]]; then fail "message must be one line"; fi
+          status=$(gh api "repos/$REPO/compare/$SHA...production" --jq .status) || fail "cannot compare $SHA with production"
+          case "$status" in identical|ahead) ;; *) fail "$SHA is not on production (compare: $status). Release it first";; esac
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Refuse a dynamic app config; check publish-ota.js has not changed shape
+        working-directory: apps/mobile
+        run: |
+          set -euo pipefail
+          for f in app.config.js app.config.ts app.config.mjs app.config.cjs; do
+            if [ -e "$f" ]; then echo "::error::$f exists. This workflow only supports a static app.json"; exit 1; fi
+          done
+          # The export below mirrors scripts/lib/otaCommands.js. If that file
+          # starts passing a flag this workflow doesn't know, stop, so the two
+          # paths can't quietly diverge. (Read-only use of repository code in
+          # a job with no secrets.)
+          node -e '
+            const c = require("./scripts/lib/otaCommands");
+            const inner = c.exportCommand("dist-ota");
+            const known = ["--clear", "--platform", "ios", "android", "--output-dir", "dist-ota"];
+            const args = inner.replace(/^npx eas-cli env:exec production "/, "").replace(/"$/, "").split(/\s+/);
+            if (args[0] !== "npx" || args[1] !== "expo" || args[2] !== "export") { console.error("unexpected export command"); process.exit(1); }
+            const unknown = args.slice(3).filter((a) => !known.includes(a));
+            if (unknown.length) { console.error("::error::otaCommands.exportCommand has flags this workflow does not mirror: " + unknown.join(" ")); process.exit(1); }
+            console.log("publish-ota export command: " + args.join(" "));
+          '
+
+      - name: Install dependencies (same as CI)
+        run: |
+          set -euo pipefail
+          npm ci --prefix packages/core --no-audit --no-fund
+          npm ci --prefix packages/content --no-audit --no-fund
+          npm ci --prefix apps/mobile --no-audit --no-fund
+
+      - name: Export iOS and Android bundles with the production values
+        working-directory: apps/mobile
+        env:
+          # Public client values, stored as ota-build environment SECRETS only
+          # so that GitHub masks them in this public repository's logs (a
+          # step's env is printed in its log header; variables are not
+          # masked). They grant nothing. Explicit names, never toJSON(secrets),
+          # so no other secret can ever reach this job. A name EAS production
+          # has but this list lacks fails the upload job's comparison: add it
+          # here.
+          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL }}
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_REVENUECAT_API_KEY_IOS: ${{ secrets.EXPO_PUBLIC_REVENUECAT_API_KEY_IOS }}
+          EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID: ${{ secrets.EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID }}
+          EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
+          EXPO_PUBLIC_UI_V2: ${{ secrets.EXPO_PUBLIC_UI_V2 }}
+          EXPO_PUBLIC_APP_ENV: ${{ secrets.EXPO_PUBLIC_APP_ENV }}
+          EXPO_NO_DOTENV: '1'
+          EXPO_NO_TELEMETRY: '1'
+        run: |
+          set -euo pipefail
+          # Unset the empty ones, so "not defined in ota-build" means "not
+          # defined at build time", exactly as with eas env:exec. Names only
+          # are printed, never values.
+          names=()
+          for n in EXPO_PUBLIC_API_URL EXPO_PUBLIC_SUPABASE_URL EXPO_PUBLIC_SUPABASE_ANON_KEY \
+                   EXPO_PUBLIC_REVENUECAT_API_KEY_IOS EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID \
+                   EXPO_PUBLIC_SENTRY_DSN EXPO_PUBLIC_UI_V2 EXPO_PUBLIC_APP_ENV; do
+            if [ -n "${!n}" ]; then names+=("$n"); else unset "$n"; fi
+          done
+          [ "${#names[@]}" -gt 0 ] || { echo "::error::The ota-build environment has no EXPO_PUBLIC_* values (see setup-release-gate.sh ota)"; exit 1; }
+          echo "EXPO_PUBLIC_* values loaded: ${names[*]}"
+
+          # Same guard as publish-ota.js: declare production explicitly and
+          # refuse a conflicting preset value rather than override it.
+          preset="${EXPO_PUBLIC_APP_ENV:-}"
+          if [ -n "$preset" ] && [ "$preset" != production ]; then
+            echo "::error::EXPO_PUBLIC_APP_ENV is '$preset' in ota-build. It must be production or unset"; exit 1
+          fi
+          export EXPO_PUBLIC_APP_ENV=production
+          if [ -f scripts/check-build-env.js ]; then node scripts/check-build-env.js; fi
+
+          rm -rf dist-ota
+          npx expo export --clear --platform ios --platform android --output-dir dist-ota
+
+          # The repository's own key check (same as publish-ota.js).
+          node -e '
+            const { checkOtaBundles } = require("./scripts/lib/otaKeyCheck");
+            const r = checkOtaBundles("dist-ota");
+            if (!r.ok) { r.problems.forEach((p) => console.error("::error::" + p)); process.exit(1); }
+            console.log("Key check PASS: iOS bundle has appl_..., Android bundle has goog_...");
+          '
+
+          # Names and SHA-256 of the values used, for the upload job's
+          # comparison with the EAS production environment.
+          mkdir -p "$RUNNER_TEMP/ota"
+          for n in $(printf '%s\n' "${names[@]}" EXPO_PUBLIC_APP_ENV | sort -u); do
+            printf '%s %s\n' "$n" "$(printf '%s' "${!n}" | sha256sum | cut -d' ' -f1)"
+          done > "$RUNNER_TEMP/ota/build-env.sha256"
+          mv dist-ota "$RUNNER_TEMP/ota/dist"
+
+      - id: pack
+        name: Digest
+        env:
+          SHA: ${{ inputs.sha }}
+          MESSAGE: ${{ inputs.message }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/ota"
+          if [ -n "$(find . -type l)" ]; then echo "::error::symlinks in the export"; exit 1; fi
+          digest=$(find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+          files=$(find . -type f | wc -l)
+          runtime=$(jq -r '.expo.version' "$GITHUB_WORKSPACE/apps/mobile/app.json")
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "runtime=$runtime" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Production OTA request"
+            echo "- **Commit (on production):** \`$SHA\`"
+            echo "- **Message:** $MESSAGE"
+            echo "- **Runtime version (appVersion policy):** \`$runtime\`. Only installed apps with this version receive it"
+            echo "- **Bundle digest (SHA-256 over $files files):** \`$digest\`"
+            echo "- **RevenueCat key check:** PASS (iOS \`appl_\`, Android \`goog_\`)"
+            echo "- **EXPO_PUBLIC_* names used:** $(cut -d' ' -f1 build-env.sha256 | tr '\n' ' ')"
+            echo
+            echo "The upload job re-checks this digest and the keys, and compares these values with the EAS production environment, before publishing. Approve only if you want this commit on every phone."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ota-bundle
+          path: ${{ runner.temp }}/ota
+          if-no-files-found: error
+          retention-days: 7
+
+  upload:
+    name: Publish to EAS (requires approval)
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: production-ota
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Re-validate (no credential in this step)
+        env:
+          SHA: ${{ inputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::bad sha"; exit 1; }
+          status=$(gh api "repos/$REPO/compare/$SHA...production" --jq .status)
+          case "$status" in identical|ahead) ;; *) echo "::error::$SHA is no longer on production ($status)"; exit 1;; esac
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ota-bundle
+          path: ${{ runner.temp }}/ota
+
+      - name: Re-verify the bundle digest and RevenueCat keys (inline shell)
+        env:
+          EXPECTED: ${{ needs.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/ota"
+          if [ -n "$(find . -type l)" ]; then echo "::error::symlinks in the artifact"; exit 1; fi
+          digest=$(find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+          [ "$digest" = "$EXPECTED" ] || { echo "::error::artifact digest $digest != approved $EXPECTED"; exit 1; }
+          [ -f dist/metadata.json ] || { echo "::error::dist/metadata.json missing"; exit 1; }
+          # Same rule as scripts/lib/otaKeyCheck.js: each platform's Hermes/JS
+          # bundle must contain its RevenueCat key prefix. -q: nothing printed.
+          for pair in ios:appl_ android:goog_; do
+            platform=${pair%%:*}; prefix=${pair#*:}
+            shopt -s nullglob
+            bundles=(dist/_expo/static/js/"$platform"/*.hbc dist/_expo/static/js/"$platform"/*.js)
+            shopt -u nullglob
+            [ "${#bundles[@]}" -gt 0 ] || { echo "::error::$platform: no bundle"; exit 1; }
+            found=0
+            for b in "${bundles[@]}"; do if grep -qaF -- "$prefix" "$b"; then found=1; fi; done
+            [ "$found" = 1 ] || { echo "::error::$platform: RevenueCat key ($prefix...) missing from bundle"; exit 1; }
+          done
+          echo "Digest matches the approved build; key check PASS"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Install the pinned eas-cli and prepare the project config (no credential)
+        env:
+          SHA: ${{ inputs.sha }}
+          WORKFLOW_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          raw() { gh api -H 'Accept: application/vnd.github.raw' "repos/$REPO/contents/$1?ref=$2"; }
+
+          # eas-cli from the lockfile in this workflow's own commit.
+          mkdir -p "$RUNNER_TEMP/eas-cli"
+          raw .github/ota/eas-cli/package.json "$WORKFLOW_SHA" > "$RUNNER_TEMP/eas-cli/package.json"
+          raw .github/ota/eas-cli/package-lock.json "$WORKFLOW_SHA" > "$RUNNER_TEMP/eas-cli/package-lock.json"
+          (cd "$RUNNER_TEMP/eas-cli" && npm ci --ignore-scripts --no-audit --no-fund --loglevel=error)
+          v=$(jq -r .version "$RUNNER_TEMP/eas-cli/node_modules/eas-cli/package.json")
+          [ "$v" = "$EAS_CLI_VERSION" ] || { echo "::error::eas-cli $v installed, expected $EAS_CLI_VERSION"; exit 1; }
+
+          # Project config: app.json and eas.json at the released commit, a
+          # generated package.json, nothing else (no node_modules, no code).
+          P="$RUNNER_TEMP/project"; mkdir -p "$P"
+          entries=$(gh api "repos/$REPO/contents/apps/mobile?ref=$SHA" --jq '.[].name')
+          if grep -qE '^app\.config\.(js|ts|mjs|cjs)$' <<< "$entries"; then echo "::error::dynamic app config present; refusing"; exit 1; fi
+          raw apps/mobile/app.json "$SHA" > "$P/app.json"
+          raw apps/mobile/eas.json "$SHA" > "$P/eas.json"
+          jq -e --arg id "$EAS_PROJECT_ID" --arg acct "$EXPO_ACCOUNT" '
+            .expo.extra.eas.projectId == $id
+            and .expo.owner == $acct
+            and .expo.updates.url == ("https://u.expo.dev/" + $id)
+            and .expo.runtimeVersion.policy == "appVersion"
+            and (.expo.updates.codeSigningCertificate == null)
+          ' "$P/app.json" >/dev/null || { echo "::error::app.json is not this EAS project's static config (projectId/owner/updates.url/runtimeVersion policy/code signing)"; exit 1; }
+          jq -e '(.cli // {}) | keys - ["version","appVersionSource","requireCommit","promptToConfigurePush"] | length == 0' "$P/eas.json" >/dev/null \
+            || { echo "::error::eas.json has cli settings this workflow does not allow (e.g. updateManifestHostOverride)"; exit 1; }
+          pkg=$(raw apps/mobile/package.json "$SHA")
+          expo_v=$(jq -r '.dependencies.expo // empty' <<< "$pkg")
+          upd_v=$(jq -r '.dependencies["expo-updates"] // empty' <<< "$pkg")
+          for x in "$expo_v" "$upd_v"; do [[ "$x" =~ ^[~^]?[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::unexpected expo/expo-updates version string"; exit 1; }; done
+          jq -n --arg e "$expo_v" --arg u "$upd_v" '{name:"clearpass", private:true, dependencies:{expo:$e, "expo-updates":$u}}' > "$P/package.json"
+          echo "Project config ready: app.json + eas.json from $SHA; package.json generated (expo $expo_v, expo-updates $upd_v)"
+
+      - name: Check the build used the EAS production values (by hash)
+        working-directory: ${{ runner.temp }}/project
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_NO_VCS: '1'
+          EAS_PROJECT_ROOT: ${{ runner.temp }}/project
+          EXPO_NO_TELEMETRY: '1'
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/compare-env.sh" <<'SH'
+          set -euo pipefail
+          # Runs inside `eas env:exec production`: EAS production's plain-text
+          # and sensitive variables are in this process's environment.
+          # Prints names and match/mismatch only.
+          manifest="$RUNNER_TEMP/ota/build-env.sha256"
+          bad=0
+          eas_names=$(compgen -e | grep -E '^EXPO_PUBLIC_[A-Z0-9_]+$' | sort -u || true)
+          for n in $eas_names; do
+            h=$(printf '%s' "${!n}" | sha256sum | cut -d' ' -f1)
+            b=$(awk -v n="$n" '$1 == n {print $2}' "$manifest")
+            if [ "$n" = EXPO_PUBLIC_APP_ENV ] && [ "${!n}" != production ]; then echo "MISMATCH $n (EAS production defines a non-production APP_ENV)"; bad=1
+            elif [ -z "$b" ]; then echo "MISSING-IN-BUILD $n"; bad=1
+            elif [ "$h" != "$b" ]; then echo "MISMATCH $n"; bad=1
+            else echo "match $n"; fi
+          done
+          while read -r n _; do
+            [ "$n" = EXPO_PUBLIC_APP_ENV ] && continue
+            grep -qx "$n" <<< "$eas_names" || { echo "EXTRA-IN-BUILD $n (not in EAS production)"; bad=1; }
+          done < "$manifest"
+          exit "$bad"
+          SH
+          if ! "$RUNNER_TEMP/eas-cli/node_modules/.bin/eas" env:exec production "bash $RUNNER_TEMP/compare-env.sh" --non-interactive | tee "$RUNNER_TEMP/compare.txt"; then
+            { echo "### ❌ ota-build values differ from the EAS production environment"; echo '```'; cat "$RUNNER_TEMP/compare.txt"; echo '```'; echo "Update ota-build (setup-release-gate.sh ota), or add a new name to the build step's list, and run again."; } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::ota-build values differ from the EAS production environment"; exit 1
+          fi
+
+      - name: Publish the approved bundle (pinned eas-cli)
+        working-directory: ${{ runner.temp }}/project
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_NO_VCS: '1'
+          EAS_PROJECT_ROOT: ${{ runner.temp }}/project
+          EAS_SKIP_AUTO_FINGERPRINT: '1'
+          EXPO_NO_TELEMETRY: '1'
+          SHA: ${{ inputs.sha }}
+          MESSAGE: ${{ inputs.message }}
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/eas-cli/node_modules/.bin/eas" update \
+            --branch production \
+            --environment production \
+            --skip-bundler \
+            --input-dir "$RUNNER_TEMP/ota/dist" \
+            --platform all \
+            --message "$MESSAGE (commit ${SHA:0:7})" \
+            --non-interactive \
+            --json > "$RUNNER_TEMP/published.json"
+          {
+            echo "### ✅ Published to EAS branch \`production\`"
+            echo "| Platform | Update group | Runtime |"
+            echo "|---|---|---|"
+            jq -r '.[] | "| \(.platform) | `\(.group)` | \(.runtimeVersion) |"' "$RUNNER_TEMP/published.json"
+            echo
+            echo "To roll back: run **OTA rollback** with the update group that was live before this one."
+          } >> "$GITHUB_STEP_SUMMARY"
+          jq -r '.[] | "\(.platform) group=\(.group) runtime=\(.runtimeVersion)"' "$RUNNER_TEMP/published.json"

@@ -1,0 +1,509 @@
+name: Apply a production database migration
+
+# Applies migration files that are already merged to `main` to the production
+# Supabase database, behind the owner's approval. Separate from code releases
+# on purpose: its own environment (`production-db`), its own reviewer, its own
+# secret, its own run.
+#
+#   1. check  - NO secrets. Confirms the commit is on `main` and the files
+#               exist there under apps/mobile/supabase/migrations, then refuses:
+#               - destructive statements (CLAUDE.md's list: DROP, TRUNCATE,
+#                 DELETE, ALTER COLUMN ... TYPE, DISABLE ROW LEVEL SECURITY,
+#                 REVOKE on existing objects);
+#               - anything that modifies or attaches to a table ClearPass
+#                 doesn't own (Zen Footy shares this database; ClearPass's
+#                 tables are every CREATE TABLE in apps/mobile/supabase/
+#                 schema.sql and the migrations, at that commit);
+#               - files without a header documenting Compatibility (code
+#                 already in production works with the new schema) and
+#                 Rollback (compensating SQL, or "none needed: additive");
+#               - psql meta-commands, transaction control, COPY PROGRAM, role
+#                 switching and server file access.
+#               It writes the files' SHA-256 and full SQL to the summary.
+#   2. apply  - runs in `production-db`: owner approval, admins cannot bypass,
+#               `main` only. Holds SUPABASE_DB_URL (session pooler, port 5432).
+#               Installs postgresql-client from apt, re-checks every file's
+#               SHA-256 against what the approver saw, refuses out-of-order or
+#               already-applied versions, then applies each file in ONE
+#               transaction and records it in supabase_migrations.
+#               schema_migrations exactly as `supabase db push` (and so
+#               `npm run db:migrate`) does, and reloads PostgREST's schema
+#               cache. It executes no repository code: the migration SQL is
+#               the approved payload, sent with `psql -c` so psql never
+#               interprets backslash meta-commands in it.
+#
+# Backups: Supabase's scheduled backups can't be listed over SQL, and an
+# account-wide Supabase token is ruled out. So the dispatcher must set
+# backup_confirmed, and the approval summary tells the owner exactly where to
+# check in the dashboard; approving is the owner's confirmation.
+#
+# Rollback: a migration is never "undone" by this workflow. A rollback is a
+# NEW forward migration containing the compensating SQL from the original
+# file's `-- Rollback:` header, merged to main and applied through this same
+# gate. (Additive migrations need none: code that predates them ignores them.)
+#
+# Security notes:
+# - The connection string never appears on a command line or in the log: it
+#   is split into libpq PG* environment variables, the password is masked.
+# - Inputs reach the shell only through env vars, never via ${{ }} inside `run`.
+# - Official GitHub actions only, pinned by commit SHA.
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Full 40-character commit SHA on main that contains the migration(s)"
+        required: true
+        type: string
+      migrations:
+        description: "Exact file name(s) in apps/mobile/supabase/migrations, oldest first, space-separated"
+        required: true
+        type: string
+      backup_confirmed:
+        description: "A Supabase backup from the last 24 h exists (Dashboard → Database → Backups). The owner re-checks before approving"
+        required: true
+        default: false
+        type: boolean
+      reason:
+        description: "One line for the approver, e.g. 'PR #130 streak table'"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migrate-production
+  cancel-in-progress: false
+
+env:
+  MIGRATIONS_DIR: apps/mobile/supabase/migrations
+  SCHEMA_FILE: apps/mobile/supabase/schema.sql
+
+jobs:
+  check:
+    name: Check the migration(s) (no secrets)
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    outputs:
+      files: ${{ steps.check.outputs.files }}
+      all_versions: ${{ steps.check.outputs.all_versions }}
+      new_tables: ${{ steps.check.outputs.new_tables }}
+      owned_tables: ${{ steps.check.outputs.owned_tables }}
+    steps:
+      - name: Validate inputs
+        env:
+          SHA: ${{ inputs.sha }}
+          BACKUP_CONFIRMED: ${{ inputs.backup_confirmed }}
+          REASON: ${{ inputs.reason }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; echo "### ❌ Migration refused: $1" >> "$GITHUB_STEP_SUMMARY"; exit 1; }
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || fail "sha must be a full 40-character lowercase commit SHA"
+          [ "$BACKUP_CONFIRMED" = true ] || fail "backup_confirmed is not set. Check Supabase Dashboard → Database → Backups for a backup from the last 24 h, then run again with it ticked"
+          if [ "${#REASON}" -lt 3 ] || [ "${#REASON}" -gt 200 ]; then fail "reason must be 3-200 characters"; fi
+          if [[ "$REASON" == *$'\n'* || "$REASON" == *$'\r'* ]]; then fail "reason must be one line"; fi
+          echo "- **Reason:** $REASON" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Commit is on main
+        env:
+          SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$SHA" origin/main || { echo "::error::$SHA is not on main"; echo "### ❌ $SHA is not on main" >> "$GITHUB_STEP_SUMMARY"; exit 1; }
+
+      - id: check
+        name: Check files, statements, tables and headers
+        shell: python3 -I {0}
+        env:
+          SHA: ${{ inputs.sha }}
+          MIGRATIONS: ${{ inputs.migrations }}
+        run: |
+          import hashlib, html, json, os, re, subprocess, sys
+
+          sha = os.environ["SHA"]
+          mdir = os.environ["MIGRATIONS_DIR"]
+          schema = os.environ["SCHEMA_FILE"]
+          requested = os.environ["MIGRATIONS"].replace(",", " ").split()
+          out_path = os.environ["GITHUB_OUTPUT"]
+          summary_path = os.environ["GITHUB_STEP_SUMMARY"]
+          MAX_BYTES = 60_000  # the apply job passes the file twice inside ONE psql -c argument (Linux caps one argument at 128 KiB)
+
+          FILE_RE = re.compile(r"^([0-9]{14})_([a-z0-9_]+)\.sql$")
+          IDENT = r'(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)'
+          NAME = rf"({IDENT}(?:\s*\.\s*{IDENT})?)"
+          FLAGS = re.I | re.S
+
+
+          def git(*args):
+              return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
+
+
+          def blob(path):
+              """Content exactly as committed at SHA; must be a regular file."""
+              entry = git("ls-tree", sha, "--", path).strip()
+              if not entry:
+                  return None, "not present at this commit"
+              mode = entry.split()[0]
+              if mode != "100644":
+                  return None, f"not a regular file (mode {mode})"
+              return subprocess.run(["git", "cat-file", "blob", f"{sha}:{path}"], check=True, capture_output=True).stdout, None
+
+
+          def norm(name):
+              # Unquoted identifiers fold to lower case; quoted ones keep their case.
+              parts = [p[1:-1] if p.startswith('"') else p.lower() for p in re.findall(IDENT, name)]
+              if len(parts) == 2 and parts[0] == "public":
+                  parts = parts[1:]
+              return ".".join(parts)
+
+
+          def lex(sql):
+              """Returns (code, bare): code = comments removed; bare = comments, string
+              literals, quoted identifiers and dollar-quoted bodies removed."""
+              code, bare, i, n = [], [], 0, len(sql)
+              while i < n:
+                  c, nxt = sql[i], sql[i + 1] if i + 1 < n else ""
+                  if c == "-" and nxt == "-":
+                      j = sql.find("\n", i)
+                      i = n if j < 0 else j
+                      continue
+                  if c == "/" and nxt == "*":
+                      depth, i = 1, i + 2
+                      while i < n and depth:
+                          if sql.startswith("/*", i):
+                              depth, i = depth + 1, i + 2
+                          elif sql.startswith("*/", i):
+                              depth, i = depth - 1, i + 2
+                          else:
+                              i += 1
+                      code.append(" "); bare.append(" ")
+                      continue
+                  if c == "'":
+                      estr = i > 0 and sql[i - 1] in "eE" and (i < 2 or not (sql[i - 2].isalnum() or sql[i - 2] == "_"))
+                      j = i + 1
+                      while j < n:
+                          if estr and sql[j] == "\\":
+                              j += 2
+                              continue
+                          if sql[j] == "'":
+                              if j + 1 < n and sql[j + 1] == "'":
+                                  j += 2
+                                  continue
+                              break
+                          j += 1
+                      code.append(sql[i:j + 1]); bare.append("''")
+                      i = j + 1
+                      continue
+                  if c == '"':
+                      j = sql.find('"', i + 1)
+                      j = n - 1 if j < 0 else j
+                      code.append(sql[i:j + 1]); bare.append('"x"')
+                      i = j + 1
+                      continue
+                  if c == "$" and (i == 0 or not (sql[i - 1].isalnum() or sql[i - 1] in "_$")):
+                      m = re.match(r"\$([A-Za-z_][A-Za-z0-9_]*)?\$", sql[i:])
+                      if m:
+                          tag = m.group(0)
+                          j = sql.find(tag, i + len(tag))
+                          j = n if j < 0 else j + len(tag)
+                          code.append(sql[i:j]); bare.append(" $body$ ")
+                          i = j
+                          continue
+                  code.append(c); bare.append(c)
+                  i += 1
+              return "".join(code), "".join(bare)
+
+
+          def created_objects(code):
+              objs = set()
+              for kind, name in re.findall(
+                  rf"\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:UNLOGGED\s+)?(TABLE|SCHEMA|FUNCTION|VIEW|SEQUENCE|TYPE|PROCEDURE)\s+(?:IF\s+NOT\s+EXISTS\s+)?{NAME}",
+                  code, FLAGS):
+                  objs.add((kind.upper(), norm(name)))
+              return objs
+
+
+          # ClearPass-owned tables: every CREATE TABLE in schema.sql and in every
+          # migration at this commit.
+          listing = [p for p in git("ls-tree", "--name-only", sha, mdir + "/").split()]
+          all_migrations = sorted(os.path.basename(p) for p in listing if FILE_RE.match(os.path.basename(p)))
+          owned = set()
+          for p in [schema] + [f"{mdir}/{f}" for f in all_migrations]:
+              data, _ = blob(p)
+              if data is not None:
+                  owned |= {name for kind, name in created_objects(lex(data.decode("utf-8", "replace"))[0]) if kind == "TABLE"}
+
+          # CLAUDE.md's list: stop and ask the owner.
+          DESTRUCTIVE = [
+              ("DROP", r"\bDROP\b"),
+              ("TRUNCATE", r"\bTRUNCATE\b"),
+              # DELETE as a statement (anywhere, including function bodies), not the
+              # privilege or event name in ON DELETE / FOR DELETE / GRANT ..., DELETE.
+              ("DELETE", r"(?<![\w$])(?<!ON\s)(?<!FOR\s)(?<!OR\s)(?<!OF\s)(?<!,\s)(?<!,)(?<!GRANT\s)(?<!BEFORE\s)(?<!AFTER\s)DELETE\b"),
+              ("ALTER COLUMN ... TYPE", rf"\bALTER\s+(?:COLUMN\s+)?{IDENT}\s+(?:SET\s+DATA\s+)?TYPE\b"),
+              ("DISABLE ROW LEVEL SECURITY", r"\bDISABLE\s+ROW\s+LEVEL\s+SECURITY\b"),
+              ("NO FORCE ROW LEVEL SECURITY", r"\bNO\s+FORCE\s+ROW\s+LEVEL\s+SECURITY\b"),
+          ]
+          # Never allowed in a file applied with production credentials.
+          UNSAFE = [
+              ("a backslash outside quotes (psql meta-command syntax)", "bare", r"\\"),
+              ("transaction control (each file already runs in one transaction)", "bare", r"\bCOMMIT\b|\bROLLBACK\b|\bSTART\s+TRANSACTION\b|\bBEGIN\s*(?:WORK\s*|TRANSACTION\s*)?;|\bSAVEPOINT\b|\bEND\s*;\s*$"),
+              ("COPY ... PROGRAM", "code", r"\b(?:FROM|TO)\s+PROGRAM\b"),
+              ("CONCURRENTLY (cannot run in a transaction)", "code", r"\bCONCURRENTLY\b"),
+              ("ALTER SYSTEM / VACUUM / CREATE DATABASE", "code", r"\bALTER\s+SYSTEM\b|\bVACUUM\b|\bCREATE\s+DATABASE\b"),
+              ("role or session switching", "code", r"\bSET\s+(?:LOCAL\s+|SESSION\s+)?ROLE\b|\bSESSION\s+AUTHORIZATION\b|\bRESET\s+ROLE\b"),
+              ("server file/program access", "code", r"\b(?:pg_read_file|pg_read_binary_file|pg_ls_dir|pg_stat_file|lo_import|lo_export|pg_execute_server_program|dblink\w*)\b"),
+          ]
+          # Statements that modify, or attach to, a table.
+          TOUCH = [
+              ("ALTER TABLE", rf"\bALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?{NAME}"),
+              ("INSERT INTO", rf"\bINSERT\s+INTO\s+{NAME}"),
+              ("UPDATE", rf"\bUPDATE\s+(?:ONLY\s+)?{NAME}\s+(?:AS\s+)?(?:{IDENT}\s+)?SET\b"),
+              ("DELETE FROM", rf"\bDELETE\s+FROM\s+(?:ONLY\s+)?{NAME}"),
+              ("TRUNCATE", rf"\bTRUNCATE\s+(?:TABLE\s+)?(?:ONLY\s+)?{NAME}"),
+              ("POLICY", rf"\b(?:CREATE|ALTER|DROP)\s+POLICY\s+(?:IF\s+EXISTS\s+)?{IDENT}\s+ON\s+{NAME}"),
+              ("TRIGGER", rf"\b(?:CREATE\s+(?:OR\s+REPLACE\s+)?(?:CONSTRAINT\s+)?|DROP\s+)TRIGGER\s+(?:IF\s+EXISTS\s+)?{IDENT}\s[^;]*?\bON\s+{NAME}"),
+              ("INDEX", rf"\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:{IDENT}\s+)?ON\s+(?:ONLY\s+)?{NAME}"),
+              ("GRANT/REVOKE", rf"\b(?:GRANT|REVOKE)\b[^;]*?\bON\s+(?:TABLE\s+)?(?!(?:FUNCTION|SCHEMA|SEQUENCE|ALL|TYPE|DOMAIN|LANGUAGE|PROCEDURE|ROUTINE)\b){NAME}"),
+              ("COMMENT ON TABLE", rf"\bCOMMENT\s+ON\s+TABLE\s+{NAME}"),
+              ("RULE", rf"\bCREATE\s+(?:OR\s+REPLACE\s+)?RULE\s+{IDENT}\s+AS\s+ON\s+\w+\s+TO\s+{NAME}"),
+              ("REFERENCES", rf"\bREFERENCES\s+{NAME}"),
+          ]
+
+          errors, rows, files_out, details, new_tables = [], [], [], [], set()
+          if not requested:
+              errors.append("no migration files given")
+          if len(set(requested)) != len(requested):
+              errors.append("a file is listed twice")
+          if requested != sorted(requested):
+              errors.append("list the files in version order (oldest first)")
+
+          for f in requested:
+              m = FILE_RE.match(f)
+              if not m:
+                  errors.append(f"`{f}`: not a migration file name (14-digit version, _name, .sql; no paths)")
+                  continue
+              data, err = blob(f"{mdir}/{f}")
+              if data is None:
+                  errors.append(f"`{f}`: {err} under {mdir} at {sha[:7]}")
+                  continue
+              try:
+                  sql = data.decode("utf-8")
+              except UnicodeDecodeError:
+                  errors.append(f"`{f}`: not UTF-8")
+                  continue
+              digest = hashlib.sha256(data).hexdigest()
+              files_out.append({"file": f, "version": m.group(1), "name": m.group(2), "sha256": digest})
+              problems = []
+              if len(data) > MAX_BYTES:
+                  problems.append(f"larger than {MAX_BYTES} bytes; split it")
+              if "\x00" in sql:
+                  problems.append("contains a NUL byte")
+
+              # Header block: the comment lines before the first statement.
+              header = []
+              for line in sql.splitlines():
+                  if line.strip().startswith("--"):
+                      header.append(line.strip()[2:].strip())
+                  elif line.strip():
+                      break
+              htext = "\n".join(header)
+              comp = re.search(r"^Compatibility:\s*(\S.{9,})", htext, re.I | re.M)
+              rb = re.search(r"^Rollback:\s*(\S.{3,})", htext, re.I | re.M)
+              if not comp:
+                  problems.append("header has no `-- Compatibility: ...` line (why code already in production keeps working with the new schema)")
+              if not rb:
+                  problems.append("header has no `-- Rollback: ...` line (the compensating SQL, or `none needed: additive`)")
+
+              code, bare = lex(sql)
+              for label, rx in DESTRUCTIVE:
+                  if re.search(rx, code, re.I | re.M):
+                      problems.append(f"destructive statement: {label}")
+              for label, view, rx in UNSAFE:
+                  if re.search(rx, bare if view == "bare" else code, re.I | re.M):
+                      problems.append(f"not allowed: {label}")
+
+              created = created_objects(code)
+              here_tables = {nm for k, nm in created if k == "TABLE"}
+              created_names = {nm for _, nm in created}
+              for st in re.finditer(rf"\bREVOKE\b[^;]*?\bON\s+(?:(TABLE|SCHEMA|FUNCTION|SEQUENCE|PROCEDURE|ALL\s+\w+\s+IN\s+SCHEMA)\s+)?{NAME}", code, FLAGS):
+                  target = norm(st.group(2))
+                  if (st.group(1) or "").upper().startswith("ALL") or target not in created_names:
+                      problems.append(f"REVOKE on an existing object (`{target}`)")
+
+              touched = set()
+              for label, rx in TOUCH:
+                  for mt in re.finditer(rx, code, FLAGS):
+                      t = norm(mt.group(1))
+                      if label == "REFERENCES" and t == "auth.users":
+                          continue  # foreign key to Supabase's users table: a read-only reference
+                      touched.add(t)
+                      if t not in owned and t not in here_tables:
+                          problems.append(f"{label} on `{t}`, which is not a ClearPass table (Zen Footy shares this database; the Supabase `auth` and `storage` schemas are shared too)")
+              for t in here_tables:
+                  if not re.fullmatch(r"[a-z_][a-z0-9_]*(\.[a-z_][a-z0-9_]*)?", t):
+                      problems.append(f"new table `{t}`: use a lowercase, unquoted name")
+              new_tables |= here_tables
+
+              rows.append(f"| {'✅' if not problems else '❌'} | `{f}` | `{digest}` | {', '.join(sorted('`' + t + '`' for t in touched)) or '-'} |")
+              errors += [f"`{f}`: {p}" for p in dict.fromkeys(problems)]
+              details.append((f, comp.group(1) if comp else "(missing)", rb.group(1) if rb else "(missing)", sql))
+
+          ok = not errors
+          with open(summary_path, "a") as s:
+              s.write("## Production migration request\n")
+              s.write(f"- **Commit (on main):** `{sha}`\n- **Files, in apply order:** {' '.join('`' + f + '`' for f in requested)}\n\n")
+              if rows:
+                  s.write("| | File | SHA-256 | Tables touched |\n|---|---|---|---|\n" + "\n".join(rows) + "\n\n")
+              if errors:
+                  s.write("### ❌ Refused\n" + "\n".join(f"- {html.escape(e)}" for e in errors) + "\n\n"
+                          "Destructive or non-ClearPass changes don't go through this workflow: ask the owner (CLAUDE.md).\n\n")
+              for f, comp_t, rb_t, sql in details:
+                  s.write(f"### `{f}`\n- **Compatibility:** {html.escape(comp_t)}\n- **Rollback:** {html.escape(rb_t)}\n\n")
+                  s.write(f"<details><summary>Full SQL ({len(sql.splitlines())} lines)</summary>\n\n<pre>{html.escape(sql)}</pre>\n</details>\n\n")
+              if ok:
+                  s.write(
+                      "### Before you approve\n"
+                      "1. **Backup:** Supabase dashboard → the ClearPass project → **Database → Backups → Scheduled backups**. "
+                      "Check there is a backup from the last 24 hours. If there isn't (or the plan has no daily backups), "
+                      "**reject this run** and take a backup first. Approving is your confirmation that you checked.\n"
+                      "2. **Read the SQL above.** Each file runs in ONE transaction (4 s lock timeout) and is recorded in "
+                      "`supabase_migrations.schema_migrations`, the same table `npm run db:migrate` / `supabase db push` uses.\n"
+                      "3. **Rollback** is a NEW forward migration (the compensating SQL in the header), through this same workflow.\n")
+          with open(out_path, "a") as o:
+              o.write(f"files={json.dumps(files_out, separators=(',', ':'))}\n")
+              o.write(f"all_versions={json.dumps([FILE_RE.match(x).group(1) for x in all_migrations], separators=(',', ':'))}\n")
+              o.write(f"new_tables={json.dumps(sorted(new_tables), separators=(',', ':'))}\n")
+              o.write(f"owned_tables={json.dumps(sorted(owned), separators=(',', ':'))}\n")
+          for e in errors:
+              print(f"::error::{e}")
+          print(f"ClearPass tables known at {sha[:7]}: {len(owned)}; files checked: {len(files_out)}; problems: {len(errors)}")
+          sys.exit(0 if ok else 1)
+
+  apply:
+    name: Apply (requires approval)
+    needs: check
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: production-db
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Re-validate and fetch the approved files (no credential in this step)
+        env:
+          SHA: ${{ inputs.sha }}
+          BACKUP_CONFIRMED: ${{ inputs.backup_confirmed }}
+          FILES: ${{ needs.check.outputs.files }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          [ "$BACKUP_CONFIRMED" = true ] || fail "backup not confirmed"
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || fail "bad sha"
+          status=$(gh api "repos/$REPO/compare/$SHA...main" --jq .status)
+          case "$status" in identical|ahead) ;; *) fail "$SHA is no longer on main ($status)";; esac
+          mkdir -p "$RUNNER_TEMP/m"
+          n=$(jq 'length' <<< "$FILES"); [ "$n" -gt 0 ] || fail "no files"
+          for i in $(seq 0 $((n - 1))); do
+            f=$(jq -r ".[$i].file" <<< "$FILES"); want=$(jq -r ".[$i].sha256" <<< "$FILES")
+            [[ "$f" =~ ^[0-9]{14}_[a-z0-9_]+\.sql$ ]] || fail "bad file name"
+            gh api -H 'Accept: application/vnd.github.raw' "repos/$REPO/contents/$MIGRATIONS_DIR/$f?ref=$SHA" > "$RUNNER_TEMP/m/$f"
+            got=$(sha256sum "$RUNNER_TEMP/m/$f" | cut -d' ' -f1)
+            [ "$got" = "$want" ] || fail "$f: SHA-256 $got differs from the approved $want"
+          done
+          echo "Fetched $n file(s); SHA-256 matches what was approved"
+
+      - name: Install the PostgreSQL client (apt)
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends postgresql-client >/dev/null
+          psql --version
+
+      - name: Apply
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          FILES: ${{ needs.check.outputs.files }}
+          ALL_VERSIONS: ${{ needs.check.outputs.all_versions }}
+          NEW_TABLES: ${{ needs.check.outputs.new_tables }}
+          OWNED_TABLES: ${{ needs.check.outputs.owned_tables }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; echo "### ❌ $1" >> "$GITHUB_STEP_SUMMARY"; exit 1; }
+
+          # Connection: split the secret into libpq's PG* variables, so neither the
+          # URL nor the password is ever a command-line argument. Never printed.
+          re='^postgres(ql)?://([^:@/]+):([^@/]+)@([^:/?@]+):([0-9]+)/([^?]+)(\?.*)?$'
+          [[ "${SUPABASE_DB_URL:-}" =~ $re ]] || fail "SUPABASE_DB_URL is not postgresql://user:password@host:port/database"
+          export PGUSER="${BASH_REMATCH[2]}" PGHOST="${BASH_REMATCH[4]}" PGPORT="${BASH_REMATCH[5]}" PGDATABASE="${BASH_REMATCH[6]}"
+          pw="${BASH_REMATCH[3]}"
+          unset SUPABASE_DB_URL BASH_REMATCH
+          [ "$PGPORT" = 5432 ] || fail "SUPABASE_DB_URL must be the session pooler (port 5432), never the transaction pooler (6543)"
+          PGPASSWORD=$(printf '%b' "${pw//%/\\x}")  # percent-decode (printf is a shell builtin)
+          unset pw
+          export PGPASSWORD
+          echo "::add-mask::$PGPASSWORD"
+          export PGSSLMODE=require PGCONNECT_TIMEOUT=15 PGAPPNAME=clearpass-migrate-production
+          q() { psql -X -q -A -t -v ON_ERROR_STOP=1 -c "$1"; }
+
+          # Read-only preflight.
+          applied=$(q "select version from supabase_migrations.schema_migrations order by version") \
+            || fail "cannot read supabase_migrations.schema_migrations (connection, or the table is missing)"
+          latest=$(tail -n1 <<< "$applied")
+          mapfile -t want < <(jq -r '.[].version' <<< "$FILES")
+          for v in "${want[@]}"; do
+            if grep -qx "$v" <<< "$applied"; then fail "$v is already applied"; fi
+            if [ -n "$latest" ] && [[ "$v" < "$latest" ]]; then fail "$v is older than the latest applied migration ($latest); apply migrations in order"; fi
+          done
+          maxv="${want[-1]}"
+          for v in $(jq -r '.[]' <<< "$ALL_VERSIONS"); do
+            [[ "$v" < "$maxv" ]] || continue
+            if ! grep -qx "$v" <<< "$applied" && ! printf '%s\n' "${want[@]}" | grep -qx "$v"; then
+              fail "migration $v (earlier, at this commit) is not applied yet; include it or apply it first"
+            fi
+          done
+          for t in $(jq -r '.[]' <<< "$NEW_TABLES"); do
+            [[ "$t" =~ ^[a-z_][a-z0-9_]*(\.[a-z_][a-z0-9_]*)?$ ]] || fail "unexpected table name"
+            qualified="$t"; [[ "$t" == *.* ]] || qualified="public.$t"
+            exists=$(q "select to_regclass('$qualified') is not null")
+            if [ "$exists" = t ] && ! jq -e --arg t "$t" 'index($t) != null' <<< "$OWNED_TABLES" >/dev/null; then
+              fail "table $qualified already exists in the database and is not a ClearPass table (Zen Footy?)"
+            fi
+          done
+          echo "Preflight OK: ${#want[@]} pending file(s), latest applied ${latest:-none}"
+
+          # Apply: one transaction per file (like supabase db push), sent with -c so
+          # psql passes the SQL to the server verbatim (no meta-commands, no variable
+          # interpolation). The history row uses the same table and columns as the
+          # Supabase CLI (version, name, statements); `statements` holds the whole
+          # file as one element.
+          n=$(jq 'length' <<< "$FILES")
+          for i in $(seq 0 $((n - 1))); do
+            f=$(jq -r ".[$i].file" <<< "$FILES"); v=$(jq -r ".[$i].version" <<< "$FILES"); name=$(jq -r ".[$i].name" <<< "$FILES")
+            [[ "$v" =~ ^[0-9]{14}$ && "$name" =~ ^[a-z0-9_]+$ ]] || fail "bad version/name"
+            body=$(cat "$RUNNER_TEMP/m/$f")
+            tag="cp$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+            [[ "$body" != *"\$$tag\$"* ]] || fail "dollar-quote tag collision"
+            sql="SET LOCAL lock_timeout = '4s';
+          SET LOCAL statement_timeout = '10min';
+          $body
+          ;
+          INSERT INTO supabase_migrations.schema_migrations (version, name, statements) VALUES ('$v', '$name', ARRAY[\$$tag\$$body\$$tag\$]);
+          NOTIFY pgrst, 'reload schema';"
+            echo "Applying $f ..."
+            if ! psql -X -v ON_ERROR_STOP=1 --single-transaction -c "$sql"; then
+              fail "$f failed and was rolled back (nothing from it was applied)"
+            fi
+            [ "$(q "select count(*) from supabase_migrations.schema_migrations where version = '$v'")" = 1 ] || fail "$f: history row missing after commit"
+            echo "- ✅ applied \`$f\`" >> "$GITHUB_STEP_SUMMARY"
+          done
+          echo "Done. Next: run \`npm run smoke:instructor\` (apps/mobile/server) and report PASS/FAIL." >> "$GITHUB_STEP_SUMMARY"
