@@ -1,6 +1,6 @@
 # ClearPass 2.0 — Infrastructure Action Plan (ordered, with approval gates)
 
-For Craig. Last updated 2026-11-26. This consolidates every remaining infrastructure step into one sequence.
+For Craig. Last updated 2026-11-26 (rev 2: P1 model approved, with safeguards). This consolidates every remaining infrastructure step into one sequence.
 
 **Every step is prepared, not authorised.** Each gate (G1–G5) needs your explicit go-ahead. Nothing here changes production data, credentials or pricing.
 
@@ -16,42 +16,98 @@ For Craig. Last updated 2026-11-26. This consolidates every remaining infrastruc
 
 ---
 
-## Gate G1 — Release control (no cost). Do this before any merge.
+## Gate G1 — Release control with a dedicated `production` branch (approved model; no cost)
 
-### Recommended: a `production` release branch
+**Decision (Craig, 2026-11-26):** P1, a dedicated `production` branch. P1-alt is dropped. C7a is approved in principle, subject to reviewing the exact settings below.
 
-Point all production deployments at a new `production` branch instead of `main`.
+### How it works
+- **All four production deployments track `production`:** Vercel clearpass-app, clearpass-instructor-web and clearpass-web, plus Railway. Merging to `main` deploys nothing. On Vercel, `main` builds become preview builds, and the existing "Only build production" Ignored Build Step skips them.
+- **A release** is a fast-forward of `production` to a commit already merged to `main` and green in CI. Claude Code makes it **only after your explicit message approving that specific release**, naming the commit or PR.
+- **Protection** (C7a now, C7b after #109):
 
-**What changes:**
-- Merging to `main` no longer deploys anything. On Vercel, `main` builds become "preview" builds, which the existing Ignored Build Step skips.
-- **Releasing** becomes a single, deliberate, approved step: Claude Code fast-forwards `production` to an approved `main` commit (`git push origin <sha>:production`).
-- That one push deploys Vercel (3 projects) and Railway together, from a commit CI has already passed on `main`.
+| | `main` | `production` |
+|---|---|---|
+| Deletion | Blocked | Blocked |
+| Force push | Blocked | Blocked (fast-forward only) |
+| How it changes | Pull requests only; **0 required reviewers** (single owner) | No PRs. **"Restrict updates"**: only the repository admin role (your account) can push |
+| Required CI checks (C7b) | 7 checks | The same 7 checks, so **only CI-green commits can become production** |
+| Bypass list | Empty | Repository admin (only for the "Restrict updates" rule) |
 
-**Why it's better than switching auto-deploy off:**
-- Every platform still deploys automatically, but only on an explicit release.
-- Railway's "Wait for CI" can verify the commit, because CI ran on that exact commit when it landed on `main`.
-- No manual redeploys from dashboards. Rollback stays a one-click platform action.
-- Staged merges can go ahead freely, and you release in whatever groups you approve.
+**What the protection can and can't enforce.** Claude Code pushes with your GitHub account. So "Restrict updates" stops everyone else (other collaborators, apps, tokens), but technically it can't tell you and Claude Code apart.
+- **Release approval is enforced by procedure:** Claude Code never pushes `production` without your explicit per-release approval (this plan, plus a saved project rule).
+- **If you want a second, technical gate,** say so. A GitHub Environment `production-release` with you as required reviewer, plus a small release workflow, would make every release need your click in GitHub. That's optional; it can be added after G1.
 
-**Steps:**
-1. **Claude Code (needs G1 approval):** read the commit currently live on Vercel and Railway (from each dashboard's latest production deployment, gathered in prompt P1 step 0). If they match `origin/main` (expected `d791923`), create `production` at that exact commit. Nothing deploys, because it's the same code that's already live.
-2. **Chrome prompt P1** (below): switch the production branch to `production` on all three Vercel projects and on Railway. Turn **Wait for CI** on in Railway.
-3. **Chrome prompt C7a** (below): branch rulesets.
-   - `main`: changes only via PR, no reviewer required, no force-push or deletion.
-   - `production`: no deletion and no force-push. Only fast-forwards from `main`.
+### Verified before changing anything (2026-11-26, read-only)
+GitHub's deployment records show the **latest production deployment on all four platforms is `d791923`**, the current `main` (PR #105 merge), and every one reported `success`. That's 25 Nov: Railway at 15:55, clearpass-web 15:58, instructor-web 15:58, clearpass-app 15:59.
 
-**Rollback under this model:**
-- Use the platform's instant rollback: Vercel → Deployments → previous → "Instant Rollback"; Railway → Deployments → previous → "Redeploy".
-- Then revert on `main`, and fast-forward `production` again.
-- `production` is never force-pushed.
+This shows the latest deployment, not necessarily what's serving (an earlier Instant Rollback would change that). So each prompt also confirms the **serving** commit on screen before changing anything, and Claude Code re-checks immediately before each step.
 
-### Alternative (what you originally asked for): turn Railway auto-deploy off
+### Don't assume a branch switch deploys nothing
+- **Vercel:** changing the production branch normally doesn't start a build. If it does, `production` points at the identical commit, so the output is identical. The prompt checks the Deployments list straight after.
+- **Railway:** changing the source branch **may start a deployment** of `production`'s head. That's the same commit as now, so it's equivalent to a redeploy, but it does restart the single replica (seconds of possible interruption). Do it at a quiet time. Claude Code runs `npm run smoke:instructor` afterwards.
+- **If any platform's serving commit isn't `d791923` at step 0, stop.** Nothing changes until we know why.
 
-Chrome prompt **P1-alt** turns Railway auto-deploy OFF and Wait for CI ON. There's no equivalent switch on Vercel. The closest is setting Ignored Build Step to "Don't build anything" during staged merges, then deploying each approved commit by hand from the dashboard.
+### Wait for CI with the `production` branch
+- Railway's Wait for CI waits for the GitHub Actions runs triggered by the push to the branch it deploys from.
+- On `main` today, CI only runs on pushes to `main`. So **#109 now also runs CI on pushes to `production`** (commit `f043c4e`). Every release push starts its own CI run, and Railway deploys only after that run passes.
+- **Until #109 merges** there's no workflow for Railway to wait for, so it deploys immediately. That's acceptable, because no releases happen before #109.
+- **Confirmed in practice by a validation release** (G1.10): the first release is #109's own merge commit, which changes only CI and test files. Railway's deployment page should show "Waiting for CI", then deploy after the run passes.
+- The Vercel projects don't wait for CI. They build straight away, but only from a commit that already passed CI on `main` (the required checks on `production` enforce this).
 
-That works, but it's more manual and easier to get wrong. P1-alt is included in case you prefer it.
+### How the three Vercel deployments and Railway are coordinated
+One push to `production` triggers all four independently: Vercel ×3 build in about 1–3 minutes; Railway deploys after its CI run (about 6–8 minutes). **The order isn't guaranteed, so every release must be safe in any mixed state.**
 
----
+- **Compatibility rule:** each release must work in all of these combinations:
+  - new web + old server;
+  - old web + new server;
+  - **all installed native apps (1.1.x)** + new server. Native apps update separately, so the server must stay backward-compatible with them permanently.
+
+  If a change can't meet that, split it into two releases: server first (additive endpoint or field), web second.
+- **Release types:** each release is labelled server-only, web-only, or both-compatible. In the current queue:
+  - **Server-only:** #111, #113, #118, #116, #117.
+  - **Web-only, no new server dependency:** #108, #110, #107, #79, #114/#115/M1. #107's events write straight to Supabase, not the server.
+- **Per-release checks** by Claude Code:
+  - before: the commit is on `main`; all 7 checks are green; the GitHub deployment records show all four platforms healthy;
+  - after: all four deployment records reach `success` at the new commit; `smoke:instructor` passes for server changes; the web spot checks listed in the sequence.
+
+**If one platform fails:**
+- **Vercel build failure:** that project keeps serving the previous deployment.
+- **Railway deploy failure or crash:** the previous deployment keeps running.
+
+Either way the platforms are briefly out of step. Because of the compatibility rule, that's safe. Then:
+1. Fix forward with a new PR and release, **or**
+2. Roll back the platforms that did deploy (below), revert the PR on `main`, and release the revert, so `production` matches what's serving again.
+
+### Rollback, covering code, data and the database
+1. **Code (fast):**
+   - **Vercel:** Deployments → previous production deployment → **Instant Rollback**, for each affected project. **Gotcha:** after an Instant Rollback, Vercel stops auto-promoting new production deployments until you **"Undo Rollback"** or promote one manually. The procedure finishes by undoing it once the revert release is live.
+   - **Railway:** Deployments → previous successful deployment → **Redeploy**.
+2. **Realign:** revert the PR on `main` (through a PR, with CI), then release the revert by fast-forwarding `production`. `production` is never force-pushed.
+3. **Data written by the new code:** each server PR documents what it writes and how older code treats it.
+   - #113 and #118 write `iap_sandbox` / `iap_trial` grants. Their procedure is: check read-only for active rows; if there are any, the revert must keep those priority entries.
+   - #111, #116 and #117 write nothing.
+4. **Database migrations:**
+   - **Separate from code releases:** migrations are applied by `npm run db:migrate`, under the CLAUDE.md rules, before the release that uses them, never in the same step.
+   - **Additive only** (expand, then contract): new tables and columns are nullable or defaulted. Code must work with both the old and new schema, so **rolling back code never needs a schema rollback**.
+   - **Destructive steps** (DROP, type changes, etc.) only after the code that needs the old shape is gone and has soaked. They need your explicit approval.
+   - **None of the queued PRs contains a migration.** #112 changes only `schema.sql`, used for local and staging replay.
+5. **API compatibility:** the server is backward-compatible with every live client. Server endpoints are additive; nothing is removed or changed incompatibly while 1.1.x apps exist. The smoke test exercises the instructor/learner contract after every server release.
+6. **OTA (native apps)** isn't part of this. It's released separately via `npm run ota:production`, with its own approval (A10). An OTA rollback uses EAS's republish of the previous update. Claude Code will add a guarded `ota:rollback` script, mirroring `ota:production`, before the first OTA release, so CLAUDE.md's "never run `eas update` directly" rule still holds.
+
+### G1 steps in order: who does what
+
+| Step | Who | Action | Verification |
+|---|---|---|---|
+| G1.1 | **You** | Approve G1 (this section) | — |
+| G1.2 | Claude Code | Re-check: `origin/main` = `d791923`, and the four latest production deployments are `success` at `d791923`. If anything differs, **stop** and report | Report |
+| G1.3 | Claude Code | Create `production` at `d791923` (`git push origin d791923:refs/heads/production`). Nothing tracks it yet, so nothing deploys | GitHub branch list. No new deployment records |
+| G1.4 | **You** (Chrome) | **Prompt 1: C7a**, the rulesets for `main` and `production` | The prompt reports the saved settings |
+| G1.5 | **You** (Chrome) | **Prompt 2: P1-V**, the Vercel production branch → `production` for all 3 projects | The prompt confirms serving commits before and after |
+| G1.6 | Claude Code | Check the deployment records: no new Vercel production deployment, or if there is one, it's `d791923` and `success` | Report |
+| G1.7 | **You** (Chrome) | **Prompt 3: P1-R**, the Railway branch → `production` and Wait for CI on (at a quiet time) | The prompt reports any deployment it started |
+| G1.8 | Claude Code | Check the deployment records, then run `npm run smoke:instructor` | PASS/FAIL |
+| G1.9 | **You**, then Claude Code | Approve merging **#109**; Claude Code merges it. **This deploys nothing**; Claude Code confirms no production deployment records appear | Report |
+| G1.10 | **You** (Chrome), then Claude Code | **Prompt 4: C7b**, the required checks on both rulesets. Then you approve the **validation release** of #109's merge commit. Claude Code fast-forwards `production`, watches Railway "Waiting for CI" → deploy and Vercel ×3 build, confirms all four at the new commit, and runs smoke | Wait for CI and the coordination confirmed in practice |
 
 ## Gate G2 — Pre-merge configuration (no cost)
 
@@ -71,7 +127,7 @@ That works, but it's more manual and easier to get wrong. P1-alt is included in 
 
 ## Gate G3 — Merges and releases
 
-These follow the sequence in `03-implementation-tracker.md` ("Recommended merge and deploy order"). Under the G1 model:
+These follow the sequence in `03-implementation-tracker.md`. Every release follows the coordination, verification and rollback rules in G1. Under the G1 model:
 - **Merge** = no deployment.
 - **Release** = fast-forward `production`, which needs approval each time. After any release that changes the server, Claude Code runs `npm run smoke:instructor` and reports PASS or FAIL.
 
@@ -132,92 +188,152 @@ The server reads 18 variable names; your R1 summary mentioned 7 of them. The oth
 
 ---
 
+## Execution order: every step, who does it, and its prompt
+
+**Never run two prompts at once.** Paste each prompt's report back to Claude Code before starting the next.
+
+| # | Who | Step | Prompt | When |
+|---|---|---|---|---|
+| 1 | **You** | Approve G1 | — | Now |
+| 2 | Claude Code | Re-verify all four platforms at `d791923`; create `production` | — | After 1 |
+| 3 | **You** | **Prompt 1: C7a** (rulesets) | below | After 2 |
+| 4 | **You** | **Prompt 2: P1-V** (Vercel ×3) | below | After 3 |
+| 5 | Claude Code | Check deployment records | — | After 4 |
+| 6 | **You** | **Prompt 3: P1-R** (Railway), at a quiet time | below | After 5 |
+| 7 | Claude Code | Check deployment records, smoke test | — | After 6 |
+| 8 | **You**, then Claude Code | Approve, then merge #109 (deploys nothing) | — | After 7 |
+| 9 | **You** | **Prompt 4: C7b** (required checks) | below | After 8 |
+| 10 | **You**, then Claude Code | Approve the validation release of #109; Claude Code releases and verifies | — | After 9 |
+| 11 | **You** | **Prompt 5: C5** (Vercel secret clean-up) | `06-chrome-prompts.md` § C5 | Any time after 10 |
+| 12 | **You**, then Claude Code | Merges and releases, one approval each, in the tracker's sequence: #106/#112 → #111 → #113 + #118 → #116 (after the Stripe prefix check) → #117 | — | After 10 |
+| 13 | **You** | **Prompt 6: C1b** (A12 variables plus turning off the build override) | `06-chrome-prompts.md` § C1b | Just before #108 |
+| 14 | **You**, then Claude Code | #108 → #110 → #107 → #79 → #114/#115/M1 (merges and releases) | — | After 13 |
+| 15 | **You** | Approve G4 staging (≈ $10–15/month) | — | When you want hosted review |
+| 16 | **You** | **Prompt 7: C2** (Supabase staging). You type the DB password | `06-chrome-prompts.md` § C2 | After 15 |
+| 17 | **You** | Create `~/.config/clearpass/staging-db.env` | setup guide §1 | After 16 |
+| 18 | Claude Code | Schema, migrations and seed on staging only | — | After 17 |
+| 19 | **You** | **Prompt 8: R3** (Railway staging). You paste the secrets | below | After 18 |
+| 20 | **You** | Prompts S1 (Stripe test mode), RC1 (RevenueCat staging), V1 (Preview/EAS variables). Claude Code writes them when 19 is done | — | After 19 |
+
 ## Prompts
 
-### P1 — Release control: `production` branch (run only after Claude Code has created the `production` branch, G1)
+### Prompt 1 — C7a: rulesets for `main` and `production` (G1.4; after Claude Code has created `production`)
 
 ```text
-You are changing deployment settings for my app ClearPass so that production deploys only from a branch called "production". I am signed in to Vercel, Railway and GitHub in this Chrome.
+You are adding two branch rulesets to my GitHub repository ZenFinanceHub/clearpass-app. I am signed in to GitHub in this Chrome. I am the only person who works on this repository.
 
-SAFETY: Change ONLY the settings listed. Do not redeploy, promote, roll back, delete or pause anything. Never reveal, copy or report any variable value. If a page asks you to confirm anything not listed here, cancel it. If the "production" branch doesn't appear in a branch picker, STOP and tell me. Don't create branches yourself.
+SAFETY: Create exactly the two rulesets below. Don't change any other setting, ruleset, secret, collaborator, webhook or Actions setting. If a page asks you to confirm anything else, cancel it.
 
-Step 0 (read-only, do first):
-- In Vercel (https://vercel.com/zenfinancehubs-projects), for each of clearpass-app, clearpass-instructor-web and clearpass-web: Deployments → the current Production deployment → report its commit hash (short) and branch.
-- In Railway (https://railway.com/dashboard) → ClearPass project → production → clearpass-app service → Deployments: report the active deployment's commit hash and branch.
-- Confirm https://github.com/ZenFinanceHub/clearpass-app/branches lists a branch named "production", and report its latest commit hash.
-- If any of the hashes differ from the "production" branch's hash, STOP here and report. Don't change anything.
+Before you start: open https://github.com/ZenFinanceHub/clearpass-app/branches and confirm a branch named "production" exists. Report its latest commit's short hash. If it doesn't exist, STOP.
 
-Step 1 — Vercel, for EACH of clearpass-app, clearpass-instructor-web and clearpass-web:
-  Settings → Environments → Production → Branch Tracking (or Settings → Git → "Production Branch"): change the production branch from "main" to "production". Save.
-  Leave Ignored Build Step as "Only build production". Don't change anything else.
+Ruleset 1. Open https://github.com/ZenFinanceHub/clearpass-app/settings/rules → New ruleset → New branch ruleset.
+- Ruleset name: main protection
+- Enforcement status: Active
+- Bypass list: leave EMPTY
+- Target branches: Add target → Include default branch (main)
+- Branch rules (tick ONLY these):
+  [x] Restrict deletions
+  [x] Block force pushes
+  [x] Require a pull request before merging, with:
+        Required approvals: 0
+        Dismiss stale pull request approvals when new commits are pushed: OFF
+        Require review from Code Owners: OFF
+        Require approval of the most recent reviewable push: OFF
+        Require conversation resolution before merging: OFF
+        Allowed merge methods: leave the default
+  (Leave "Require status checks to pass" unticked for now; it's added later.)
+- Click Create.
 
-Step 2 — Railway: ClearPass project → production environment → clearpass-app service → Settings:
-  a. Source → Branch connected to production: change "main" to "production".
-  b. Turn "Wait for CI" ON.
-  c. Leave automatic deployments ON. They will now only trigger when the production branch moves.
-  d. Leave root directory, start command, region and replicas unchanged.
+Ruleset 2. Click New ruleset → New branch ruleset.
+- Ruleset name: production protection
+- Enforcement status: Active
+- Bypass list: Add bypass → choose the role "Repository admin" → set it to "Always allow" (not "For pull requests only").
+- Target branches: Add target → Include by pattern → type: production
+- Branch rules (tick ONLY these):
+  [x] Restrict updates   (only bypass actors, i.e. repository admins, may push to production)
+  [x] Restrict deletions
+  [x] Block force pushes
+  (Do NOT tick "Require a pull request before merging". Releases are fast-forward pushes of commits already merged to main.)
+- Click Create.
 
-Step 3 — Report: for each Vercel project and for Railway, the production branch before and after; Wait for CI before and after; the Step 0 commit hashes; and confirmation that nothing was deployed or redeployed.
+Re-open both rulesets and report every setting exactly as saved: name, enforcement, bypass list with mode, target, each rule and its options. Confirm nothing else was changed.
 ```
 
-### P1-alt — Railway: auto-deploy off and Wait for CI on (the alternative; don't run as well as P1)
+### Prompt 2 — P1-V: Vercel production branch → `production` (G1.5)
 
 ```text
-You are changing one Railway service's deployment settings for my app ClearPass. I am signed in to Railway in this Chrome.
+You are changing which Git branch deploys to production for three Vercel projects of my app ClearPass. I am signed in to Vercel in this Chrome. Team: https://vercel.com/zenfinancehubs-projects
 
-SAFETY: Change ONLY the two settings below. Do not deploy, redeploy, restart, roll back or delete anything. Never reveal or report any variable value. If a page asks you to confirm anything else, cancel it.
+SAFETY: Change ONLY the production branch setting. Do not redeploy, promote, roll back, delete or cancel any deployment. Don't change environment variables, domains, the Ignored Build Step or anything else. Never reveal or report any variable value. If a page asks you to confirm anything not listed here, cancel it.
 
-1. https://railway.com/dashboard → ClearPass project → production environment → clearpass-app service → Settings.
-2. Report the current values of: the source branch, automatic deployments (on/off), and Wait for CI (on/off).
-3. Turn automatic deployments OFF for this service (the toggle may be labelled "Auto deploy", "Automatic deployments" or "Deploy on push"). Save if needed.
-4. Turn "Wait for CI" ON. Save if needed.
-5. Reload the page and report both settings as saved.
+The expected commit is d791923. Everything below is checked against it.
 
-Report: before/after for automatic deployments and Wait for CI, and confirmation that nothing was deployed.
+Do the following for EACH project in turn: clearpass-app, then clearpass-instructor-web, then clearpass-web.
+
+A. Before changing anything:
+   1. Open https://vercel.com/zenfinancehubs-projects/<project>/deployments
+   2. Find the deployment marked "Current" (the one serving the Production domain). Report its short commit hash, branch, status and created time.
+   3. If its commit is NOT d791923, or it isn't "Ready", or the project shows an active "Instant Rollback" banner, STOP for this project and report. Don't change it.
+   4. Note the time.
+B. Change the production branch:
+   1. Open https://vercel.com/zenfinancehubs-projects/<project>/settings/environments (or Settings → Git if there is no Environments page).
+   2. Production → Branch Tracking (or "Production Branch"): change "main" to "production". Save.
+   3. Don't change "Ignored Build Step" (it should still say "Only build production"). Report its value.
+C. After the change:
+   1. Wait one minute. Reload the Deployments page.
+   2. Report whether ANY new deployment appeared after the time you noted in A4. If one did, report its commit, branch, environment and status, and wait until it finishes (Ready or Error) before continuing.
+   3. Confirm the "Current" production deployment is still commit d791923.
+
+REPORT, per project:
+| Project | Serving commit before | Production branch before → after | Ignored Build Step | New deployment after change? (commit/status) | Serving commit after |
+Then: "No deployments were triggered manually, and only the production branch setting was changed."
 ```
 
-Under P1-alt, every server release is a manual "Deploy latest commit" in Railway, which you'd approve each time. Vercel would need Ignored Build Step set to "Don't build anything" (ask for that prompt if you choose this route).
-
-### C7a — GitHub rulesets for `main` and `production` (no CI checks yet; safe before #109)
+### Prompt 3 — P1-R: Railway branch → `production`, Wait for CI on (G1.7; at a quiet time)
 
 ```text
-You are adding branch rulesets to my GitHub repository ZenFinanceHub/clearpass-app. I am signed in to GitHub in this Chrome. I am the only person who works on this repository.
+You are changing which Git branch Railway deploys from, for my app ClearPass's server, and turning on "Wait for CI". I am signed in to Railway in this Chrome.
 
-SAFETY: Create exactly the two rulesets below. Don't change other settings, rulesets, secrets, collaborators or Actions settings. If a page asks you to confirm anything else, cancel it.
+SAFETY: Change ONLY the two settings below. Do not manually deploy, redeploy, restart, roll back, delete or pause anything. Don't change variables, domains, region, replicas, root directory or start command. Never reveal or report any variable value. If a page asks you to confirm anything not listed here, cancel it.
 
-Ruleset 1 — https://github.com/ZenFinanceHub/clearpass-app/settings/rules → New ruleset → New branch ruleset
-- Name: main protection. Enforcement: Active. Bypass list: EMPTY.
-- Target branches: Include default branch (main).
-- Rules (tick only these):
-  - Restrict deletions.
-  - Block force pushes.
-  - Require a pull request before merging:
-    - Required approvals: 0.
-    - Dismiss stale approvals, Code Owners review, Approval of most recent push, and Conversation resolution: all OFF.
-- Create.
+The expected commit is d791923.
 
-Ruleset 2 — New branch ruleset
-- Name: production protection. Enforcement: Active. Bypass list: EMPTY.
-- Target branches: Include by pattern → production.
-- Rules (tick only these):
-  - Restrict deletions.
-  - Block force pushes.
-  (Do NOT require pull requests on this one. Releases are fast-forward pushes of commits already merged to main.)
-- Create.
+A. Before changing anything:
+   1. https://railway.com/dashboard → ClearPass project → production environment → clearpass-app service → Deployments.
+   2. Report the ACTIVE deployment's short commit hash, branch, status and time.
+   3. If it isn't d791923, or it isn't Active/Success, STOP and report. Don't change anything.
+   4. Note the time.
+B. Settings (same service):
+   1. Source → the branch production deploys from: change "main" to "production". Save if needed.
+   2. Turn "Wait for CI" ON. Save if needed.
+   3. Leave automatic deployments ON. They will now trigger only when the "production" branch moves.
+   4. Report the before/after values of the branch, automatic deployments and Wait for CI.
+C. After the change:
+   1. Go to Deployments. Wait two minutes, then reload.
+   2. Report whether a NEW deployment started after the time in A4: its commit, branch, status, and whether it shows "Waiting for CI" or similar.
+   3. If one started, wait until it is Active (or Failed/Crashed), then report the final status and which deployment is now ACTIVE. Do NOT click Redeploy or Rollback yourself. If something failed, just report it.
 
-Re-open both and report every saved setting. Confirm nothing else changed.
+REPORT:
+| Item | Before | After |
+| Branch | | |
+| Automatic deploys | | |
+| Wait for CI | | |
+| Active deployment commit | | |
+New deployment triggered by the change: yes/no (commit, status).
+Then: "Only the branch and Wait for CI settings were changed, and nothing was deployed manually."
 ```
 
-### C7b — Add the required CI checks to `main` (run right after #109 merges)
+### Prompt 4 — C7b: required CI checks on `main` and `production` (G1.10; right after #109 merges)
 
 ```text
-In my GitHub repository ZenFinanceHub/clearpass-app, edit ONE existing ruleset. I am signed in in this Chrome.
+In my GitHub repository ZenFinanceHub/clearpass-app, edit TWO existing rulesets. I am signed in to GitHub in this Chrome.
 
-SAFETY: Edit only the ruleset named "main protection". Change nothing else.
+SAFETY: Edit only the rulesets named "main protection" and "production protection", and only as described. Change nothing else.
 
-1. https://github.com/ZenFinanceHub/clearpass-app/settings/rules → open "main protection".
+For EACH of the two rulesets:
+1. Open https://github.com/ZenFinanceHub/clearpass-app/settings/rules and open the ruleset.
 2. Tick "Require status checks to pass". Leave "Require branches to be up to date before merging" OFF.
-3. Add these checks, choosing each from the GitHub Actions suggestions:
+3. Add these 7 checks, choosing each from the "GitHub Actions" suggestions (type the name, then pick it):
      Typecheck (apps/mobile)
      Typecheck (apps/instructor-web)
      Unit tests (packages/core, packages/content)
@@ -226,7 +342,9 @@ SAFETY: Edit only the ruleset named "main protection". Change nothing else.
      Unit tests (apps/instructor-web)
      E2E (Playwright, stubbed backend)
    Do NOT add "Native fingerprint (informational)" or any "Vercel" check.
-4. Save. Re-open the ruleset and report the saved list of required checks and all other rules unchanged.
+4. Save. Re-open it, and report the full saved settings (all rules, not only the new one) and the bypass list.
+
+Report both rulesets as saved, and confirm nothing else changed.
 ```
 
 ### R3 — Railway staging environment (run after G4 approval and after C2; Claude Code fills the marked values first)

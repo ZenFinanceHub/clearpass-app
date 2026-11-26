@@ -164,8 +164,8 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
 
 | # | Step | Prerequisite | CI required | Release effect (when `production` moves) | Post-release check | Rollback |
 |---|---|---|---|---|---|---|
-| 0 | **G1:** create `production`, then prompts P1 and C7a | Your approval | — | None (same commit as live) | Step 0 hashes match | Revert settings in the dashboards |
-| 1 | Merge **#109** CI | G1 | Its own run | Nothing user-facing | — | Revert PR |
+| 0 | **G1** (`07-…` G1.1–G1.8): verify all four platforms at `d791923`; create `production`; Prompt 1 C7a, Prompt 2 P1-V, Prompt 3 P1-R | Your approval | — | Railway may redeploy the same commit | Deployment records at `d791923`; smoke PASS | Revert the settings in the dashboards |
+| 1 | Merge **#109** CI (now also runs on `production` pushes, `f043c4e`), then the **validation release** | G1 | Its own run | CI files only. Confirms Railway Wait for CI and the four-platform coordination | All four at the new commit; smoke PASS | Revert PR |
 | 2 | **C7b:** required checks | #109 merged | — | — | — | Edit the ruleset |
 | 3 | Merge **#106** docs, **#112** schema | C7b | 7 checks | None (no migration) | — | Revert PR |
 | 4 | Merge **#111**; release | R1 ✅ (`CRON_SECRET` exists) | 7 checks | Railway: the parent-email endpoint fails closed | `smoke:instructor` PASS; next cron run | Railway redeploys the previous deployment, then revert |
