@@ -8,7 +8,12 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    # production: the release branch (docs/clearpass-2.0/07-infrastructure-
+    # action-plan.md). A release fast-forwards it to a commit already green on
+    # main; running CI again on that push gives Railway's "Wait for CI" a
+    # check suite for the production push itself, so a deploy can't start
+    # before this run passes.
+    branches: [main, production]
 
 permissions:
   contents: read
