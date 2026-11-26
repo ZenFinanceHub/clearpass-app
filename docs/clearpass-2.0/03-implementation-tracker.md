@@ -102,6 +102,8 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
 - **Merging to `main` is a release.** Vercel's Git integration deploys `main` to production for clearpass-app and clearpass-instructor-web on every merge. Railway appears to deploy the server from `main` too (CLAUDE.md: "any push that deploys the Railway server"; Railway config isn't in the repo, so C1 should confirm the trigger).
 - So approving a merge of an app or server PR means approving a web or server release. OTA (native apps) is always a separate step via `npm run ota:production`.
 
+**#116 and #117:** 342 and 337 server tests pass. They merge cleanly with each other and with #108, #111 and #113.
+
 **Verified for the whole set:** all of #107, #108, #109, #111, #112 and #113 merged together → server 371/371 tests pass. The only textual conflict is **#110 ↔ #107** in `app/taster.tsx`, so whichever goes second gets a rebase.
 
 | Step | PR | What merging does in production | Before | After (verification) | Rollback |
@@ -111,8 +113,8 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
 | 3 | **#112** schema.sql | Nothing: the file is used only for local and staging replay. No migration | — | Local replay (done: 0 diffs) | Revert |
 | 4 | **#111** F2 cron auth | Railway: the parent-email endpoint refuses requests without the secret | Confirm `CRON_SECRET` is set in Railway | `npm run smoke:instructor` PASS. Check the next cron-job.org run | Redeploy the previous build. No data written |
 | 5 | **#113** F1 sandbox flag | Railway: new sandbox purchases are marked `iap_sandbox` and excluded from stats | — | Smoke PASS. Next daily Slack stats show the sandbox line | **See the #113 rollback procedure:** if unexpired `iap_sandbox` rows exist, revert but keep `iap_sandbox: 0` priority |
-| 6 | **Stripe livemode PR** (in development) | Railway: test-mode events refused in production | Live key confirmed as the configured mode | Smoke PASS. The next real Stripe event is processed | Redeploy the previous build |
-| 7 | **RevenueCat config PR** (in development) | Railway: no change in production (IDs pinned) | — | Smoke PASS | Redeploy the previous build |
+| 6 | **#116** Stripe livemode guard | Railway: test-mode events are acknowledged and ignored (200, logged) in production. Undeterminable mode → 500 (Stripe retries for 3 days) | Confirm the Railway `STRIPE_SECRET_KEY` starts with `rk_live_`/`sk_live_`. Only the prefix is needed, never the value | Smoke PASS. The next real Stripe event is processed | Redeploy the previous build |
+| 7 | **#117** RevenueCat IDs to env config | Railway: no change in production (IDs pinned). The server refuses to start if a conflicting ID or an unknown `CLEARPASS_SERVER_ENV` is set | Confirm Railway defines neither RevenueCat ID variable, and `CLEARPASS_SERVER_ENV` is unset or `production` | Smoke PASS | Redeploy the previous build |
 | 8 | **#108** environments | Web: production builds must declare their env | **A12: add the two Vercel Production variables first** | The production deploy succeeds and the site loads | Revert. The Vercel variables are harmless to leave |
 | 9 | **#110** P0-2 bug fixes | Web: the bug fixes go live | — | Web spot check of onboarding, limit results and FAB | Revert. **The OTA is a separate approval (A10)**, after the web check |
 | 10 | **#107** analytics (rebase on #110: `taster.tsx`) | Web: new events start flowing into `funnel_events` | A6 privacy stance | Events appear in read-only queries | Revert. Rows stay, harmless |
