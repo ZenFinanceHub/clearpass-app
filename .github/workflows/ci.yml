@@ -1,0 +1,265 @@
+name: CI
+
+# Checks only: nothing here deploys, publishes an OTA, runs migrations or
+# talks to production. No repository secrets are used. The Playwright job
+# runs against a local web export with every backend call stubbed (see
+# apps/mobile/e2e/README.md).
+
+on:
+  pull_request:
+  push:
+    # production: the release branch (docs/clearpass-2.0/07-infrastructure-
+    # action-plan.md). A release fast-forwards it to a commit already green on
+    # main; running CI again on that push gives Railway's "Wait for CI" a
+    # check suite for the production push itself, so a deploy can't start
+    # before this run passes.
+    branches: [main, production]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+  # Belt and braces: never bake a local .env into anything built here.
+  EXPO_NO_DOTENV: '1'
+  EXPO_NO_TELEMETRY: '1'
+
+jobs:
+  typecheck-mobile:
+    name: Typecheck (apps/mobile)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            apps/mobile/package-lock.json
+            packages/core/package-lock.json
+            packages/content/package-lock.json
+      - name: Install
+        run: |
+          npm ci --prefix packages/core --no-audit --no-fund
+          npm ci --prefix packages/content --no-audit --no-fund
+          npm ci --prefix apps/mobile --no-audit --no-fund
+      # TODO(P0-1 baseline): origin/main already fails `tsc --noEmit` with one
+      # pre-existing error, so this step is report-only for now:
+      #   app/_layout.tsx(409,15): error TS2769: No overload matches this call.
+      #   (`suppressHydrationWarning` is not a prop of react-native's View)
+      # Once that is fixed, delete `continue-on-error` to make this blocking.
+      - name: tsc --noEmit (report-only, see TODO)
+        working-directory: apps/mobile
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npx tsc --noEmit | tee tsc-output.txt || {
+            grep -E 'error TS' tsc-output.txt | while IFS= read -r line; do echo "::warning title=tsc (apps/mobile, report-only)::$line"; done
+            exit 1
+          }
+
+  typecheck-instructor-web:
+    name: Typecheck (apps/instructor-web)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/instructor-web/package-lock.json
+      - name: Install
+        run: npm ci --prefix apps/instructor-web --no-audit --no-fund
+      # `next typegen` generates the global PageProps/LayoutProps route types
+      # that a plain `tsc` run otherwise reports as missing.
+      - name: next typegen && tsc --noEmit
+        working-directory: apps/instructor-web
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: |
+          npx next typegen
+          npx tsc --noEmit
+
+  core-tests:
+    name: Unit tests (packages/core, packages/content)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            packages/core/package-lock.json
+            packages/content/package-lock.json
+      - name: Install
+        run: |
+          npm ci --prefix packages/core --no-audit --no-fund
+          npm ci --prefix packages/content --no-audit --no-fund
+      - name: packages/core vitest
+        run: npm test --prefix packages/core
+      - name: packages/content vitest
+        run: npm test --prefix packages/content
+
+  server-tests:
+    name: Unit tests (apps/mobile/server)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/mobile/server/package-lock.json
+      - name: Install
+        run: npm ci --prefix apps/mobile/server --no-audit --no-fund
+      - name: npm test
+        run: npm test --prefix apps/mobile/server
+
+  script-tests:
+    name: Unit tests (apps/mobile scripts)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      # Node built-in test runner only; the script tests need no dependencies.
+      - name: npm run test:scripts
+        working-directory: apps/mobile
+        run: npm run test:scripts
+
+  instructor-web-tests:
+    name: Unit tests (apps/instructor-web)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/instructor-web/package-lock.json
+      - name: Install
+        run: npm ci --prefix apps/instructor-web --no-audit --no-fund
+      - name: vitest
+        run: npm test --prefix apps/instructor-web
+
+  e2e:
+    name: E2E (Playwright, stubbed backend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            apps/mobile/package-lock.json
+            packages/core/package-lock.json
+            packages/content/package-lock.json
+      - name: Install
+        run: |
+          npm ci --prefix packages/core --no-audit --no-fund
+          npm ci --prefix packages/content --no-audit --no-fund
+          npm ci --prefix apps/mobile --no-audit --no-fund
+      - name: Install Chromium
+        working-directory: apps/mobile
+        run: npx playwright install --with-deps chromium
+      # playwright.config.ts builds the web export (dist-e2e/) and serves it
+      # on 127.0.0.1:8090; desktop-chromium and mobile-chromium projects.
+      - name: playwright test
+        working-directory: apps/mobile
+        run: npm run test:e2e
+      - name: Upload HTML report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/mobile/playwright-report/
+            apps/mobile/test-results/
+          retention-days: 14
+
+  fingerprint:
+    # Informational only: tells a reviewer whether the native fingerprint
+    # changed vs the PR base (changed = needs a store build, not just an OTA).
+    # Writes to the job summary; posts no comments and sets no labels.
+    name: Native fingerprint (informational)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            apps/mobile/package-lock.json
+            packages/core/package-lock.json
+            packages/content/package-lock.json
+      - name: Install
+        run: |
+          npm ci --prefix packages/core --no-audit --no-fund
+          npm ci --prefix packages/content --no-audit --no-fund
+          npm ci --prefix apps/mobile --no-audit --no-fund
+      - name: Compare fingerprint with base
+        working-directory: apps/mobile
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          npx @expo/fingerprint . > "$RUNNER_TEMP/head.json"
+          git worktree add -q "$RUNNER_TEMP/base" "$BASE_SHA"
+          if [ -f "$RUNNER_TEMP/base/apps/mobile/package-lock.json" ]; then
+            # The base needs its own install: autolinked native module
+            # versions are part of the fingerprint.
+            npm ci --prefix "$RUNNER_TEMP/base/packages/core" --no-audit --no-fund --silent
+            npm ci --prefix "$RUNNER_TEMP/base/packages/content" --no-audit --no-fund --silent
+            npm ci --prefix "$RUNNER_TEMP/base/apps/mobile" --no-audit --no-fund --silent
+            (cd "$RUNNER_TEMP/base/apps/mobile" && npx @expo/fingerprint .) > "$RUNNER_TEMP/base.json" || echo '{}' > "$RUNNER_TEMP/base.json"
+          else
+            echo '{}' > "$RUNNER_TEMP/base.json"
+          fi
+          head_hash=$(node -p "require('$RUNNER_TEMP/head.json').hash")
+          base_hash=$(node -p "require('$RUNNER_TEMP/base.json').hash || 'n/a'")
+          {
+            echo "### Native fingerprint (apps/mobile)"
+            echo ""
+            echo "| | hash |"
+            echo "|---|---|"
+            echo "| base | \`$base_hash\` |"
+            echo "| head | \`$head_hash\` |"
+            echo ""
+            if [ "$head_hash" = "$base_hash" ]; then
+              echo "Unchanged: no native-affecting inputs changed."
+            else
+              echo "**Changed**: native-affecting inputs differ from base, so an OTA alone may not ship this (check whether a store build is needed). Advisory only: runtimeVersion uses the appVersion policy, and package.json scripts and .gitignore also count as inputs."
+              echo ""
+              echo "<details><summary>Differences</summary>"
+              echo ""
+              echo '```'
+              node -e "
+                const h=require('$RUNNER_TEMP/head.json').sources||[]; const b=require('$RUNNER_TEMP/base.json').sources||[];
+                const key=s=>s.type+':'+(s.filePath||s.id); const bm=new Map(b.map(s=>[key(s),s.hash]));
+                const hm=new Map(h.map(s=>[key(s),s.hash]));
+                for (const [k,v] of hm) if (bm.get(k)!==v) console.log((bm.has(k)?'changed ':'added   ')+k);
+                for (const k of bm.keys()) if (!hm.has(k)) console.log('removed '+k);
+              " | head -100 || true
+              echo '```'
+              echo "</details>"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

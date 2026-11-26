@@ -12,3 +12,9 @@ apps/files/
 apps/files (2)/
 apps/files (3)/
 apps/files.zip
+
+# apps/mobile e2e: local web export + Playwright output
+apps/mobile/dist-e2e/
+apps/mobile/playwright-report/
+apps/mobile/test-results/
+apps/mobile/blob-report/

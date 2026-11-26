@@ -1,4 +1,10 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, seedLearner, signInAs } from './support';
+
+// These screens are behind sign-in: run as a synthetic, onboarded learner.
+test.beforeEach(async ({ page, network }) => {
+  await seedLearner(page);
+  await signInAs(page, network);
+});
 
 test.describe('Practice Questions', () => {
   test.beforeEach(async ({ page }) => {
