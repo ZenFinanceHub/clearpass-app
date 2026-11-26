@@ -5,30 +5,38 @@ name: Release to production
 #
 #   1. verify   - checks the request; writes a summary for the approver.
 #   2. push     - runs in the `production-release` GitHub Environment, which
-#                 requires Craig's approval. Only this job can read the deploy
-#                 key that is allowed to update `production` (ruleset bypass).
+#                 requires the owner's approval and only accepts runs from
+#                 `main`. Only this job can mint a token for the
+#                 `clearpass-release` GitHub App, the one bypass actor (besides
+#                 the owner) allowed to update `production`. It re-validates
+#                 everything before pushing.
 #   3. monitor  - waits for all four production deployments to report success.
 #
+# mode=test pushes to `release-gate-test` instead of `production`. It exercises
+# the same approval and credential path without touching production.
+#
 # Security notes:
-# - Everything that runs is inline in this file (owned by CODEOWNERS). No repo
-#   scripts, no npm install, no third-party actions after the push job starts.
-# - The environment only accepts runs from `main`, so a modified copy of this
-#   workflow on another branch cannot reach the deploy key.
-# - Inputs reach the shell only through env vars, never ${{ }} inside `run`.
+# - All logic is inline in this file, which is owned by CODEOWNERS. No repo
+#   scripts and no npm install. Only two official GitHub actions, pinned by
+#   commit SHA.
+# - Inputs reach the shell only through env vars, never via ${{ }} inside `run`.
+# - The App token is short-lived (1 h), limited to this repository, and has
+#   contents:write and workflows:write only. It is masked in logs and revoked
+#   at the end of the job.
 
 on:
   workflow_dispatch:
     inputs:
       sha:
-        description: "Full 40-character commit SHA on main to release (or, for rollback, an earlier production commit)"
+        description: "Full 40-character commit SHA on main to release (rollback: an earlier production commit)"
         required: true
         type: string
       mode:
-        description: "release = move production forward; rollback = move production back to an earlier production commit"
+        description: "release = move production forward; rollback = move production back to an earlier production commit; test = exercise the gate on release-gate-test only"
         required: true
         default: release
         type: choice
-        options: [release, rollback]
+        options: [release, rollback, test]
       reason:
         description: "One line for the approver, e.g. 'PR #111 cron auth'"
         required: true
@@ -65,59 +73,80 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       current: ${{ steps.check.outputs.current }}
+      target: ${{ steps.check.outputs.target }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 0
           persist-credentials: false
       - id: check
-        name: Check commit, ancestry, CI and history
+        name: Check commit, ancestry, CI, history and workflow safety
         env:
           SHA: ${{ inputs.sha }}
           MODE: ${{ inputs.mode }}
           REASON: ${{ inputs.reason }}
+          WORKFLOW_SHA: ${{ github.sha }}
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           fail() { echo "::error::$1"; echo "### ❌ Release refused: $1" >> "$GITHUB_STEP_SUMMARY"; exit 1; }
           [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || fail "sha must be a full 40-character lowercase commit SHA"
-          git fetch --quiet origin main production
-          CUR=$(git rev-parse origin/production)
+
+          # Public-repo hygiene: no workflow on main may run untrusted PR code
+          # with secrets, and only this file may reference secrets.
+          if grep -rlE '^\s*pull_request_target\s*:' .github/workflows/ >/dev/null 2>&1; then fail "a workflow on main uses pull_request_target"; fi
+          others=$(grep -rlE 'secrets\.' .github/workflows/ | grep -v '^.github/workflows/release.yml$' || true)
+          [ -z "$others" ] || fail "workflows other than release.yml reference secrets: $others"
+
+          if [ "$MODE" = test ]; then TARGET=release-gate-test; else TARGET=production; fi
+          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+          git fetch --quiet origin main "$TARGET"
+          CUR=$(git rev-parse "origin/$TARGET")
           echo "current=$CUR" >> "$GITHUB_OUTPUT"
-          [ "$SHA" != "$CUR" ] || fail "production is already at $SHA"
           git merge-base --is-ancestor "$SHA" origin/main || fail "$SHA is not on main"
 
-          if [ "$MODE" = release ]; then
-            git merge-base --is-ancestor "$CUR" "$SHA" || fail "not a fast-forward from current production $CUR"
+          check_ci() {
             while IFS= read -r name; do
               [ -n "$name" ] || continue
               concl=$(gh api --paginate "repos/$REPO/commits/$SHA/check-runs?per_page=100" \
                 | jq -rs --arg n "$name" '[.[].check_runs[] | select(.name == $n)] | sort_by(.completed_at) | last | .conclusion // "missing"')
               [ "$concl" = success ] || fail "required check '$name' is '$concl' on $SHA"
             done <<< "$REQUIRED_CHECKS"
-          else
-            git merge-base --is-ancestor "$SHA" "$CUR" || fail "rollback target must be an earlier commit of production"
-            n=$(gh api --paginate "repos/$REPO/deployments?sha=$SHA&per_page=100" \
-              | jq -s '[.[][] | select(.environment | test("^Production|/ production$"))] | length')
-            [ "$n" -gt 0 ] || fail "$SHA was never deployed to production, so it is not a known-good rollback target"
-          fi
+          }
+
+          case "$MODE" in
+            release)
+              [ "$SHA" != "$CUR" ] || fail "production is already at $SHA"
+              git merge-base --is-ancestor "$CUR" "$SHA" || fail "not a fast-forward from current production $CUR"
+              check_ci ;;
+            rollback)
+              [ "$SHA" != "$CUR" ] || fail "production is already at $SHA"
+              git merge-base --is-ancestor "$SHA" "$CUR" || fail "rollback target must be an earlier commit of production"
+              n=$(gh api --paginate "repos/$REPO/deployments?sha=$SHA&per_page=100" \
+                | jq -s '[.[][] | select(.environment | test("^Production|/ production$"))] | length')
+              [ "$n" -gt 0 ] || fail "$SHA was never deployed to production, so it is not a known-good rollback target" ;;
+            test)
+              check_ci ;;
+          esac
 
           {
             echo "## Production ${MODE} request"
             echo "- **Reason:** ${REASON}"
+            echo "- **Target branch:** \`${TARGET}\`"
             echo "- **From:** \`${CUR}\`"
-            echo "- **To:** \`${SHA}\`"
+            echo "- **To (the exact commit you are approving):** \`${SHA}\`"
+            echo "- **Release workflow version:** \`${WORKFLOW_SHA}\`"
             echo
-            if [ "$MODE" = release ]; then
-              echo "### Commits being released"
-              git log --format='- %h %s' "$CUR..$SHA"
-              files=$(git diff --name-only "$CUR" "$SHA")
-            else
+            if [ "$MODE" = rollback ]; then
               echo "### Commits being rolled back"
               git log --format='- %h %s' "$SHA..$CUR"
               files=$(git diff --name-only "$SHA" "$CUR")
+            else
+              echo "### Commits included"
+              git log --format='- %h %s' "$CUR..$SHA" 2>/dev/null | head -100
+              files=$(git diff --name-only "$CUR" "$SHA" 2>/dev/null || true)
             fi
             echo
             echo "### Areas touched"
@@ -125,52 +154,88 @@ jobs:
             if grep -qE '^apps/mobile/(app|src|assets|api)/|^packages/' <<< "$files"; then echo "- 🌐 **Learner web app (Vercel)**. Native apps are unaffected (OTA is separate)"; fi
             if grep -q '^apps/instructor-web/' <<< "$files"; then echo "- 🌐 **Instructor site (Vercel)**"; fi
             if grep -q '^apps/web/' <<< "$files"; then echo "- 🌐 **Marketing site (Vercel)**"; fi
+            if grep -qE '(^|/)(vercel\.json|eas\.json|app\.json|package\.json|next\.config\.[a-z]+)$|^\.github/' <<< "$files"; then echo "- ⚠️ **Build, deploy or CI configuration changed**"; fi
             if grep -qE 'migrations/|schema\.sql' <<< "$files"; then echo "- 🗄️ **Database files changed.** Releases never run migrations; confirm any migration was applied separately and is backward-compatible"; fi
             echo
             echo "Approve only if this matches what you agreed to release."
           } >> "$GITHUB_STEP_SUMMARY"
 
   push:
-    name: Move production (requires approval)
+    name: Move the release branch (requires approval)
     needs: verify
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production-release
+    permissions:
+      contents: read
+      checks: read
     steps:
-      - name: Push to production with the release deploy key
+      - name: Re-validate immediately before pushing (no credential yet)
         env:
           SHA: ${{ inputs.sha }}
           MODE: ${{ inputs.mode }}
+          TARGET: ${{ needs.verify.outputs.target }}
           EXPECTED_CURRENT: ${{ needs.verify.outputs.current }}
-          RELEASE_DEPLOY_KEY: ${{ secrets.RELEASE_DEPLOY_KEY }}
+          GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          [ -n "$RELEASE_DEPLOY_KEY" ] || { echo "::error::RELEASE_DEPLOY_KEY is not available in this environment"; exit 1; }
-          umask 077
-          mkdir -p ~/.ssh
-          printf '%s\n' "$RELEASE_DEPLOY_KEY" > ~/.ssh/release_key
-          # Pin GitHub's published SSH host keys (from the HTTPS meta API) instead of trusting ssh-keyscan.
-          curl -fsSL https://api.github.com/meta | python3 -c 'import json,sys; [print("github.com " + k) for k in json.load(sys.stdin)["ssh_keys"]]' > ~/.ssh/known_hosts
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/release_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
-          git init -q repo && cd repo
-          git remote add origin "git@github.com:${REPO}.git"
-          git fetch -q origin main production
-          CUR=$(git rev-parse origin/production)
-          [ "$CUR" = "$EXPECTED_CURRENT" ] || { echo "::error::production moved since verification ($EXPECTED_CURRENT -> $CUR); start a new release"; exit 1; }
-          git merge-base --is-ancestor "$SHA" origin/main || { echo "::error::$SHA is no longer on main"; exit 1; }
-          if [ "$MODE" = release ]; then
-            git push origin "$SHA:refs/heads/production"
-          else
-            git push --force-with-lease="production:$CUR" origin "$SHA:refs/heads/production"
+          fail() { echo "::error::$1"; exit 1; }
+          main=$(gh api "repos/$REPO/branches/main" --jq .commit.sha)
+          cur=$(gh api "repos/$REPO/branches/$TARGET" --jq .commit.sha)
+          [ "$cur" = "$EXPECTED_CURRENT" ] || fail "$TARGET moved since verification ($EXPECTED_CURRENT -> $cur); start a new release"
+          status=$(gh api "repos/$REPO/compare/$SHA...$main" --jq .status)
+          case "$status" in identical|ahead) ;; *) fail "$SHA is no longer on main (compare: $status)";; esac
+          if [ "$MODE" != rollback ]; then
+            while IFS= read -r name; do
+              [ -n "$name" ] || continue
+              concl=$(gh api --paginate "repos/$REPO/commits/$SHA/check-runs?per_page=100" \
+                | jq -rs --arg n "$name" '[.[].check_runs[] | select(.name == $n)] | sort_by(.completed_at) | last | .conclusion // "missing"')
+              [ "$concl" = success ] || fail "required check '$name' is now '$concl' on $SHA"
+            done <<< "$REQUIRED_CHECKS"
           fi
-          rm -f ~/.ssh/release_key
-          echo "production: $CUR -> $SHA ($MODE)" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Re-validated: $TARGET $cur -> $SHA ($MODE)"
+
+      - name: Mint a short-lived release token (clearpass-release App)
+        id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          repositories: clearpass-app
+          permission-contents: write
+          permission-workflows: write
+
+      - name: Push
+        env:
+          SHA: ${{ inputs.sha }}
+          MODE: ${{ inputs.mode }}
+          TARGET: ${{ needs.verify.outputs.target }}
+          EXPECTED_CURRENT: ${{ needs.verify.outputs.current }}
+          TOKEN: ${{ steps.app.outputs.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          auth=$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          git init -q repo && cd repo
+          git config --local "http.https://github.com/.extraheader" "AUTHORIZATION: basic $auth"
+          git remote add origin "https://github.com/${REPO}.git"
+          git fetch -q origin main "$TARGET"
+          [ "$(git rev-parse "origin/$TARGET")" = "$EXPECTED_CURRENT" ] || { echo "::error::$TARGET moved; start a new release"; exit 1; }
+          git merge-base --is-ancestor "$SHA" origin/main || { echo "::error::$SHA is not on main"; exit 1; }
+          if [ "$MODE" = release ]; then
+            git push -q origin "$SHA:refs/heads/$TARGET"
+          else
+            git push -q --force-with-lease="$TARGET:$EXPECTED_CURRENT" origin "$SHA:refs/heads/$TARGET"
+          fi
+          git config --local --unset-all "http.https://github.com/.extraheader"
+          echo "$TARGET: $EXPECTED_CURRENT -> $SHA ($MODE)" | tee -a "$GITHUB_STEP_SUMMARY"
 
   monitor:
     name: Wait for all four production deployments
     needs: push
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && inputs.mode != 'test'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
