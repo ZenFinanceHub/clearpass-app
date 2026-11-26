@@ -387,6 +387,25 @@ export default function PracticeScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topicFilter, topicNonce, phase]);
 
+  // ui_v2: the Learn hub opens Battle Mode, Speed Round or Weak Spots directly
+  // (?launch=battle|speed|weakspots&t=<nonce>), calling the same start
+  // functions as the buttons on the start screen. Same once-per-tap and
+  // start/results-only rules as the topic launcher. Ignored with the flag off.
+  const { launch } = useLocalSearchParams<{ launch?: string }>();
+  const launchAutoStartRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!uiV2 || (launch !== 'battle' && launch !== 'speed' && launch !== 'weakspots')) return;
+    const key = `${launch}:${topicNonce ?? ''}`;
+    if (launchAutoStartRef.current === key) return;
+    if (phase !== 'start' && phase !== 'results') return;
+    launchAutoStartRef.current = key;
+    if (launch === 'battle') void startBattle();
+    else if (launch === 'speed') startSpeedRound();
+    else void startWeakSpotDrill(); // stays on the start screen if there are too few weak spots
+    router.setParams({ launch: undefined, t: undefined } as never);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [launch, topicNonce, phase]);
+
   async function startBattle() {
     const progress = (await loadUserProgress()) ?? createFreshUserProgress();
     userProgressRef.current = progress;

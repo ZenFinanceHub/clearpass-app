@@ -45,6 +45,8 @@ export function TabBarV2({ active, onPress }: { active: TabKey; onPress?: (key: 
             accessibilityRole="tab"
             accessibilityLabel={t.label}
             accessibilityState={{ selected: focused }}
+            // react-native-web ignores accessibilityState.selected; aria-selected reaches the DOM.
+            aria-selected={focused}
             onPress={() => onPress?.(t.key)}
             style={{ flex: 1, minHeight: 52, alignItems: 'center', justifyContent: 'center', gap: 2 }}
           >

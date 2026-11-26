@@ -49,6 +49,8 @@ export function SideNavV2({ active, onPress }: { active: TabKey; onPress?: (key:
               accessibilityRole="tab"
               accessibilityLabel={t.label}
               accessibilityState={{ selected: focused }}
+              // react-native-web ignores accessibilityState.selected; aria-selected reaches the DOM.
+              aria-selected={focused}
               onPress={() => onPress?.(t.key)}
               style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({
                 flexDirection: 'row', alignItems: 'center', gap: 12,

@@ -1,4 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { View as V2View } from 'react-native';
+import { uiV2 } from '@/src/uiFlags';
+import { ProgressLinksV2 } from '@/src/nav/HubScreens';
 import { useTrialDays } from '@/src/purchaseGate';
 import { loadSRState, SpacedRepetitionState } from '@/src/spacedRepetition';
 import { computeAndSavePassProbability, PassProbabilityResult } from '@/src/passProbability';
@@ -96,7 +99,7 @@ function getRank(score: number): { label: string; color: string } {
 
 const DISPLAY_ACHIEVEMENTS = ACHIEVEMENTS.filter((a) => !a.id.endsWith('_eligible'));
 
-export default function ProgressScreen() {
+function ProgressScreen() {
   const trialDays = useTrialDays();
   const [progress, setProgress] = useState<UserProgress | null>(null);
   const [srState,  setSrState]  = useState<SpacedRepetitionState | null>(null);
@@ -1185,3 +1188,15 @@ const styles = StyleSheet.create({
   proBannerSub: { fontSize: 12, color: '#6B7280' },
   proBannerArrow: { fontSize: 18, color: '#D97706', fontWeight: '700', marginLeft: 8 },
 });
+
+// ClearPass 2.0 (ui_v2): the Progress tab is this existing screen, with
+// links to Leaderboards and Challenge a friend above it. Flag off: unchanged.
+export default function ProgressRoute() {
+  if (!uiV2) return <ProgressScreen />;
+  return (
+    <V2View style={{ flex: 1 }}>
+      <ProgressLinksV2 />
+      <V2View style={{ flex: 1 }}><ProgressScreen /></V2View>
+    </V2View>
+  );
+}

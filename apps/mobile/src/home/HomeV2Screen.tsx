@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, RefreshControl, View } from 'react-native';
+import { Platform, RefreshControl, View, useWindowDimensions } from 'react-native';
+import { SIDE_NAV_BREAKPOINT } from '@/src/ui';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -68,6 +69,8 @@ export function HomeV2Screen() {
   const reminderOffer = useReminderOffer(!loading);
   const reviewTriggerRef = useRef<ReviewTrigger | null>(null);
   const insets = useSafeAreaInsets();
+  // The desktop sidebar (SideNavV2, wide layouts) already shows the app icon and wordmark.
+  const { width: windowWidth } = useWindowDimensions();
   const { colors } = useDesignTheme();
 
   const loadInitial = useCallback(async () => {
@@ -245,6 +248,7 @@ export function HomeV2Screen() {
         progress={progress}
         onNavigate={navigate}
         onSetTestDate={() => setDateModal(true)}
+        hideBrand={windowWidth >= SIDE_NAV_BREAKPOINT}
         onRetry={() => { void loadInitial().then(() => refreshDerived(false)); }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void handleRefresh(); }} tintColor={colors.brand.primary} />}
         qotdQuestion={qotdQuestion}
