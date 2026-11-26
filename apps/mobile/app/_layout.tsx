@@ -23,7 +23,7 @@ import { resolvePostAuthRoute } from '@/src/postAuthRouting';
 import { CrossPlatformAlertHost } from '@/src/CrossPlatformAlert';
 import { Colors } from '@/src/constants/theme';
 import { registerAppSession } from '@/src/reviewPrompt';
-import { devScreensEnabled } from '@/src/uiFlags';
+import { devScreensEnabled, uiV2 } from '@/src/uiFlags';
 import {
   getCacheStatus,
   cacheQuestions,
@@ -461,7 +461,9 @@ function RootLayout() {
               in-content bottom controls — e.g. Mock Test's Prev/Next row, or any
               other screen's bottom CTA — which a fixed bottom-right FAB would
               otherwise sit on top of and intercept taps for. */}
-          <PipFab defaultTop={insets.top + 56} />
+          {/* ClearPass 2.0 (ui_v2): the FAB is replaced by Ask Pip entries (Home quick
+              access, the Learn hub, Settings/Profile, nudges). Flag off: unchanged. */}
+          {!uiV2 && <PipFab defaultTop={insets.top + 56} />}
           <InstructorRouteGuardOverlay />
           <CrossPlatformAlertHost />
           {showCachingToast && (

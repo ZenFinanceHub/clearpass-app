@@ -1,4 +1,6 @@
 import React from 'react';
+import { uiV2 } from '@/src/uiFlags';
+import { LearnHubV2 } from '@/src/nav/HubScreens';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useNetwork } from '@/src/NetworkContext';
@@ -24,7 +26,7 @@ const CARDS: StudyCard[] = [
 
 const ONLINE_ONLY = new Set(['/aitutor']);
 
-export default function StudyScreen() {
+function StudyScreen() {
   const router = useRouter();
   const { isOffline } = useNetwork();
 
@@ -128,3 +130,9 @@ const styles = StyleSheet.create({
   cardDisabled: { opacity: 0.45 },
   textDisabled: { color: '#9CA3AF' },
 });
+
+// ClearPass 2.0 (ui_v2): /(tabs)/learn renders the Learn tab hub (mapping doc).
+// Flag off: the existing Study hub, unchanged.
+export default function LearnRoute() {
+  return uiV2 ? <LearnHubV2 /> : <StudyScreen />;
+}
