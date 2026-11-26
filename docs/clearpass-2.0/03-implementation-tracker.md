@@ -146,7 +146,7 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
 - **Release gate:** #119 has been revised (GitHub App, separate OS user, gate tests). The checklist is in `07-…`.
 
 Blockers:
-1. **Release control (G1)** isn't in place, so any merge deploys production. Every merge therefore waits for G1 or is treated as a release.
+1. **Release control (G1)**: Part A complete 2026-11-26 (all four platforms track `production`, at `d791923`; Railway Wait for CI on). Merges to `main` no longer deploy, but nothing merges until Part B (#109 + #119) is approved. Previously: any merge deployed production. Every merge therefore waits for G1 or is treated as a release.
 2. **#108** needs C1b (A12 plus turning the build override off) before it merges.
 3. **Required CI on `main`** needs #109 merged, then C7b.
 4. **Hosted review of M1** needs staging (G4). A local review is possible without it.
@@ -157,7 +157,7 @@ Blockers:
 **Model:** after G1 (`07-infrastructure-action-plan.md`), **merge ≠ deploy**, and every release needs your approval click in GitHub (the Release workflow, #119).
 - Merges land on `main` with PR plus CI.
 - A **release** fast-forwards `production` to an approved `main` commit. That deploys Vercel (3 projects) and Railway together, and needs your approval each time.
-- **Until G1 is done, every merge is a production deployment** on Railway (no CI gate) and all three Vercel projects. Don't merge anything before G1.
+- **Since G1 Part A (2026-11-26) merges to `main` no longer deploy**: Vercel ×3 and Railway build from `production` only. `production` is protected (rulesets) and moves only via the Release workflow once Part B is set up.
 
 **Verified so far:**
 - Server: #111/#113/#107/#108/#109/#112 merged together pass 371/371.
