@@ -237,8 +237,8 @@ The server reads 18 variable names; your R1 summary mentioned 7 of them. The oth
 | 1 | You | Give the go-ahead for Part A | Message |
 | 2 | Claude | ✅ 2026-11-26 10:48 UTC: preflight passed; `production` created at `d791923`; no deployments triggered | — |
 | 3 | You | ✅ 2026-11-26: rulesets created. Verified via API: main (PR, 0 approvals, Code Owner review, last-push approval, stale dismissal; admin bypass for PRs only) and production + release-gate-test (update, deletion and force-push restricted; admin bypass always). GitHub's default Copilot-PR approval setting was left on | **Prompt 1** |
-| 4 | You | Vercel production branch → `production` (3 projects) | **Prompt 2** |
-| 5 | Claude | Check the deployment records | — |
+| 4 | You | ✅ 2026-11-26: all 3 Vercel projects now track `production`; still serving `d791923` (Ready); redeploy prompts dismissed | **Prompt 2** |
+| 5 | Claude | ✅ Verified: latest production records are still `d791923`/success on all four platforms; no production deployments since the branch was created; all three sites return 200. Note: clearpass-web keeps building **Preview** deployments of PR branches (static marketing site, no backend; it was deliberately left out of A0). Harmless | — |
 | 6 | You | Railway branch → `production`, Wait for CI on (quiet time) | **Prompt 3** |
 | 7 | Claude | Check the deployment records; smoke test | — |
 
