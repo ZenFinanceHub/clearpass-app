@@ -74,6 +74,13 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
   - Vercel production needs the two non-secret variables first (A12, Chrome prompt C1b).
   - In a release bundle the app itself keeps its pinned-production fallback, deliberately: crashing every user is worse than a degraded update.
   - Tests: scripts 20 + 39 pass; instructor-web guard 7 pass.
+- **F3 → PR #112** (schema-only; `schema.sql` only).
+  - **Drift found:** 32 differences, including the missing `update_aggregate_stats` and `account_class`, the reshaped `hazard_clips` and `instructor_relationships`, and missing indexes, views and buckets.
+  - **The repo was wrong in places:**
+    - A replayed database rejected consent withdrawal.
+    - It gave anonymous users read access to hazard clips, which production doesn't.
+  - **Verification:** a fresh replay of `schema.sql` plus 8 migrations ran with 0 errors, and a re-diff against production shows 0 differences. No rows were exported, and the raw dump was deleted.
+  - **Follow-up on #108:** once #112 merges, `seed-local.js` and the docs need updating (they say `account_class` doesn't exist), and the bucket setup in `local-setup.sql` becomes redundant.
 - **Phase 1/2 started on local synthetic data:** P1-1 tokens/fonts/theme/`ui_v2` flag, the P1-2 subset Home needs, and the P2-1 Home with a fixture-driven preview route (M0.5). Branches start from `origin/main`; nothing depends on staging.
 
 ## Consolidated PR plan
