@@ -47,7 +47,7 @@ import {
 import { buildTodaySummary } from '../studyplan';
 import { loadSRState, getDueQuestions } from '@/src/spacedRepetition';
 import { computeAndSavePassProbability, PassProbabilityResult } from '@/src/passProbability';
-import { generateNudges, saveNudges, loadNudges, dismissNudge, TutorNudge, NudgeType } from '@/src/tutorNudges';
+import { dismissNudge, refreshNudges, TutorNudge, NudgeType } from '@/src/tutorNudges';
 import { checkAndTriggerCelebrations, CelebrationEvent } from '@/src/celebrations';
 import { hasStreakMilestone, maybeRequestReview, ReviewTrigger } from '@/src/reviewPrompt';
 import { checkStreakToast } from '@/src/streakToasts';
@@ -63,6 +63,10 @@ import { supabase } from '@/src/supabase';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 import { useNetwork } from '@/src/NetworkContext';
+import { uiV2 } from '@/src/uiFlags';
+import { HomeV2Screen } from '@/src/home/HomeV2Screen';
+import { SCHEDULED_TESTS_KEY, futureScheduledMocks, type ScheduledMockTest } from '@/src/scheduledMocks';
+import { QOTD_XP, qotdDateKey, qotdIndex, qotdStorageKey } from '@/src/qotd';
 
 // ─── NudgesSection ────────────────────────────────────────────────────────────
 
@@ -167,30 +171,6 @@ function NudgesSection({
 
 // ─── Scheduled Mock Test helpers ─────────────────────────────────────────────
 
-type ScheduledMockTest = {
-  id: string;
-  dateTimeIso: string;
-  label: string;
-  notifId: string | null;
-};
-
-const SCHEDULED_TESTS_KEY = '@clearpass/scheduled_mock_tests';
-
-function formatTestDateTime(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-  const isToday = d.toDateString() === now.toDateString();
-  const isTomorrow = d.toDateString() === tomorrow.toDateString();
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const time = `${hh}:${mm}`;
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  if (isToday) return `Today at ${time}`;
-  if (isTomorrow) return `Tomorrow at ${time}`;
-  return `${d.getDate()} ${months[d.getMonth()]} at ${time}`;
-}
-
 const DAILY_TIPS = [
   "Stopping distance at 70mph is 96 metres - that's 24 car lengths!",
   'Over 50% of learners fail their theory test first time. Practice daily to beat the odds.',
@@ -218,7 +198,7 @@ function getDaysRemaining(testDateIso: string): number {
 
 // ─── HomeScreen ───────────────────────────────────────────────────────────────
 
-export default function HomeScreen() {
+function HomeScreen() {
   const [progress, setProgress]       = useState<UserProgress | null>(null);
   const trialDays = useTrialDays();
   const [isLoading, setIsLoading]     = useState(true);
@@ -269,16 +249,7 @@ export default function HomeScreen() {
         setHomeDueCount(dueIds.length);
         const prob = await computeAndSavePassProbability(fresh, srState, allQuestions);
         setPassProb(prob);
-        const generated = generateNudges(fresh, srState, allQuestions);
-        const existing = await loadNudges();
-        const dismissedIds = new Set(
-          (existing?.nudges ?? []).filter(n => n.dismissed).map(n => n.id),
-        );
-        const withDismissals = generated.map(n =>
-          dismissedIds.has(n.id) ? { ...n, dismissed: true } : n,
-        );
-        await saveNudges(withDismissals);
-        setNudges(withDismissals.filter(n => !n.dismissed));
+        setNudges(await refreshNudges(fresh, srState, allQuestions));
       }
       const plan = await loadStudyPlan();
       setAiStudyPlan(plan);
@@ -312,7 +283,7 @@ export default function HomeScreen() {
       try {
         const storedRaw = await AsyncStorage.getItem(SCHEDULED_TESTS_KEY);
         const stored: ScheduledMockTest[] = storedRaw ? (JSON.parse(storedRaw) as ScheduledMockTest[]) : [];
-        const future = stored.filter(t => new Date(t.dateTimeIso) > new Date());
+        const future = futureScheduledMocks(stored);
         setScheduledTests(future);
         if (future.length !== stored.length) {
           await AsyncStorage.setItem(SCHEDULED_TESTS_KEY, JSON.stringify(future));
@@ -372,16 +343,7 @@ export default function HomeScreen() {
           if (freshProg) {
             const prob = await computeAndSavePassProbability(freshProg, srState, allQuestions);
             setPassProb(prob);
-            const generated = generateNudges(freshProg, srState, allQuestions);
-            const existing = await loadNudges();
-            const dismissedIds = new Set(
-              (existing?.nudges ?? []).filter(n => n.dismissed).map(n => n.id),
-            );
-            const withDismissals = generated.map(n =>
-              dismissedIds.has(n.id) ? { ...n, dismissed: true } : n,
-            );
-            await saveNudges(withDismissals);
-            setNudges(withDismissals.filter(n => !n.dismissed));
+            setNudges(await refreshNudges(freshProg, srState, allQuestions));
           }
         } catch {}
 
@@ -438,8 +400,7 @@ export default function HomeScreen() {
         }
 
         // QotD: check if already answered today
-        const todayStr = new Date().toISOString().split('T')[0];
-        const qotdRaw = await AsyncStorage.getItem(`@clearpass/qotd_${todayStr}`);
+        const qotdRaw = await AsyncStorage.getItem(qotdStorageKey(qotdDateKey(new Date())));
         if (qotdRaw !== null) {
           setQotdDoneToday(true);
           setQotdSelected(parseInt(qotdRaw, 10));
@@ -577,10 +538,7 @@ export default function HomeScreen() {
   }
 
   // Question of the Day — deterministic daily pick
-  const _qotdToday = new Date().toISOString().split('T')[0]!;
-  const _qotdParts = _qotdToday.split('-').map(Number);
-  const _qotdSeed  = _qotdParts[0]! * 10000 + _qotdParts[1]! * 100 + _qotdParts[2]!;
-  const qotdQuestion = allQuestions[_qotdSeed % allQuestions.length]!;
+  const qotdQuestion = allQuestions[qotdIndex(qotdDateKey(new Date()), allQuestions.length)]!;
 
   const prob = passProb ? passProb.probability : readinessPct;
   let pipMood: PipMood = 'wave';
@@ -610,13 +568,12 @@ export default function HomeScreen() {
     if (qotdSelected !== null) return;
     setQotdSelected(optionIndex);
     setQotdExpanded(true);
-    const todayStr = new Date().toISOString().split('T')[0]!;
-    await AsyncStorage.setItem(`@clearpass/qotd_${todayStr}`, String(optionIndex));
+    await AsyncStorage.setItem(qotdStorageKey(qotdDateKey(new Date())), String(optionIndex));
     if (!qotdDoneToday) {
       setQotdDoneToday(true);
       const base = progress;
       if (base) {
-        const updated = awardXp(base, 10);
+        const updated = awardXp(base, QOTD_XP);
         setProgress(updated);
         await saveUserProgress(updated);
       }
@@ -1723,3 +1680,7 @@ const styles = StyleSheet.create({
   testDaySub:       { fontSize: 12, color: 'rgba(255,255,255,0.82)', marginTop: 2 },
   testDayChevron:   { fontSize: 26, color: '#FFFFFF', fontWeight: '700', lineHeight: 30 },
 });
+
+// ClearPass 2.0: the Daily Coach Home replaces this screen only when the
+// build-time ui_v2 flag is on (local/staging). Off = HomeScreen, unchanged.
+export default uiV2 ? HomeV2Screen : HomeScreen;

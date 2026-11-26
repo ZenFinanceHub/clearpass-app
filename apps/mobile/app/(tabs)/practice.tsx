@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { uiV2 } from '@/src/uiFlags';
 import {
   Achievement,
   applyCorrectAnswerToChallenge,
@@ -154,7 +155,12 @@ type BattleDisplay = {
 };
 
 export default function PracticeScreen() {
-  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  const { mode, topic, t: topicNonce } = useLocalSearchParams<{ mode?: string; topic?: string; t?: string }>();
+  // ClearPass 2.0 (ui_v2 only): Home's "Practise <topic>" opens a session on
+  // that topic directly (?topic=<TopicCategory>&t=<nonce>). With the flag off
+  // the param is ignored, so behaviour is unchanged.
+  const topicFilter: TopicCategory | null =
+    uiV2 && topic && (Object.values(TopicCategory) as string[]).includes(topic) ? (topic as TopicCategory) : null;
 
   const [phase, setPhase] = useState<Phase>('start');
   const reminderOffer = useReminderOffer(phase === 'dailyLimit');
@@ -343,6 +349,8 @@ export default function PracticeScreen() {
       if (sessionQuestions.length === 0) {
         sessionQuestions = await selectPracticeQuestions(allQuestions, SESSION_SIZE);
       }
+    } else if (topicFilter) {
+      sessionQuestions = await selectPracticeQuestions(allQuestions.filter((q) => q.topicCategory === topicFilter), SESSION_SIZE);
     } else {
       sessionQuestions = await selectPracticeQuestions(allQuestions, SESSION_SIZE);
     }
@@ -362,6 +370,22 @@ export default function PracticeScreen() {
     setQuestions(sessionQuestions);
     setPhase(sessionQuestions.length > 0 ? 'quiz' : 'results');
   }
+
+  // ui_v2: auto-start a topic session once per Home tap (keyed on the nonce),
+  // only from the start/results screens so an in-progress quiz is never discarded.
+  const topicAutoStartRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!topicFilter) return;
+    const key = `${topicFilter}:${topicNonce ?? ''}`;
+    if (topicAutoStartRef.current === key) return;
+    if (phase !== 'start' && phase !== 'results') return;
+    topicAutoStartRef.current = key;
+    setPhase('loading');
+    void startSession(); // captures this render's topicFilter
+    // Clear the params so a later plain "Start" isn't silently topic-filtered.
+    router.setParams({ topic: undefined, t: undefined } as never);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topicFilter, topicNonce, phase]);
 
   async function startBattle() {
     const progress = (await loadUserProgress()) ?? createFreshUserProgress();

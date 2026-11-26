@@ -299,3 +299,25 @@ export async function getActiveNudges(): Promise<TutorNudge[]> {
   if (ageMs > 24 * 60 * 60 * 1000) return [];
   return stored.nudges.filter(n => !n.dismissed);
 }
+
+/**
+ * Regenerate today's nudges, carry over earlier dismissals, save them, and
+ * return the ones still showing (generator order = priority). This is the
+ * exact sequence the current Home ran inline; both Homes now share it.
+ */
+export async function refreshNudges(
+  progress: UserProgress,
+  srState: SpacedRepetitionState,
+  allQuestions: Question[],
+): Promise<TutorNudge[]> {
+  const generated = generateNudges(progress, srState, allQuestions);
+  const existing = await loadNudges();
+  const dismissedIds = new Set(
+    (existing?.nudges ?? []).filter(n => n.dismissed).map(n => n.id),
+  );
+  const withDismissals = generated.map(n =>
+    dismissedIds.has(n.id) ? { ...n, dismissed: true } : n,
+  );
+  await saveNudges(withDismissals);
+  return withDismissals.filter(n => !n.dismissed);
+}

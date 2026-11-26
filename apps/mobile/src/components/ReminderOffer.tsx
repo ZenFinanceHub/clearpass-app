@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, StyleSheet, Text, TouchableOpacity, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Colors } from '@/src/constants/theme';
 import { logFunnelEvent } from '@/src/funnel';
 import {
@@ -66,9 +66,8 @@ export function useReminderOffer(active = true): { visible: boolean; hide: () =>
   return { visible, hide: () => setVisible(false) };
 }
 
-export function ReminderOffer({ context, onDone }: { context: Context; onDone: () => void }) {
-  const [state, setState] = React.useState<'ask' | 'busy' | 'on' | 'blocked'>('ask');
-  const copy = COPY[context];
+export function ReminderOffer({ context, onDone, style }: { context: Context; onDone: () => void; style?: StyleProp<ViewStyle> }) {
+  const [state, setState] = React.useState<ReminderOfferState>('ask');
 
   React.useEffect(() => {
     logFunnelEvent('reminder_offer_viewed', { context });
@@ -94,9 +93,20 @@ export function ReminderOffer({ context, onDone }: { context: Context; onDone: (
     onDone();
   }
 
+  return <ReminderOfferView context={context} state={state} onYes={() => void handleYes()} onNo={handleNo} onDone={onDone} style={style} />;
+}
+
+export type ReminderOfferState = 'ask' | 'busy' | 'on' | 'blocked';
+
+/** The offer's UI with no side effects (no storage, permission or funnel
+ *  calls), so a fixture preview can render it. `ReminderOffer` wires it up. */
+export function ReminderOfferView({ context, state, onYes, onNo, onDone, style }: {
+  context: Context; state: ReminderOfferState; onYes: () => void; onNo: () => void; onDone: () => void; style?: StyleProp<ViewStyle>;
+}) {
+  const copy = COPY[context];
   if (state === 'on') {
     return (
-      <View style={styles.card}>
+      <View style={[styles.card, style]}>
         <Text style={styles.title}>{'Reminders on ✅'}</Text>
         <Text style={styles.body}>{'We’ll nudge you at 7pm. Change or turn it off any time in Settings.'}</Text>
       </View>
@@ -105,7 +115,7 @@ export function ReminderOffer({ context, onDone }: { context: Context; onDone: (
 
   if (state === 'blocked') {
     return (
-      <View style={styles.card}>
+      <View style={[styles.card, style]}>
         <Text style={styles.title}>{'Notifications are off'}</Text>
         <Text style={styles.body}>{'To get reminders, allow notifications for ClearPass in your phone’s settings.'}</Text>
         <TouchableOpacity style={styles.noBtn} onPress={onDone} activeOpacity={0.7}>
@@ -116,14 +126,14 @@ export function ReminderOffer({ context, onDone }: { context: Context; onDone: (
   }
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, style]}>
       <Text style={styles.title}>{'🔔 '}{copy.title}</Text>
       <Text style={styles.body}>{copy.body}</Text>
       <View style={styles.row}>
-        <TouchableOpacity style={styles.noBtn} onPress={handleNo} activeOpacity={0.7} disabled={state === 'busy'}>
+        <TouchableOpacity style={styles.noBtn} onPress={onNo} activeOpacity={0.7} disabled={state === 'busy'}>
           <Text style={styles.noText}>{'Not now'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.yesBtn} onPress={() => void handleYes()} activeOpacity={0.85} disabled={state === 'busy'}>
+        <TouchableOpacity style={styles.yesBtn} onPress={onYes} activeOpacity={0.85} disabled={state === 'busy'}>
           <Text style={styles.yesText}>{state === 'busy' ? '…' : 'Yes, remind me'}</Text>
         </TouchableOpacity>
       </View>
