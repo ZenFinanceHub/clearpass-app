@@ -5,5 +5,6 @@ export { Badge, type BadgeTone } from './Badge';
 export { ProgressBar } from './ProgressBar';
 export { Icon, type IconName } from './Icon';
 export { ScreenHeader } from './ScreenHeader';
+export { ListRow, type ListRowProps } from './ListRow';
 export { TabBarV2, V2_TABS, type TabKey } from './TabBarV2';
 export { SideNavV2, SIDE_NAV_WIDTH, SIDE_NAV_BREAKPOINT } from './SideNavV2';

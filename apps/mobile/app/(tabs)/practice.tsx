@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { uiV2 } from '@/src/uiFlags';
+import { AskPipAboutThis } from '@/src/nav/AskPipAboutThis';
 import {
   Achievement,
   applyCorrectAnswerToChallenge,
@@ -1649,9 +1650,9 @@ function ResultsScreen({
 
       <Text style={styles.sectionLabel}>Question Breakdown</Text>
       <View style={styles.breakdownList}>
-        {results.map(({ question, correct: isCorrect }, i) => (
+        {results.map(({ question, correct: isCorrect, selectedIndex }, i) => (
+          <React.Fragment key={question.id}>
           <View
-            key={question.id}
             style={[
               styles.breakdownRow,
               isCorrect ? styles.breakdownRowCorrect : styles.breakdownRowWrong,
@@ -1664,6 +1665,11 @@ function ResultsScreen({
               {i + 1}.{'  '}{question.questionText}
             </Text>
           </View>
+          {/* ClearPass 2.0: per incorrect question, open the existing tutor with it prefilled. */}
+          {uiV2 && !isCorrect && (
+            <AskPipAboutThis question={question} selectedIndex={selectedIndex} from="/(tabs)/practice" testID={`ask-pip-about-${question.id}`} />
+          )}
+          </React.Fragment>
         ))}
       </View>
 

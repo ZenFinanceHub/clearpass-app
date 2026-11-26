@@ -205,3 +205,50 @@ export function resolveRouteFile(path: string, files: ReadonlySet<string>): stri
   for (const c of candidates) if (files.has(c)) return c;
   return null;
 }
+
+// ─── Deep-link verification (M1) ─────────────────────────────────────────────
+
+/** The old (flag-off) tab bar's five visible tabs, named by their route file. */
+export type LegacyTab = 'home' | 'practice' | 'mock' | 'hazard' | 'settings';
+
+/**
+ * Which old tab lights up for each (tabs) route with ui_v2 OFF
+ * (app/(tabs)/_layout.tsx TABS). Hidden tabs light none (null).
+ */
+export const LEGACY_ROUTE_TAB: Record<string, LegacyTab | null> = {
+  home: 'home',
+  practice: 'practice',
+  mock: 'mock',
+  hazard: 'hazard',
+  settings: 'settings',
+  learn: null,
+  tutor: null,
+  highwaycode: null,
+  roadsigns: null,
+  progress: null,
+  leaderboard: null,
+  tests: null,
+};
+
+export interface RouteLanding {
+  /** The app/ route file that renders. */
+  file: string;
+  /** Highlighted tab: a V2Tab with ui_v2 on, a LegacyTab with it off; null outside the tab bar. */
+  tab: V2Tab | LegacyTab | null;
+  /** Set when the route redirects (flag-off /(tabs)/tests -> /home). */
+  redirectTo: string | null;
+}
+
+/**
+ * Where a URL lands, given the route files and the flag. The unit test runs
+ * every MAPPED_ROUTE through this both ways; the e2e deep-link spec checks
+ * the real web export agrees.
+ */
+export function routeLanding(path: string, files: ReadonlySet<string>, uiV2: boolean): RouteLanding | null {
+  const file = resolveRouteFile(path, files);
+  if (!file) return null;
+  if (!file.startsWith('(tabs)/')) return { file, tab: null, redirectTo: null };
+  const name = file.slice('(tabs)/'.length);
+  if (!uiV2 && name === 'tests') return { file: '(tabs)/home', tab: 'home', redirectTo: '/home' };
+  return { file, tab: uiV2 ? tabForRoute(name) : (LEGACY_ROUTE_TAB[name] ?? null), redirectTo: null };
+}

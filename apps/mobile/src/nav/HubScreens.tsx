@@ -7,7 +7,12 @@ import { useNetwork } from '@/src/NetworkContext';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { useDesignTheme } from '@/src/design';
 import { contentMaxWidth, minTouchTarget } from '@/src/design/tokens';
-import { Badge, Card, Icon, Text, type IconName } from '@/src/ui';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Badge, Card, Icon, ListRow, Text, type IconName } from '@/src/ui';
+import {
+  SCHEDULED_MOCKS_EMPTY, SCHEDULED_TESTS_KEY, parseScheduledMocks, scheduledMockList, testDateRow,
+  type ScheduledMockListRow,
+} from '@/src/scheduledMocks';
 import { LEARN_HUB, PROGRESS_LINKS, TESTS_HUB, withTapNonce, type HubEntry } from './routeMap';
 import { TOPIC_PICKER_PARAM, topicRevisionList, type TopicRevisionItem } from './topicRevision';
 
@@ -187,6 +192,17 @@ function formatDay(iso: string): string {
 export function TestsHubV2() {
   const { colors } = useDesignTheme();
   const [recent, setRecent] = useState<RecentResult[] | null>(null);
+  const [scheduled, setScheduled] = useState<ScheduledMockListRow[] | null>(null);
+  const [testDate, setTestDate] = useState<ReturnType<typeof testDateRow>>(null);
+  useFocusEffect(useCallback(() => {
+    // Read-only: the scheduled mocks Home already stores on the device, and the test date.
+    void AsyncStorage.getItem(SCHEDULED_TESTS_KEY)
+      .then((raw) => setScheduled(scheduledMockList(parseScheduledMocks(raw))))
+      .catch(() => setScheduled([]));
+    void loadUserProgress()
+      .then((p) => setTestDate(testDateRow(p?.testDate ?? null)))
+      .catch(() => setTestDate(null));
+  }, []));
   useFocusEffect(useCallback(() => {
     // Read-only view of the existing local history. No new data.
     void loadUserProgress().then((p) => {
@@ -210,6 +226,33 @@ export function TestsHubV2() {
           <HubRow key={e.id} entry={e} disabledNote={isWeb && e.nativeOnly ? 'Available in the iOS and Android app' : null} />
         ))}
       </HubGrid>
+      <SectionTitle>{'Scheduled mocks'}</SectionTitle>
+      <Card padding={8} testID="scheduled-mocks">
+        {scheduled === null ? (
+          <Text variant="bodySmall" color="secondary" style={{ padding: 8 }}>{'Loading…'}</Text>
+        ) : scheduled.length === 0 ? (
+          <Text variant="bodySmall" color="secondary" style={{ padding: 8 }} testID="scheduled-mocks-empty">{SCHEDULED_MOCKS_EMPTY}</Text>
+        ) : scheduled.map((m) => (
+          <ListRow
+            key={m.id}
+            icon="alarm-outline"
+            title={m.label}
+            subtitle={m.when}
+            onPress={() => go(m.route)}
+            accessibilityLabel={`Scheduled: ${m.label}, ${m.when}. Open mock tests`}
+            testID={`scheduled-mock-${m.id}`}
+          />
+        ))}
+        {testDate ? (
+          <ListRow
+            icon="flag-outline"
+            title={testDate.label}
+            subtitle={testDate.daysLeft === 0 ? 'Today' : `${testDate.daysLeft} day${testDate.daysLeft === 1 ? '' : 's'} to go`}
+            value={testDate.when}
+            testID="scheduled-test-date"
+          />
+        ) : null}
+      </Card>
       <SectionTitle>{'Your recent results'}</SectionTitle>
       <Card padding={14} testID="recent-results">
         {recent === null ? (

@@ -15,6 +15,8 @@ import { router, useFocusEffect } from 'expo-router';
 import { useNavigation, useRoute, usePreventRemove } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { mockTestExitGuard } from '@/src/mockTestExitGuard';
+import { uiV2 } from '@/src/uiFlags';
+import { AskPipAboutThis } from '@/src/nav/AskPipAboutThis';
 import { usePipVisibility } from '@/src/PipVisibilityContext';
 import {
   Achievement,
@@ -1049,6 +1051,17 @@ function ReviewView({
                 </View>
               </TouchableOpacity>
 
+              {/* ClearPass 2.0: per incorrect question, open the existing tutor with it prefilled. */}
+              {uiV2 && !isCorrect && (
+                <AskPipAboutThis
+                  question={q}
+                  selectedIndex={userAnswer}
+                  from="/(tabs)/mock"
+                  onBeforeNavigate={onLeaveForTutor}
+                  testID={`ask-pip-about-${q.id}`}
+                />
+              )}
+
               {isExpanded && (
                 <View style={styles.reviewExpanded}>
                   <Text style={[styles.reviewFullQ, { fontSize: theme.fontSize(14), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(21), color: theme.textColor }]}>
@@ -1085,6 +1098,8 @@ function ReviewView({
                       {q.explanation}
                     </Text>
                   </View>
+                  {/* ui_v2 shows "Ask Pip about this" above for incorrect rows instead. */}
+                  {!(uiV2 && !isCorrect) && (
                   <TouchableOpacity
                     style={styles.tutorBtn}
                     onPress={() => {
@@ -1104,6 +1119,7 @@ function ReviewView({
                   >
                     <Text style={styles.tutorBtnText}>{'Ask Pip 🦔'}</Text>
                   </TouchableOpacity>
+                  )}
                 </View>
               )}
             </View>

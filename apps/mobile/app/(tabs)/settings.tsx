@@ -23,6 +23,7 @@ import { useAccessibility } from '@/src/AccessibilityContext';
 import type { AccessibilitySettings } from '@/src/AccessibilityContext';
 import { useTheme } from '@/src/theme';
 import { uiV2 } from '@/src/uiFlags';
+import { SubscriptionCardV2 } from '@/src/profile/SubscriptionCardV2';
 import { useReduceMotion } from '@/src/design/ThemeProvider';
 import { REDUCED_MOTION_SETTING } from '@/src/design/motion';
 import { Colors } from '@/src/constants/theme';
@@ -622,6 +623,7 @@ export default function SettingsScreen() {
       </Text>
 
       {/* Subscription status — always at the top of account */}
+      {uiV2 ? <SubscriptionCardV2 /> : (
       <TouchableOpacity
         style={[styles.subscriptionCard, { backgroundColor: isPro ? Colors.indigo : theme.cardColor, borderColor: isPro ? Colors.indigo : Colors.border }]}
         onPress={() => router.push('/paywall')}
@@ -641,6 +643,7 @@ export default function SettingsScreen() {
           <Text style={styles.subscriptionBtnText}>{isPro ? 'Manage' : 'Upgrade'}</Text>
         </View>
       </TouchableOpacity>
+      )}
 
       {/* ── Streak Freeze (Pro only) ────────────────────────────────────────── */}
       {isPro && (

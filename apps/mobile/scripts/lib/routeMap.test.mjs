@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import {
   V2_TAB_ORDER, TAB_ROUTE, ROUTE_TAB, V2_HEADER_TITLE, tabForRoute, withTapNonce,
   LEARN_HUB, TESTS_HUB, PROGRESS_LINKS, MAPPED_ROUTES, resolveRouteFile, DOC_PATHS_NOT_APP_ROUTES,
+  LEGACY_ROUTE_TAB, routeLanding, TOPIC_PICKER_ROUTE,
 } from '../../src/nav/routeMap.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -111,6 +112,64 @@ test('tap nonce only for per-tap launch routes', () => {
   assert.equal(withTapNonce('/(tabs)/practice?topic=Alertness', 5), '/(tabs)/practice?topic=Alertness&t=5');
   assert.equal(withTapNonce('/(tabs)/practice?mode=bookmarked', 5), '/(tabs)/practice?mode=bookmarked');
   assert.equal(withTapNonce('/challenge', 5), '/challenge');
+});
+
+// ─── Deep-link verification (M1): every mapped route lands on the right tab and screen ───
+
+test('flag off: legacy tab highlight is the five old tabs; hidden screens light none', () => {
+  assert.deepEqual(
+    Object.entries(LEGACY_ROUTE_TAB).filter(([, t]) => t).map(([r]) => r).sort(),
+    ['hazard', 'home', 'mock', 'practice', 'settings'],
+  );
+  // Same set of (tabs) files as the v2 map: nothing is left undeclared.
+  assert.deepEqual(Object.keys(LEGACY_ROUTE_TAB).sort(), Object.keys(ROUTE_TAB).sort());
+  for (const name of ['learn', 'tutor', 'highwaycode', 'roadsigns', 'progress', 'leaderboard', 'tests']) {
+    assert.equal(LEGACY_ROUTE_TAB[name], null, name);
+  }
+});
+
+test('every mapped route lands on its screen and tab, with ui_v2 on and off', () => {
+  for (const r of MAPPED_ROUTES) {
+    for (const flag of [true, false]) {
+      const landing = routeLanding(r.path, FILES, flag);
+      assert.ok(landing, `${r.path} (uiV2=${flag}) resolves`);
+      assert.ok(FILES.has(landing.file), `${r.path} -> ${landing.file}`);
+      if (flag) assert.equal(landing.tab, r.tab, `${r.path} v2 tab`);
+    }
+  }
+});
+
+test('route landings: explicit cases', () => {
+  const on = (p) => routeLanding(p, FILES, true);
+  const off = (p) => routeLanding(p, FILES, false);
+  assert.deepEqual(on('/(tabs)/practice?mode=bookmarked'), { file: '(tabs)/practice', tab: 'learn', redirectTo: null });
+  assert.deepEqual(off('/(tabs)/practice?mode=bookmarked'), { file: '(tabs)/practice', tab: 'practice', redirectTo: null });
+  assert.deepEqual(on('/(tabs)/settings'), { file: '(tabs)/settings', tab: 'profile', redirectTo: null });
+  assert.deepEqual(off('/(tabs)/settings'), { file: '(tabs)/settings', tab: 'settings', redirectTo: null });
+  // The Tests hub exists only under ui_v2; flag off it redirects to Home.
+  assert.deepEqual(on('/(tabs)/tests'), { file: '(tabs)/tests', tab: 'tests', redirectTo: null });
+  assert.deepEqual(off('/(tabs)/tests'), { file: '(tabs)/home', tab: 'home', redirectTo: '/home' });
+  // Hidden tabs (flag off) light no tab; under v2 they light their hub's tab.
+  assert.equal(off('/(tabs)/tutor').tab, null);
+  assert.equal(on('/(tabs)/tutor').tab, 'learn');
+  // Top-level aliases are stack screens (no tab bar) either way.
+  assert.deepEqual(on('/aitutor'), { file: 'aitutor', tab: null, redirectTo: null });
+  assert.deepEqual(off('/hazard'), { file: 'hazard', tab: null, redirectTo: null });
+  assert.equal(on('/nope'), null);
+});
+
+test('the topic-picker link and every hub entry land on the tab that owns them', () => {
+  assert.deepEqual(routeLanding(TOPIC_PICKER_ROUTE, FILES, true), { file: '(tabs)/learn', tab: 'learn', redirectTo: null });
+  for (const e of LEARN_HUB) {
+    const l = routeLanding(e.route, FILES, true);
+    assert.ok(l, e.id);
+    assert.ok(l.tab === 'learn' || l.tab === null, `${e.id} -> ${l.tab}`);
+  }
+  for (const e of TESTS_HUB) assert.equal(routeLanding(e.route, FILES, true).tab, 'tests', e.id);
+  for (const e of PROGRESS_LINKS) {
+    const l = routeLanding(e.route, FILES, true);
+    assert.ok(l.tab === 'progress' || l.tab === null, e.id);
+  }
 });
 
 test('mapping doc coverage (when MAPPING_DOC is set)', { skip: !process.env.MAPPING_DOC }, () => {

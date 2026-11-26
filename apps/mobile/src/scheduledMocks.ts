@@ -33,3 +33,48 @@ export function formatTestDateTime(iso: string, now: Date = new Date()): string 
   if (isTomorrow) return `Tomorrow at ${time}`;
   return `${d.getDate()} ${months[d.getMonth()]} at ${time}`;
 }
+
+// ─── Tests hub: the full scheduled-mock list (ClearPass 2.0, ui_v2) ─────────
+
+export const SCHEDULED_MOCKS_EMPTY = 'No mock tests scheduled. When you book a time for a mock, it will show here.';
+const DEFAULT_LABEL = 'Mock Test';
+
+export interface ScheduledMockListRow { id: string; label: string; when: string; route: '/(tabs)/mock' }
+
+/** Stored list from SCHEDULED_TESTS_KEY; anything unreadable counts as empty. */
+export function parseScheduledMocks(raw: string | null | undefined): ScheduledMockTest[] {
+  if (!raw) return [];
+  try {
+    const v: unknown = JSON.parse(raw);
+    if (!Array.isArray(v)) return [];
+    return v.filter((t): t is ScheduledMockTest =>
+      !!t && typeof t === 'object'
+      && typeof (t as ScheduledMockTest).id === 'string'
+      && typeof (t as ScheduledMockTest).dateTimeIso === 'string');
+  } catch {
+    return [];
+  }
+}
+
+/** Every upcoming scheduled mock, soonest first (Home shows only the next one). */
+export function scheduledMockList(list: ReadonlyArray<ScheduledMockTest>, now: Date = new Date()): ScheduledMockListRow[] {
+  const valid = list.filter((t) => !Number.isNaN(new Date(t.dateTimeIso).getTime()));
+  return futureScheduledMocks(valid, now)
+    .sort((a, b) => new Date(a.dateTimeIso).getTime() - new Date(b.dateTimeIso).getTime())
+    .map((t) => ({ id: t.id, label: t.label || DEFAULT_LABEL, when: formatTestDateTime(t.dateTimeIso, now), route: '/(tabs)/mock' as const }));
+}
+
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** The learner's theory test date (progress.testDate) while it's today or later, else null. */
+export function testDateRow(
+  testDateIso: string | null | undefined, now: Date = new Date(),
+): { label: string; when: string; daysLeft: number } | null {
+  if (!testDateIso) return null;
+  const d = new Date(testDateIso);
+  if (Number.isNaN(d.getTime())) return null;
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const daysLeft = Math.round((day(d) - day(now)) / 86_400_000);
+  if (daysLeft < 0) return null;
+  return { label: 'Your theory test', when: `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`, daysLeft };
+}
