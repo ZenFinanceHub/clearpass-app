@@ -15,7 +15,7 @@ Last updated 2026-11-26 (rev 6: C1 and A14 results, reconciliation, Vercel secre
 | A6 | Confirm the analytics privacy stance (events carry no content or PII; platform plus anonymous install id only) and whether the privacy policy needs a line about product analytics | P0-3 merge | Before P0-3 merges | ⬜ |
 | A7 | (Optional) Supply higher-resolution original Pip files if they exist. Otherwise Pip is used at existing sizes, up to ~240px @3x | P2-1 hero sizes | No | ⬜ |
 | A8 | Device and accessibility test time in Phase 7 (iOS and Android devices; VoiceOver and TalkBack) | P7 | Phase 7 | ⬜ |
-| A9 | Review batches: one per phase, plus M0.5 and M1 | All | — | ✅ **M0.5 reviewed (direction approved 2026-11-26).** ⬜ **M0.6 refinement review** next: before/after and viewport screenshots |
+| A9 | Review batches: one per phase, plus M0.5 and M1 | All | — | ✅ **M0.5 reviewed (direction approved 2026-11-26).** ⬜ **M0.6 ready for review** (gallery v2 and ZIP v2) |
 | A10 | Approve **production release** of the P0-2 bug fixes (OTA and web) once reviewed | P0-2 release | — | ⬜ |
 | A12 | ⬜ **Outstanding** (C1: neither variable exists yet). **Before #108 merges:** add `EXPO_PUBLIC_APP_ENV=production` to clearpass-app and `NEXT_PUBLIC_APP_ENV=production` to clearpass-instructor-web, **Production scope only**, in Vercel. Chrome prompt **C1b**, which now also turns off the learner build-command override. Neither value is secret. Without them, the next production deploy fails its check: the site stays up on the previous deployment, but deploys are blocked | #108 merge | Blocks the #108 merge only | ⬜ |
 | A13 | Approve the **Railway deploys** of the F1 and F2 server fixes once reviewed | F1, F2 release | — | ⬜ |
@@ -48,7 +48,8 @@ What the previews *did* do was let a logged-in team member use production data t
 | Desktop | Permanent left sidebar with the 5 destinations; two-column content. Mobile keeps the bottom tabs |
 | Go Pro | Deep indigo and gold; personalised; verified benefits only; hazard availability by platform explained; never for Pro; no pricing, entitlement or paywall changes |
 | Readiness | Presentation only. Journey-start state for low data. The algorithm needs approval |
-| Road-sign artwork | Check accuracy and **report before changing** (the arrow-in-red-circle sign) |
+| Road-sign artwork | Check accuracy and **report before changing**. **Findings (`src/components/RoadmapPath.tsx`, PR #105 artwork):**<br>• Road-signs milestone (lines 153–168): a red ring with a black ahead arrow is **not a UK sign**. Red rings mean prohibition, and "ahead only" is a blue disc with a white arrow. Proposed: a blue "ahead only" disc, or "No entry".<br>• Hazard triangle (lines 190–210): correct (the "Other danger" sign).<br>• Traffic light (lines 170–188): correct order, but all three lamps are lit. Optionally light one.<br>⬜ **Decision D20 needed:** approve the corrections to the protected road artwork? |
+| Readiness gauge | The small "0%" gauge inside the road scene stays for new learners, because hiding it needs a RoadmapPath change. The header shows "Journey started" instead. Could be folded into D20 |
 | Existing Home features | All kept in M1, shown contextually so the screen isn't overcrowded |
 
 ## D. Decisions

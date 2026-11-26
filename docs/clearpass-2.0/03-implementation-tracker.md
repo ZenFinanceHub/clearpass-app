@@ -86,6 +86,13 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
     - a placement plan for all existing Home features.
   - **Deliverables:** before/after comparisons and real viewport screenshots.
   - **The design system isn't locked until this round is reviewed.**
+  - ✅ **M0.6 delivered (2026-11-26):** #114 `3b8c477`; #115 `90d389e` plus merge `ecdbaaa`.
+    - **Tests:** scripts 8 + 58 pass; tsc 0 errors. With the flag off, a production-like build is unchanged.
+    - **Fold:** the Daily Coach button is above the fold at 390×844, 375×667 and 412×915 for new, established and Pro. Exceptions, which reflow without clipping: 320 px wide with a long name (1 px below) and Large Text with 1.3× text (20 px below).
+    - **Topic CTA:** opens `/(tabs)/practice?topic=<category>` directly (flag-gated; the free limit still applies; never discards a quiz in progress).
+    - **Already wired in the real v2 Home:** celebrations, streak toasts, challenge invites, pull-to-refresh. **Planned for M1:** QOTD, nudges, reminder offer, scheduled mocks.
+    - **Still not done:** the desktop sidebar is in the preview only until P2-2, and the in-app reduced-motion toggle doesn't exist yet (the OS setting is honoured).
+  - **Deliverables:** gallery v2 (private artifact) and `~/clearpass-daily-coach-home-preview-v2.zip`.
 - **#108:** the seed now sets `profiles.account_class='internal'` where the column exists (verified locally with and without it).
 - **M0.5 delivered:** a static Home preview, drafts **#114** (design foundation and components) and **#115** (Daily Coach Home).
   - **Screenshots:** 5 learner states × mobile/desktop × light/dark, on a private gallery page.
