@@ -3,7 +3,10 @@ import test from 'node:test';
 import assert from 'node:assert';
 import {
   buildHomeViewModel, daysUntil, weakestTopic, challengeFeasible, topicPracticeRoute, JOURNEY_START_QUESTIONS,
+  nudgeFitsRecommendation, upcomingScheduledMock, SCHEDULED_MOCK_WINDOW_HOURS,
 } from '../../src/home/homeViewModel.ts';
+import { qotdIndex, qotdDateKey, qotdStorageKey, QOTD_XP } from '../../src/qotd.ts';
+import { futureScheduledMocks, formatTestDateTime } from '../../src/scheduledMocks.ts';
 import { getFixture, FIXTURE_NAMES } from '../../src/home/homeFixtures.ts';
 import { hasFreeMockLeft, FREE_QUESTION_LIMIT } from './homeTestHelpers.mjs';
 
@@ -25,6 +28,11 @@ function vmFor(name, over = {}) {
     dueReviewCount: f.dueReviewCount,
     freeMockAvailable: hasFreeMockLeft(f.progress),
     freeDailyQuestionLimit: FREE_QUESTION_LIMIT,
+    nudges: f.nudges,
+    qotd: f.qotd,
+    scheduledMocks: f.scheduledMocks,
+    reminderOfferAvailable: f.reminderOfferAvailable,
+    pendingChallengeInvites: f.pendingChallengeInvites,
     ...over,
   });
 }
@@ -253,4 +261,125 @@ test('helpers', () => {
   assert.equal(daysUntil(new Date(2026, 10, 27, 23).toISOString(), NOW), 1);
   assert.deepEqual(weakestTopic({ A: 0, B: 65, C: 50, D: 90 }), { key: 'C', score: 50 });
   assert.equal(weakestTopic({ A: 0, B: 90 }), null);
+});
+
+// ─── M1: contextual Home features ────────────────────────────────────────────
+
+const nudge = (type, title = type, topic) => ({ id: `${type}_x`, type, title, ...(topic ? { topic } : {}) });
+
+test('nudge: supplies the headline only when no context rule applies, with its id for "Not now"', () => {
+  const vm = vmFor('nudge');
+  assert.equal(vm.coach.action.id, 'weak-topic');
+  // ready_for_mock is skipped (recommendation is a topic); the next nudge fits.
+  assert.equal(vm.coach.headline, 'Mock score dropped');
+  assert.equal(vm.coach.nudgeId, 'mock_score_dropped_fixture');
+  // The advice and CTA are still the recommendation.
+  assert.match(vm.coach.advice, /Hazard Awareness is your trickiest topic/);
+  // No nudges: the default headline, no dismiss.
+  const plain = vmFor('established');
+  assert.equal(plain.coach.nudgeId, null);
+  assert.equal(plain.coach.headline, "Let's sharpen up");
+});
+
+test('nudge: every stronger context rule wins over a nudge', () => {
+  const f = getFixture('established', NOW);
+  const nudges = [nudge('mock_score_dropped', 'Mock score dropped')];
+  const cases = [
+    ['new', base({ ...f.progress, totalQuestionsAnswered: 0 }, { nudges }), "Hi, I'm Pip!"],
+    ['test day', base({ ...f.progress, testDate: new Date(2026, 10, 26, 9).toISOString() }, { nudges }), "It's test day!"],
+    ['test past', base({ ...f.progress, testDate: new Date(2026, 10, 20).toISOString() }, { nudges }), 'How did your test go?'],
+    ['mock passed', base({ ...f.progress, mockTestHistory: [{ passed: true, score: 23, takenAt: NOW.toISOString() }] }, { nudges }), 'You passed your last mock!'],
+    ['streak at risk', base({ ...f.progress, lastStudied: new Date(2026, 10, 25, 20).toISOString() }, { nudges }), 'Keep your 5-day streak going'],
+    ['final week', base({ ...f.progress, testDate: new Date(2026, 11, 1).toISOString() }, { nudges }), '5 days to go'],
+    ['long streak', base({ ...f.progress, studyStreakDays: 9 }, { nudges }), '9-day streak!'],
+  ];
+  for (const [label, args, headline] of cases) {
+    const vm = buildHomeViewModel(args);
+    assert.equal(vm.coach.headline, headline, label);
+    assert.equal(vm.coach.nudgeId, null, label);
+  }
+  // Loading and error never take a nudge.
+  assert.equal(vmFor('loading', { nudges }).coach.nudgeId ?? null, null);
+  assert.equal(vmFor('error', { nudges }).coach.nudgeId ?? null, null);
+});
+
+test('nudge fit rules: mock nudge only above a mock, topic nudges never contradict the topic', () => {
+  const weak = { id: 'weak-topic', topic: 'HazardAwareness' };
+  assert.equal(nudgeFitsRecommendation(nudge('ready_for_mock'), weak), false);
+  assert.equal(nudgeFitsRecommendation(nudge('ready_for_mock'), { id: 'free-mock' }), true);
+  assert.equal(nudgeFitsRecommendation(nudge('ready_for_mock'), { id: 'pro-mock' }), true);
+  assert.equal(nudgeFitsRecommendation(nudge('struggling_topic', 'x', 'MotorwayRules'), weak), false);
+  assert.equal(nudgeFitsRecommendation(nudge('struggling_topic', 'x', 'HazardAwareness'), weak), true);
+  assert.equal(nudgeFitsRecommendation(nudge('struggling_topic', 'x', 'MotorwayRules'), { id: 'due-review' }), true);
+  assert.equal(nudgeFitsRecommendation(nudge('weak_area_detected'), weak), false);
+  assert.equal(nudgeFitsRecommendation(nudge('weak_area_detected'), { id: 'mixed' }), true);
+  for (const t of ['mock_score_dropped', 'streak_at_risk', 'milestone_close', 'inactivity']) {
+    assert.equal(nudgeFitsRecommendation(nudge(t), weak), true, t);
+  }
+  // Nothing fits: the default headline.
+  const vm = vmFor('established', { nudges: [nudge('ready_for_mock', 'Ready for a mock test?')] });
+  assert.equal(vm.coach.nudgeId, null);
+  assert.equal(vm.coach.headline, "Let's sharpen up");
+});
+
+test('QOTD: open row until answered today, then a done row; hidden while loading, errored or not loaded', () => {
+  const open = vmFor('established');
+  assert.deepEqual(open.qotd, { state: 'open', label: 'Question of the day', detail: 'Tap to answer', xp: 10, correct: null });
+  const wrong = vmFor('qotd-done');
+  assert.equal(wrong.qotd.state, 'done');
+  assert.equal(wrong.qotd.correct, false);
+  assert.equal(wrong.qotd.detail, 'Answered today: not quite');
+  assert.equal(vmFor('pro').qotd.detail, 'Answered today: correct');
+  assert.equal(vmFor('new').qotd.state, 'open');
+  assert.equal(vmFor('loading', { qotd: { answered: false, correct: null } }).qotd, null);
+  assert.equal(vmFor('error', { qotd: { answered: false, correct: null } }).qotd, null);
+  assert.equal(vmFor('established', { qotd: null }).qotd, null);
+  // QOTD isn't a goal item: the goal count is unchanged.
+  assert.equal(open.dailyPlan.total, vmFor('established', { qotd: null }).dailyPlan.total);
+});
+
+test('QOTD helpers keep the current Home pick, key and XP', () => {
+  assert.equal(QOTD_XP, 10);
+  assert.equal(qotdDateKey(new Date('2026-11-26T23:30:00Z')), '2026-11-26');
+  assert.equal(qotdStorageKey('2026-11-26'), '@clearpass/qotd_2026-11-26');
+  // Same arithmetic as before: 20261126 % count.
+  assert.equal(qotdIndex('2026-11-26', 1000), 20261126 % 1000);
+  assert.equal(qotdIndex('2026-01-05', 777), 20260105 % 777);
+});
+
+test('scheduled mock: soonest one within 48h becomes a Daily goal row; none otherwise', () => {
+  assert.equal(SCHEDULED_MOCK_WINDOW_HOURS, 48);
+  const vm = vmFor('scheduled-mock');
+  assert.deepEqual(vm.scheduledMock, { id: 'fixture-sched-1', label: 'Mock Test', when: 'Tomorrow at 18:00', route: '/(tabs)/mock' });
+  const at = (h) => ({ id: `h${h}`, dateTimeIso: new Date(NOW.getTime() + h * 3_600_000).toISOString(), label: '' });
+  assert.equal(upcomingScheduledMock([at(-1)], NOW), null);
+  assert.equal(upcomingScheduledMock([at(49)], NOW), null);
+  assert.equal(upcomingScheduledMock([at(48)], NOW).id, 'h48');
+  assert.equal(upcomingScheduledMock([at(30), at(2), at(-3)], NOW).id, 'h2');
+  assert.equal(upcomingScheduledMock([{ id: 'bad', dateTimeIso: 'nope', label: '' }], NOW), null);
+  // An empty label falls back to the current Home's default.
+  assert.equal(vmFor('established', { scheduledMocks: [at(3)] }).scheduledMock.label, 'Mock Test');
+  assert.equal(vmFor('established').scheduledMock, null);
+  assert.equal(vmFor('loading', { scheduledMocks: [at(3)] }).scheduledMock, null);
+});
+
+test('scheduled-mock helpers match the current Home', () => {
+  const now = new Date(2026, 10, 26, 12);
+  assert.equal(formatTestDateTime(new Date(2026, 10, 26, 9, 5).toISOString(), now), 'Today at 09:05');
+  assert.equal(formatTestDateTime(new Date(2026, 10, 27, 18).toISOString(), now), 'Tomorrow at 18:00');
+  assert.equal(formatTestDateTime(new Date(2026, 11, 3, 7, 30).toISOString(), now), '3 Dec at 07:30');
+  const list = [{ dateTimeIso: new Date(2026, 10, 26, 11).toISOString() }, { dateTimeIso: new Date(2026, 10, 26, 13).toISOString() }];
+  assert.equal(futureScheduledMocks(list, now).length, 1);
+});
+
+test('secondary card: at most one; challenge invites outrank the reminder offer', () => {
+  assert.equal(vmFor('established').secondaryCard, null);
+  assert.deepEqual(vmFor('reminder-offer').secondaryCard, { kind: 'reminder-offer' });
+  assert.deepEqual(vmFor('challenge-invites').secondaryCard, { kind: 'challenge-invites', count: 2, title: '2 friends challenged you', route: '/challenge' });
+  assert.equal(vmFor('established', { pendingChallengeInvites: 1 }).secondaryCard.title, 'A friend challenged you');
+  for (const s of ['loading', 'error']) {
+    assert.equal(vmFor(s, { pendingChallengeInvites: 3, reminderOfferAvailable: true }).secondaryCard, null, s);
+  }
+  // New learners can get the reminder offer too (the current Home shows it to everyone).
+  assert.deepEqual(vmFor('new', { reminderOfferAvailable: true }).secondaryCard, { kind: 'reminder-offer' });
 });

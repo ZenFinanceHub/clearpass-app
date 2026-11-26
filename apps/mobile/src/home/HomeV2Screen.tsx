@@ -3,7 +3,7 @@ import { Platform, RefreshControl, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { calculateReadiness, generateDailyChallenge, type UserProgress } from '@clearpass/core';
+import { awardXp, calculateReadiness, generateDailyChallenge, type UserProgress } from '@clearpass/core';
 import { allQuestions } from '@clearpass/content';
 import {
   createFreshUserProgress,
@@ -24,11 +24,14 @@ import { checkStreakToast } from '@/src/streakToasts';
 import { CelebrationModal } from '@/src/components/CelebrationModal';
 import { StreakToast } from '@/src/components/StreakToast';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
+import { ReminderOffer, useReminderOffer } from '@/src/components/ReminderOffer';
+import { dismissNudge, refreshNudges, type TutorNudge } from '@/src/tutorNudges';
+import { QOTD_XP, qotdDateKey, qotdIndex, qotdStorageKey } from '@/src/qotd';
+import { SCHEDULED_TESTS_KEY, futureScheduledMocks, type ScheduledMockTest } from '@/src/scheduledMocks';
 import { useDesignTheme } from '@/src/design';
-import { Card, Icon, Text } from '@/src/ui';
 import { DailyCoachHome } from './DailyCoachHome';
 import { TestDateModal } from './TestDateModal';
-import { buildHomeViewModel, type HomePlatform } from './homeViewModel';
+import { buildHomeViewModel, type HomeNudge, type HomePlatform } from './homeViewModel';
 
 /**
  * The real Daily Coach Home, rendered at /(tabs)/home ONLY when `uiV2` is on
@@ -40,9 +43,10 @@ import { buildHomeViewModel, type HomePlatform } from './homeViewModel';
  * test date, pending username sync, reminder defaults, test-date editing
  * (same validation, save and notification reschedule), celebrations (and
  * the review prompt after a streak milestone), streak toasts, pending
- * challenge invites, pull-to-refresh. Still to come (M1, see the PR's
- * placement plan): Question of the Day, tutor nudges, reminder offer,
- * scheduled mocks.
+ * challenge invites, pull-to-refresh, Question of the Day (same pick, key
+ * and XP), tutor nudges (same generation and dismissals), the reminder offer
+ * (the existing component) and scheduled mocks (same key and pruning).
+ * Where each appears is decided by the view model (PR #115 placement plan).
  */
 export function HomeV2Screen() {
   const [progress, setProgress] = useState<UserProgress | null>(null);
@@ -57,6 +61,11 @@ export function HomeV2Screen() {
   const [pendingChallenges, setPendingChallenges] = useState(0);
   const [celebQueue, setCelebQueue] = useState<CelebrationEvent[]>([]);
   const [streakToastDays, setStreakToastDays] = useState<number | null>(null);
+  const [nudges, setNudges] = useState<TutorNudge[]>([]);
+  const [qotdLoaded, setQotdLoaded] = useState(false);
+  const [qotdSelected, setQotdSelected] = useState<number | null>(null);
+  const [scheduledMocks, setScheduledMocks] = useState<ScheduledMockTest[]>([]);
+  const reminderOffer = useReminderOffer(!loading);
   const reviewTriggerRef = useRef<ReviewTrigger | null>(null);
   const insets = useSafeAreaInsets();
   const { colors } = useDesignTheme();
@@ -82,6 +91,14 @@ export function HomeV2Screen() {
       setLoadError(true);
     }
     setLoading(false);
+    // Scheduled mock tests, pruning past ones (as the current Home does).
+    try {
+      const storedRaw = await AsyncStorage.getItem(SCHEDULED_TESTS_KEY);
+      const stored: ScheduledMockTest[] = storedRaw ? (JSON.parse(storedRaw) as ScheduledMockTest[]) : [];
+      const future = futureScheduledMocks(stored);
+      setScheduledMocks(future);
+      if (future.length !== stored.length) await AsyncStorage.setItem(SCHEDULED_TESTS_KEY, JSON.stringify(future));
+    } catch {}
   }, []);
 
   useEffect(() => { void loadInitial(); }, [loadInitial]);
@@ -107,8 +124,16 @@ export function HomeV2Screen() {
     try {
       const [sr, due] = await Promise.all([loadSRState(), getDueQuestions(allQuestions.map((q) => q.id), 200)]);
       setDueCount(due.length);
-      if (fresh) setPassProbability((await computeAndSavePassProbability(fresh, sr, allQuestions)).probability);
+      if (fresh) {
+        setPassProbability((await computeAndSavePassProbability(fresh, sr, allQuestions)).probability);
+        setNudges(await refreshNudges(fresh, sr, allQuestions));
+      }
     } catch {}
+    try {
+      const raw = await AsyncStorage.getItem(qotdStorageKey(qotdDateKey(new Date())));
+      setQotdSelected(raw !== null ? parseInt(raw, 10) : null);
+    } catch {}
+    setQotdLoaded(true);
     setResultSubmitted((await AsyncStorage.getItem('@clearpass/has_submitted_result')) === 'true');
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -155,6 +180,11 @@ export function HomeV2Screen() {
   }
 
   const now = useMemo(() => new Date(), [progress]);
+  const qotdQuestion = allQuestions[qotdIndex(qotdDateKey(now), allQuestions.length)]!;
+  const homeNudges = useMemo<HomeNudge[]>(
+    () => nudges.map((n) => ({ id: n.id, type: n.type, title: n.title, topic: n.actionParams?.topic })),
+    [nudges],
+  );
   const vm = buildHomeViewModel({
     now,
     platform: Platform.OS as HomePlatform,
@@ -168,7 +198,29 @@ export function HomeV2Screen() {
     freeMockAvailable: hasFreeMockLeft(progress),
     freeDailyQuestionLimit: FREE_QUESTION_LIMIT,
     testResultSubmitted: resultSubmitted,
+    nudges: homeNudges,
+    qotd: qotdLoaded ? { answered: qotdSelected !== null, correct: qotdSelected === null ? null : qotdSelected === qotdQuestion.correctIndex } : null,
+    scheduledMocks,
+    reminderOfferAvailable: reminderOffer.visible,
+    pendingChallengeInvites: pendingChallenges,
   });
+
+  // Same as the current Home: store the choice, award QOTD_XP once.
+  async function handleQotdAnswer(optionIndex: number) {
+    if (qotdSelected !== null) return;
+    setQotdSelected(optionIndex);
+    await AsyncStorage.setItem(qotdStorageKey(qotdDateKey(new Date())), String(optionIndex));
+    if (progress) {
+      const updated = awardXp(progress, QOTD_XP);
+      setProgress(updated);
+      await saveUserProgress(updated);
+    }
+  }
+
+  async function handleDismissNudge(id: string) {
+    await dismissNudge(id);
+    setNudges((prev) => prev.filter((n) => n.id !== id));
+  }
 
   async function saveDate(iso: string) {
     if (!progress) return;
@@ -185,18 +237,6 @@ export function HomeV2Screen() {
     router.push(target as never);
   }
 
-  const invites = pendingChallenges > 0 ? (
-    <Card onPress={() => router.push('/challenge' as never)} accessibilityLabel={`${pendingChallenges} challenge invites waiting`} padding={14}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <Icon name="people" size={24} color={colors.text.brand} />
-        <Text variant="bodyStrong" weight={700} style={{ flex: 1 }}>
-          {pendingChallenges === 1 ? 'A friend challenged you' : `${pendingChallenges} friends challenged you`}
-        </Text>
-        <Icon name="chevron-forward" size={18} color={colors.text.secondary} />
-      </View>
-    </Card>
-  ) : null;
-
   return (
     <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: colors.bg.canvas }}>
       <OfflineBanner />
@@ -207,7 +247,11 @@ export function HomeV2Screen() {
         onSetTestDate={() => setDateModal(true)}
         onRetry={() => { void loadInitial().then(() => refreshDerived(false)); }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void handleRefresh(); }} tintColor={colors.brand.primary} />}
-        extraCards={invites}
+        qotdQuestion={qotdQuestion}
+        qotdSelected={qotdSelected}
+        onQotdAnswer={(i) => { void handleQotdAnswer(i); }}
+        onDismissNudge={(id) => { void handleDismissNudge(id); }}
+        reminderOffer={<ReminderOffer context="home" onDone={reminderOffer.hide} style={{ maxWidth: '100%' }} />}
       />
       <TestDateModal
         visible={dateModal}

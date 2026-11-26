@@ -21,9 +21,18 @@ export interface DailyCoachHomeProps {
   /** Hide the icon + wordmark row (the desktop sidebar already shows it). */
   hideBrand?: boolean;
   refreshControl?: ScrollViewProps['refreshControl'];
-  /** Rendered between the coach card and quick access (e.g. challenge invites). */
-  extraCards?: React.ReactNode;
+  /** Today's Question of the Day (from @clearpass/content), shown when vm.qotd is set. */
+  qotdQuestion?: QotdQuestion | null;
+  /** Option chosen today (from '@clearpass/qotd_<date>'), or null. */
+  qotdSelected?: number | null;
+  onQotdAnswer?: (optionIndex: number) => void;
+  /** "Not now" on a nudge headline (dismissNudge in src/tutorNudges.ts). */
+  onDismissNudge?: (id: string) => void;
+  /** The existing ReminderOffer, rendered when vm.secondaryCard is the reminder offer. */
+  reminderOffer?: React.ReactNode;
 }
+
+export interface QotdQuestion { questionText: string; options: ReadonlyArray<string>; correctIndex: number; explanation?: string }
 
 /** View-model pose (asset name) -> existing Pip mood key. Every pose is an existing PNG. */
 export const POSE_TO_MOOD: Record<PipPose, PipMood> = {
@@ -61,7 +70,10 @@ const TWO_COLUMN = 720;
  * Presentation only: everything comes from the view model and the existing
  * RoadmapPath.
  */
-export function DailyCoachHome({ vm, progress, onNavigate, onSetTestDate, onRetry, hideBrand, refreshControl, extraCards }: DailyCoachHomeProps) {
+export function DailyCoachHome({
+  vm, progress, onNavigate, onSetTestDate, onRetry, hideBrand, refreshControl,
+  qotdQuestion, qotdSelected = null, onQotdAnswer, onDismissNudge, reminderOffer,
+}: DailyCoachHomeProps) {
   const { colors, space, textStyle } = useDesignTheme();
   const window = useWindowDimensions();
   // Effective text scale (in-app Large Text x emulated OS scale) for layout decisions.
@@ -76,7 +88,11 @@ export function DailyCoachHome({ vm, progress, onNavigate, onSetTestDate, onRetr
 
   const roadmap = loading ? <RoadmapSkeleton wide={wide} /> : errored ? null : <RoadmapCard vm={vm} progress={progress} wide={wide} />;
   const pipW = wide ? 140 : colW < 320 || textScale > 1.25 ? 64 : 92;
-  const coach = loading ? <CoachSkeleton /> : <CoachCard coach={vm.coach} onNavigate={onNavigate} onRetry={onRetry} compact={!wide} pipW={pipW} />;
+  const coach = loading ? <CoachSkeleton /> : <CoachCard coach={vm.coach} onNavigate={onNavigate} onRetry={onRetry} onDismissNudge={onDismissNudge} compact={!wide} pipW={pipW} />;
+  // At most one secondary contextual card (the view model picks it).
+  const sc = vm.secondaryCard;
+  const invites = sc?.kind === 'challenge-invites' ? <InvitesCard title={sc.title} count={sc.count} onPress={() => onNavigate(sc.route)} /> : null;
+  const reminder = sc?.kind === 'reminder-offer' && reminderOffer ? <View testID="reminder-offer">{reminderOffer}</View> : null;
   const n = vm.quickActions.length;
   // 4 (or 3) across on phones; 2 across on desktop or when labels would clip (narrow / large text).
   const quickColumns = (wide && n === 4) || colW / n < 80 * textScale ? 2 : n;
@@ -85,7 +101,7 @@ export function DailyCoachHome({ vm, progress, onNavigate, onSetTestDate, onRetr
   );
   const goals = loading ? <GoalSkeleton /> : errored ? null : (
     <View style={{ gap: space.sm }}>
-      <DailyGoal vm={vm} onNavigate={onNavigate} />
+      <DailyGoal vm={vm} onNavigate={onNavigate} qotdQuestion={qotdQuestion ?? null} qotdSelected={qotdSelected} onQotdAnswer={onQotdAnswer} />
       <StreakCard vm={vm} />
     </View>
   );
@@ -108,11 +124,12 @@ export function DailyCoachHome({ vm, progress, onNavigate, onSetTestDate, onRetr
             <View style={{ flex: 3, gap: space.md, minWidth: 0 }}>
               {roadmap}
               {coach}
-              {extraCards}
+              {invites}
             </View>
             <View style={{ flex: 2, gap: space.md, minWidth: 0 }}>
               <SectionTitle>{'Quick access'}</SectionTitle>
               {quick}
+              {reminder}
               {goals}
               {upgrade}
             </View>
@@ -121,9 +138,10 @@ export function DailyCoachHome({ vm, progress, onNavigate, onSetTestDate, onRetr
           <>
             {roadmap}
             {coach}
-            {extraCards}
+            {invites}
             <SectionTitle>{'Quick access'}</SectionTitle>
             {quick}
+            {reminder}
             {goals}
             {upgrade}
           </>
@@ -274,7 +292,9 @@ function RoadmapCard({ vm, progress, wide }: { vm: HomeViewModel; progress: User
 
 // ─── Daily Coach card: Pip's advice + the one recommended activity ──────────
 
-function CoachCard({ coach, onNavigate, onRetry, compact, pipW }: { coach: Coach; onNavigate: (r: string) => void; onRetry?: () => void; compact: boolean; pipW: number }) {
+function CoachCard({ coach, onNavigate, onRetry, onDismissNudge, compact, pipW }: {
+  coach: Coach; onNavigate: (r: string) => void; onRetry?: () => void; onDismissNudge?: (id: string) => void; compact: boolean; pipW: number;
+}) {
   const { colors } = useDesignTheme();
   const frame = poseFrame(coach.pose, pipW);
   return (
@@ -293,7 +313,20 @@ function CoachCard({ coach, onNavigate, onRetry, compact, pipW }: { coach: Coach
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Icon name="chatbubble-ellipses" size={16} color={colors.text.secondaryBrand} />
-            <Text variant="caption" weight={700} color="secondaryBrand">{'Your Daily Coach'}</Text>
+            <Text variant="caption" weight={700} color="secondaryBrand" style={{ flex: 1 }}>{'Your Daily Coach'}</Text>
+            {coach.nudgeId && onDismissNudge ? (
+              // The headline came from a tutor nudge: let the learner put it away.
+              <Pressable
+                onPress={() => onDismissNudge(coach.nudgeId!)}
+                accessibilityRole="button"
+                accessibilityLabel={`${copy.nudgeDismiss}: dismiss “${coach.headline}”`}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                style={({ pressed }) => ({ paddingHorizontal: 6, paddingVertical: 2, opacity: pressed ? 0.7 : 1 })}
+                testID="coach-nudge-dismiss"
+              >
+                <Text variant="caption" weight={600} color="secondary">{copy.nudgeDismiss}</Text>
+              </Pressable>
+            ) : null}
           </View>
           <Text variant={compact ? 'bodyStrong' : 'heading'} weight={700}>{coach.headline}</Text>
           <Text variant="bodySmall" color="secondary">{coach.advice}</Text>
@@ -379,9 +412,13 @@ function PlanRow({ item, onNavigate }: { item: PlanItem; onNavigate: (r: string)
   );
 }
 
-function DailyGoal({ vm, onNavigate }: { vm: HomeViewModel; onNavigate: (r: string) => void }) {
+function DailyGoal({ vm, onNavigate, qotdQuestion, qotdSelected, onQotdAnswer }: {
+  vm: HomeViewModel; onNavigate: (r: string) => void;
+  qotdQuestion: QotdQuestion | null; qotdSelected: number | null; onQotdAnswer?: (i: number) => void;
+}) {
   const { colors } = useDesignTheme();
   const { completed, total, items } = vm.dailyPlan;
+  const extras = !!vm.scheduledMock || (!!vm.qotd && !!qotdQuestion);
   return (
     <Card testID="daily-goal" padding={14}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
@@ -392,6 +429,123 @@ function DailyGoal({ vm, onNavigate }: { vm: HomeViewModel; onNavigate: (r: stri
       <ProgressBar value={completed / total} label={`Daily goal: ${completed} of ${total} completed`} tone={completed === total ? 'success' : 'brand'} />
       <View style={{ marginTop: 4 }}>
         {items.map((i) => <PlanRow key={i.id} item={i} onNavigate={onNavigate} />)}
+      </View>
+      {extras && (
+        // Extras sit under a divider: they are not part of the "N of M done" count.
+        <View style={{ borderTopWidth: 1, borderTopColor: colors.border.default, marginTop: 4, paddingTop: 2 }}>
+          {vm.scheduledMock && <ScheduledMockRow row={vm.scheduledMock} onNavigate={onNavigate} />}
+          {vm.qotd && qotdQuestion && (
+            <QotdRow row={vm.qotd} question={qotdQuestion} selected={qotdSelected} onAnswer={onQotdAnswer} />
+          )}
+        </View>
+      )}
+    </Card>
+  );
+}
+
+function ScheduledMockRow({ row, onNavigate }: { row: NonNullable<HomeViewModel['scheduledMock']>; onNavigate: (r: string) => void }) {
+  const { colors } = useDesignTheme();
+  return (
+    <Pressable
+      onPress={() => onNavigate(row.route)}
+      accessibilityRole="button"
+      accessibilityLabel={`${copy.scheduled.prefix}: ${row.label}, ${row.when}. Open mock tests`}
+      testID="scheduled-mock"
+      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: minTouchTarget, opacity: pressed ? 0.8 : 1 })}
+    >
+      <Icon name="alarm-outline" size={24} color={colors.text.brand} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text variant="bodySmall" weight={600}>{`${copy.scheduled.prefix}: ${row.label}`}</Text>
+        <Text variant="caption" color="secondary">{row.when}</Text>
+      </View>
+      <Icon name="chevron-forward" size={18} color={colors.text.secondary} />
+    </Pressable>
+  );
+}
+
+/**
+ * Question of the Day: a collapsed row ("Question of the day · +10 XP")
+ * that expands inline. Once answered it is a one-line "done" row that can
+ * be expanded to review. Feedback is icon + text, never colour alone.
+ */
+function QotdRow({ row, question, selected, onAnswer }: {
+  row: NonNullable<HomeViewModel['qotd']>; question: QotdQuestion; selected: number | null; onAnswer?: (i: number) => void;
+}) {
+  const { colors, radii } = useDesignTheme();
+  const [open, setOpen] = useState(false);
+  const done = row.state === 'done' || selected !== null;
+  const correct = selected !== null ? selected === question.correctIndex : row.correct;
+  const detail = selected !== null && row.state === 'open'
+    ? (correct ? copy.qotd.doneCorrect : copy.qotd.doneWrong)
+    : row.detail;
+  return (
+    <View testID="qotd">
+      <Pressable
+        onPress={() => setOpen((v) => !v)}
+        accessibilityRole="button"
+        accessibilityLabel={`${row.label}, ${done ? detail : `plus ${row.xp} XP`}`}
+        accessibilityState={{ expanded: open }}
+        style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: minTouchTarget, opacity: pressed ? 0.8 : 1 })}
+      >
+        <Icon name={done ? 'checkmark-circle' : 'help-circle-outline'} size={24} color={done ? colors.status.success : colors.text.brand} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text variant="bodySmall" weight={600} color={done ? 'secondary' : 'primary'}>{row.label}</Text>
+          <Text variant="caption" color="secondary" numberOfLines={1}>{done ? detail : row.detail}</Text>
+        </View>
+        <Badge label={done ? `✓ +${row.xp} XP` : `+${row.xp} XP`} tone="success" />
+        <Icon name={open ? 'chevron-up' : 'chevron-down'} size={18} color={colors.text.secondary} />
+      </Pressable>
+      {open && (
+        <View style={{ gap: 8, paddingBottom: 8 }}>
+          <Text variant="bodySmall" weight={600}>{question.questionText}</Text>
+          {question.options.map((opt, idx) => {
+            const isCorrect = idx === question.correctIndex;
+            const isPicked = idx === selected;
+            const reveal = selected !== null;
+            const tone = reveal && isCorrect ? 'success' : reveal && isPicked ? 'error' : null;
+            return (
+              <Pressable
+                key={idx}
+                onPress={() => onAnswer?.(idx)}
+                disabled={reveal || !onAnswer}
+                accessibilityRole="button"
+                accessibilityLabel={`${opt}${tone === 'success' ? ', correct answer' : tone === 'error' ? ', your answer, incorrect' : ''}`}
+                accessibilityState={{ disabled: reveal, selected: isPicked }}
+                style={({ pressed }) => ({
+                  flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: minTouchTarget,
+                  paddingHorizontal: 12, paddingVertical: 8, borderRadius: radii.control, borderWidth: 1,
+                  borderColor: tone === 'success' ? colors.status.success : tone === 'error' ? colors.status.error : colors.border.default,
+                  backgroundColor: tone === 'success' ? colors.status.successBg : tone === 'error' ? colors.status.errorBg : colors.bg.card,
+                  opacity: pressed ? 0.85 : 1,
+                })}
+              >
+                <Text variant="bodySmall" style={{ flex: 1 }}>{opt}</Text>
+                {tone && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Icon name={tone === 'success' ? 'checkmark-circle' : 'close-circle'} size={18} color={colors.status[tone]} />
+                    <Text variant="caption" weight={700} color={tone}>{tone === 'success' ? 'Correct' : 'Incorrect'}</Text>
+                  </View>
+                )}
+              </Pressable>
+            );
+          })}
+          {selected !== null && question.explanation ? (
+            <Text variant="bodySmall" color="secondary" accessibilityLiveRegion="polite">{question.explanation}</Text>
+          ) : null}
+        </View>
+      )}
+    </View>
+  );
+}
+
+function InvitesCard({ title, count, onPress }: { title: string; count: number; onPress: () => void }) {
+  const { colors } = useDesignTheme();
+  return (
+    <Card onPress={onPress} accessibilityLabel={`${count} challenge ${count === 1 ? 'invite' : 'invites'} waiting`} padding={14} testID="challenge-invites">
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <Icon name="people" size={24} color={colors.text.brand} />
+        <Text variant="bodyStrong" weight={700} style={{ flex: 1 }}>{title}</Text>
+        <Icon name="chevron-forward" size={18} color={colors.text.secondary} />
       </View>
     </Card>
   );

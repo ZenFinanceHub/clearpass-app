@@ -135,6 +135,16 @@ export const copy = {
     cta: 'Start mock',
   },
   retry: 'Try again',
+  nudgeDismiss: 'Not now',
+  qotd: {
+    label: 'Question of the day',
+    open: 'Tap to answer',
+    done: 'Answered today',
+    doneCorrect: 'Answered today: correct',
+    doneWrong: 'Answered today: not quite',
+  },
+  scheduled: { defaultLabel: 'Mock Test', prefix: 'Scheduled' },
+  invites: (n: number) => (n === 1 ? 'A friend challenged you' : `${n} friends challenged you`),
 } as const;
 
 /**

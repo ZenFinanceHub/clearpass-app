@@ -3,10 +3,16 @@
  * and the view-model tests. Invented data only — no real user data.
  * Pure: no imports, dates relative to `now`.
  */
-import type { HomeProgress } from './homeViewModel.ts';
+import type { HomeNudge, HomeProgress, QotdInput } from './homeViewModel.ts';
 
-export type FixtureName = 'new' | 'established' | 'pro' | 'no-test-date' | 'loading' | 'error';
-export const FIXTURE_NAMES: FixtureName[] = ['new', 'established', 'pro', 'no-test-date', 'loading', 'error'];
+export type FixtureName =
+  | 'new' | 'established' | 'pro' | 'no-test-date' | 'loading' | 'error'
+  // M1 contextual states (each is `established` or `pro` plus one extra):
+  | 'nudge' | 'qotd-done' | 'scheduled-mock' | 'reminder-offer' | 'challenge-invites';
+export const FIXTURE_NAMES: FixtureName[] = [
+  'new', 'established', 'pro', 'no-test-date', 'loading', 'error',
+  'nudge', 'qotd-done', 'scheduled-mock', 'reminder-offer', 'challenge-invites',
+];
 
 /** Full progress object: HomeProgress plus the remaining UserProgress fields RoadmapPath reads. */
 export interface FixtureProgress extends HomeProgress {
@@ -27,7 +33,15 @@ export interface Fixture {
   error?: boolean;
   progress: FixtureProgress | null;
   dueReviewCount: number;
+  /** Contextual Home inputs (see HomeInputs). Absent = nothing pending. */
+  nudges?: HomeNudge[];
+  qotd?: QotdInput | null;
+  scheduledMocks?: Array<{ id: string; dateTimeIso: string; label: string }>;
+  reminderOfferAvailable?: boolean;
+  pendingChallengeInvites?: number;
 }
+
+const QOTD_OPEN: QotdInput = { answered: false, correct: null };
 
 const TOPICS = [
   'Alertness', 'Attitude', 'SafetyAndYourVehicle', 'SafetyMargins', 'HazardAwareness', 'VulnerableRoadUsers',
@@ -80,12 +94,12 @@ export function getFixture(name: FixtureName, now: Date = new Date()): Fixture {
   switch (name) {
     case 'new':
       return {
-        name, displayName: 'Sam', loading: false, dueReviewCount: 0,
+        name, displayName: 'Sam', loading: false, dueReviewCount: 0, qotd: QOTD_OPEN,
         progress: { ...base(now), testDate: daysFrom(now, 42) },
       };
     case 'established':
       return {
-        name, displayName: 'Alex', loading: false, dueReviewCount: 0,
+        name, displayName: 'Alex', loading: false, dueReviewCount: 0, qotd: QOTD_OPEN,
         progress: {
           ...base(now),
           totalQuestionsAnswered: 186,
@@ -107,7 +121,7 @@ export function getFixture(name: FixtureName, now: Date = new Date()): Fixture {
       };
     case 'pro':
       return {
-        name, displayName: 'Jordan', loading: false, dueReviewCount: 0,
+        name, displayName: 'Jordan', loading: false, dueReviewCount: 0, qotd: { answered: true, correct: true },
         progress: {
           ...base(now),
           isPro: true,
@@ -128,7 +142,7 @@ export function getFixture(name: FixtureName, now: Date = new Date()): Fixture {
       };
     case 'no-test-date':
       return {
-        name, displayName: 'Riley', loading: false, dueReviewCount: 0,
+        name, displayName: 'Riley', loading: false, dueReviewCount: 0, qotd: QOTD_OPEN,
         progress: {
           ...base(now),
           totalQuestionsAnswered: 64,
@@ -143,5 +157,34 @@ export function getFixture(name: FixtureName, now: Date = new Date()): Fixture {
       return { name, displayName: null, loading: true, dueReviewCount: 0, progress: null };
     case 'error':
       return { name, displayName: null, loading: false, error: true, dueReviewCount: 0, progress: null };
+    case 'nudge': {
+      // Established learner with no context rule firing (studied today,
+      // test in 21 days, last mock failed): the first nudge that fits the
+      // recommendation supplies Pip's headline. "Ready for a mock test?" is
+      // skipped because the recommendation is a topic, not a mock.
+      const f = getFixture('established', now);
+      return {
+        ...f, name,
+        nudges: [
+          { id: 'ready_for_mock_fixture', type: 'ready_for_mock', title: 'Ready for a mock test?' },
+          { id: 'mock_score_dropped_fixture', type: 'mock_score_dropped', title: 'Mock score dropped' },
+        ],
+      };
+    }
+    case 'qotd-done':
+      return { ...getFixture('established', now), name, qotd: { answered: true, correct: false } };
+    case 'scheduled-mock':
+      return {
+        ...getFixture('pro', now), name,
+        scheduledMocks: [
+          { id: 'fixture-sched-2', dateTimeIso: daysFrom(now, 5, 18), label: 'Full mock' },
+          { id: 'fixture-sched-1', dateTimeIso: daysFrom(now, 1, 18), label: 'Mock Test' },
+        ],
+      };
+    case 'reminder-offer':
+      return { ...getFixture('established', now), name, reminderOfferAvailable: true };
+    case 'challenge-invites':
+      // Invites outrank the reminder offer: only one secondary card shows.
+      return { ...getFixture('established', now), name, pendingChallengeInvites: 2, reminderOfferAvailable: true };
   }
 }

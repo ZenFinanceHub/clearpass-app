@@ -17,8 +17,15 @@
  *    than the free daily limit (FREE_QUESTION_LIMIT, passed in), and a
  *    challenge they can't complete on the free plan is left out.
  *  - Coach: Pip's advice line IS the recommendation, so the CTA acts on it.
+ *  - Contextual extras (M1, placement plan in PR #115): a tutor nudge can
+ *    supply Pip's headline only when no context rule applies and it fits the
+ *    recommendation; Question of the Day and a scheduled mock within 48h are
+ *    rows in the Daily goal card; challenge invites and the reminder offer
+ *    are the only secondary cards, and at most one shows (invites first).
  */
 import { copy, PRO_BENEFITS, topicName } from './homeCopy.ts';
+import { formatTestDateTime } from '../scheduledMocks.ts';
+import { QOTD_XP } from '../qotd.ts';
 
 export type HomePlatform = 'ios' | 'android' | 'web';
 /** Existing Pip artwork poses (apps/mobile/assets/pip). No others exist. */
@@ -60,7 +67,29 @@ export interface HomeInputs {
   freeDailyQuestionLimit: number;
   /** '@clearpass/has_submitted_result' === 'true' (existing key). */
   testResultSubmitted?: boolean;
+  /** Non-dismissed tutor nudges from refreshNudges() (src/tutorNudges.ts), generator order. */
+  nudges?: ReadonlyArray<HomeNudge>;
+  /** Today's Question of the Day; null/undefined while not yet loaded (row hidden). */
+  qotd?: QotdInput | null;
+  /** Entries from '@clearpass/scheduled_mock_tests' (the current Home's key). */
+  scheduledMocks?: ReadonlyArray<{ id: string; dateTimeIso: string; label: string }>;
+  /** useReminderOffer(...).visible (src/components/ReminderOffer.tsx): native, not yet opted in. */
+  reminderOfferAvailable?: boolean;
+  /** Pending `challenges` rows for this learner (same query as the current Home). */
+  pendingChallengeInvites?: number;
 }
+
+/** The fields of a TutorNudge the Home uses. */
+export interface HomeNudge {
+  id: string;
+  type: 'struggling_topic' | 'mock_score_dropped' | 'streak_at_risk' | 'milestone_close' | 'ready_for_mock' | 'weak_area_detected' | 'inactivity';
+  title: string;
+  /** actionParams.topic (struggling_topic only). */
+  topic?: string;
+}
+
+/** answered: the '@clearpass/qotd_<date>' key exists; correct: the stored option was right. */
+export interface QotdInput { answered: boolean; correct: boolean | null }
 
 export type RecommendationId = 'first-practice' | 'test-day' | 'due-review' | 'free-mock' | 'pro-mock' | 'weak-topic' | 'hazard' | 'mixed';
 export type CoachIcon = 'school' | 'flag' | 'refresh' | 'clipboard' | 'locate' | 'eye' | 'shuffle';
@@ -68,6 +97,8 @@ export type CoachIcon = 'school' | 'flag' | 'refresh' | 'clipboard' | 'locate' |
 export interface Coach {
   pose: PipPose;
   headline: string;
+  /** Set when the headline came from a tutor nudge: Home shows "Not now", which dismisses it. */
+  nudgeId?: string | null;
   advice: string;
   /** null in loading/error states (error shows a retry instead). */
   action: null | { id: RecommendationId; cta: string; route: string; icon: CoachIcon };
@@ -85,6 +116,12 @@ export type Countdown =
 export type Upgrade =
   | { kind: 'pro'; eyebrow: string; headline: string; sub: string; benefits: string[]; cta: string; route: '/paywall' }
   | { kind: 'free-mock'; title: string; body: string; cta: string; route: '/(tabs)/mock' };
+
+export interface QotdRow { state: 'open' | 'done'; label: string; detail: string; xp: number; correct: boolean | null }
+export interface ScheduledMockRow { id: string; label: string; when: string; route: '/(tabs)/mock' }
+export type SecondaryCard =
+  | { kind: 'challenge-invites'; count: number; title: string; route: '/challenge' }
+  | { kind: 'reminder-offer' };
 
 export interface HomeViewModel {
   state: 'loading' | 'error' | 'new' | 'established';
@@ -106,6 +143,12 @@ export interface HomeViewModel {
   upgrade: Upgrade | null;
   /** "I passed" / resit prompt: only after the test date (spec §6.1). */
   showTestResultPrompt: boolean;
+  /** Question of the Day row inside the Daily goal card (not counted in the goal). */
+  qotd: QotdRow | null;
+  /** Soonest scheduled mock starting within SCHEDULED_MOCK_WINDOW_HOURS: a Daily goal row. */
+  scheduledMock: ScheduledMockRow | null;
+  /** At most one secondary contextual card. */
+  secondaryCard: SecondaryCard | null;
 }
 
 // ─── Date helpers (local calendar days, like the current Home) ──────────────
@@ -131,6 +174,45 @@ export const DAILY_QUESTION_TARGET = 10;
 export const JOURNEY_START_QUESTIONS = 10;
 const WEAK_TOPIC_THRESHOLD = 70; // same threshold calculateReadiness uses for weak topics
 const MOCK_READY_QUESTIONS = 30;
+/** A scheduled mock shows on Home only once it is this close. */
+export const SCHEDULED_MOCK_WINDOW_HOURS = 48;
+
+/**
+ * Can this nudge's title sit above this recommendation without contradicting
+ * it? Pip's advice and CTA are the recommendation, so a nudge that points
+ * somewhere else is skipped (the next one is tried):
+ *  - "Ready for a mock test?" only when the recommendation is a mock;
+ *  - a topic nudge only when the recommendation isn't a different topic
+ *    (nudges use review accuracy, the recommendation topic scores, so the
+ *    two can name different topics).
+ */
+export function nudgeFitsRecommendation(nudge: HomeNudge, rec: { id: RecommendationId; topic?: string | null }): boolean {
+  switch (nudge.type) {
+    case 'ready_for_mock':
+      return rec.id === 'free-mock' || rec.id === 'pro-mock';
+    case 'struggling_topic':
+      return rec.id !== 'weak-topic' || (!!nudge.topic && nudge.topic === rec.topic);
+    case 'weak_area_detected':
+      return rec.id !== 'weak-topic';
+    default:
+      return true;
+  }
+}
+
+/** Soonest entry in (now, now + window], or null. */
+export function upcomingScheduledMock<T extends { dateTimeIso: string }>(
+  list: ReadonlyArray<T>, now: Date, windowHours = SCHEDULED_MOCK_WINDOW_HOURS,
+): T | null {
+  const start = now.getTime();
+  const end = start + windowHours * 3_600_000;
+  let best: T | null = null;
+  for (const m of list) {
+    const t = new Date(m.dateTimeIso).getTime();
+    if (Number.isNaN(t) || t <= start || t > end) continue;
+    if (!best || t < new Date(best.dateTimeIso).getTime()) best = m;
+  }
+  return best;
+}
 
 export function weakestTopic(scores: Record<string, number>): { key: string; score: number } | null {
   let best: { key: string; score: number } | null = null;
@@ -218,7 +300,7 @@ export function buildHomeViewModel(input: HomeInputs): HomeViewModel {
 
   // Recommendation: one activity, never something this platform/plan can't do.
   // Hazard perception is native-only and Pro-only; mocks need Pro or the free mock.
-  type Rec = { id: RecommendationId; advice: string; cta: string; route: string; icon: CoachIcon };
+  type Rec = { id: RecommendationId; advice: string; cta: string; route: string; icon: CoachIcon; topic?: string };
   let rec: Rec;
   if (isNew) rec = { id: 'first-practice', ...copy.rec.first, route: '/(tabs)/practice', icon: 'school' };
   else if (days !== null && days >= 0 && days <= 1) rec = { id: 'test-day', ...copy.rec.testDay, route: '/testday', icon: 'flag' };
@@ -227,7 +309,7 @@ export function buildHomeViewModel(input: HomeInputs): HomeViewModel {
     rec = isPro
       ? { id: 'pro-mock', ...copy.rec.proMock, route: '/(tabs)/mock', icon: 'clipboard' }
       : { id: 'free-mock', ...copy.rec.freeMock, route: '/(tabs)/mock', icon: 'clipboard' };
-  } else if (weak) rec = { id: 'weak-topic', ...copy.rec.weakTopic(topicName(weak.key), weak.score), route: topicPracticeRoute(weak.key), icon: 'locate' };
+  } else if (weak) rec = { id: 'weak-topic', ...copy.rec.weakTopic(topicName(weak.key), weak.score), route: topicPracticeRoute(weak.key), icon: 'locate', topic: weak.key };
   else if (platform !== 'web' && isPro && !p!.hazardPerceptionHistory.some((h) => h.passed)) {
     rec = { id: 'hazard', ...copy.rec.hazard, route: '/(tabs)/hazard', icon: 'eye' };
   } else if (isPro) rec = { id: 'pro-mock', ...copy.rec.proMock, route: '/(tabs)/mock', icon: 'clipboard' };
@@ -244,6 +326,9 @@ export function buildHomeViewModel(input: HomeInputs): HomeViewModel {
   else {
     let headline: string = copy.headline.byRec[rec.id] ?? copy.headline.steady;
     let pose: PipPose = recPose[rec.id];
+    let nudgeId: string | null = null;
+    // Tutor nudge: only when no context rule below applies (it's the final else).
+    const nudge = (input.nudges ?? []).find((n) => nudgeFitsRecommendation(n, rec)) ?? null;
     if (state === 'new') { headline = copy.headline.new; pose = 'teaching'; }
     else if (days === 0) { headline = copy.headline.testDay; pose = 'encouraging'; }
     else if (days !== null && days < 0) { headline = copy.headline.testPast; pose = 'thinking'; }
@@ -252,7 +337,8 @@ export function buildHomeViewModel(input: HomeInputs): HomeViewModel {
     else if (days !== null && days <= 7) { headline = copy.headline.finalWeek(days); pose = 'encouraging'; }
     else if (streakDays >= 7) { headline = copy.headline.streak(streakDays); pose = 'streak'; }
     else if (lastGap !== null && lastGap >= 3) { headline = copy.headline.returning; pose = 'encouraging'; }
-    coach = { pose, headline, advice: rec.advice, action: { id: rec.id, cta: rec.cta, route: rec.route, icon: rec.icon } };
+    else if (nudge) { headline = nudge.title; nudgeId = nudge.id; }
+    coach = { pose, headline, nudgeId, advice: rec.advice, action: { id: rec.id, cta: rec.cta, route: rec.route, icon: rec.icon } };
   }
 
   // Daily plan from today's local activity. No new stored data.
@@ -313,6 +399,23 @@ export function buildHomeViewModel(input: HomeInputs): HomeViewModel {
     }
   }
 
+  // Contextual extras: never while loading or in the error state.
+  const ready = state === 'new' || state === 'established';
+  const qotd: QotdRow | null = ready && input.qotd ? (
+    input.qotd.answered
+      ? { state: 'done', label: copy.qotd.label, detail: input.qotd.correct === null ? copy.qotd.done : input.qotd.correct ? copy.qotd.doneCorrect : copy.qotd.doneWrong, xp: QOTD_XP, correct: input.qotd.correct }
+      : { state: 'open', label: copy.qotd.label, detail: copy.qotd.open, xp: QOTD_XP, correct: null }
+  ) : null;
+  const nextMock = ready ? upcomingScheduledMock(input.scheduledMocks ?? [], now) : null;
+  const scheduledMock: ScheduledMockRow | null = nextMock
+    ? { id: nextMock.id, label: nextMock.label || copy.scheduled.defaultLabel, when: formatTestDateTime(nextMock.dateTimeIso, now), route: '/(tabs)/mock' }
+    : null;
+  const invites = input.pendingChallengeInvites ?? 0;
+  const secondaryCard: SecondaryCard | null = !ready ? null
+    : invites > 0 ? { kind: 'challenge-invites', count: invites, title: copy.invites(invites), route: '/challenge' }
+    : input.reminderOfferAvailable ? { kind: 'reminder-offer' }
+    : null;
+
   return {
     state,
     greeting,
@@ -331,5 +434,8 @@ export function buildHomeViewModel(input: HomeInputs): HomeViewModel {
     quickActions,
     upgrade,
     showTestResultPrompt: days !== null && days < 0 && !input.testResultSubmitted,
+    qotd,
+    scheduledMock,
+    secondaryCard,
   };
 }
