@@ -6,6 +6,7 @@ import { Colors } from '@/src/constants/theme';
 import { Pip } from '@/src/components/Pip';
 import { mockTestExitGuard } from '@/src/mockTestExitGuard';
 import { hazardExitGuard } from '@/src/hazardExitGuard';
+import { uiV2 } from '@/src/uiFlags';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -100,6 +101,8 @@ export default function TabLayout() {
                 </View>
               ),
             } : {}),
+            // ui_v2 Home draws its own header (app icon + wordmark).
+            ...(uiV2 && name === 'home' ? { headerShown: false } : {}),
             ...(hidden ? { tabBarButton: () => null, tabBarItemStyle: { display: 'none' as const, width: 0 } } : {}),
             tabBarIcon: ({ color, size, focused }) => (
               <Ionicons name={focused ? iconFocused : icon} size={size} color={color} />

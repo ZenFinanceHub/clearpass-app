@@ -63,6 +63,8 @@ import { supabase } from '@/src/supabase';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 import { useNetwork } from '@/src/NetworkContext';
+import { uiV2 } from '@/src/uiFlags';
+import { HomeV2Screen } from '@/src/home/HomeV2Screen';
 
 // ─── NudgesSection ────────────────────────────────────────────────────────────
 
@@ -218,7 +220,7 @@ function getDaysRemaining(testDateIso: string): number {
 
 // ─── HomeScreen ───────────────────────────────────────────────────────────────
 
-export default function HomeScreen() {
+function HomeScreen() {
   const [progress, setProgress]       = useState<UserProgress | null>(null);
   const trialDays = useTrialDays();
   const [isLoading, setIsLoading]     = useState(true);
@@ -1723,3 +1725,7 @@ const styles = StyleSheet.create({
   testDaySub:       { fontSize: 12, color: 'rgba(255,255,255,0.82)', marginTop: 2 },
   testDayChevron:   { fontSize: 26, color: '#FFFFFF', fontWeight: '700', lineHeight: 30 },
 });
+
+// ClearPass 2.0: the Daily Coach Home replaces this screen only when the
+// build-time ui_v2 flag is on (local/staging). Off = HomeScreen, unchanged.
+export default uiV2 ? HomeV2Screen : HomeScreen;
