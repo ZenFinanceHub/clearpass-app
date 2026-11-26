@@ -151,7 +151,7 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
 
 ## Recommended merge and release sequence (2026-11-26, rev 3)
 
-**Model:** after G1 (`07-infrastructure-action-plan.md`), **merge ≠ deploy**.
+**Model:** after G1 (`07-infrastructure-action-plan.md`), **merge ≠ deploy**, and every release needs your approval click in GitHub (the Release workflow, #119).
 - Merges land on `main` with PR plus CI.
 - A **release** fast-forwards `production` to an approved `main` commit. That deploys Vercel (3 projects) and Railway together, and needs your approval each time.
 - **Until G1 is done, every merge is a production deployment** on Railway (no CI gate) and all three Vercel projects. Don't merge anything before G1.
@@ -164,8 +164,8 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
 
 | # | Step | Prerequisite | CI required | Release effect (when `production` moves) | Post-release check | Rollback |
 |---|---|---|---|---|---|---|
-| 0 | **G1** (`07-…` G1.1–G1.8): verify all four platforms at `d791923`; create `production`; Prompt 1 C7a, Prompt 2 P1-V, Prompt 3 P1-R | Your approval | — | Railway may redeploy the same commit | Deployment records at `d791923`; smoke PASS | Revert the settings in the dashboards |
-| 1 | Merge **#109** CI (now also runs on `production` pushes, `f043c4e`), then the **validation release** | G1 | Its own run | CI files only. Confirms Railway Wait for CI and the four-platform coordination | All four at the new commit; smoke PASS | Revert PR |
+| 0 | **G1** (`07-…` G1.1–G1.13): verify all four platforms at `d791923`; create `production`; Prompts 1–3; merge #109 + **#119 (release gate)**; owner setup script; Prompts 4–5 (checks, machine user) | Your approval | — | Railway may redeploy the same commit | Deployment records at `d791923`; smoke PASS | Revert the settings in the dashboards |
+| 1 | **Validation release** of the #109/#119 merge commit through the Release workflow (your approval click) | G1 | Its own run | CI files only. Confirms Railway Wait for CI and the four-platform coordination | All four at the new commit; smoke PASS | Revert PR |
 | 2 | **C7b:** required checks | #109 merged | — | — | — | Edit the ruleset |
 | 3 | Merge **#106** docs, **#112** schema | C7b | 7 checks | None (no migration) | — | Revert PR |
 | 4 | Merge **#111**; release | R1 ✅ (`CRON_SECRET` exists) | 7 checks | Railway: the parent-email endpoint fails closed | `smoke:instructor` PASS; next cron run | Railway redeploys the previous deployment, then revert |

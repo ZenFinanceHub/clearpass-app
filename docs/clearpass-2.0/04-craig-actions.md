@@ -23,7 +23,7 @@ Last updated 2026-11-26 (rev 7: R1 complete; consolidated plan in `07-infrastruc
 | A15 | Run **C5** (Vercel secret clean-up: delete the unused `STRIPE_SECRET_KEY` from clearpass-app; limit `SLACK_WEBHOOK_CLEARPASS` to Production) when approved | Hygiene | No | ⬜ |
 | A16 | Branch protection: **C7a** now (with G1), **C7b** after #109 merges | Safer merges | No | ⬜ |
 | A17 | Railway audit R1 | — | — | ✅ Done 2026-11-26. Auto-deploy from `main`, Wait for CI off, US East. Remediation is G1 in `07-…` |
-| A19 | **G1, release control (recommended before ANY merge):** approve creating the `production` branch, then run **P1** and **C7a** | All merges | **Yes** | ⬜ |
+| A19 | **G1, release control and approval gate** (`07-…`): approve; then Prompts 1–3; approve merging #109 and #119; run the setup script; Prompts 4–5 (incl. creating the `clearpass-bot` machine user and switching the CLI to it); approve the validation release | All merges and releases | **Yes** | ⬜ (model approved 2026-11-26; awaiting go-ahead) |
 | A20 | Verify the Railway `STRIPE_SECRET_KEY` prefix (masked in R1) | #116 release | #116 only | ⬜ |
 | A18 | **G4:** approve hosted staging at ≈ $10–15/month (Supabase ~$10, Railway staging ~$0–5), then C2 → R3 → S1 → RC1 → V1 | Hosted staging | Hosted review only; local development continues | ⬜ |
 | A11 | Approve the **Railway deploy** of the Ask Pip allowance endpoint (P5-2) once reviewed and tested | P5-3 | — | ⬜ |
@@ -76,6 +76,7 @@ What the previews *did* do was let a logged-in team member use production data t
 | D16 | "I Passed" placement | Default: Profile, plus Home on or after the test date |
 | D17 | Quick Mock | ✅ **Real format retained:** 25 questions, 28 minutes, pass mark 22 |
 | D18 | Gold accent | ✅ Contrast restrictions accepted: decoration or dark text only |
+| D21 | Production release approval | ✅ **Technical gate:** a GitHub Environment `production-release` with you as the only reviewer; a release deploy key only the approved job can use; a machine user for Claude Code. $0. PR #119 |
 | D19 | `ui_v2` flag | ✅ Approved. Presentation-only, build-time per environment, no incompatible data changes. Rollback = flag off |
 
 ## PR review (2026-11-25): recommendations, not actioned
