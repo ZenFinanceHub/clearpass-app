@@ -43,3 +43,28 @@ export function askPipAboutQuestion(q: AskPipQuestion, selectedIndex: number | n
     },
   };
 }
+
+export interface AskPipAttempt<Q> {
+  question: Q;
+  selectedIndex: number | null;
+  correct: boolean;
+}
+
+/**
+ * The incorrect answers a results screen offers "Ask Pip about this" for
+ * (Speed Round, Weak Spots, Battle Mode). One entry per question, in the order
+ * first seen; a question missed more than once (Weak Spots requeues it) keeps
+ * its latest wrong answer.
+ */
+export function incorrectForAskPip<Q extends { id: string }>(
+  attempts: ReadonlyArray<AskPipAttempt<Q>>,
+): Array<{ question: Q; selectedIndex: number | null }> {
+  const byId = new Map<string, { question: Q; selectedIndex: number | null }>();
+  for (const a of attempts) {
+    if (a.correct) continue;
+    const existing = byId.get(a.question.id);
+    if (existing) existing.selectedIndex = a.selectedIndex;
+    else byId.set(a.question.id, { question: a.question, selectedIndex: a.selectedIndex });
+  }
+  return [...byId.values()];
+}
