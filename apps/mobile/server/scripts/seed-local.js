@@ -18,9 +18,12 @@
 //   pupil-1@example.invalid, pupil-2@example.invalid
 //
 // Every account: profiles.exclude_from_stats = true, and user_metadata
-// { account_class: 'internal', seeded_local: true, e2e: true }. (There is no
-// account_class column yet; e2e: true reuses lib/e2e.js so no server Slack
-// post ever fires for these accounts.)
+// { account_class: 'internal', seeded_local: true, e2e: true }, and
+// profiles.account_class = 'internal' where that column exists. It exists in
+// production but was missing from schema.sql until PR #112, so the update is
+// best-effort: skipped with a note on a database replayed without it.
+// e2e: true reuses lib/e2e.js so no server Slack post ever fires for these
+// accounts.
 //
 // SAFETY: refuses to run unless SUPABASE_URL is 127.0.0.1/localhost, or a
 // host listed in CLEARPASS_SEED_ALLOWED_HOSTS (for the future hosted staging
@@ -166,6 +169,7 @@ async function main() {
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const ids = {};
+  let accountClassNoted = false;
 
   for (const a of ACCOUNTS) {
     const metadata = { account_class: 'internal', seeded_local: true, e2e: true, display_name: a.name };
@@ -191,6 +195,17 @@ async function main() {
         ...(a.instructorCode ? { instructor_code: a.instructorCode } : {}),
       }),
     );
+    {
+      const { error } = await admin.from('profiles').update({ account_class: 'internal' }).eq('id', user.id);
+      if (error && /account_class/.test(error.message || '')) {
+        if (!accountClassNoted) {
+          console.log('[seed] profiles.account_class not present in this database (schema.sql before #112); skipped');
+          accountClassNoted = true;
+        }
+      } else if (error) {
+        throw new Error(`account_class ${a.email}: ${error.message}`);
+      }
+    }
     if (a.progress) {
       await check(
         `progress ${a.email}`,

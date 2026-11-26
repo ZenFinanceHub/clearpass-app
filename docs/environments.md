@@ -93,7 +93,7 @@ For an Android emulator, use `http://10.0.2.2:55321`; for a phone on the LAN, us
 - `update_aggregate_stats(p_topic, p_correct, p_total)` is called by `src/analytics.ts` but not declared in `schema.sql`. Locally the RPC fails and the caller swallows the error, so comparative stats stay empty. It should be dumped from production into `schema.sql` (read-only) in a later PR.
 - `hazard_clips` is empty locally, so the hazard screen shows 0 clips.
 - Zen Footy's tables (`players`, `matches`, `lineups`, `attendance`) are deliberately absent.
-- There is no `account_class` column. Seed accounts carry `account_class: 'internal'` in `user_metadata`, plus `profiles.exclude_from_stats = true`.
+- `profiles.account_class` exists in production but is missing from `schema.sql` until PR #112 (schema reconciliation). Seed accounts set it to `internal` where the column exists, and always carry `account_class: 'internal'` in `user_metadata` plus `profiles.exclude_from_stats = true`.
 
 `local-setup.sql` (local only) creates the `question-images` (public) and `hazard-videos` (private) buckets. The `instructor-documents` bucket comes from migration `20260911180000`. The seed uploads one synthetic placeholder image to `question-images`.
 
