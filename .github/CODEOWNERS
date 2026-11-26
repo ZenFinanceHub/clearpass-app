@@ -1,4 +1,13 @@
-# Changes to CI, the release workflow, the release-gate setup and this file need
-# the repository owner's review (the "main protection" ruleset requires Code
-# Owner review). Everything else merges with CI only.
+# Files that run with production credentials, or that could weaken the
+# release gate, need the repository owner's review (the "main protection"
+# ruleset requires Code Owner review). Everything else merges with CI only.
+#
+# Rule for this file: every file that a job holding a production credential
+# executes or reads as configuration must be listed here. The credentialed
+# jobs are designed to execute no repository code and no repository
+# dependencies, so today that is only:
+#
+#   /.github/  - all workflows (release.yml mints the release App token; CI
+#                decides what "green" means), the release-gate scripts, and
+#                this CODEOWNERS file itself.
 /.github/ @ZenFinanceHub

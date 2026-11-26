@@ -9,6 +9,11 @@
 # creates a pending approval request on a mode=test run; the owner may see a
 # notification for it. Do NOT approve that one, because this script cancels it.
 #
+# The release workflow has no rollback mode and never force-pushes (rollbacks
+# are revert commits released normally). G5b still checks that a force-push
+# to a production-protected branch is refused, and G11 checks that the
+# release workflow on main contains no force-push path.
+#
 # Exit code 0 = every protection held.
 
 set -uo pipefail
@@ -26,22 +31,26 @@ login=$(gh api user --jq .login)
 admin=$(gh api "repos/$REPO" --jq .permissions.admin)
 owner=$(gh api "repos/$REPO" --jq .owner.login)
 echo "Running as: $login"
-[ "$login" != "$owner" ] && ok "G1 CLI identity is not the owner ($login)" || { bad "G1 CLI identity IS the owner. Stop: log in as the machine user"; exit 1; }
-[ "$admin" = "false" ] && ok "G2 machine user is not a repository admin" || bad "G2 machine user has ADMIN rights"
+if [ "$login" != "$owner" ]; then ok "G1 CLI identity is not the owner ($login)"; else bad "G1 CLI identity IS the owner. Stop: log in as the machine user"; exit 1; fi
+if [ "$admin" = "false" ]; then ok "G2 machine user is not a repository admin"; else bad "G2 machine user has ADMIN rights"; fi
 
 # Credentials reachable from this OS user (names only).
-gh auth status 2>&1 | grep -q "account $owner" && bad "G3 the owner's account is still logged in to this CLI" || ok "G3 owner account not present in this CLI"
-for v in GH_TOKEN GITHUB_TOKEN GITHUB_PAT; do [ -n "${!v:-}" ] && bad "G3 environment variable $v is set" ; done
-[ -e "$HOME/.git-credentials" ] && bad "G3 $HOME/.git-credentials exists" || ok "G3 no plaintext git credentials file"
+if gh auth status 2>&1 | grep -q "account $owner"; then bad "G3 the owner's account is still logged in to this CLI"; else ok "G3 owner account not present in this CLI"; fi
+for v in GH_TOKEN GITHUB_TOKEN GITHUB_PAT; do if [ -n "${!v:-}" ]; then bad "G3 environment variable $v is set"; fi; done
+if [ -e "$HOME/.git-credentials" ]; then bad "G3 $HOME/.git-credentials exists"; else ok "G3 no plaintext git credentials file"; fi
 
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
-git clone -q "https://github.com/$REPO.git" "$tmp/r" && cd "$tmp/r" || { bad "clone failed"; exit 1; }
+if ! git clone -q "https://github.com/$REPO.git" "$tmp/r"; then bad "clone failed"; exit 1; fi
+cd "$tmp/r" || exit 1
 git config user.name "$login"; git config user.email "$login@users.noreply.github.com"
 main=$(git rev-parse origin/main)
 
 # G4 rules apply to production (read-only check).
-gh api "repos/$REPO/rules/branches/production" --jq '[.[].type] | join(",")' | grep -q update \
-  && ok "G4 'restrict updates' applies to production" || bad "G4 'restrict updates' NOT applied to production"
+if gh api "repos/$REPO/rules/branches/production" --jq '[.[].type] | join(",")' | grep -q update; then
+  ok "G4 'restrict updates' applies to production"
+else
+  bad "G4 'restrict updates' NOT applied to production"
+fi
 
 # G5 push / force-push / delete on a production-protected branch.
 git fetch -q origin release-gate-test || true
@@ -63,6 +72,8 @@ denied "G7d add a deploy key" gh api -X POST "repos/$REPO/keys" -f title=probe -
 denied "G7e invite a collaborator" gh api -X PUT "repos/$REPO/collaborators/octocat" -f permission=admin
 
 # G8 self-approval: start a mode=test release, then try to approve it as the bot.
+# (Test mode accepts the commit release-gate-test is already at, as a no-op,
+# so this always reaches the approval step when main's CI is green.)
 gh workflow run release.yml --repo "$REPO" --ref main -f sha="$main" -f mode=test -f reason="gate self-approval probe (owner: do NOT approve)" >/dev/null 2>&1
 sleep 8
 run=$(gh run list --repo "$REPO" --workflow release.yml --limit 1 --json databaseId,headBranch --jq '.[0].databaseId')
@@ -75,7 +86,7 @@ done
 if [ "$st" = waiting ]; then
   env_id=$(gh api "repos/$REPO/actions/runs/$run/pending_deployments" --jq '.[0].environment.id')
   can=$(gh api "repos/$REPO/actions/runs/$run/pending_deployments" --jq '.[0].current_user_can_approve')
-  [ "$can" = false ] && ok "G8a GitHub reports the bot cannot approve (current_user_can_approve=false)" || bad "G8a current_user_can_approve=$can"
+  if [ "$can" = false ]; then ok "G8a GitHub reports the bot cannot approve (current_user_can_approve=false)"; else bad "G8a current_user_can_approve=$can"; fi
   denied "G8b bot approves its own release request" gh api -X POST "repos/$REPO/actions/runs/$run/pending_deployments" -F "environment_ids[]=$env_id" -f state=approved -f comment=probe
 else
   bad "G8 test run did not reach 'waiting' (status: $st). Check that verify passed (is main CI-green?)"
@@ -83,16 +94,27 @@ fi
 gh run cancel "$run" --repo "$REPO" >/dev/null 2>&1 || true
 
 # G9 run a modified release workflow from another branch: the environment must refuse it.
+# The probe replaces release.yml with a version that has no checks at all and
+# just asks the environment for the key.
 git checkout -q -B gate-probe "$main"
-python3 - <<'PY'
-import re
-p='.github/workflows/release.yml'; s=open(p).read()
-s=re.sub(r"\n    if: github\.ref == 'refs/heads/main'[^\n]*", "", s)                     # drop main-only guards
-s=s.replace("check_ci ;;", ":;;")                                                   # skip CI checks
-s=re.sub(r"(      - name: Re-validate.*?)(?=\n      - name: Mint)", "      - name: Re-validate\n        run: 'true'", s, flags=re.S)
-s=re.sub(r"\n      - name: Mint.*\Z", "\n      - name: Probe\n        env:\n          K: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}\n        run: if [ -n \"$K\" ]; then echo KEY_AVAILABLE; else echo NO_KEY; fi\n", s, flags=re.S)
-open(p,'w').write(s)
-PY
+cat > .github/workflows/release.yml <<'YML'
+name: Release to production
+on:
+  workflow_dispatch:
+    inputs:
+      sha: { required: true, type: string }
+      mode: { required: true, type: string }
+      reason: { required: true, type: string }
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    environment: production-release
+    steps:
+      - name: Probe
+        env:
+          K: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+        run: if [ -n "$K" ]; then echo KEY_AVAILABLE; else echo NO_KEY; fi
+YML
 git commit -q -am "gate probe: modified release workflow (must not reach the key)"
 if git push -q origin HEAD:refs/heads/gate-probe 2>/dev/null; then
   gh workflow run release.yml --repo "$REPO" --ref gate-probe -f sha="$main" -f mode=test -f reason="gate branch probe" >/dev/null 2>&1
@@ -119,6 +141,16 @@ if git push -q origin HEAD:refs/heads/gate-codeowners 2>/dev/null; then
   gh pr close "$url" --repo "$REPO" --delete-branch >/dev/null 2>&1 || git push -q origin :refs/heads/gate-codeowners
 else
   bad "G10 could not push probe branch"
+fi
+
+# G11 the release workflow on main is fast-forward only: modes are exactly
+# release and test, and no non-comment line force-pushes.
+wf=$(gh api "repos/$REPO/contents/.github/workflows/release.yml?ref=main" --jq .content | base64 -d)
+if grep -qE '^\s*options: \[release, test\]\s*$' <<< "$wf"; then ok "G11a release modes are exactly [release, test]"; else bad "G11a release workflow modes are not exactly [release, test]"; fi
+if grep -vE '^\s*#' <<< "$wf" | grep -qE -- '--force|force-with-lease|push[^#]*\+[0-9a-zA-Z$"]|mode: rollback'; then
+  bad "G11b release workflow on main contains a force-push or rollback path"
+else
+  ok "G11b release workflow on main has no force-push or rollback path"
 fi
 
 echo
