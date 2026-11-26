@@ -7,7 +7,7 @@ const { quoteArg, exportCommand, updateCommand } = require('./otaCommands');
 test('export command passes the inner expo command to env:exec as ONE quoted argument', () => {
   assert.equal(
     exportCommand('dist-ota'),
-    'npx eas-cli env:exec production "npx expo export --platform ios --platform android --output-dir dist-ota"',
+    'npx eas-cli env:exec production "npx expo export --clear --platform ios --platform android --output-dir dist-ota"',
   );
 });
 
