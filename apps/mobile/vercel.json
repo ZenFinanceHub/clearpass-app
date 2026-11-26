@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npx expo export --platform web",
+  "buildCommand": "node scripts/check-build-env.js && npx expo export --platform web",
   "outputDirectory": "dist",
   "framework": null,
   "installCommand": "npm install",

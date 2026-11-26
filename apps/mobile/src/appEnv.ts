@@ -6,7 +6,12 @@
  * that feeds it the inlined EXPO_PUBLIC_* values.
  *
  * Rules (see docs/environments.md):
- *  - EXPO_PUBLIC_APP_ENV unset or empty means production, with the values
+ *  - In a development build (__DEV__) EXPO_PUBLIC_APP_ENV is required; unset
+ *    throws. Release builds that run in a non-production context (Vercel
+ *    previews, EAS non-production profiles) are stopped at build time by
+ *    scripts/check-build-env.js, because a release bundle can't tell on its
+ *    own where it is running.
+ *  - In a release build, EXPO_PUBLIC_APP_ENV unset or empty means production, with the values
  *    pinned below. These are exactly the values the app hardcoded before
  *    environments existed, so EAS production builds, `npm run ota:production`
  *    and Vercel production builds behave identically. In production any
@@ -114,6 +119,17 @@ function jwtRef(key: string): string | null {
 export function resolveAppEnv(raw: RawAppEnvVars, opts: { isDev: boolean }): ResolvedAppEnv {
   const envName = clean(raw.EXPO_PUBLIC_APP_ENV);
   const uiV2Requested = clean(raw.EXPO_PUBLIC_UI_V2) === '1';
+
+  // A development build (__DEV__: `expo start`, dev client) is never
+  // production by default. It must name its backend: `local` for the Docker
+  // stack, or `production` explicitly to deliberately use live data. Missing
+  // config fails closed instead of silently talking to production.
+  if (envName === '' && opts.isDev) {
+    throw new AppEnvConfigError(
+      'EXPO_PUBLIC_APP_ENV is not set in a development build. Set it to "local" (Docker stack) or, ' +
+        'only to deliberately use live data, "production"',
+    );
+  }
 
   if (envName === '' || envName === 'production') {
     return {

@@ -43,8 +43,13 @@ test('APP_ENV unset resolves to exactly the legacy production values (release bu
   assert.equal(PRODUCTION_API_URL, LEGACY_RAILWAY);
 });
 
-test('APP_ENV unset in a __DEV__ build keeps the legacy localhost:3001 API', () => {
-  const r = resolveAppEnv({}, { isDev: true });
+test('APP_ENV unset in a __DEV__ build fails closed (never silently production)', () => {
+  assert.throws(() => resolveAppEnv({}, { isDev: true }), /not set in a development build/);
+  assert.throws(() => resolveAppEnv({ EXPO_PUBLIC_APP_ENV: '  ' }, { isDev: true }), AppEnvConfigError);
+});
+
+test('APP_ENV=production set explicitly in a __DEV__ build keeps the legacy localhost:3001 API', () => {
+  const r = resolveAppEnv({ EXPO_PUBLIC_APP_ENV: 'production' }, { isDev: true });
   assert.equal(r.apiUrl, 'http://localhost:3001');
   assert.equal(r.supabaseUrl, LEGACY_SUPABASE_URL);
 });

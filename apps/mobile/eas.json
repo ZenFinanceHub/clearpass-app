@@ -13,7 +13,8 @@
       "channel": "preview",
       "environment": "preview",
       "env": {
-        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "EXPO_PUBLIC_APP_ENV": "staging"
       },
       "android": {
         "buildType": "apk"

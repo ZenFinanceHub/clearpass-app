@@ -10,7 +10,7 @@ now chosen by `EXPO_PUBLIC_APP_ENV`.
 
 | Variable | local | staging | production |
 |---|---|---|---|
-| `EXPO_PUBLIC_APP_ENV` | `local` | `staging` | unset (or `production`) |
+| `EXPO_PUBLIC_APP_ENV` | `local` | `staging` | unset (or `production`) in release builds. **Required** in development builds (`__DEV__`) |
 | `EXPO_PUBLIC_SUPABASE_URL` | `http://127.0.0.1:55321` (required) | staging project URL (required) | ignored: pinned in `src/appEnv.ts` |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | local demo anon key (required) | staging anon key (required) | ignored: pinned |
 | `EXPO_PUBLIC_API_URL` | optional, default `http://localhost:3001` | staging Railway URL (required) | ignored: `__DEV__` → `http://localhost:3001`, release → production Railway |
@@ -20,6 +20,7 @@ Where they are set:
 
 - **local**: `npm run web:local` (from `apps/mobile/server`) sets them from the running local stack.
 - **staging**: EAS `preview` environment (`eas.json` preview profile now has `"environment": "preview"`) and Vercel **Preview** scope. See the setup guide §2 and §3.1.
+- **development builds** (`expo start`, dev client): `EXPO_PUBLIC_APP_ENV` must be set. Use `local`, or `production` explicitly to deliberately work against live data (the old default). An unset value now refuses to start.
 - **production**: nothing to set. EAS production builds, `npm run ota:production` and Vercel production deployments resolve exactly the values the app hardcoded before (unit-tested in `scripts/lib/appEnv.test.mjs`).
 
 Code: `apps/mobile/src/appEnv.ts` (pure resolver, unit-tested) and
@@ -29,8 +30,18 @@ statically, because Expo only inlines static references). `src/supabase.ts`,
 
 ### Fail-closed rules
 
-At startup, `src/appConfig.ts` throws, and the app does not start, if:
+**At build time**, `scripts/check-build-env.js` (rules in `scripts/lib/buildEnvGuard.js`, unit-tested) runs as part of the Vercel `buildCommand` (`vercel.json`) and as the EAS `eas-build-pre-install` hook. It fails the build when:
 
+- Vercel `VERCEL_ENV` is `preview` or `development` and `EXPO_PUBLIC_APP_ENV` is unset or `production`. **A preview with no env vars at all fails**;
+- EAS `EAS_BUILD_PROFILE` is anything other than `production` or `development` and `EXPO_PUBLIC_APP_ENV` is unset or `production` (`eas.json` preview profile also pins `EXPO_PUBLIC_APP_ENV=staging`, so a preview build without staging values fails);
+- a production context (Vercel production, EAS production) carries `local` or `staging`;
+- `local`/`staging` is missing a value or points at production (same checks as below).
+
+A release bundle can't detect where it runs, so with no build signal (a developer machine, `npm run ota:production`) an unset value still means production. That is what production builds rely on.
+
+**At startup**, `src/appConfig.ts` throws, and the app does not start, if:
+
+- the build is a development build (`__DEV__`) and `EXPO_PUBLIC_APP_ENV` is unset;
 - `EXPO_PUBLIC_APP_ENV` is anything other than `local`, `staging`, `production` or empty;
 - `local`/`staging` lacks a Supabase URL or anon key, or `staging` lacks `EXPO_PUBLIC_API_URL`;
 - `local`/`staging` points at a production host (`secavejbaapapvvqbwed.supabase.co`, `clearpass-app-production.up.railway.app`) or uses the production anon key (exact match, or a JWT whose `ref` is the production project).
@@ -167,4 +178,8 @@ setup guide) would send the native support chat to Railway, which has no
 - Seed staging: `SUPABASE_URL=<staging> SUPABASE_SERVICE_KEY=<staging service key> CLEARPASS_SEED_ALLOWED_HOSTS=<staging host> CLEARPASS_SEED_PASSWORD=<…> node scripts/seed-local.js`. Values come from the credentials file and are never printed.
 - Copy or rehost question images (see above) and hazard clips for staging.
 - Stripe test mode and the RevenueCat decision above (A3).
-- Until then, Vercel previews and EAS preview builds keep resolving to production (APP_ENV unset), exactly as today.
+- Until then, Vercel preview builds and EAS preview builds **fail** at the build-env check instead of resolving to production. (Vercel non-production builds are also switched off in the dashboard, action A0.)
+
+## Instructor web (`apps/instructor-web`)
+
+`next.config.ts` runs `lib/backendGuard.ts` at build and dev start. It refuses the production Supabase or API host unless `VERCEL_ENV=production`. On a developer machine (no `VERCEL_ENV`), `NEXT_PUBLIC_APP_ENV=production` must be set explicitly to use live data. Missing values still fail at runtime in `lib/supabase.ts`.
