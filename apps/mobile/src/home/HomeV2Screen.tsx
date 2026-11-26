@@ -71,7 +71,7 @@ export function HomeV2Screen() {
   const insets = useSafeAreaInsets();
   // The desktop sidebar (SideNavV2, wide layouts) already shows the app icon and wordmark.
   const { width: windowWidth } = useWindowDimensions();
-  const { colors } = useDesignTheme();
+  const { colors, reduceMotion } = useDesignTheme();
 
   const loadInitial = useCallback(async () => {
     setLoading(true);
@@ -263,7 +263,7 @@ export function HomeV2Screen() {
         onClose={() => setDateModal(false)}
         onSave={async (iso) => { await saveDate(iso); setDateModal(false); }}
       />
-      {celebQueue[0] && <CelebrationModal event={celebQueue[0]} onDismiss={handleCelebDismiss} />}
+      {celebQueue[0] && <CelebrationModal event={celebQueue[0]} onDismiss={handleCelebDismiss} reduceMotion={reduceMotion} />}
       {streakToastDays !== null && <StreakToast days={streakToastDays} onHide={() => setStreakToastDays(null)} />}
     </View>
   );

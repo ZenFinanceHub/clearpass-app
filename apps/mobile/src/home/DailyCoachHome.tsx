@@ -7,6 +7,7 @@ import { useDesignTheme } from '@/src/design';
 import { contentMaxWidth, minTouchTarget } from '@/src/design/tokens';
 import { Badge, Button, Card, Icon, ProgressBar, Text, type IconName } from '@/src/ui';
 import { copy } from './homeCopy';
+import { TOPIC_PICKER_ROUTE } from '@/src/nav/routeMap';
 import type { Coach, HomeViewModel, PlanItem, QuickAction, Upgrade } from './homeViewModel';
 import type { PipPose } from './homeViewModel';
 import type { PipMood } from '@/src/components/Pip';
@@ -333,15 +334,29 @@ function CoachCard({ coach, onNavigate, onRetry, onDismissNudge, compact, pipW }
         </View>
       </View>
       {coach.action ? (
-        <Button
-          label={coach.action.cta}
-          icon="arrow-forward"
-          size="lg"
-          numberOfLines={2}
-          onPress={() => onNavigate(coach.action!.route)}
-          style={{ marginTop: compact ? 10 : 16, alignSelf: 'stretch' }}
-          testID="coach-cta"
-        />
+        <>
+          <Button
+            label={coach.action.cta}
+            icon="arrow-forward"
+            size="lg"
+            numberOfLines={2}
+            onPress={() => onNavigate(coach.action!.route)}
+            style={{ marginTop: compact ? 10 : 16, alignSelf: 'stretch' }}
+            testID="coach-cta"
+          />
+          {coach.action.id === 'weak-topic' ? (
+            // Topic revision: practise a different topic instead (opens the Learn picker).
+            <Button
+              label="Choose another topic"
+              variant="ghost"
+              icon="list-outline"
+              iconPosition="left"
+              onPress={() => onNavigate(TOPIC_PICKER_ROUTE)}
+              style={{ marginTop: 4, alignSelf: 'stretch' }}
+              testID="coach-choose-topic"
+            />
+          ) : null}
+        </>
       ) : onRetry ? (
         <Button label={copy.retry} icon="refresh" iconPosition="left" size="lg" onPress={onRetry} style={{ marginTop: 12, alignSelf: 'stretch' }} testID="coach-retry" />
       ) : null}

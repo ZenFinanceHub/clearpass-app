@@ -79,6 +79,13 @@ export interface HubEntry {
   nativeOnly?: boolean;
 }
 
+/**
+ * Topic revision (spec §6.2): opens the topic picker on the Learn hub. Each
+ * topic then starts the existing topic launcher (practice?topic=<key>).
+ * Also linked from Home's weak-topic coach card.
+ */
+export const TOPIC_PICKER_ROUTE = '/(tabs)/learn?revise=topics';
+
 export const LEARN_HUB: readonly HubEntry[] = [
   { id: 'practice', title: 'Practice questions', subtitle: 'Mixed sets across every topic', route: '/(tabs)/practice', icon: 'school-outline' },
   { id: 'ask-pip', title: 'Ask Pip', subtitle: 'Get any question explained', route: '/(tabs)/tutor', icon: 'chatbubble-ellipses-outline', onlineOnly: true },
@@ -87,6 +94,7 @@ export const LEARN_HUB: readonly HubEntry[] = [
   { id: 'battle', title: 'Battle Mode', subtitle: 'Combo streaks on your weakest topics', route: '/(tabs)/practice?launch=battle', icon: 'flash-outline' },
   { id: 'challenge', title: 'Challenge a friend', subtitle: 'Send a head-to-head quiz', route: '/challenge', icon: 'people-outline' },
   { id: 'bookmarked', title: 'Bookmarked questions', subtitle: 'Your saved questions', route: '/(tabs)/practice?mode=bookmarked', icon: 'bookmark-outline' },
+  { id: 'topic-revision', title: 'Topic revision', subtitle: 'Pick a topic and practise it', route: TOPIC_PICKER_ROUTE, icon: 'list-outline' },
   { id: 'road-signs', title: 'Road signs', subtitle: 'Learn all UK signs', route: '/(tabs)/roadsigns', icon: 'warning-outline' },
   { id: 'highway-code', title: 'Highway Code', subtitle: 'Rules and regulations', route: '/(tabs)/highwaycode', icon: 'document-text-outline' },
   { id: 'study-plan', title: 'Study plan', subtitle: 'Your daily task to test day', route: '/study-plan', icon: 'calendar-outline' },

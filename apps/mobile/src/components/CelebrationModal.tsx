@@ -113,9 +113,15 @@ function ConfettiPiece({ cfg }: { cfg: PieceConfig }) {
 export function CelebrationModal({
   event,
   onDismiss,
+  reduceMotion = false,
 }: {
   event: CelebrationEvent;
   onDismiss: () => void;
+  /**
+   * ClearPass 2.0 Home passes useReduceMotion(): no confetti, no Pip bounce,
+   * the button shown at once. Omitted (false) everywhere else, as before.
+   */
+  reduceMotion?: boolean;
 }) {
   const config = CELEBRATION_CONFIGS[event];
 
@@ -139,6 +145,7 @@ export function CelebrationModal({
   // Pip bounce: 1 → 1.18 → 1, 3 iterations
   const bounceAnim = useRef(new Animated.Value(1)).current;
   useEffect(() => {
+    if (reduceMotion) return;
     Animated.loop(
       Animated.sequence([
         Animated.timing(bounceAnim, {
@@ -159,8 +166,9 @@ export function CelebrationModal({
   }, []);
 
   // Button fades in after 1 s
-  const btnOpacity = useRef(new Animated.Value(0)).current;
+  const btnOpacity = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
   useEffect(() => {
+    if (reduceMotion) return;
     const tid = setTimeout(() => {
       Animated.timing(btnOpacity, { toValue: 1, duration: 450, useNativeDriver: true }).start();
     }, 1000);
@@ -177,7 +185,7 @@ export function CelebrationModal({
     <Modal visible transparent animationType="fade" onRequestClose={() => onDismissRef.current()}>
       <View style={styles.backdrop}>
         {/* Confetti layer */}
-        {pieces.map(p => (
+        {!reduceMotion && pieces.map(p => (
           <ConfettiPiece key={p.id} cfg={p} />
         ))}
 

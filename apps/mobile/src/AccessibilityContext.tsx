@@ -10,6 +10,12 @@ export interface AccessibilitySettings {
   creamBackground: boolean;
   darkMode: boolean;
   soundEffects: boolean;
+  /**
+   * ClearPass 2.0 in-app Reduced Motion (ui_v2 only). Unset = follow the OS
+   * setting, so it is deliberately not in DEFAULTS. Read it via
+   * useReduceMotion() (src/design), never directly.
+   */
+  reduceMotion?: boolean;
 }
 
 const DEFAULTS: AccessibilitySettings = {

@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, type TextStyle } from 'react-native';
 import { useAccessibility } from '@/src/AccessibilityContext';
+import { uiV2 } from '@/src/uiFlags';
 import { useInterFonts } from './fonts';
+import { resolveReduceMotion } from './motion';
 import {
   buildColorTokens,
   interFamily,
@@ -19,8 +21,8 @@ import {
 /**
  * ClearPass 2.0 theme. Reads the EXISTING in-app accessibility settings
  * (src/AccessibilityContext: darkMode, highContrast, creamBackground,
- * largeText, dyslexiaFont, wordSpacing) — no new stored settings — and
- * combines Reduced Motion from the OS.
+ * largeText, dyslexiaFont, wordSpacing) and Reduced Motion (the OS setting,
+ * or the in-app toggle when ui_v2 is on; see useReduceMotion).
  *
  * `DesignThemeProvider` is optional: `useDesignTheme()` works without it.
  * The provider exists so a dev preview can force a scheme
@@ -46,12 +48,7 @@ export function DesignThemeProvider({ overrides, children }: { overrides?: Desig
   return <OverridesContext.Provider value={value}>{children}</OverridesContext.Provider>;
 }
 
-/**
- * OS reduce-motion setting. The app has NO in-app reduced-motion setting today
- * (AccessibilitySettings: dyslexiaFont, largeText, highContrast, textToSpeech,
- * wordSpacing, creamBackground, darkMode, soundEffects). The toggle is planned
- * for P6-1 and will be OR-ed in here.
- */
+/** OS reduce-motion setting. Use useReduceMotion() in components. */
 export function useOsReduceMotion(): boolean {
   const [reduce, setReduce] = useState(false);
   useEffect(() => {
@@ -63,6 +60,17 @@ export function useOsReduceMotion(): boolean {
     return () => { alive = false; sub?.remove?.(); };
   }, []);
   return reduce;
+}
+
+/**
+ * THE reduced-motion hook: every animation (road scene, Pip, ui_v2 screens)
+ * reads this. With ui_v2 on, the in-app Profile › Accessibility toggle wins
+ * once set; until then (and always with the flag off) it is the OS setting.
+ */
+export function useReduceMotion(): boolean {
+  const { settings } = useAccessibility();
+  const os = useOsReduceMotion();
+  return resolveReduceMotion({ inApp: settings.reduceMotion, os, uiV2 });
 }
 
 export interface DesignTheme {
@@ -82,14 +90,14 @@ export interface DesignTheme {
 export function useDesignTheme(): DesignTheme {
   const overrides = useContext(OverridesContext);
   const { settings } = useAccessibility();
-  const osReduceMotion = useOsReduceMotion();
+  const appReduceMotion = useReduceMotion();
   const fontsLoaded = useInterFonts();
 
   const scheme: ColorScheme = overrides.scheme ?? (settings.darkMode ? 'dark' : 'light');
   const { highContrast, creamBackground, dyslexiaFont, wordSpacing } = settings;
   const largeText = overrides.largeText ?? settings.largeText;
   const emulatedScale = overrides.fontScale ?? 1;
-  const reduceMotion = overrides.reduceMotion ?? osReduceMotion;
+  const reduceMotion = overrides.reduceMotion ?? appReduceMotion;
 
   return useMemo<DesignTheme>(() => {
     const colors = buildColorTokens({ scheme, highContrast, cream: creamBackground });

@@ -22,6 +22,9 @@ import { getAccessToken } from '@/src/getAccessToken';
 import { useAccessibility } from '@/src/AccessibilityContext';
 import type { AccessibilitySettings } from '@/src/AccessibilityContext';
 import { useTheme } from '@/src/theme';
+import { uiV2 } from '@/src/uiFlags';
+import { useReduceMotion } from '@/src/design/ThemeProvider';
+import { REDUCED_MOTION_SETTING } from '@/src/design/motion';
 import { Colors } from '@/src/constants/theme';
 import { calculateReadiness } from '@clearpass/core';
 import { allQuestions, highwayCodeChapters, roadSigns } from '@clearpass/content';
@@ -123,6 +126,9 @@ const SETTINGS: SettingConfig[] = [
   },
 ];
 
+// ClearPass 2.0 (ui_v2 only): the in-app Reduce Motion toggle (spec §6.9).
+const ACCESSIBILITY_ROWS: SettingConfig[] = uiV2 ? [...SETTINGS, REDUCED_MOTION_SETTING] : SETTINGS;
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getInitials(name: string): string {
@@ -151,6 +157,8 @@ function linkedInstructorsSubtitle(linked: number, pending: number): string {
 export default function SettingsScreen() {
   const { settings, setSetting } = useAccessibility();
   const theme = useTheme();
+  // Effective value (OS setting until the learner toggles it); only shown with ui_v2 on.
+  const reduceMotion = useReduceMotion();
 
   // Profile state
   const [username, setUsername]           = useState<string | null>(null);
@@ -827,10 +835,12 @@ export default function SettingsScreen() {
       </Text>
 
       <View style={[styles.group, { backgroundColor: theme.cardColor }]}>
-        {SETTINGS.map((item, index) => (
+        {ACCESSIBILITY_ROWS.map((item, index) => {
+          const value = item.key === 'reduceMotion' ? reduceMotion : settings[item.key];
+          return (
           <View
             key={item.key}
-            style={[styles.row, index < SETTINGS.length - 1 && styles.rowBorder]}
+            style={[styles.row, index < ACCESSIBILITY_ROWS.length - 1 && styles.rowBorder]}
           >
             <View style={styles.iconWrap}>
               <Text style={styles.iconText}>{item.icon}</Text>
@@ -840,14 +850,15 @@ export default function SettingsScreen() {
               <Text style={[styles.description, { fontSize: theme.fontSize(12), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(17), color: theme.subTextColor }]}>{item.description}</Text>
             </View>
             <Switch
-              value={settings[item.key]}
+              value={value}
               onValueChange={(val) => { setSetting(item.key, val); showSavedToast(); }}
               trackColor={{ false: '#E5E7EB', true: Colors.indigo }}
-              thumbColor={settings[item.key] ? '#FFFFFF' : '#9CA3AF'}
+              thumbColor={value ? '#FFFFFF' : '#9CA3AF'}
               ios_backgroundColor={'#E5E7EB'}
             />
           </View>
-        ))}
+          );
+        })}
       </View>
 
       <View style={styles.noteBox}>
