@@ -1,0 +1,181 @@
+name: OTA rollback (republish an earlier update)
+
+# Rolls the native apps back by republishing an EARLIER EAS update group to
+# the `production` branch, so it becomes the newest update again. Same
+# approval and credential as ota-production.yml (`production-ota`
+# environment: owner approval, admins cannot bypass, `main` only).
+#
+# The command (verified against eas-cli 27.7.2, the pinned version):
+#   eas update:republish --group <group id> --destination-branch production
+#     --message "..." --non-interactive --json
+# Confirmed in `eas update:republish --help` (flags --group,
+# --destination-branch, --message, --non-interactive, --json) and in its
+# source, build/commands/update/republish.js: with --group it loads exactly
+# that group's updates; with --destination-branch it publishes copies to
+# that branch (without it, to the group's own branch). It re-signs nothing
+# and rebuilds nothing: the original bundle is reused.
+# Not verified end to end: this needs an EXPO_TOKEN, which this repository
+# does not hold yet.
+#
+# Other options, deliberately NOT used:
+#   - `eas update:republish --branch production` republishes the LATEST
+#     update on the branch, which is not a rollback.
+#   - `eas update:roll-back-to-embedded` makes apps fall back to the JS
+#     embedded in their store build. Possible, but it discards every OTA
+#     since the store build; republishing a known-good group is narrower.
+#
+# The approved job checks, with the token, that the group exists and was
+# published to `production` before republishing it. Like the upload job of
+# ota-production.yml, it executes no repository code: only the pinned
+# eas-cli, reading app.json/eas.json from the current `production` commit
+# (CODEOWNERS, pinned to this EAS project).
+
+on:
+  workflow_dispatch:
+    inputs:
+      group:
+        description: "EAS update group ID to republish (the last good one), e.g. from the OTA run summary or expo.dev"
+        required: true
+        type: string
+      reason:
+        description: "One line for the approver, e.g. 'roll back 1.1.3 paywall OTA: crash on Android'"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ota-production
+  cancel-in-progress: false
+
+env:
+  EAS_PROJECT_ID: dac8f561-57cc-4b8b-b13d-7302561d71ee
+  EXPO_ACCOUNT: craigyp1982
+  EAS_CLI_VERSION: 27.7.2
+  NODE_VERSION: '22'
+
+jobs:
+  request:
+    name: Describe the rollback (no secrets)
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Validate and summarise
+        env:
+          GROUP: ${{ inputs.group }}
+          REASON: ${{ inputs.reason }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; echo "### ❌ Rollback refused: $1" >> "$GITHUB_STEP_SUMMARY"; exit 1; }
+          [[ "$GROUP" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || fail "group must be an EAS update group ID (lowercase UUID)"
+          if [ "${#REASON}" -lt 3 ] || [ "${#REASON}" -gt 200 ]; then fail "reason must be 3-200 characters"; fi
+          if [[ "$REASON" == *$'\n'* || "$REASON" == *$'\r'* ]]; then fail "reason must be one line"; fi
+          {
+            echo "## Production OTA rollback request"
+            echo "- **Reason:** $REASON"
+            echo "- **Republish update group:** \`$GROUP\` to EAS branch \`production\`"
+            echo "- **Check it first:** https://expo.dev/accounts/$EXPO_ACCOUNT/projects/clearpass/updates/$GROUP (message, commit, runtime version, date)"
+            echo
+            echo "After approval the job confirms the group exists and was published to \`production\`, then republishes it; phones on that runtime version get it on their next launch."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  republish:
+    name: Republish (requires approval)
+    needs: request
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: production-ota
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Install the pinned eas-cli and prepare the project config (no credential)
+        env:
+          WORKFLOW_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          raw() { gh api -H 'Accept: application/vnd.github.raw' "repos/$REPO/contents/$1?ref=$2"; }
+          mkdir -p "$RUNNER_TEMP/eas-cli"
+          raw .github/ota/eas-cli/package.json "$WORKFLOW_SHA" > "$RUNNER_TEMP/eas-cli/package.json"
+          raw .github/ota/eas-cli/package-lock.json "$WORKFLOW_SHA" > "$RUNNER_TEMP/eas-cli/package-lock.json"
+          (cd "$RUNNER_TEMP/eas-cli" && npm ci --ignore-scripts --no-audit --no-fund --loglevel=error)
+          v=$(jq -r .version "$RUNNER_TEMP/eas-cli/node_modules/eas-cli/package.json")
+          [ "$v" = "$EAS_CLI_VERSION" ] || { echo "::error::eas-cli $v installed, expected $EAS_CLI_VERSION"; exit 1; }
+
+          SHA=$(gh api "repos/$REPO/branches/production" --jq .commit.sha)
+          P="$RUNNER_TEMP/project"; mkdir -p "$P"
+          entries=$(gh api "repos/$REPO/contents/apps/mobile?ref=$SHA" --jq '.[].name')
+          if grep -qE '^app\.config\.(js|ts|mjs|cjs)$' <<< "$entries"; then echo "::error::dynamic app config present; refusing"; exit 1; fi
+          # Without `plugins`: eas-cli's bundled reader can't resolve plugin
+          # code (and must not). Republish reuses the original update's
+          # manifest, so the config here only identifies the project.
+          raw apps/mobile/app.json "$SHA" > "$RUNNER_TEMP/repo-app.json"
+          jq '.expo |= del(.plugins)' "$RUNNER_TEMP/repo-app.json" > "$P/app.json"
+          raw apps/mobile/eas.json "$SHA" > "$P/eas.json"
+          jq -e --arg id "$EAS_PROJECT_ID" --arg acct "$EXPO_ACCOUNT" '
+            .expo.extra.eas.projectId == $id
+            and .expo.owner == $acct
+            and .expo.updates.url == ("https://u.expo.dev/" + $id)
+            and (.expo.updates.codeSigningCertificate == null)
+          ' "$P/app.json" >/dev/null || { echo "::error::app.json is not this EAS project's static config"; exit 1; }
+          jq -e '(.cli // {}) | keys - ["version","appVersionSource","requireCommit","promptToConfigurePush"] | length == 0' "$P/eas.json" >/dev/null \
+            || { echo "::error::eas.json has cli settings this workflow does not allow"; exit 1; }
+          pkg=$(raw apps/mobile/package.json "$SHA")
+          expo_v=$(jq -r '.dependencies.expo // empty' <<< "$pkg")
+          upd_v=$(jq -r '.dependencies["expo-updates"] // empty' <<< "$pkg")
+          for x in "$expo_v" "$upd_v"; do [[ "$x" =~ ^[~^]?[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::unexpected expo/expo-updates version string"; exit 1; }; done
+          jq -n --arg e "$expo_v" --arg u "$upd_v" '{name:"clearpass", private:true, dependencies:{expo:$e, "expo-updates":$u}}' > "$P/package.json"
+          # Same guard as ota-production.yml: nothing of the project's may be
+          # resolvable, so only eas-cli's bundled code runs.
+          [ -z "${NODE_PATH:-}" ] || { echo "::error::NODE_PATH is set"; exit 1; }
+          d="$P"; while [ "$d" != / ]; do [ ! -e "$d/node_modules" ] || { echo "::error::$d/node_modules exists above the project dir"; exit 1; }; d=$(dirname "$d"); done
+          plugins=$(jq -r '.expo.plugins // [] | .[] | if type == "array" then .[0] else . end' "$RUNNER_TEMP/repo-app.json")
+          for m in expo expo-updates expo/fingerprint $plugins; do
+            if node -e 'require.resolve(process.argv[1], { paths: [process.argv[2]] })' "$m" "$P" 2>/dev/null; then
+              echo "::error::'$m' is resolvable from the project dir; refusing"; exit 1
+            fi
+          done
+
+      - name: Check the group, then republish it to production
+        working-directory: ${{ runner.temp }}/project
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_NO_VCS: '1'
+          EAS_PROJECT_ROOT: ${{ runner.temp }}/project
+          EXPO_NO_TELEMETRY: '1'
+          GROUP: ${{ inputs.group }}
+          REASON: ${{ inputs.reason }}
+        run: |
+          set -euo pipefail
+          [[ "$GROUP" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || { echo "::error::bad group id"; exit 1; }
+          eas="$RUNNER_TEMP/eas-cli/node_modules/.bin/eas"
+          "$eas" update:view "$GROUP" --json > "$RUNNER_TEMP/group.json"
+          jq -e 'length > 0 and all(.[]; .branch == "production" and (.isRollBackToEmbedded | not))' "$RUNNER_TEMP/group.json" >/dev/null \
+            || { echo "::error::group $GROUP was not published to the production branch (or is a roll-back-to-embedded)"; exit 1; }
+          {
+            echo "### Republishing update group \`$GROUP\`"
+            echo "| Platform | Runtime | Created | Commit | Message |"
+            echo "|---|---|---|---|---|"
+            jq -r '.[] | "| \(.platform) | \(.runtimeVersion) | \(.createdAt) | `\((.gitCommitHash // "") | .[0:7])` | \(.message // "" | gsub("\\|"; "/")) |"' "$RUNNER_TEMP/group.json"
+          } >> "$GITHUB_STEP_SUMMARY"
+          "$eas" update:republish \
+            --group "$GROUP" \
+            --destination-branch production \
+            --message "Rollback to $GROUP: $REASON" \
+            --non-interactive \
+            --json > "$RUNNER_TEMP/republished.json"
+          {
+            echo
+            echo "### ✅ Republished to EAS branch \`production\`"
+            echo '```json'
+            jq '[.[]? | {platform, group, runtimeVersion}]' "$RUNNER_TEMP/republished.json" 2>/dev/null || cat "$RUNNER_TEMP/republished.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,8 @@
+{
+  "name": "clearpass-ota-eas-cli",
+  "private": true,
+  "description": "The pinned eas-cli used by the credentialed jobs of ota-production.yml and ota-rollback.yml. They install it with `npm ci --ignore-scripts` from this lockfile (every package has an integrity hash), outside the checkout; no repository code or dependency is involved. To upgrade: pick a version published at least 2 weeks ago, then in this folder run `npm install --package-lock-only --ignore-scripts --before=<that publish date> eas-cli@<version>` and update EAS_CLI_VERSION in both workflows.",
+  "dependencies": {
+    "eas-cli": "27.7.2"
+  }
+}
