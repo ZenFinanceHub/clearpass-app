@@ -74,6 +74,19 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
   - Vercel production needs the two non-secret variables first (A12, Chrome prompt C1b).
   - In a release bundle the app itself keeps its pinned-production fallback, deliberately: crashing every user is worse than a degraded update.
   - Tests: scripts 20 + 39 pass; instructor-web guard 7 pass.
+- **M0.5 reviewed (Craig plus ChatGPT): direction approved.** Retained: palette, typography, Pip, road animation, learner states, light/dark, five tabs.
+  - **Refinement round (M0.6) in progress on #114/#115:**
+    - mobile density, so the next step is visible without scrolling at 390×844, 375×667 and 412×915;
+    - a single Daily Coach card (Pip plus next step) whose CTA opens the recommended topic directly;
+    - a desktop left sidebar (mobile keeps bottom tabs);
+    - an indigo/gold Go Pro card with personalised copy and only verified benefits, never shown to Pro;
+    - readiness/milestone clarity, with a journey-start state instead of an assessed-looking 0% (presentation only);
+    - road-sign accuracy: **report only**, no artwork change;
+    - finishing details: ticks not strikethroughs, zero-streak copy, Pro badge by name, real-shape skeletons, error/retry, reduced motion, free goals within free limits, long names, small screens, large text, contrast;
+    - a placement plan for all existing Home features.
+  - **Deliverables:** before/after comparisons and real viewport screenshots.
+  - **The design system isn't locked until this round is reviewed.**
+- **#108:** the seed now sets `profiles.account_class='internal'` where the column exists (verified locally with and without it).
 - **M0.5 delivered:** a static Home preview, drafts **#114** (design foundation and components) and **#115** (Daily Coach Home).
   - **Screenshots:** 5 learner states × mobile/desktop × light/dark, on a private gallery page.
   - **Tests:** scripts 8 + 52 pass; tsc 0 errors (main has 1). `RoadmapPath.tsx` and `assets/` are unchanged.
