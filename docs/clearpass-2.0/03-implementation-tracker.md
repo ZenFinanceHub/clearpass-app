@@ -74,6 +74,12 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
   - Vercel production needs the two non-secret variables first (A12, Chrome prompt C1b).
   - In a release bundle the app itself keeps its pinned-production fallback, deliberately: crashing every user is worse than a degraded update.
   - Tests: scripts 20 + 39 pass; instructor-web guard 7 pass.
+- **M0.5 delivered:** a static Home preview, drafts **#114** (design foundation and components) and **#115** (Daily Coach Home).
+  - **Screenshots:** 5 learner states × mobile/desktop × light/dark, on a private gallery page.
+  - **Tests:** scripts 8 + 52 pass; tsc 0 errors (main has 1). `RoadmapPath.tsx` and `assets/` are unchanged.
+  - **Dependency added:** `@expo-google-fonts/inter` (JS and assets only, OTA-safe).
+  - **Finding:** Metro's cache can carry `EXPO_PUBLIC_*` values between exports. A production OTA built after a preview export could ship `uiV2` on. **Fixed in #114** by adding `--clear` to the `ota:production` export. That conflicts textually with #108's `otaCommands.js` change; trivial to resolve.
+  - **Still to do for M1:** carry over the current Home extras (celebrations, QOTD, nudges, reminder offer, scheduled mocks, challenge invites, pull-to-refresh); see the real Home against local Supabase; P2-2 five-tab navigator (including a desktop navigation layout); the remaining P1-2 components; an in-app Reduced Motion toggle.
 - **F2 → PR #111, F1 → PR #113** (details in `04-craig-actions.md` table F). #107's funnel query now excludes sandbox testers (validated with EXPLAIN only on production).
 - **Approved 2026-11-26** (development only):
   - final review of #111/#113, plus a consolidated merge and deploy order;
@@ -115,9 +121,9 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
 
 | PR | Title | Contents | Release | Active | Status |
 |---|---|---|---|---|---|
-| **P1-1** | Design foundation | Semantic light and dark tokens, with a test that enforces AA contrast for every pair. Inter loaded at runtime (OTA-safe). Type scale. `ThemeProvider` with in-app dark mode, the existing setting. In-app Reduced Motion combined with the OS setting. The `ui_v2` flag. Old theme modules become aliases. | OTA + WEB | 2 d | 🟦 started 2026-11-26 (M0.5 first) |
-| **P1-2** | Core components | Text, Button, Card, ListRow, Badge, Input (with label and error), ScreenHeader, IconButton, ProgressBar, Icon (Ionicons). 44/48pt targets, roles and labels. A dev/staging component gallery with screenshot tests. Wraps existing `ScaleButton`, `SkeletonBox` and `AnswerOptions` rather than duplicating them. | OTA + WEB | 1.5–2 d | 🟦 started 2026-11-26 (M0.5 first) |
-| **P2-1** | Daily Coach Home | Recommendation engine in `packages/core` (pure, unit-tested; readiness untouched). Daily plan and daily goal, stored locally. `PipCard` with the rule-based message library (existing poses only). New Home following the approved hierarchy, with the **existing `RoadmapPath` unchanged**. States: new, established, free, Pro, no test date, offline, loading. Desktop width handled. | OTA + WEB | 2.5–3 d | 🟦 started 2026-11-26 (M0.5 first) |
+| **P1-1** | Design foundation | Semantic light and dark tokens, with a test that enforces AA contrast for every pair. Inter loaded at runtime (OTA-safe). Type scale. `ThemeProvider` with in-app dark mode, the existing setting. In-app Reduced Motion combined with the OS setting. The `ui_v2` flag. Old theme modules become aliases. | OTA + WEB | 2 d | 🟨 draft #114 (with the P1-2 Home subset) |
+| **P1-2** | Core components | Text, Button, Card, ListRow, Badge, Input (with label and error), ScreenHeader, IconButton, ProgressBar, Icon (Ionicons). 44/48pt targets, roles and labels. A dev/staging component gallery with screenshot tests. Wraps existing `ScaleButton`, `SkeletonBox` and `AnswerOptions` rather than duplicating them. | OTA + WEB | 1.5–2 d | 🟦 Home subset in #114; ListRow, Input, IconButton and the gallery remain |
+| **P2-1** | Daily Coach Home | Recommendation engine in `packages/core` (pure, unit-tested; readiness untouched). Daily plan and daily goal, stored locally. `PipCard` with the rule-based message library (existing poses only). New Home following the approved hierarchy, with the **existing `RoadmapPath` unchanged**. States: new, established, free, Pro, no test date, offline, loading. Desktop width handled. | OTA + WEB | 2.5–3 d | 🟨 draft #115 (stacked on #114). Preview done; real Home wired behind `uiV2` but not yet seen against local Supabase |
 | **P2-2** | Five-tab navigation | Home, Learn, Tests, Progress, Profile. Hubs link to the **existing** screens. Settings content moved into Profile. Every route alias and redirect follows `02-navigation-mapping.md`, with an e2e route-coverage test. Battle, Challenge, the AI study plan and Bookmarks made discoverable. Ask Pip entry points added. **PipFab removed.** | OTA + WEB | 1.5–2 d | ⬜ |
 | — | (P0-2 and P0-1 must be merged first) | | | | |
 

@@ -15,7 +15,7 @@ Last updated 2026-11-26 (rev 5, #111/#113 direction approved; test-purchase inve
 | A6 | Confirm the analytics privacy stance (events carry no content or PII; platform plus anonymous install id only) and whether the privacy policy needs a line about product analytics | P0-3 merge | Before P0-3 merges | ⬜ |
 | A7 | (Optional) Supply higher-resolution original Pip files if they exist. Otherwise Pip is used at existing sizes, up to ~240px @3x | P2-1 hero sizes | No | ⬜ |
 | A8 | Device and accessibility test time in Phase 7 (iOS and Android devices; VoiceOver and TalkBack) | P7 | Phase 7 | ⬜ |
-| A9 | Review batches: one per phase, plus M0.5 and M1 | All | — | ⬜ |
+| A9 | Review batches: one per phase, plus M0.5 and M1 | All | — | **M0.5 ready for review:** the Home preview gallery (private artifact) and draft PRs #114/#115 |
 | A10 | Approve **production release** of the P0-2 bug fixes (OTA and web) once reviewed | P0-2 release | — | ⬜ |
 | A12 | **Before #108 merges:** add `EXPO_PUBLIC_APP_ENV=production` to clearpass-app and `NEXT_PUBLIC_APP_ENV=production` to clearpass-instructor-web, **Production scope only**, in Vercel. Chrome prompt **C1b**. Neither value is secret. Without them, the next production deploy fails its check: the site stays up on the previous deployment, but deploys are blocked | #108 merge | Blocks the #108 merge only | ⬜ |
 | A13 | Approve the **Railway deploys** of the F1 and F2 server fixes once reviewed | F1, F2 release | — | ⬜ |
