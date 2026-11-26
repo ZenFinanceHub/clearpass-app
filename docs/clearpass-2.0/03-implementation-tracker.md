@@ -67,6 +67,13 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
   - Tests: mobile scripts 18 + 39 pass, instructor-web guard 7 pass. A `next build` with preview plus production values was refused; with Vercel production it loaded.
   - **Consequence for local development:** `npx expo start` now needs `EXPO_PUBLIC_APP_ENV=local` (or `production` explicitly).
 - **Credential review:** no rotation needed (see `04-craig-actions.md` §R). One read-only confirmation is pending via Chrome prompt C1.
+- **F1–F3 approved and in development** as three separate PRs: F2 cron auth, F1 sandbox-purchase flagging, F3 schema reconciliation (from a read-only, structure-only export).
+- **Explicit environment declaration** added to #108 (commit `626a35c`):
+  - Every build must declare `EXPO_PUBLIC_APP_ENV`, production included.
+  - EAS production declares it in `eas.json`. `ota:production` declares it and runs the check inside the EAS production environment.
+  - Vercel production needs the two non-secret variables first (A12, Chrome prompt C1b).
+  - In a release bundle the app itself keeps its pinned-production fallback, deliberately: crashing every user is worse than a degraded update.
+  - Tests: scripts 20 + 39 pass; instructor-web guard 7 pass.
 - **Phase 1/2 started on local synthetic data:** P1-1 tokens/fonts/theme/`ui_v2` flag, the P1-2 subset Home needs, and the P2-1 Home with a fixture-driven preview route (M0.5). Branches start from `origin/main`; nothing depends on staging.
 
 ## Consolidated PR plan

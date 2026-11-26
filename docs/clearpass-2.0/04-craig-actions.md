@@ -1,13 +1,13 @@
 # ClearPass 2.0 — Actions and Decisions for Craig
 
-Last updated 2026-11-26 (rev 3, A0 completed; credential review; Chrome prompts). Step-by-step instructions are in `05-setup-guide.md`.
+Last updated 2026-11-26 (rev 4, F1–F3 approved; explicit production declaration). Step-by-step instructions are in `05-setup-guide.md`.
 
 ## A. Actions (things only Craig can do)
 
 | # | Action | Needed for | Blocking? | Status |
 |---|---|---|---|---|
 | A0 | Stop Vercel PR previews from using production | All PRs | — | ✅ **Done 2026-11-26 by Craig (via Claude in Chrome).** clearpass-app and clearpass-instructor-web set to "Only build production". Standard Protection with Vercel Authentication was already on for both. All 59 historical previews deleted (30 + 29); zero remain. Both production sites still public. No env vars, DB settings or credentials changed; clearpass-web untouched; no cost. Defence in depth added in PR #108: preview builds now **fail** unless wired to staging |
-| A1 | Run Chrome prompt **C1** (read-only check, `06-chrome-prompts.md`), approve the staging cost it reports, then **C2** to create the **hosted staging Supabase project** and enter its keys into Vercel Preview, EAS `preview` and Railway staging (guide §1–§3) | P0-4 hosted part; hosted review of M1 | Blocks hosted staging only. Local development continues | ⬜ |
+| A1 | Run Chrome prompt **C1** (Craig is running it now; no rotation until its results are in) (read-only check, `06-chrome-prompts.md`), approve the staging cost it reports, then **C2** to create the **hosted staging Supabase project** and enter its keys into Vercel Preview, EAS `preview` and Railway staging (guide §1–§3) | P0-4 hosted part; hosted review of M1 | Blocks hosted staging only. Local development continues | ⬜ |
 | A2 | **Enable GitHub Actions** (guide §4) | P0-1 CI | — | ✅ Already enabled; CI ran green on #109. Optional: apply the §4 hardening settings and make `ci` a required check |
 | A3 | **Stripe test mode and RevenueCat sandbox** set up for staging (guide §5–§6) | P5-4, P7 purchase testing | Phase 5 testing | ⬜ (approved to prepare) |
 | A4 | ~~Unpushed commits~~ **Decided: preserve.** Programme branches start from `origin/main`; local `main` is left untouched | — | — | ✅ |
@@ -17,6 +17,8 @@ Last updated 2026-11-26 (rev 3, A0 completed; credential review; Chrome prompts)
 | A8 | Device and accessibility test time in Phase 7 (iOS and Android devices; VoiceOver and TalkBack) | P7 | Phase 7 | ⬜ |
 | A9 | Review batches: one per phase, plus M0.5 and M1 | All | — | ⬜ |
 | A10 | Approve **production release** of the P0-2 bug fixes (OTA and web) once reviewed | P0-2 release | — | ⬜ |
+| A12 | **Before #108 merges:** add `EXPO_PUBLIC_APP_ENV=production` to clearpass-app and `NEXT_PUBLIC_APP_ENV=production` to clearpass-instructor-web, **Production scope only**, in Vercel. Chrome prompt **C1b**. Neither value is secret. Without them, the next production deploy fails its check: the site stays up on the previous deployment, but deploys are blocked | #108 merge | Blocks the #108 merge only | ⬜ |
+| A13 | Approve the **Railway deploys** of the F1 and F2 server fixes once reviewed | F1, F2 release | — | ⬜ |
 | A11 | Approve the **Railway deploy** of the Ask Pip allowance endpoint (P5-2) once reviewed and tested | P5-3 | — | ⬜ |
 
 ## R. Credential review after A0 (2026-11-26)
@@ -84,18 +86,16 @@ What the previews *did* do was let a logged-in team member use production data t
 
 | # | Finding | Evidence | Recommendation | Needs |
 |---|---|---|---|---|
-| F1 | **Sandbox (test) purchases grant real Pro in production and count as paying.** The RevenueCat webhook never checks `environment` (sandbox vs production). This affects TestFlight and App Review purchases, and it skews the "paying" figures in the audit | `server/lib/revenuecatWebhook.js:38` grants; `:429` is the only filter (PR #108 investigation) | (a) A **separate RevenueCat project for staging** (no code change; guide §6). (b) Production **ignores or flags sandbox events**: a small server change, needing approval and a Railway deploy. Decide whether App Review sandbox purchases *should* unlock Pro. They usually should, so prefer **flagging** (e.g. `proSource:'iap_sandbox'` excluded from stats) over ignoring | Decision + approval for (b) |
-| F2 | **`/api/send-weekly-parent-emails` allows requests when `CRON_SECRET` is unset.** Production presumably sets it, so the live risk is low, but it fails open | `proxy.js:2359` (PR #108) | Switch it to the existing `requireCronAuth` (fail closed). A tiny server PR, needing a Railway deploy and approval | Approval |
-| F3 | **Schema drift.** Production has objects missing from `schema.sql`: `profiles.account_class` and the `update_aggregate_stats` RPC. Local and staging replay therefore differ from production | PR #108 replay; live table listing | A docs/schema-only PR that adds them to `schema.sql` (no production change), derived from a read-only schema dump | Approval to read production schema (read-only) |
+| F1 | **Sandbox (test) purchases grant real Pro in production and count as paying.** The RevenueCat webhook never checks `environment` (sandbox vs production). This affects TestFlight and App Review purchases, and it skews the "paying" figures in the audit | `server/lib/revenuecatWebhook.js:38` grants; `:429` is the only filter (PR #108 investigation) | (a) A **separate RevenueCat project for staging** (no code change; guide §6). (b) Production **ignores or flags sandbox events**: a small server change, needing approval and a Railway deploy. Decide whether App Review sandbox purchases *should* unlock Pro. They usually should, so prefer **flagging** (e.g. `proSource:'iap_sandbox'` excluded from stats) over ignoring | ✅ **Approved 2026-11-26: both.** Staging gets its own RevenueCat project; production flags sandbox purchases (access kept for App Review) and excludes them from revenue, conversion and paying-subscriber reporting. Genuine entitlements and restore are unchanged. In development. Deploy needs A13 |
+| F2 | **`/api/send-weekly-parent-emails` allows requests when `CRON_SECRET` is unset.** Production presumably sets it, so the live risk is low, but it fails open | `proxy.js:2359` (PR #108) | Switch it to the existing `requireCronAuth` (fail closed). A tiny server PR, needing a Railway deploy and approval | ✅ **Approved 2026-11-26.** Missing or invalid `CRON_SECRET` is refused. Regression tests cover missing, incorrect and valid credentials. In development. Deploy needs A13 |
+| F3 | **Schema drift.** Production has objects missing from `schema.sql`: `profiles.account_class` and the `update_aggregate_stats` RPC. Local and staging replay therefore differ from production | PR #108 replay; live table listing | A docs/schema-only PR that adds them to `schema.sql` (no production change), derived from a read-only schema dump | ✅ **Approved 2026-11-26:** a read-only, structure-only export (no rows, no personal data), then a separate schema-only PR covering functions, policies, triggers and permissions. In progress |
 | F4 | **Past test dates are accepted** in onboarding | P0-1 marked the e2e check `fixme` | Fix in P5-1 (onboarding) | — (planned) |
 | F5 | **`/aitutor` redirects to `/` on web** (on `main` too) | P0-2 verification | Investigate in P2-2 when Ask Pip entry points are rebuilt | — (planned) |
 | F6 | **Tab bar labels clipped** at 390px on web | Audit screenshots; P0-2 screenshots | Fixed by the new tab bar in P1-2/P2-2 | — (planned) |
 
-## F1–F3: the decisions needed
+## F1–F3 status
 
-1. **F1, sandbox purchases grant real Pro.** Choose: (a) staging uses its own RevenueCat project (no code change, recommended regardless), and/or (b) production *flags* sandbox purchases (they still unlock Pro, so App Review works, but they're excluded from paying stats). Recommended: **both**. (b) is a small server PR, which needs approval to develop and then a separate approval to deploy to Railway.
-2. **F2, the cron endpoint fails open.** Approve a one-line server PR switching `/api/send-weekly-parent-emails` to the existing `requireCronAuth`. Deploy needs a separate approval. Recommended: **approve**.
-3. **F3, schema drift.** Approve a **read-only** dump of production's schema definitions (no data) so `schema.sql` can be corrected in a docs/schema-only PR. Nothing changes in production. Recommended: **approve**. Staging replay (A1) is only faithful once this lands.
+All three were approved on 2026-11-26 (see table F). They are being developed as three separate PRs. Nothing is deployed or migrated.
 
 ## Things Claude Code will not do without explicit approval
 

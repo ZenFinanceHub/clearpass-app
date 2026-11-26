@@ -7,6 +7,7 @@ For Craig. Each prompt is self-contained: paste one into Claude in Chrome, let i
 | Prompt | What it does | Safe to run | Cost |
 |---|---|---|---|
 | **C1** | Read-only check: Vercel env var names per scope and build-command overrides; Supabase organisations and plans; GitHub Actions settings (and applies the read-only hardening) | **Now** | $0 |
+| **C1b** | Adds the two non-secret `APP_ENV=production` variables to the Vercel **Production** scope (A12) | Only once you approve merging #108 | $0 |
 | **C2** | Creates the hosted staging Supabase project | After C1, once you've approved the cost it reports | $0 or ~$10/month (C1 tells us which) |
 | C3 | Railway staging environment and Vercel/EAS Preview variables | After C2 and the staging schema is applied (Claude Code does that from the credentials file) | ~$1–5/month |
 | C4 | Stripe sandbox products and webhooks, RevenueCat staging project | After C3 (webhooks need the staging Railway URL) | $0 |
@@ -44,6 +45,23 @@ NEVER copy, type, screenshot-describe or report the VALUE of any environment var
       Report before/after for each.
 
 Finish with a short report in three sections (Vercel, Supabase, GitHub). Include anything that looked unexpected.
+```
+
+---
+
+## C1b — Declare production explicitly in Vercel (only once you approve merging #108)
+
+```text
+In Vercel, make exactly two changes and nothing else. Do not redeploy, and do not change or reveal any other variable.
+
+1. Project "clearpass-app" → Settings → Environment Variables → Add:
+   Key: EXPO_PUBLIC_APP_ENV   Value: production   Environments: Production ONLY (untick Preview and Development).
+2. Project "clearpass-instructor-web" → Settings → Environment Variables → Add:
+   Key: NEXT_PUBLIC_APP_ENV   Value: production   Environments: Production ONLY.
+3. If a variable with that key already exists in either project, do not change it; report its environments instead.
+4. Do not trigger a redeploy. The variables take effect on the next production deploy.
+
+Report: for each project, the key, the environments ticked, and confirmation that nothing else changed.
 ```
 
 ---
