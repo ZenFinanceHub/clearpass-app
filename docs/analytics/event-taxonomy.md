@@ -85,10 +85,54 @@ Platforms: **all** = iOS, Android and web. File references are
 | `purchase_started` | Buy tapped | `plan`; `rail`: `stripe`, `iap`; `trialDays` int 0-365 | all (`iap` on phones) | `app/paywall.tsx:152`, `:187` |
 | `purchase_succeeded` / `purchase_cancelled` / `purchase_failed` | Store purchase outcome | `plan`; `rail`; `trialDays`; `reason`: `no_package` (failed only) | iOS, Android | `app/paywall.tsx:184`, `:190` |
 | `iap_sandbox_purchase` | **Server-written** (RevenueCat webhook, PR #113) when a purchase arrives with `environment=SANDBOX` (App Review, TestFlight, licence testers). Not a funnel step. A durable marker so reporting can exclude testers after their sandbox grant expires | none | server | `server/proxy.js` (#113) |
+| `iap_trial_started` | **Server-written** (RevenueCat webhook, PR #118) on a PRODUCTION `INITIAL_PURCHASE` with `period_type = TRIAL`: a free trial began. Store-verified, unlike the app's `purchase_succeeded` | see "Server-written RevenueCat markers" below | server | `server/lib/revenuecatWebhook.js` (#118) |
+| `iap_trial_converted` | **Server-written** (#118) on a PRODUCTION `RENEWAL` with `is_trial_conversion = true` (or the first paid renewal of a trial): the trial became a paid subscription | as below | server | as above |
+| `iap_trial_cancelled` | **Server-written** (#118) on a PRODUCTION `CANCELLATION` with `period_type = TRIAL`: auto-renew turned off during the trial. Pro stays until the trial end; it will not convert unless the learner re-subscribes | as below; `cancel_reason` says why | server | as above |
 | `free_mock_started` | Free quick mock begun | `mode`: `standard`, `quick` | all | `app/(tabs)/mock.tsx:365` |
 | `free_mock_completed` | Free mock submitted | `passed` boolean; `correct`, `total` int 0-100 | all | `app/(tabs)/mock.tsx:518` |
 | `iap_unavailable` | Store could not be configured | `mode`: `missing_api_key`, `configure_threw`, `get_offerings_threw`, `no_quarterly_package`; `source`: `boot`, `refresh` | iOS, Android | `src/purchases.ts:66` |
 | `reminder_offer_viewed` / `reminder_enabled` / `reminder_declined` / `reminder_os_denied` | Daily reminder offer shown / answered | `context`: `daily_limit`, `home`, `onboarding` | iOS, Android | `src/components/ReminderOffer.tsx:74-93`, `app/auth/reminders.tsx:21-34` |
+
+#### Trial starts vs paid purchases
+
+The app offers free trials on store plans (`src/purchases.ts`
+`trialDaysForPackage`). A store "purchase" with a trial takes no money until
+the trial ends, so purchases are split at query time:
+
+- **Trial start**: `purchase_succeeded` with `props->>'trialDays'` > 0 (app
+  side), confirmed server side by `iap_trial_started`.
+- **Paid purchase**: `purchase_succeeded` with `trialDays` null or 0 (paid
+  immediately), or a trial that converted (`iap_trial_converted`).
+- **Trial cancelled**: `iap_trial_cancelled`. That learner keeps Pro until the
+  trial end date, then lapses.
+- `purchase_succeeded` only records what the app saw at the time. Use the
+  server markers for whether a trial actually converted. On the server,
+  `user_progress.progress->>'proSource'` is `iap_trial` during a trial and
+  `iap` once paid (`iap_sandbox` for testers). Only `stripe`, `seat` and
+  `iap` are paying.
+- Rows written before #118 was deployed say `iap` for trials too, and have no
+  trial markers. See `docs/sql/trials.sql` (in PR #118).
+- Queries: `docs/sql/analytics/03_limit_paywall_purchase_funnel.sql` splits
+  `purchase_succeeded` into trial and paid columns, and
+  `docs/sql/analytics/05_trials.sql` is the trial funnel (started, converted,
+  cancelled, conversion rate).
+
+#### Server-written RevenueCat markers
+
+`iap_sandbox_purchase`, `iap_trial_started`, `iap_trial_converted` and
+`iap_trial_cancelled` are inserted by the server (service role), not the app:
+
+- `user_id` is the RevenueCat `app_user_id`, and `anon_id` is
+  `revenuecat:<RevenueCat event id>` (so they never join to a real install).
+- They are written at most once per RevenueCat event id and marker type.
+- `props` (trial markers): `source` (`revenuecat_webhook`), `rc_event_id`,
+  `rc_event_type`, `environment` (`PRODUCTION`), `store` (`APP_STORE`,
+  `PLAY_STORE`, ...), `product_id`, `period_type`, `is_trial_conversion`
+  boolean, `cancel_reason` (cancellations only). No personal data.
+- `platform` is `ios` / `android` from the store (null if unknown).
+- They are not funnel steps in `server/lib/funnelStats.js`. Count them by
+  `rc_event_id`, and exclude `exclude_from_stats` accounts and sandbox
+  testers like any other metric.
 
 ### Activation (P0-3)
 

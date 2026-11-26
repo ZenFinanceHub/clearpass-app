@@ -8,6 +8,16 @@
 -- never needed to buy. Stripe purchases complete on the web checkout page, so
 -- for rail = 'stripe' purchase_started is the last step the app records;
 -- confirm payment from Stripe / user_progress, not from this table.
+--
+-- Store purchases are split into TRIAL STARTS and PAID purchases (a trial
+-- takes no money until it converts):
+--   purchase_succeeded_trial  app purchase_succeeded with props.trialDays > 0
+--   purchase_succeeded_paid   app purchase_succeeded with trialDays null/0
+--   trial_converted           server marker iap_trial_converted (RevenueCat
+--                             RENEWAL with is_trial_conversion, PR #118)
+--   paid_total                paid immediately OR trial converted
+-- Server markers only exist for events after #118 was deployed; earlier
+-- trials show as trial starts with no conversion data here.
 
 -- Counted = profiles.exclude_from_stats = false. Set by_class = true in
 -- params to split results by profiles.account_class (genuine, internal, junk,
@@ -68,7 +78,8 @@ ev as (
   cross join params
   where fe.created_at >= params.since
     and fe.event in ('daily_limit_hit', 'paywall_prompt_viewed', 'paywall_prompt_tapped',
-                     'paywall_viewed', 'purchase_started', 'purchase_succeeded')
+                     'paywall_viewed', 'purchase_started', 'purchase_succeeded',
+                     'iap_trial_converted')
     and not exists (select 1 from excluded_users x where x.user_id = coalesce(fe.user_id, ao.user_id))
     and not exists (select 1 from excluded_anon xa where xa.anon_id = fe.anon_id)
 ),
@@ -90,7 +101,17 @@ reached as (
     exists (select 1 from ev e where e.actor = l.actor and e.created_at >= l.first_hit
             and e.event = 'purchase_started')   as purchase_started,
     exists (select 1 from ev e where e.actor = l.actor and e.created_at >= l.first_hit
-            and e.event = 'purchase_succeeded') as purchase_succeeded
+            and e.event = 'purchase_succeeded') as purchase_succeeded,
+    exists (select 1 from ev e where e.actor = l.actor and e.created_at >= l.first_hit
+            and e.event = 'purchase_succeeded'
+            and coalesce(case when (e.props->>'trialDays') ~ '^[0-9]+$'
+                              then (e.props->>'trialDays')::int end, 0) > 0) as purchase_trial,
+    exists (select 1 from ev e where e.actor = l.actor and e.created_at >= l.first_hit
+            and e.event = 'purchase_succeeded'
+            and coalesce(case when (e.props->>'trialDays') ~ '^[0-9]+$'
+                              then (e.props->>'trialDays')::int end, 0) = 0) as purchase_paid,
+    exists (select 1 from ev e where e.actor = l.actor and e.created_at >= l.first_hit
+            and e.event = 'iap_trial_converted') as trial_converted
   from limit_hit l
 )
 select
@@ -102,7 +123,12 @@ select
   count(*) filter (where paywall_viewed)     as paywall_viewed,
   count(*) filter (where purchase_started)   as purchase_started,
   count(*) filter (where purchase_succeeded) as purchase_succeeded_iap,
-  round(100.0 * count(*) filter (where purchase_started) / nullif(count(*), 0), 1) as limit_to_purchase_start_pct
+  count(*) filter (where purchase_trial)     as purchase_succeeded_trial,
+  count(*) filter (where purchase_paid)      as purchase_succeeded_paid,
+  count(*) filter (where trial_converted)    as trial_converted,
+  count(*) filter (where purchase_paid or trial_converted) as paid_total,
+  round(100.0 * count(*) filter (where purchase_started) / nullif(count(*), 0), 1) as limit_to_purchase_start_pct,
+  round(100.0 * count(*) filter (where purchase_paid or trial_converted) / nullif(count(*), 0), 1) as limit_to_paid_pct
 from reached
 group by grouping sets ((account_class, platform), (account_class))
 order by account_class, platform nulls last;
