@@ -33,9 +33,10 @@ name: Apply a production database migration
 #               interprets backslash meta-commands in it.
 #
 # Backups: Supabase's scheduled backups can't be listed over SQL, and an
-# account-wide Supabase token is ruled out. So the dispatcher must set
-# backup_confirmed, and the approval summary tells the owner exactly where to
-# check in the dashboard; approving is the owner's confirmation.
+# account-wide Supabase token is ruled out. So the run refuses unless
+# backup_confirmed is ticked, and the approval summary tells the owner exactly
+# where to check in the dashboard. The dispatcher (Claude Code) cannot see
+# backups; the OWNER's approval is the confirmation.
 #
 # Rollback: a migration is never "undone" by this workflow. A rollback is a
 # NEW forward migration containing the compensating SQL from the original
@@ -60,7 +61,7 @@ on:
         required: true
         type: string
       backup_confirmed:
-        description: "A Supabase backup from the last 24 h exists (Dashboard → Database → Backups). The owner re-checks before approving"
+        description: "Required. Asks the approver to confirm a Supabase backup from the last 24 h (Dashboard → Database → Backups) before approving; approving is that confirmation"
         required: true
         default: false
         type: boolean
