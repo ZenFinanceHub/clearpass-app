@@ -11,6 +11,7 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { uiV2 } from '@/src/uiFlags';
 import { AskPipAboutThis } from '@/src/nav/AskPipAboutThis';
+import { incorrectForAskPip } from '@/src/nav/askPip';
 import {
   Achievement,
   applyCorrectAnswerToChallenge,
@@ -141,6 +142,9 @@ function DailyChallengeQuestionBadge({
 
 type Phase = 'start' | 'loading' | 'quiz' | 'results' | 'battle' | 'battleResults' | 'dailyLimit' | 'noBookmarks' | 'speedRound' | 'speedRoundResults' | 'weakSpot' | 'weakSpotResults';
 
+/** A question answered incorrectly, for the ui_v2 "Ask Pip about this" review. */
+type IncorrectAnswer = { question: Question; selectedIndex: number | null };
+
 type SessionResult = {
   question: Question;
   selectedIndex: number;
@@ -238,6 +242,8 @@ export default function PracticeScreen() {
   const battleScoreRef = useRef(0);
   const battleAnsweredRef = useRef(false);
   const battleCancelledRef = useRef(false);
+  // Every Battle answer, for the ui_v2 "Ask Pip about this" review on the results screen.
+  const battleAttemptsRef = useRef<SessionResult[]>([]);
 
   const speedQsRef = useRef<Question[]>([]);
   const speedIdxRef = useRef(0);
@@ -254,6 +260,8 @@ export default function PracticeScreen() {
   const weakClearedRef = useRef<Set<string>>(new Set());
   const weakAnsweredRef3 = useRef(false);
   const weakAttemptsRef  = useRef(0);
+  // Every Weak Spots answer, for the ui_v2 "Ask Pip about this" review on the results screen.
+  const weakAnswersRef = useRef<SessionResult[]>([]);
 
   // Clear the daily-challenge-complete flash once the next question loads
   useEffect(() => {
@@ -436,6 +444,7 @@ export default function PracticeScreen() {
     battleScoreRef.current = 0;
     battleAnsweredRef.current = false;
     battleCancelledRef.current = false;
+    battleAttemptsRef.current = [];
 
     setBattleDisplay({ idx: 0, selected: null, combo: 0, maxCombo: 0, score: 0 });
     setBattleXpEarned(0);
@@ -452,6 +461,7 @@ export default function PracticeScreen() {
     if (!q) return;
 
     const isCorrect = optionIndex === q.correctIndex;
+    battleAttemptsRef.current.push({ question: q, selectedIndex: optionIndex, correct: isCorrect });
     applyDailyChallengeProgress(q, isCorrect);
     void recordWeakSpotResult(q.id, isCorrect);
     void recordAnswer(q.id, isCorrect, false);
@@ -629,6 +639,7 @@ export default function PracticeScreen() {
     weakClearedRef.current = new Set();
     weakAnsweredRef3.current = false;
     weakAttemptsRef.current = 0;
+    weakAnswersRef.current = [];
 
     setWeakDisplay({ selected: null, consecutive: 0, clearedCount: 0, totalCount: qs.length, showCleared: false });
     setWeakFinalCleared([]);
@@ -644,6 +655,7 @@ export default function PracticeScreen() {
     const item = weakQueueRef.current[0];
     if (!item) return;
     const correct = optionIndex === item.question.correctIndex;
+    weakAnswersRef.current.push({ question: item.question, selectedIndex: optionIndex, correct });
 
     if (settings.soundEffects) { if (correct) playCorrect(); else playWrong(); }
     void (correct
@@ -1152,6 +1164,7 @@ export default function PracticeScreen() {
         clearedQuestions={weakFinalCleared}
         totalQuestions={weakOrigRef.current.length}
         xpGained={weakXpGained}
+        incorrect={uiV2 ? incorrectForAskPip(weakAnswersRef.current) : []}
         onPlayAgain={() => void startWeakSpotDrill()}
         onBack={handlePlayAgain}
       />
@@ -1166,6 +1179,7 @@ export default function PracticeScreen() {
         totalQuestions={battleQsRef.current.length}
         xpEarned={battleXpEarned}
         newAchievements={battleNewAchievements}
+        incorrect={uiV2 ? incorrectForAskPip(battleAttemptsRef.current) : []}
         onPlayAgain={() => void startBattle()}
         onBackToPractice={handlePlayAgain}
       />
@@ -1825,6 +1839,7 @@ function BattleResultsScreen({
   totalQuestions,
   xpEarned,
   newAchievements,
+  incorrect,
   onPlayAgain,
   onBackToPractice,
 }: {
@@ -1833,6 +1848,8 @@ function BattleResultsScreen({
   totalQuestions: number;
   xpEarned: number;
   newAchievements: Achievement[];
+  /** ui_v2 only (empty with the flag off): questions answered incorrectly. */
+  incorrect: IncorrectAnswer[];
   onPlayAgain: () => void;
   onBackToPractice: () => void;
 }) {
@@ -1883,6 +1900,28 @@ function BattleResultsScreen({
           <Text style={styles.battleStatLabel}>XP</Text>
         </View>
       </View>
+
+      {/* ClearPass 2.0: per incorrect question, open the existing tutor with it prefilled. */}
+      {uiV2 && incorrect.length > 0 && (
+        <View testID="ask-pip-review">
+          <Text style={styles.sectionLabel}>Questions to review</Text>
+          <View style={styles.breakdownList}>
+            {incorrect.map(({ question, selectedIndex }) => (
+              <React.Fragment key={question.id}>
+                <View style={[styles.breakdownRow, styles.breakdownRowWrong]}>
+                  <View style={[styles.breakdownDot, styles.dotRed]}>
+                    <Text style={styles.dotText}>{'x'}</Text>
+                  </View>
+                  <Text style={styles.breakdownText} numberOfLines={2}>
+                    {question.questionText}
+                  </Text>
+                </View>
+                <AskPipAboutThis question={question} selectedIndex={selectedIndex} from="/(tabs)/practice" testID={`ask-pip-about-${question.id}`} />
+              </React.Fragment>
+            ))}
+          </View>
+        </View>
+      )}
 
       {score < 10 && (
         <View style={styles.battleHint}>
@@ -2006,12 +2045,15 @@ function WeakSpotResultsView({
   clearedQuestions,
   totalQuestions,
   xpGained,
+  incorrect,
   onPlayAgain,
   onBack,
 }: {
   clearedQuestions: Question[];
   totalQuestions: number;
   xpGained: number;
+  /** ui_v2 only (empty with the flag off): questions answered incorrectly during the drill. */
+  incorrect: IncorrectAnswer[];
   onPlayAgain: () => void;
   onBack: () => void;
 }) {
@@ -2046,6 +2088,28 @@ function WeakSpotResultsView({
             ))}
           </View>
         </>
+      )}
+
+      {/* ClearPass 2.0: per incorrect question, open the existing tutor with it prefilled. */}
+      {uiV2 && incorrect.length > 0 && (
+        <View testID="ask-pip-review">
+          <Text style={styles.sectionLabel}>Questions to review</Text>
+          <View style={styles.breakdownList}>
+            {incorrect.map(({ question, selectedIndex }) => (
+              <React.Fragment key={question.id}>
+                <View style={[styles.breakdownRow, styles.breakdownRowWrong]}>
+                  <View style={[styles.breakdownDot, styles.dotRed]}>
+                    <Text style={styles.dotText}>{'x'}</Text>
+                  </View>
+                  <Text style={styles.breakdownText} numberOfLines={2}>
+                    {question.questionText}
+                  </Text>
+                </View>
+                <AskPipAboutThis question={question} selectedIndex={selectedIndex} from="/(tabs)/practice" testID={`ask-pip-about-${question.id}`} />
+              </React.Fragment>
+            ))}
+          </View>
+        </View>
       )}
 
       <TouchableOpacity style={styles.primaryButton} onPress={onPlayAgain} activeOpacity={0.85}>
@@ -2183,9 +2247,9 @@ function SpeedRoundResultsView({
 
       <Text style={styles.sectionLabel}>Question Breakdown</Text>
       <View style={styles.breakdownList}>
-        {results.map(({ question, correct: isCorrect }, i) => (
+        {results.map(({ question, correct: isCorrect, selectedIndex }, i) => (
+          <React.Fragment key={question.id}>
           <View
-            key={question.id}
             style={[styles.breakdownRow, isCorrect ? styles.breakdownRowCorrect : styles.breakdownRowWrong]}
           >
             <View style={[styles.breakdownDot, isCorrect ? styles.dotGreen : styles.dotRed]}>
@@ -2195,6 +2259,11 @@ function SpeedRoundResultsView({
               {i + 1}.{'  '}{question.questionText}
             </Text>
           </View>
+          {/* ClearPass 2.0: per incorrect question, open the existing tutor with it prefilled. */}
+          {uiV2 && !isCorrect && (
+            <AskPipAboutThis question={question} selectedIndex={selectedIndex} from="/(tabs)/practice" testID={`ask-pip-about-${question.id}`} />
+          )}
+          </React.Fragment>
         ))}
       </View>
 
