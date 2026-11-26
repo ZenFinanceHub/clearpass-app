@@ -74,6 +74,7 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
   - Vercel production needs the two non-secret variables first (A12, Chrome prompt C1b).
   - In a release bundle the app itself keeps its pinned-production fallback, deliberately: crashing every user is worse than a degraded update.
   - Tests: scripts 20 + 39 pass; instructor-web guard 7 pass.
+- **F2 → PR #111, F1 → PR #113** (details in `04-craig-actions.md` table F). #107's funnel query now excludes sandbox testers (validated with EXPLAIN only on production).
 - **F3 → PR #112** (schema-only; `schema.sql` only).
   - **Drift found:** 32 differences, including the missing `update_aggregate_stats` and `account_class`, the reshaped `hazard_clips` and `instructor_relationships`, and missing indexes, views and buckets.
   - **The repo was wrong in places:**
