@@ -56,6 +56,19 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
 
 ---
 
+## Progress log, 2026-11-26
+
+- **A0 complete** (Craig): Vercel non-production builds off for clearpass-app and clearpass-instructor-web; 59 historical previews deleted; Vercel Authentication confirmed on.
+- **#108 hardened to fail closed** (commit `b783a9b`):
+  - Development builds refuse to start without `EXPO_PUBLIC_APP_ENV`.
+  - A build-env check runs in the Vercel `buildCommand` and as the EAS `eas-build-pre-install` hook. Vercel preview/development and EAS non-production builds fail unless they are wired to complete, non-production staging values. This includes when no env vars are set at all.
+  - instructor-web `next.config.ts` refuses production hosts outside Vercel production.
+  - Production paths are unchanged.
+  - Tests: mobile scripts 18 + 39 pass, instructor-web guard 7 pass. A `next build` with preview plus production values was refused; with Vercel production it loaded.
+  - **Consequence for local development:** `npx expo start` now needs `EXPO_PUBLIC_APP_ENV=local` (or `production` explicitly).
+- **Credential review:** no rotation needed (see `04-craig-actions.md` §R). One read-only confirmation is pending via Chrome prompt C1.
+- **Phase 1/2 started on local synthetic data:** P1-1 tokens/fonts/theme/`ui_v2` flag, the P1-2 subset Home needs, and the P2-1 Home with a fixture-driven preview route (M0.5). Branches start from `origin/main`; nothing depends on staging.
+
 ## Consolidated PR plan
 
 **Effort columns:**
@@ -69,7 +82,7 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
 | **P0-1** | Test safety and CI | **Network guard:** Playwright default → local web export, a shared stub harness, and a test that **fails on any production host**. Existing e2e specs moved onto the harness. **GitHub Actions:** tsc (mobile and instructor-web), core vitest, server node tests, scripts tests, instructor-web vitest, and a stubbed Playwright smoke run. | NONE | 1.5–2 d | Actions enabled (A2, approved) | 🟨 #109 (CI green) |
 | **P0-2** | Live bug fixes | Separate commits for:<br>• one onboarding-state key, with fallback reads of both old keys;<br>• free learners see results and review at the daily limit (entitlement unchanged);<br>• Pip FAB no longer covers page titles and is hidden on hazard playback and `/aitutor`;<br>• the unused 0-byte dyslexia `.ttf` removed, with the working `.otf` fonts verified;<br>• `/screenshot-mode` blocked in production builds.<br>Tests for each. | OTA + WEB | 1–1.5 d | Production release needs separate approval | 🟨 #110 |
 | **P0-3** | Analytics foundation | Event taxonomy plus the new events, written via the existing `funnel_events` table (no migration). `app_opened` once per day. Read-only retention and funnel SQL kept in the repo. No content or PII. | OTA + WEB | 1 d | Confirm the privacy stance (A6) | 🟨 #107 |
-| **P0-4** | Local and staging environments (adds `appEnv` config; local stack in `apps/mobile/supabase-local/`) | Local Supabase in Docker, replaying `schema.sql` and migrations. Environment config so local, staging and production are selected by env var. Seed and reset scripts for synthetic accounts, all `exclude_from_stats`. Staging docs. The hosted staging wiring lands when A1/A3 arrive, as a follow-up commit on the same PR or a small config PR. | NONE | 1–1.5 d (+0.5 d when credentials arrive) | A1, A3 | 🟨 #108 (local part) |
+| **P0-4** | Local and staging environments (adds `appEnv` config; local stack in `apps/mobile/supabase-local/`) | Local Supabase in Docker, replaying `schema.sql` and migrations. Environment config so local, staging and production are selected by env var. Seed and reset scripts for synthetic accounts, all `exclude_from_stats`. Staging docs. The hosted staging wiring lands when A1/A3 arrive, as a follow-up commit on the same PR or a small config PR. | NONE | 1–1.5 d (+0.5 d when credentials arrive) | A1, A3 | 🟨 #108 (local part; fail-closed hardening added 2026-11-26) |
 
 **Phase 0 progress log (2026-11-25):**
 - **Merge order:** #109 (CI) first, so the other PRs get CI runs; then #108, #110 and #107. Rebase each after the previous one merges. #110 and #107 both touch `practice.tsx` in small, separate places.
@@ -81,9 +94,9 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
 
 | PR | Title | Contents | Release | Active | Status |
 |---|---|---|---|---|---|
-| **P1-1** | Design foundation | Semantic light and dark tokens, with a test that enforces AA contrast for every pair. Inter loaded at runtime (OTA-safe). Type scale. `ThemeProvider` with in-app dark mode, the existing setting. In-app Reduced Motion combined with the OS setting. The `ui_v2` flag. Old theme modules become aliases. | OTA + WEB | 2 d | ⬜ |
-| **P1-2** | Core components | Text, Button, Card, ListRow, Badge, Input (with label and error), ScreenHeader, IconButton, ProgressBar, Icon (Ionicons). 44/48pt targets, roles and labels. A dev/staging component gallery with screenshot tests. Wraps existing `ScaleButton`, `SkeletonBox` and `AnswerOptions` rather than duplicating them. | OTA + WEB | 1.5–2 d | ⬜ |
-| **P2-1** | Daily Coach Home | Recommendation engine in `packages/core` (pure, unit-tested; readiness untouched). Daily plan and daily goal, stored locally. `PipCard` with the rule-based message library (existing poses only). New Home following the approved hierarchy, with the **existing `RoadmapPath` unchanged**. States: new, established, free, Pro, no test date, offline, loading. Desktop width handled. | OTA + WEB | 2.5–3 d | ⬜ |
+| **P1-1** | Design foundation | Semantic light and dark tokens, with a test that enforces AA contrast for every pair. Inter loaded at runtime (OTA-safe). Type scale. `ThemeProvider` with in-app dark mode, the existing setting. In-app Reduced Motion combined with the OS setting. The `ui_v2` flag. Old theme modules become aliases. | OTA + WEB | 2 d | 🟦 started 2026-11-26 (M0.5 first) |
+| **P1-2** | Core components | Text, Button, Card, ListRow, Badge, Input (with label and error), ScreenHeader, IconButton, ProgressBar, Icon (Ionicons). 44/48pt targets, roles and labels. A dev/staging component gallery with screenshot tests. Wraps existing `ScaleButton`, `SkeletonBox` and `AnswerOptions` rather than duplicating them. | OTA + WEB | 1.5–2 d | 🟦 started 2026-11-26 (M0.5 first) |
+| **P2-1** | Daily Coach Home | Recommendation engine in `packages/core` (pure, unit-tested; readiness untouched). Daily plan and daily goal, stored locally. `PipCard` with the rule-based message library (existing poses only). New Home following the approved hierarchy, with the **existing `RoadmapPath` unchanged**. States: new, established, free, Pro, no test date, offline, loading. Desktop width handled. | OTA + WEB | 2.5–3 d | 🟦 started 2026-11-26 (M0.5 first) |
 | **P2-2** | Five-tab navigation | Home, Learn, Tests, Progress, Profile. Hubs link to the **existing** screens. Settings content moved into Profile. Every route alias and redirect follows `02-navigation-mapping.md`, with an e2e route-coverage test. Battle, Challenge, the AI study plan and Bookmarks made discoverable. Ask Pip entry points added. **PipFab removed.** | OTA + WEB | 1.5–2 d | ⬜ |
 | — | (P0-2 and P0-1 must be merged first) | | | | |
 

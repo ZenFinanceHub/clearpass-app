@@ -1,13 +1,13 @@
 # ClearPass 2.0 — Actions and Decisions for Craig
 
-Last updated 2026-11-25 (rev 2, after Craig's plan approval). Step-by-step instructions are in `05-setup-guide.md`.
+Last updated 2026-11-26 (rev 3, A0 completed; credential review; Chrome prompts). Step-by-step instructions are in `05-setup-guide.md`.
 
 ## A. Actions (things only Craig can do)
 
 | # | Action | Needed for | Blocking? | Status |
 |---|---|---|---|---|
-| **A0** | **URGENT: stop Vercel PR previews from using production.** Vercel builds a preview for every PR branch (seen on #106–#110), and the app hardcodes production Supabase, so previews read and write the production DB (sign-ins, progress sync, `funnel_events`). Until staging Preview env vars exist (A1), in Vercel open **clearpass-app → Settings → Git → Ignored Build Step**, choose **"Only build production"** (or the custom command `[ "$VERCEL_ENV" != "production" ]`, which skips non-production builds), and do the same for **clearpass-instructor-web**. `clearpass-web` is static and harmless. Also confirm **Deployment Protection** is on for previews. Until then, please don't open PR preview links | All PRs | **Yes, for preview safety** | ⬜ |
-| A1 | Create the **hosted staging Supabase project** and enter its keys into Vercel Preview, EAS `preview` and Railway staging (guide §1–§3) | P0-4 hosted part; hosted review of M1 | Blocks hosted staging only. Local development continues | ⬜ |
+| A0 | Stop Vercel PR previews from using production | All PRs | — | ✅ **Done 2026-11-26 by Craig (via Claude in Chrome).** clearpass-app and clearpass-instructor-web set to "Only build production". Standard Protection with Vercel Authentication was already on for both. All 59 historical previews deleted (30 + 29); zero remain. Both production sites still public. No env vars, DB settings or credentials changed; clearpass-web untouched; no cost. Defence in depth added in PR #108: preview builds now **fail** unless wired to staging |
+| A1 | Run Chrome prompt **C1** (read-only check, `06-chrome-prompts.md`), approve the staging cost it reports, then **C2** to create the **hosted staging Supabase project** and enter its keys into Vercel Preview, EAS `preview` and Railway staging (guide §1–§3) | P0-4 hosted part; hosted review of M1 | Blocks hosted staging only. Local development continues | ⬜ |
 | A2 | **Enable GitHub Actions** (guide §4) | P0-1 CI | — | ✅ Already enabled; CI ran green on #109. Optional: apply the §4 hardening settings and make `ci` a required check |
 | A3 | **Stripe test mode and RevenueCat sandbox** set up for staging (guide §5–§6) | P5-4, P7 purchase testing | Phase 5 testing | ⬜ (approved to prepare) |
 | A4 | ~~Unpushed commits~~ **Decided: preserve.** Programme branches start from `origin/main`; local `main` is left untouched | — | — | ✅ |
@@ -18,6 +18,20 @@ Last updated 2026-11-25 (rev 2, after Craig's plan approval). Step-by-step instr
 | A9 | Review batches: one per phase, plus M0.5 and M1 | All | — | ⬜ |
 | A10 | Approve **production release** of the P0-2 bug fixes (OTA and web) once reviewed | P0-2 release | — | ⬜ |
 | A11 | Approve the **Railway deploy** of the Ask Pip allowance endpoint (P5-2) once reviewed and tested | P5-3 | — | ⬜ |
+
+## R. Credential review after A0 (2026-11-26)
+
+**Recommendation: no rotation is required.** Nothing privileged was ever in a preview deployment. One read-only check (C1 step 1a) is needed to close this out.
+
+| Credential | Where it appeared | Type | Rotate? |
+|---|---|---|---|
+| Supabase anon key (production) | Every web bundle, preview and production; also in the public repo since launch | **Public client key** by design; access is enforced by RLS | **No.** Rotating it would force an app release and change nothing. RLS is the control |
+| Supabase URL, Railway API URL | Bundles and the repo | Public addresses | No |
+| RevenueCat SDK keys (`appl_`, `goog_`) | Native bundles (`EXPO_PUBLIC_*`) | **Public SDK keys**; can't grant entitlements | No |
+| Sentry DSN | Bundles | **Public**; ingestion only | No |
+| Supabase service-role key, Stripe secret key, Stripe and RevenueCat webhook secrets, Anthropic, Resend, `CRON_SECRET` | Railway only. Neither client app references them: searched `apps/mobile/src`, `app/` and `apps/instructor-web` on `main` | **Privileged secrets** | **No**, unless C1 finds any of them set in a Vercel project. Even then they were only in the build environment, never in served files (no code reads them), and previews required Vercel login. The fix would be to remove them from Vercel, then rotate as a precaution |
+
+What the previews *did* do was let a logged-in team member use production data through a preview URL. That was a data-isolation problem, not a credential leak. A0 and PR #108 close it.
 
 ## D. Decisions
 
@@ -76,6 +90,12 @@ Last updated 2026-11-25 (rev 2, after Craig's plan approval). Step-by-step instr
 | F4 | **Past test dates are accepted** in onboarding | P0-1 marked the e2e check `fixme` | Fix in P5-1 (onboarding) | — (planned) |
 | F5 | **`/aitutor` redirects to `/` on web** (on `main` too) | P0-2 verification | Investigate in P2-2 when Ask Pip entry points are rebuilt | — (planned) |
 | F6 | **Tab bar labels clipped** at 390px on web | Audit screenshots; P0-2 screenshots | Fixed by the new tab bar in P1-2/P2-2 | — (planned) |
+
+## F1–F3: the decisions needed
+
+1. **F1, sandbox purchases grant real Pro.** Choose: (a) staging uses its own RevenueCat project (no code change, recommended regardless), and/or (b) production *flags* sandbox purchases (they still unlock Pro, so App Review works, but they're excluded from paying stats). Recommended: **both**. (b) is a small server PR, which needs approval to develop and then a separate approval to deploy to Railway.
+2. **F2, the cron endpoint fails open.** Approve a one-line server PR switching `/api/send-weekly-parent-emails` to the existing `requireCronAuth`. Deploy needs a separate approval. Recommended: **approve**.
+3. **F3, schema drift.** Approve a **read-only** dump of production's schema definitions (no data) so `schema.sql` can be corrected in a docs/schema-only PR. Nothing changes in production. Recommended: **approve**. Staging replay (A1) is only faithful once this lands.
 
 ## Things Claude Code will not do without explicit approval
 
