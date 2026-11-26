@@ -97,6 +97,8 @@ async function postToSlack(text) {
   }
 }
 
+const { createStripeWebhookRoute } = require('./lib/stripeMode');
+
 const stripe = process.env.STRIPE_SECRET_KEY
   ? require('stripe')(process.env.STRIPE_SECRET_KEY)
   : null;
@@ -367,22 +369,15 @@ async function handleChargeRefunded(charge, supabaseAdmin) {
 
 // ── Webhook (must be before express.json() to receive raw body) ───────────────
 
-app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-  if (!stripe || !webhookSecret) {
-    return res.status(500).json({ error: 'Stripe not configured' });
-  }
-
-  let event;
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-  } catch (err) {
-    console.error('[webhook] signature verification failed:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-
+// Signature, then live/test mode (lib/stripeMode.js), before anything below
+// runs: a mode-mismatched event is acknowledged and ignored, never deduped
+// or processed.
+app.post('/api/webhook', express.raw({ type: 'application/json' }), createStripeWebhookRoute({
+  getStripe: () => stripe,
+  secretEnvVar: 'STRIPE_WEBHOOK_SECRET',
+  notConfiguredError: 'Stripe not configured',
+  label: 'webhook',
+}, async (event, req, res) => {
   const supabaseAdmin = getSupabaseAdmin();
 
   // Dedup on Stripe's event id before doing anything else, so a retried
@@ -502,24 +497,16 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
   }
 
   res.json({ received: true });
-});
+}));
 
-app.post('/api/stripe/connect-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  const webhookSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
-
-  if (!stripe || !webhookSecret) {
-    return res.status(500).json({ error: 'Stripe Connect webhook not configured' });
-  }
-
-  let event;
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-  } catch (err) {
-    console.error('[connect-webhook] signature verification failed:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-
+// Same signature-then-mode gate. A live Connect endpoint is also sent
+// test-mode events from connected accounts, so this one does see mismatches.
+app.post('/api/stripe/connect-webhook', express.raw({ type: 'application/json' }), createStripeWebhookRoute({
+  getStripe: () => stripe,
+  secretEnvVar: 'STRIPE_CONNECT_WEBHOOK_SECRET',
+  notConfiguredError: 'Stripe Connect webhook not configured',
+  label: 'connect-webhook',
+}, async (event, req, res) => {
   if (event.type === 'account.updated') {
     const account = event.data.object;
     try {
@@ -545,7 +532,7 @@ app.post('/api/stripe/connect-webhook', express.raw({ type: 'application/json' }
   }
 
   res.json({ received: true });
-});
+}));
 
 // ─── POST /api/revenuecat-webhook ─────────────────────────────────────────────
 // RevenueCat's server-side notification for App Store/Play Store IAP events —
