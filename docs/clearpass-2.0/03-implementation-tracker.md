@@ -130,41 +130,67 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
   - **Follow-up on #108:** once #112 merges, `seed-local.js` and the docs need updating (they say `account_class` doesn't exist), and the bucket setup in `local-setup.sql` becomes redundant.
 - **Phase 1/2 started on local synthetic data:** P1-1 tokens/fonts/theme/`ui_v2` flag, the P1-2 subset Home needs, and the P2-1 Home with a fixture-driven preview route (M0.5). Branches start from `origin/main`; nothing depends on staging.
 
-## Recommended merge and deploy order (2026-11-26, draft; needs Craig's approval at each step)
+## Milestone tracker (2026-11-26)
 
-**Important:**
-- **Merging to `main` is a release.** C1 confirmed that Vercel's Git integration deploys `main` to production for **all three** projects (clearpass-app, clearpass-instructor-web, clearpass-web) on every merge, docs-only included. Railway is treated as deploying from `main` until R1 confirms it.
-- So approving a merge of an app or server PR means approving a web or server release. OTA (native apps) is always a separate step via `npm run ota:production`.
+| Milestone | Status | What's left |
+|---|---|---|
+| M0 Phase 0 safety | 🟨 PRs open: #107, #108, #109, #110 | Your review, then merges and releases per the sequence below |
+| Security fixes | 🟨 PRs open: #111, #113, **#118 (trials, stacked on #113)**, #116, #117; plus #112 schema | Your review, then merges and releases |
+| M0.5 static Home preview | ✅ Approved | — |
+| M0.6 refined Home | 🟨 Delivered (gallery v2, ZIP v2) | **Your sign-off locks the design system.** Decision D20 (road-sign artwork) |
+| M1 working Home and five tabs | 🟦 In development (stacked on #115): remaining Home features, the P2-2 navigator with desktop sidebar, and the real Home verified against local Supabase | ~5–7 active days from now. Needs M0.6 sign-off for visuals. Merging needs #108 and #109 first |
+| Hosted staging | ⏸ Prepared (`07-infrastructure-action-plan.md` G4) | Cost approval, ≈ $10–15/month |
+| Phases 3–7 | ⬜ | After M1 |
 
-**#116 and #117:** 342 and 337 server tests pass. They merge cleanly with each other and with #108, #111 and #113.
+**Current blockers** (nothing blocks local development):
+1. **Release control (G1)** isn't in place, so any merge deploys production. Every merge therefore waits for G1 or is treated as a release.
+2. **#108** needs C1b (A12 plus turning the build override off) before it merges.
+3. **Required CI on `main`** needs #109 merged, then C7b.
+4. **Hosted review of M1** needs staging (G4). A local review is possible without it.
+5. **Road-sign correction** needs D20.
 
-**Verified for the whole set:** all of #107, #108, #109, #111, #112 and #113 merged together → server 371/371 tests pass. The only textual conflict is **#110 ↔ #107** in `app/taster.tsx`, so whichever goes second gets a rebase.
+## Recommended merge and release sequence (2026-11-26, rev 3)
 
-| Step | PR | What merging does in production | Before | After (verification) | Rollback |
-|---|---|---|---|---|---|
-| 1 | **#109** CI and test guard | Nothing user-facing (tests and workflow only). The web redeploy is identical | — | CI green on main | Revert |
-| 2 | **#106** docs | Nothing | — | — | Revert |
-| 3 | **#112** schema.sql | Nothing: the file is used only for local and staging replay. No migration | — | Local replay (done: 0 diffs) | Revert |
-| 4 | **#111** F2 cron auth | Railway: the parent-email endpoint refuses requests without the secret | Confirm `CRON_SECRET` is set in Railway | `npm run smoke:instructor` PASS. Check the next cron-job.org run | Redeploy the previous build. No data written |
-| 5a | **#113** F1 sandbox flag | Railway: new sandbox purchases are marked `iap_sandbox` and excluded from stats | — | Smoke PASS. Next daily Slack stats show the sandbox line | **See the #113 rollback procedure:** if unexpired `iap_sandbox` rows exist, revert but keep `iap_sandbox: 0` priority |
-| 5b | **Trials delta PR** (stacked on #113; in development) | Railway: trials stop counting as paying; trial starts, conversions and cancellations reported | — | Smoke PASS. Daily stats show the trial lines | Same procedure as #113 for new `proSource` values |
-| 6 | **#116** Stripe livemode guard | Railway: test-mode events are acknowledged and ignored (200, logged) in production. Undeterminable mode → 500 (Stripe retries for 3 days) | Confirm the Railway `STRIPE_SECRET_KEY` starts with `rk_live_`/`sk_live_`. Only the prefix is needed, never the value | Smoke PASS. The next real Stripe event is processed | Redeploy the previous build |
-| 7 | **#117** RevenueCat IDs to env config | Railway: no change in production (IDs pinned). The server refuses to start if a conflicting ID or an unknown `CLEARPASS_SERVER_ENV` is set | Confirm Railway defines neither RevenueCat ID variable, and `CLEARPASS_SERVER_ENV` is unset or `production` | Smoke PASS | Redeploy the previous build |
-| 8 | **#108** environments | Web: production builds must declare their env | **C1b first:** the A12 variables, plus turning off the learner build-command override. Then verify the build log shows `[check-build-env] OK` | The production deploy succeeds and the site loads | Revert. The Vercel variables are harmless to leave |
-| 9 | **#110** P0-2 bug fixes | Web: the bug fixes go live | — | Web spot check of onboarding, limit results and FAB | Revert. **The OTA is a separate approval (A10)**, after the web check |
-| 10 | **#107** analytics (rebase on #110: `taster.tsx`) | Web: new events start flowing into `funnel_events` | A6 privacy stance | Events appear in read-only queries | Revert. Rows stay, harmless |
-| 11 | **#79** sign image fallback | Web: the fallback goes live | — | Road-signs views | Revert |
-| 12 | **#114 → #115** design foundation and Home | Web: **no visible change** (the `ui_v2` flag can't be on in production). Also adds `--clear` to `ota:production` | M0.5 review | Production site looks unchanged | Revert |
+**Model:** after G1 (`07-infrastructure-action-plan.md`), **merge ≠ deploy**.
+- Merges land on `main` with PR plus CI.
+- A **release** fast-forwards `production` to an approved `main` commit. That deploys Vercel (3 projects) and Railway together, and needs your approval each time.
+- **Until G1 is done, every merge is a production deployment** on Railway (no CI gate) and all three Vercel projects. Don't merge anything before G1.
 
-**Gates before the server steps (4–7):** R1 (A17) confirms the deploy trigger, that `CRON_SECRET` exists and the Stripe key prefix. **Before step 1:** C7 branch protection can be applied right after #109 (A16).
+**Verified so far:**
+- Server: #111/#113/#107/#108/#109/#112 merged together pass 371/371.
+- #118: 390/390 server tests, 136 core tests.
+- #116: 342. #117: 337.
+- Only textual conflict: #110 ↔ #107 (`taster.tsx`).
 
-**Why this order:**
-- CI first, so everything after it is checked.
-- Zero-impact docs and schema next.
-- Server security fixes each get their own deploy and smoke test, smallest first.
-- #108 only after its Vercel variables exist.
-- User-visible web changes last, each separately verifiable.
-- Steps 4–7 can each be deployed and soaked for a day before the next if you prefer. None depends on another.
+| # | Step | Prerequisite | CI required | Release effect (when `production` moves) | Post-release check | Rollback |
+|---|---|---|---|---|---|---|
+| 0 | **G1:** create `production`, then prompts P1 and C7a | Your approval | — | None (same commit as live) | Step 0 hashes match | Revert settings in the dashboards |
+| 1 | Merge **#109** CI | G1 | Its own run | Nothing user-facing | — | Revert PR |
+| 2 | **C7b:** required checks | #109 merged | — | — | — | Edit the ruleset |
+| 3 | Merge **#106** docs, **#112** schema | C7b | 7 checks | None (no migration) | — | Revert PR |
+| 4 | Merge **#111**; release | R1 ✅ (`CRON_SECRET` exists) | 7 checks | Railway: the parent-email endpoint fails closed | `smoke:instructor` PASS; next cron run | Railway redeploys the previous deployment, then revert |
+| 5 | Merge **#113**, then **#118**; release together | Step 4 soaked | 7 checks | Railway: sandbox and trials classified; stats corrected | Smoke PASS; next Slack stats show trial lines and paying = genuine | **#113/#118 procedure:** check for active `iap_sandbox`/`iap_trial` rows. If any, revert but keep both priority entries |
+| 6 | Merge **#116**; release | **Verify the Stripe key prefix** (masked in R1). Use Railway's raw editor without saving, or the Stripe dashboard's key list | 7 checks | Railway: test-mode Stripe events ignored in production | Smoke PASS; the next real Stripe event is processed | Redeploy previous |
+| 7 | Merge **#117**; release | R1 ✅ (no RevenueCat ID variables; `CLEARPASS_SERVER_ENV` absent) | 7 checks | None in production (IDs pinned) | Smoke PASS | Redeploy previous |
+| 8 | **C1b**, then merge **#108**; release | C1b done | 7 checks | Web builds must declare their env | Build log shows `[check-build-env] OK (Vercel production)`; site loads | Vercel Instant Rollback, then revert |
+| 9 | Merge **#110**; release (web). **OTA separately (A10)** | — | 7 checks | Web bug fixes live | Web spot check | Instant Rollback, then revert |
+| 10 | Rebase **#107** on #110 (`taster.tsx`), merge, release | A6 privacy stance | 7 checks | New analytics events flow | Read-only queries | Revert (rows harmless) |
+| 11 | Merge **#79**, release | — | 7 checks | Sign-image fallback | Road-signs views | Revert |
+| 12 | Merge **#114 → #115 → M1 PRs**, release | M0.6/M1 sign-off | 7 checks | **No visible change** (`ui_v2` is off in production) | Production unchanged | Revert |
+
+Steps 4–7 can each soak for a day. After any server release, Claude Code runs `npm run smoke:instructor` and reports PASS or FAIL.
+
+**Metrics after the A14 reconciliation** (54 counted learners, read-only; fixed going forward by #118):
+
+| Measure | Value |
+|---|---|
+| Genuine paying learners | **2** (1 recurring monthly subscriber via the App Store or Play Store, 1 one-off Stripe web pass) |
+| Conversion (paying ÷ learners) | **3.7%** (reported today: 5.6%, because it counts a trial) |
+| Recurring subscribers | 1 |
+| Active trials | 1 (cancelled; Pro until 27 Nov) |
+| Trials started → converted | 2 → 1 |
+| Cancelled but still active | 1 (an internal-classified account; real £7.99 quarterly) |
+| Granted Pro (not paying) | 1 counted instructor (plus 5 instructors and 2 complimentary accounts, excluded) |
 
 ## Consolidated PR plan
 

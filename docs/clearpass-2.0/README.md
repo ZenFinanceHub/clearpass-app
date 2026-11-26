@@ -9,6 +9,7 @@ An improvement programme that turns ClearPass into a guided daily learning exper
 | [03-implementation-tracker.md](03-implementation-tracker.md) | Phases, PRs, estimates, release path per PR, dependencies, milestones, risks, staging/testing and analytics |
 | [04-craig-actions.md](04-craig-actions.md) | Actions, decisions and PR #79/#19 recommendations; kept up to date throughout |
 | [06-chrome-prompts.md](06-chrome-prompts.md) | Ready-to-paste Claude in Chrome prompts for the browser-only setup steps (C1 read-only check now; C2 staging Supabase after cost approval) |
+| [07-infrastructure-action-plan.md](07-infrastructure-action-plan.md) | **The ordered infrastructure plan, with approval gates G1–G5:** release control, pre-merge configuration, releases, hosted staging (≈ $10–15/month), and follow-ups. Includes prompts P1, P1-alt, C7a/C7b and R3 |
 | [05-setup-guide.md](05-setup-guide.md) | Step-by-step staging Supabase, Vercel, Railway, EAS, GitHub Actions, Stripe test mode and RevenueCat sandbox setup, with costs |
 
 Inputs:

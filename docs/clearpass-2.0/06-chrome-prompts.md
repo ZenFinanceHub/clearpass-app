@@ -13,7 +13,8 @@ For Craig. Each prompt is self-contained: paste one into Claude in Chrome, let i
 | **C1b** | A12: the two `APP_ENV=production` Production variables, plus **turning off the learner build-command override** | When you approve merging #108 | $0 |
 | **C5** | Delete the unused `STRIPE_SECRET_KEY` from clearpass-app; limit `SLACK_WEBHOOK_CLEARPASS` to Production | When approved | $0 |
 | **C7** | Branch protection ruleset on `main` (PR plus 7 CI checks, no reviewer) | After #109 merges, when approved | $0 |
-| **R1** | Railway read-only check (deploy trigger, variable names, Stripe key prefix) | After you log in to Railway | $0 |
+| ✅ R1 | Railway read-only check | Done 2026-11-26 | — |
+| → | **All later prompts (P1, P1-alt, C7a, C7b, R3, then S1/RC1/V1) are in `07-infrastructure-action-plan.md`** | | |
 | **C2** | Creates `clearpass-staging` in the **Clear Pass** organisation (Pro) | When you approve the cost | **~$10/month** |
 | C3 | Railway staging environment and Vercel/EAS Preview variables | After C2 and the staging schema is applied (Claude Code does that from the credentials file) | ~$1–5/month |
 | C4 | Stripe sandbox products and webhooks, RevenueCat staging project | After C3 (webhooks need the staging Railway URL) | $0 |
@@ -207,7 +208,7 @@ After C2, you create `~/.config/clearpass/staging-db.env` yourself (setup guide 
 
 ---
 
-## C7 — GitHub branch protection for main (prepare only; run AFTER #109 has merged)
+## C7 — superseded by C7a/C7b in `07-infrastructure-action-plan.md` (kept for reference)
 
 **Run this only after #109 is merged.** Required checks must already exist on `main`; otherwise no PR can ever satisfy them.
 

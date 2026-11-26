@@ -1,6 +1,6 @@
 # ClearPass 2.0 — Actions and Decisions for Craig
 
-Last updated 2026-11-26 (rev 6: C1 and A14 results, reconciliation, Vercel secrets, prompts C1b/C2/C5/C7/R1). Step-by-step instructions are in `05-setup-guide.md`.
+Last updated 2026-11-26 (rev 7: R1 complete; consolidated plan in `07-infrastructure-action-plan.md`). Step-by-step instructions are in `05-setup-guide.md`.
 
 ## A. Actions (things only Craig can do)
 
@@ -21,9 +21,11 @@ Last updated 2026-11-26 (rev 6: C1 and A14 results, reconciliation, Vercel secre
 | A13 | Approve the **Railway deploys** of the F1 and F2 server fixes once reviewed | F1, F2 release | — | ⬜ |
 | A14 | RevenueCat read-only check of the 3 in-app Pro holders | Test-purchase findings | — | ✅ Done 2026-11-26. All 3 genuine production purchases with no sandbox activity. **No reclassification** (see §T) |
 | A15 | Run **C5** (Vercel secret clean-up: delete the unused `STRIPE_SECRET_KEY` from clearpass-app; limit `SLACK_WEBHOOK_CLEARPASS` to Production) when approved | Hygiene | No | ⬜ |
-| A16 | Run **C7** (branch protection on `main`) **after #109 merges**, when approved | Safer merges | No | ⬜ |
-| A17 | Log in to Railway and run **R1** (read-only: deploy trigger, variable names, Stripe key prefix) | Before the #111/#113/#116/#117 deploys; confirms whether merges deploy the server | Blocks the server deploys | ⬜ |
-| A18 | Approve the ~$10/month staging Supabase project (C2) | Hosted staging | Hosted review only; local development continues | ⬜ |
+| A16 | Branch protection: **C7a** now (with G1), **C7b** after #109 merges | Safer merges | No | ⬜ |
+| A17 | Railway audit R1 | — | — | ✅ Done 2026-11-26. Auto-deploy from `main`, Wait for CI off, US East. Remediation is G1 in `07-…` |
+| A19 | **G1, release control (recommended before ANY merge):** approve creating the `production` branch, then run **P1** and **C7a** | All merges | **Yes** | ⬜ |
+| A20 | Verify the Railway `STRIPE_SECRET_KEY` prefix (masked in R1) | #116 release | #116 only | ⬜ |
+| A18 | **G4:** approve hosted staging at ≈ $10–15/month (Supabase ~$10, Railway staging ~$0–5), then C2 → R3 → S1 → RC1 → V1 | Hosted staging | Hosted review only; local development continues | ⬜ |
 | A11 | Approve the **Railway deploy** of the Ask Pip allowance endpoint (P5-2) once reviewed and tested | P5-3 | — | ⬜ |
 
 ## R. Credential review after A0 (2026-11-26)
