@@ -235,8 +235,8 @@ The server reads 18 variable names; your R1 summary mentioned 7 of them. The oth
 | # | Who | Step | How |
 |---|---|---|---|
 | 1 | You | Give the go-ahead for Part A | Message |
-| 2 | Claude | Re-check all four platforms are at `d791923`; create `production` and nothing else | — |
-| 3 | You | Rulesets for `main` and `production` | **Prompt 1** |
+| 2 | Claude | ✅ 2026-11-26 10:48 UTC: preflight passed; `production` created at `d791923`; no deployments triggered | — |
+| 3 | You | ✅ 2026-11-26: rulesets created. Verified via API: main (PR, 0 approvals, Code Owner review, last-push approval, stale dismissal; admin bypass for PRs only) and production + release-gate-test (update, deletion and force-push restricted; admin bypass always). GitHub's default Copilot-PR approval setting was left on | **Prompt 1** |
 | 4 | You | Vercel production branch → `production` (3 projects) | **Prompt 2** |
 | 5 | Claude | Check the deployment records | — |
 | 6 | You | Railway branch → `production`, Wait for CI on (quiet time) | **Prompt 3** |
