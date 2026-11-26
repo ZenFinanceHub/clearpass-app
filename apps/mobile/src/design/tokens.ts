@@ -75,6 +75,10 @@ export interface ColorTokens {
   border: { default: string; strong: string };
   focus: { ring: string };
   chart: { track: string; fill: string; success: string };
+  /** Go Pro card: deep indigo surface. Gold only as decoration or a fill under dark text. */
+  promo: { bg: string; text: string; textSecondary: string; ctaBg: string; ctaText: string };
+  /** Desktop sidebar navigation. */
+  nav: { bg: string; activeBg: string; activeText: string; text: string };
 }
 
 export interface ColorOptions {
@@ -116,6 +120,8 @@ const LIGHT: ColorTokens = {
   border: { default: '#E5E7EB', strong: palette.grey },
   focus: { ring: palette.indigo },
   chart: { track: '#E0E7FF', fill: palette.indigo, success: palette.success },
+  promo: { bg: palette.indigoDeep, text: palette.white, textSecondary: '#C7D2FE', ctaBg: palette.white, ctaText: palette.indigoDeep },
+  nav: { bg: palette.white, activeBg: '#EEF2FF', activeText: palette.indigo, text: '#4B5563' },
 };
 
 const DARK: ColorTokens = {
@@ -151,6 +157,8 @@ const DARK: ColorTokens = {
   border: { default: '#374151', strong: '#9CA3AF' },
   focus: { ring: '#A5B4FC' },
   chart: { track: '#374151', fill: palette.indigoLight, success: palette.successLight },
+  promo: { bg: palette.indigoDeep, text: palette.white, textSecondary: '#C7D2FE', ctaBg: palette.white, ctaText: palette.indigoDeep },
+  nav: { bg: '#111827', activeBg: '#1E1B4B', activeText: '#A5B4FC', text: palette.darkSecondaryText },
 };
 
 export function buildColorTokens({ scheme, highContrast = false, cream = false }: ColorOptions): ColorTokens {
@@ -160,6 +168,7 @@ export function buildColorTokens({ scheme, highContrast = false, cream = false }
     bg: { ...base.bg },
     text: { ...base.text },
     border: { ...base.border },
+    nav: { ...base.nav },
   };
   if (scheme === 'light' && cream) t.bg.canvas = palette.cream;
   if (highContrast) {
@@ -167,6 +176,7 @@ export function buildColorTokens({ scheme, highContrast = false, cream = false }
     t.text.primary = strong;
     t.text.secondary = strong;
     t.text.secondaryOnTint = strong;
+    t.nav.text = strong;
     t.border.default = strong;
     t.border.strong = strong;
   }
@@ -213,6 +223,16 @@ export const CONTRAST_PAIRS: ContrastPair[] = [
   { fg: 'focus.ring', bg: 'bg.card', min: 3 },
   { fg: 'chart.fill', bg: 'chart.track', min: 3, note: 'progress bar fill vs track' },
   { fg: 'chart.success', bg: 'chart.track', min: 3 },
+  // Go Pro card.
+  { fg: 'promo.text', bg: 'promo.bg', min: 4.5 },
+  { fg: 'promo.textSecondary', bg: 'promo.bg', min: 4.5 },
+  { fg: 'promo.ctaText', bg: 'promo.ctaBg', min: 4.5 },
+  { fg: 'promo.ctaBg', bg: 'promo.bg', min: 3, note: 'CTA shape vs card' },
+  { fg: 'text.onGold', bg: 'accent.gold', min: 4.5 },
+  // Desktop sidebar.
+  { fg: 'nav.text', bg: 'nav.bg', min: 4.5 },
+  { fg: 'nav.activeText', bg: 'nav.activeBg', min: 4.5 },
+  { fg: 'text.primary', bg: 'nav.bg', min: 4.5 },
 ];
 
 export function resolveToken(tokens: ColorTokens, path: Path): string {

@@ -5,7 +5,8 @@ import { minTouchTarget } from '@/src/design/tokens';
 import { Text } from './Text';
 import { Icon, type IconName } from './Icon';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost';
+/** inverse: white button on the deep-indigo Go Pro card. */
+export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'inverse';
 
 export interface ButtonProps {
   label: string;
@@ -17,6 +18,8 @@ export interface ButtonProps {
   disabled?: boolean;
   loading?: boolean;
   fullWidth?: boolean;
+  /** Label lines before truncating (long topic names, large text). */
+  numberOfLines?: number;
   accessibilityLabel?: string;
   accessibilityHint?: string;
   style?: StyleProp<ViewStyle>;
@@ -26,16 +29,18 @@ export interface ButtonProps {
 /** 44pt minimum target; role, label and disabled/busy state for screen readers. */
 export function Button({
   label, onPress, variant = 'primary', size = 'md', icon, iconPosition = 'right',
-  disabled, loading, fullWidth, accessibilityLabel, accessibilityHint, style, testID,
+  disabled, loading, fullWidth, numberOfLines = 1, accessibilityLabel, accessibilityHint, style, testID,
 }: ButtonProps) {
   const { colors, radii } = useDesignTheme();
   const fg =
     variant === 'primary' ? colors.text.onPrimary
     : variant === 'secondary' ? colors.text.onSecondary
+    : variant === 'inverse' ? colors.promo.ctaText
     : colors.text.brand;
   const bg =
     variant === 'primary' ? colors.brand.primary
     : variant === 'secondary' ? colors.brand.secondary
+    : variant === 'inverse' ? colors.promo.ctaBg
     : 'transparent';
   const iconEl = icon ? <Icon name={icon} size={18} color={fg} /> : null;
 
@@ -54,6 +59,7 @@ export function Button({
         {
           minHeight: size === 'lg' ? 52 : minTouchTarget,
           paddingHorizontal: size === 'lg' ? 24 : 18,
+          paddingVertical: 8,
           borderRadius: radii.control,
           backgroundColor: bg,
           borderWidth: variant === 'outline' ? 1.5 : 0,
@@ -69,7 +75,7 @@ export function Button({
       ) : (
         <View style={styles.row}>
           {iconPosition === 'left' && iconEl}
-          <Text variant="label" weight={600} style={{ color: fg }} numberOfLines={1}>{label}</Text>
+          <Text variant="label" weight={600} align="center" style={{ color: fg, flexShrink: 1 }} numberOfLines={numberOfLines}>{label}</Text>
           {iconPosition === 'right' && iconEl}
         </View>
       )}
@@ -80,5 +86,5 @@ export function Button({
 const styles = StyleSheet.create({
   base: { alignItems: 'center', justifyContent: 'center' },
   full: { alignSelf: 'stretch' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, maxWidth: '100%' },
 });

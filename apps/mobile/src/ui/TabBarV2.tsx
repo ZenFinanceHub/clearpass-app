@@ -61,7 +61,9 @@ export function TabBarV2({ active, onPress }: { active: TabKey; onPress?: (key: 
               weight={focused ? 700 : 500}
               numberOfLines={1}
               maxFontSizeMultiplier={1.3}
-              style={{ color }}
+              // Labels are capped (icons + accessibilityLabel carry them too) so
+              // five single words never clip at 320px, even with Large Text on.
+              style={{ color, fontSize: 12, lineHeight: 16 }}
             >
               {t.label}
             </Text>
