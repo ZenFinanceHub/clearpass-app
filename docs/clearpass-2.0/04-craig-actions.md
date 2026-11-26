@@ -1,13 +1,13 @@
 # ClearPass 2.0 — Actions and Decisions for Craig
 
-Last updated 2026-11-26 (rev 5, #111/#113 direction approved; test-purchase investigation; Stripe livemode and RevenueCat config approved). Step-by-step instructions are in `05-setup-guide.md`.
+Last updated 2026-11-26 (rev 6: C1 and A14 results, reconciliation, Vercel secrets, prompts C1b/C2/C5/C7/R1). Step-by-step instructions are in `05-setup-guide.md`.
 
 ## A. Actions (things only Craig can do)
 
 | # | Action | Needed for | Blocking? | Status |
 |---|---|---|---|---|
 | A0 | Stop Vercel PR previews from using production | All PRs | — | ✅ **Done 2026-11-26 by Craig (via Claude in Chrome).** clearpass-app and clearpass-instructor-web set to "Only build production". Standard Protection with Vercel Authentication was already on for both. All 59 historical previews deleted (30 + 29); zero remain. Both production sites still public. No env vars, DB settings or credentials changed; clearpass-web untouched; no cost. Defence in depth added in PR #108: preview builds now **fail** unless wired to staging |
-| A1 | Run Chrome prompt **C1** (Craig is running it now; no rotation until its results are in) (read-only check, `06-chrome-prompts.md`), approve the staging cost it reports, then **C2** to create the **hosted staging Supabase project** and enter its keys into Vercel Preview, EAS `preview` and Railway staging (guide §1–§3) | P0-4 hosted part; hosted review of M1 | Blocks hosted staging only. Local development continues | ⬜ |
+| A1 | ✅ C1 done. Next: approve the **~$10/month** staging project, then run **C2** (Clear Pass org) (read-only check, `06-chrome-prompts.md`), approve the staging cost it reports, then **C2** to create the **hosted staging Supabase project** and enter its keys into Vercel Preview, EAS `preview` and Railway staging (guide §1–§3) | P0-4 hosted part; hosted review of M1 | Blocks hosted staging only. Local development continues | ⬜ |
 | A2 | **Enable GitHub Actions** (guide §4) | P0-1 CI | — | ✅ Already enabled; CI ran green on #109. Optional: apply the §4 hardening settings and make `ci` a required check |
 | A3 | **Stripe test mode and RevenueCat sandbox** set up for staging (guide §5–§6) | P5-4, P7 purchase testing | Phase 5 testing | ⬜ (approved to prepare) |
 | A4 | ~~Unpushed commits~~ **Decided: preserve.** Programme branches start from `origin/main`; local `main` is left untouched | — | — | ✅ |
@@ -17,9 +17,13 @@ Last updated 2026-11-26 (rev 5, #111/#113 direction approved; test-purchase inve
 | A8 | Device and accessibility test time in Phase 7 (iOS and Android devices; VoiceOver and TalkBack) | P7 | Phase 7 | ⬜ |
 | A9 | Review batches: one per phase, plus M0.5 and M1 | All | — | ✅ **M0.5 reviewed (direction approved 2026-11-26).** ⬜ **M0.6 refinement review** next: before/after and viewport screenshots |
 | A10 | Approve **production release** of the P0-2 bug fixes (OTA and web) once reviewed | P0-2 release | — | ⬜ |
-| A12 | **Before #108 merges:** add `EXPO_PUBLIC_APP_ENV=production` to clearpass-app and `NEXT_PUBLIC_APP_ENV=production` to clearpass-instructor-web, **Production scope only**, in Vercel. Chrome prompt **C1b**. Neither value is secret. Without them, the next production deploy fails its check: the site stays up on the previous deployment, but deploys are blocked | #108 merge | Blocks the #108 merge only | ⬜ |
+| A12 | ⬜ **Outstanding** (C1: neither variable exists yet). **Before #108 merges:** add `EXPO_PUBLIC_APP_ENV=production` to clearpass-app and `NEXT_PUBLIC_APP_ENV=production` to clearpass-instructor-web, **Production scope only**, in Vercel. Chrome prompt **C1b**, which now also turns off the learner build-command override. Neither value is secret. Without them, the next production deploy fails its check: the site stays up on the previous deployment, but deploys are blocked | #108 merge | Blocks the #108 merge only | ⬜ |
 | A13 | Approve the **Railway deploys** of the F1 and F2 server fixes once reviewed | F1, F2 release | — | ⬜ |
-| A14 | Run Chrome prompt **C5** (RevenueCat, read-only check of 3 in-app Pro holders). The prompt is kept **outside the repo** because it contains user IDs | Test-purchase findings | Blocks the F1 backfill decision only | ⬜ |
+| A14 | RevenueCat read-only check of the 3 in-app Pro holders | Test-purchase findings | — | ✅ Done 2026-11-26. All 3 genuine production purchases with no sandbox activity. **No reclassification** (see §T) |
+| A15 | Run **C5** (Vercel secret clean-up: delete the unused `STRIPE_SECRET_KEY` from clearpass-app; limit `SLACK_WEBHOOK_CLEARPASS` to Production) when approved | Hygiene | No | ⬜ |
+| A16 | Run **C7** (branch protection on `main`) **after #109 merges**, when approved | Safer merges | No | ⬜ |
+| A17 | Log in to Railway and run **R1** (read-only: deploy trigger, variable names, Stripe key prefix) | Before the #111/#113/#116/#117 deploys; confirms whether merges deploy the server | Blocks the server deploys | ⬜ |
+| A18 | Approve the ~$10/month staging Supabase project (C2) | Hosted staging | Hosted review only; local development continues | ⬜ |
 | A11 | Approve the **Railway deploy** of the Ask Pip allowance endpoint (P5-2) once reviewed and tested | P5-3 | — | ⬜ |
 
 ## R. Credential review after A0 (2026-11-26)
@@ -109,23 +113,56 @@ What the previews *did* do was let a logged-in team member use production data t
 
 All three were approved on 2026-11-26 (see table F). They are being developed as three separate PRs. Nothing is deployed or migrated.
 
-## T. Historical in-app Pro holders (read-only investigation, 2026-11-26)
+## T. Pro holders: verified and reconciled (2026-11-26)
 
-Labelled H1–H3; user IDs aren't in this public repo. From production (read-only, no personal data):
+RevenueCat check (A14, Craig) plus production records (read-only). **No sandbox activity anywhere; nothing is to be reclassified.**
 
-| | Store | Excluded from stats already | Purchase event | Current expiry | Provisional reading |
-|---|---|---|---|---|---|
-| H1 | — | **Yes** (`internal`) | none logged | 8 Dec | Internal/team account. Not in any reported figure, so no impact either way |
-| H2 | Android | No | 8 Nov | 11 Dec | A ~monthly expiry. Sandbox subscriptions renew within minutes and lapse within hours, so this **looks like a genuine subscriber** |
-| H3 | iOS | No | 24 Nov | **27 Nov (3 days)** | Neither a monthly nor a sandbox pattern. **Looks like a 3-day free trial**, which is counted as paying today. Possibly a sandbox purchase |
+| | Store and plan | RevenueCat (verified) | Our records | Category |
+|---|---|---|---|---|
+| H1 | App Store, quarterly £7.99 | Genuine production purchase; renewal cancelled; active until 8 Dec | Account classed `internal`, excluded from stats | **Cancelled but active.** Real money, but excluded as internal. *Craig: confirm it's your or a team account; if it's a real customer, its classification is wrong* |
+| H2 | Play Store, monthly £2.99 | Genuine; converted from a 3-day trial; auto-renew on | `iap`, counted as paying | **Recurring subscriber (paying)** |
+| H3 | App Store, monthly | Genuine **free trial**, £0, cancelled before converting; Pro until 27 Nov | `iap`, **counted as paying (wrong)** | **Active trial (cancelled).** Will lapse |
+| Web | Stripe one-off pass | Stripe Checkout is one-off, not a subscription. Recorded by the signature-verified webhook | `stripe`, active until 20 Jan 2027, counted as paying | **Paying (one-off pass)** |
 
-**Reported figures today:** 3 paying learners out of 54 counted learners, i.e. **5.6% conversion** (1 Stripe web purchase, plus H2 and H3).
-- If H3 is a trial or a test: **2 / 54 = 3.7%**.
-- If H2 were also a test: 1 / 54 = 1.9%.
+**Granted Pro (never paying):**
+- 1 counted instructor (free instructor Pro).
+- 5 more instructors and 2 unexpired comps, all excluded from stats.
 
-**Separate finding: trials count as paying.** The webhook ignores RevenueCat's `period_type`, so anyone in a free trial is reported as a paying customer until the trial ends. Entitlement during the trial is correct; only the reporting is wrong. Proposed fix (needs approval): record trial status and report "in trial" separately from "paying".
+**Figures (54 counted learners):**
 
-Confirmation needs the RevenueCat dashboard (A14 / C5). The server's RevenueCat key is only on Railway, and the Railway CLI isn't logged in here. **No production records will be changed until Craig has reviewed the findings.**
+| Measure | Reported today | Correct |
+|---|---|---|
+| Paying learners | 3 (H2, H3, Stripe) | **2** (H2 recurring, plus the Stripe one-off) |
+| Conversion | 5.6% | **3.7%** |
+| Recurring subscribers | not reported | 1 |
+| Active trials | not reported | 1 (H3, cancelled) |
+| Cancelled but active | not reported | 1 (H1, internal) |
+| Trial → paid | not reported | 1 of 2 trials converted (too few to be meaningful) |
+
+**Fix:**
+- Trials are excluded from "paying" and reported separately (starts, conversions, cancellations). This is in development as a delta PR on #113, plus #107 query updates.
+- Trial users keep their Pro access.
+- No production records are changed. H3 lapses on its own on 27 Nov.
+
+## I. Infrastructure findings from C1 (2026-11-26)
+
+| # | Finding | Investigation (read-only) | Plan |
+|---|---|---|---|
+| I1 | Vercel previews are disabled; historical previews deleted; Standard Protection on; GitHub Actions settings now correct | — | ✅ Nothing further |
+| I2 | **No branch protection on `main`** | — | **C7** prepared (PR plus 7 CI checks, no reviewer). Apply after #109 merges (A16) |
+| I3 | **`STRIPE_SECRET_KEY` is set on clearpass-app (Production and Preview)** | **Unused.** No code in `apps/mobile` outside the Railway server has ever read it (full git history). The only Vercel function, `api/support.ts`, doesn't use it. Expo only builds `EXPO_PUBLIC_*` variables into client code, and this app's Babel config has no plugin that would add others. The **live production web bundle** contains no `sk_`/`rk_` key, `whsec_`, Slack hook, `service_role` or `sk-ant-` string (fetched and searched; the bundle's public anon key confirms it's the real bundle). Preview deployments were behind Vercel Authentication and are deleted | **Never in a client build, so rotation isn't required.** Delete it from clearpass-app (C5, A15). Railway's copy is untouched. Optional hygiene: rotate the Stripe restricted key later as a planned change (Railway update plus smoke test) |
+| I4 | **`SLACK_WEBHOOK_CLEARPASS` is set on clearpass-app**, also in Preview | **Used server-side only**, by the `api/support.ts` Vercel function (support-chat escalation to Slack). No client code imports it. Not in the production bundle | Keep it for Production; **remove it from Preview** (C5). No rotation needed |
+| I5 | **The learner Build Command is overridden in the dashboard** (`npx expo export --platform web`) | Vercel's docs say `vercel.json` `buildCommand` *overrides* the dashboard setting. Today both say the same thing, so nothing is bypassed yet. The docs don't say how the dashboard "Override" toggle interacts | **Turn the override off** in C1b, alongside A12, before #108 merges. Then verify the first production build logs `[check-build-env] OK (Vercel production)` |
+| I6 | Neither production `APP_ENV` variable exists | — | A12 stays outstanding (C1b) |
+| I7 | ClearPass Supabase organisation is on **Pro** | Pro's $10 compute credit is already used by production, so a staging Micro project adds about **$10/month** | **C2 rev 2** prepared for the Clear Pass org; not created (A18) |
+| I8 | Railway not yet verified (needs login) | — | **R1** prepared (A17) |
+| I9 | **New: `/api/support` (Vercel function) is a public, unauthenticated endpoint that calls Anthropic** | `apps/mobile/api/support.ts` has no auth or rate limit visible in the handler | Possible cost-abuse risk. Not urgent. Propose a separate small PR (rate limit or origin check) when you want it |
+
+**Do merges deploy?**
+- **Vercel: yes, confirmed.** Git-connected, and Ignored Build Step is "Only build production". Every merge to `main` builds and deploys **all three** Vercel projects to production: clearpass-app, clearpass-instructor-web and clearpass-web. That includes docs-only merges, which redeploy unchanged output.
+- **Railway: unverified until R1.** Treat it as yes.
+- **EAS/OTA: never automatic.**
+- **So every merge is treated as a production deployment.**
 
 ## Things Claude Code will not do without explicit approval
 

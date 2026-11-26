@@ -93,6 +93,20 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
   - **Dependency added:** `@expo-google-fonts/inter` (JS and assets only, OTA-safe).
   - **Finding:** Metro's cache can carry `EXPO_PUBLIC_*` values between exports. A production OTA built after a preview export could ship `uiV2` on. **Fixed in #114** by adding `--clear` to the `ota:production` export. That conflicts textually with #108's `otaCommands.js` change; trivial to resolve.
   - **Still to do for M1:** carry over the current Home extras (celebrations, QOTD, nudges, reminder offer, scheduled mocks, challenge invites, pull-to-refresh); see the real Home against local Supabase; P2-2 five-tab navigator (including a desktop navigation layout); the remaining P1-2 components; an in-app Reduced Motion toggle.
+- **2026-11-26 checks:**
+  - **A14 (RevenueCat):** all 3 in-app holders are genuine production purchases, so nothing is reclassified. One is an active cancelled trial, wrongly counted as paying. Correct paying = 2 of 54 = **3.7%** (reported 5.6%).
+  - **Trials fix:** being built as a delta PR on #113, plus #107 queries.
+  - **C1:** see `04-craig-actions.md` §I.
+    - `STRIPE_SECRET_KEY` on Vercel is unused and never reached a client build (the live bundle was checked), so the plan is to delete it, with no rotation needed.
+    - The learner build-command override goes off in C1b.
+    - Branch protection C7 and Railway R1 are prepared; C2 is revised for the Clear Pass org at ~$10/month.
+- **Estimate to the working Home (M1), active effort, after M0.6 sign-off:**
+  - M0.6 itself: ~1–1.5 d (in progress).
+  - Carrying over the existing Home features with contextual placement: 1.5–2 d.
+  - The real 5-tab navigator with the desktop sidebar (P2-2): 1.5–2 d.
+  - The remaining P1-2 components: ~1 d.
+  - The real Home against the local Supabase stack, plus e2e: 0.5–1 d. Needs #108 and #109 merged, or stacked branches until then.
+  - **≈ 5–7 active days after M0.6 sign-off. Elapsed ~1.5–2.5 weeks**, depending on review turnaround. Infrastructure actions don't block it; hosted staging (C2) only affects *hosted* review of M1, and local review works without it.
 - **F2 → PR #111, F1 → PR #113** (details in `04-craig-actions.md` table F). #107's funnel query now excludes sandbox testers (validated with EXPLAIN only on production).
 - **Approved 2026-11-26** (development only):
   - final review of #111/#113, plus a consolidated merge and deploy order;
@@ -112,7 +126,7 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
 ## Recommended merge and deploy order (2026-11-26, draft; needs Craig's approval at each step)
 
 **Important:**
-- **Merging to `main` is a release.** Vercel's Git integration deploys `main` to production for clearpass-app and clearpass-instructor-web on every merge. Railway appears to deploy the server from `main` too (CLAUDE.md: "any push that deploys the Railway server"; Railway config isn't in the repo, so C1 should confirm the trigger).
+- **Merging to `main` is a release.** C1 confirmed that Vercel's Git integration deploys `main` to production for **all three** projects (clearpass-app, clearpass-instructor-web, clearpass-web) on every merge, docs-only included. Railway is treated as deploying from `main` until R1 confirms it.
 - So approving a merge of an app or server PR means approving a web or server release. OTA (native apps) is always a separate step via `npm run ota:production`.
 
 **#116 and #117:** 342 and 337 server tests pass. They merge cleanly with each other and with #108, #111 and #113.
@@ -125,14 +139,17 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
 | 2 | **#106** docs | Nothing | — | — | Revert |
 | 3 | **#112** schema.sql | Nothing: the file is used only for local and staging replay. No migration | — | Local replay (done: 0 diffs) | Revert |
 | 4 | **#111** F2 cron auth | Railway: the parent-email endpoint refuses requests without the secret | Confirm `CRON_SECRET` is set in Railway | `npm run smoke:instructor` PASS. Check the next cron-job.org run | Redeploy the previous build. No data written |
-| 5 | **#113** F1 sandbox flag | Railway: new sandbox purchases are marked `iap_sandbox` and excluded from stats | — | Smoke PASS. Next daily Slack stats show the sandbox line | **See the #113 rollback procedure:** if unexpired `iap_sandbox` rows exist, revert but keep `iap_sandbox: 0` priority |
+| 5a | **#113** F1 sandbox flag | Railway: new sandbox purchases are marked `iap_sandbox` and excluded from stats | — | Smoke PASS. Next daily Slack stats show the sandbox line | **See the #113 rollback procedure:** if unexpired `iap_sandbox` rows exist, revert but keep `iap_sandbox: 0` priority |
+| 5b | **Trials delta PR** (stacked on #113; in development) | Railway: trials stop counting as paying; trial starts, conversions and cancellations reported | — | Smoke PASS. Daily stats show the trial lines | Same procedure as #113 for new `proSource` values |
 | 6 | **#116** Stripe livemode guard | Railway: test-mode events are acknowledged and ignored (200, logged) in production. Undeterminable mode → 500 (Stripe retries for 3 days) | Confirm the Railway `STRIPE_SECRET_KEY` starts with `rk_live_`/`sk_live_`. Only the prefix is needed, never the value | Smoke PASS. The next real Stripe event is processed | Redeploy the previous build |
 | 7 | **#117** RevenueCat IDs to env config | Railway: no change in production (IDs pinned). The server refuses to start if a conflicting ID or an unknown `CLEARPASS_SERVER_ENV` is set | Confirm Railway defines neither RevenueCat ID variable, and `CLEARPASS_SERVER_ENV` is unset or `production` | Smoke PASS | Redeploy the previous build |
-| 8 | **#108** environments | Web: production builds must declare their env | **A12: add the two Vercel Production variables first** | The production deploy succeeds and the site loads | Revert. The Vercel variables are harmless to leave |
+| 8 | **#108** environments | Web: production builds must declare their env | **C1b first:** the A12 variables, plus turning off the learner build-command override. Then verify the build log shows `[check-build-env] OK` | The production deploy succeeds and the site loads | Revert. The Vercel variables are harmless to leave |
 | 9 | **#110** P0-2 bug fixes | Web: the bug fixes go live | — | Web spot check of onboarding, limit results and FAB | Revert. **The OTA is a separate approval (A10)**, after the web check |
 | 10 | **#107** analytics (rebase on #110: `taster.tsx`) | Web: new events start flowing into `funnel_events` | A6 privacy stance | Events appear in read-only queries | Revert. Rows stay, harmless |
 | 11 | **#79** sign image fallback | Web: the fallback goes live | — | Road-signs views | Revert |
 | 12 | **#114 → #115** design foundation and Home | Web: **no visible change** (the `ui_v2` flag can't be on in production). Also adds `--clear` to `ota:production` | M0.5 review | Production site looks unchanged | Revert |
+
+**Gates before the server steps (4–7):** R1 (A17) confirms the deploy trigger, that `CRON_SECRET` exists and the Stripe key prefix. **Before step 1:** C7 branch protection can be applied right after #109 (A16).
 
 **Why this order:**
 - CI first, so everything after it is checked.
