@@ -28,18 +28,28 @@ name: OTA update to production (native apps)
 # executed by the upload job.
 #
 # The upload job therefore executes NO repository code and NO repository
-# dependency. Its inputs are:
-#   - the artifact (the bundle: what the phones run, which is the point);
-#   - apps/mobile/app.json and apps/mobile/eas.json at the released commit,
-#     read by eas-cli as configuration (both in CODEOWNERS, and app.json is
-#     pinned to this EAS project below);
+# dependency. Its inputs are data:
+#   - the artifact: the bundle (what the phones run, which is the point) and
+#     the build's plugin-resolved public app config (`expo config --type
+#     public`), both covered by the approved digest;
+#   - apps/mobile/app.json at the released commit, to cross-check the
+#     resolved config's identity fields (project ID, owner, update URL,
+#     version, runtime version), which are also pinned below; and
+#     apps/mobile/eas.json (cli settings). Both are in CODEOWNERS;
 #   - .github/ota/eas-cli/package-lock.json (the pinned eas-cli, CODEOWNERS);
 #   - a package.json it writes itself with only the `expo` and `expo-updates`
-#     version strings (validated), so eas-cli can tell the SDK version.
-# There is no node_modules in the project directory, so eas-cli cannot find
-# and run the project's `expo` CLI or config plugins; it falls back to its own
-# bundled config reader (verified in eas-cli 27.7.2: projectUtils.isExpoInstalled
-# and resolveRuntimeVersionAsync). A dynamic app.config.* is refused.
+#     version strings (validated).
+# eas-cli runs the project's `expo` / `expo-updates` CLIs and config plugins
+# whenever Node can resolve them from the project dir (eas-cli 27.7.2:
+# projectUtils.isExpoInstalled, resolveRuntimeVersionAsync, @expo/config
+# plugin resolution). The upload job proves none is resolvable, then gives
+# eas-cli the resolved config as a static app.json WITHOUT `plugins` (its
+# bundled reader would otherwise fail with PLUGIN_NOT_FOUND). Measured against
+# the `expo config --type public` output that `npm run ota:production` uses,
+# the only difference in the update's embedded config is the absent
+# `plugins` list, which the app does not read (src/buildInfo.ts reads
+# version, ios.buildNumber, android.versionCode). A dynamic app.config.* is
+# refused.
 #
 # Where the EXPO_PUBLIC_* values come from: `npm run ota:production` reads them
 # from the EAS `production` environment with `eas env:exec`, which needs the
@@ -202,6 +212,15 @@ jobs:
           rm -rf dist-ota
           npx expo export --clear --platform ios --platform android --output-dir dist-ota
 
+          # The public app config with config plugins applied: what eas-cli
+          # computes with `expo config --type public --json` when it runs in
+          # the project, as `npm run ota:production` does. The upload job
+          # gives it to eas-cli as a static app.json (minus `plugins`), so
+          # eas-cli never needs the project's node_modules.
+          mkdir -p "$RUNNER_TEMP/ota"
+          npx expo config --type public --json > "$RUNNER_TEMP/ota/expo-config.json"
+          jq -e '.slug and .version and .extra.eas.projectId' "$RUNNER_TEMP/ota/expo-config.json" >/dev/null
+
           # The repository's own key check (same as publish-ota.js).
           node -e '
             const { checkOtaBundles } = require("./scripts/lib/otaKeyCheck");
@@ -212,7 +231,6 @@ jobs:
 
           # Names and SHA-256 of the values used, for the upload job's
           # comparison with the EAS production environment.
-          mkdir -p "$RUNNER_TEMP/ota"
           for n in $(printf '%s\n' "${names[@]}" EXPO_PUBLIC_APP_ENV | sort -u); do
             printf '%s %s\n' "$n" "$(printf '%s' "${!n}" | sha256sum | cut -d' ' -f1)"
           done > "$RUNNER_TEMP/ota/build-env.sha256"
@@ -324,20 +342,34 @@ jobs:
           v=$(jq -r .version "$RUNNER_TEMP/eas-cli/node_modules/eas-cli/package.json")
           [ "$v" = "$EAS_CLI_VERSION" ] || { echo "::error::eas-cli $v installed, expected $EAS_CLI_VERSION"; exit 1; }
 
-          # Project config: app.json and eas.json at the released commit, a
-          # generated package.json, nothing else (no node_modules, no code).
+          # Project config, data only (no node_modules, no code):
+          #  - app.json: the build's plugin-resolved public config (from the
+          #    digest-checked artifact) minus `plugins`, so eas-cli's bundled
+          #    reader needs no plugin code. Its identity fields must equal
+          #    the released commit's own app.json and the pins above;
+          #  - eas.json from the released commit;
+          #  - a generated package.json.
           P="$RUNNER_TEMP/project"; mkdir -p "$P"
           entries=$(gh api "repos/$REPO/contents/apps/mobile?ref=$SHA" --jq '.[].name')
           if grep -qE '^app\.config\.(js|ts|mjs|cjs)$' <<< "$entries"; then echo "::error::dynamic app config present; refusing"; exit 1; fi
-          raw apps/mobile/app.json "$SHA" > "$P/app.json"
+          raw apps/mobile/app.json "$SHA" > "$RUNNER_TEMP/repo-app.json"
           raw apps/mobile/eas.json "$SHA" > "$P/eas.json"
-          jq -e --arg id "$EAS_PROJECT_ID" --arg acct "$EXPO_ACCOUNT" '
+          jq '{expo: del(.plugins, ._internal, .hooks)}' "$RUNNER_TEMP/ota/expo-config.json" > "$P/app.json"
+          # shellcheck disable=SC2016 # a jq program; $id and $acct are jq arguments
+          pins='
             .expo.extra.eas.projectId == $id
             and .expo.owner == $acct
             and .expo.updates.url == ("https://u.expo.dev/" + $id)
             and .expo.runtimeVersion.policy == "appVersion"
             and (.expo.updates.codeSigningCertificate == null)
-          ' "$P/app.json" >/dev/null || { echo "::error::app.json is not this EAS project's static config (projectId/owner/updates.url/runtimeVersion policy/code signing)"; exit 1; }
+            and (.expo.updates.codeSigningMetadata == null)'
+          for f in "$RUNNER_TEMP/repo-app.json" "$P/app.json"; do
+            jq -e --arg id "$EAS_PROJECT_ID" --arg acct "$EXPO_ACCOUNT" "$pins" "$f" >/dev/null \
+              || { echo "::error::$(basename "$f") is not this EAS project's config (projectId/owner/updates.url/runtimeVersion policy/code signing)"; exit 1; }
+          done
+          ident='.expo | [.slug, .owner, .version, .runtimeVersion, .extra.eas.projectId, .updates.url]'
+          [ "$(jq -c "$ident" "$P/app.json")" = "$(jq -c "$ident" "$RUNNER_TEMP/repo-app.json")" ] \
+            || { echo "::error::the build's resolved config does not match the released commit's app.json (slug/owner/version/runtimeVersion/projectId/updates.url)"; exit 1; }
           jq -e '(.cli // {}) | keys - ["version","appVersionSource","requireCommit","promptToConfigurePush"] | length == 0' "$P/eas.json" >/dev/null \
             || { echo "::error::eas.json has cli settings this workflow does not allow (e.g. updateManifestHostOverride)"; exit 1; }
           pkg=$(raw apps/mobile/package.json "$SHA")
@@ -345,7 +377,20 @@ jobs:
           upd_v=$(jq -r '.dependencies["expo-updates"] // empty' <<< "$pkg")
           for x in "$expo_v" "$upd_v"; do [[ "$x" =~ ^[~^]?[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::unexpected expo/expo-updates version string"; exit 1; }; done
           jq -n --arg e "$expo_v" --arg u "$upd_v" '{name:"clearpass", private:true, dependencies:{expo:$e, "expo-updates":$u}}' > "$P/package.json"
-          echo "Project config ready: app.json + eas.json from $SHA; package.json generated (expo $expo_v, expo-updates $upd_v)"
+
+          # eas-cli runs the project's own `expo` / `expo-updates` CLIs (and
+          # config plugins) whenever Node can resolve them from the project
+          # dir, which includes any node_modules in a PARENT directory. Prove
+          # nothing is resolvable, so only eas-cli's bundled code runs.
+          [ -z "${NODE_PATH:-}" ] || { echo "::error::NODE_PATH is set"; exit 1; }
+          d="$P"; while [ "$d" != / ]; do [ ! -e "$d/node_modules" ] || { echo "::error::$d/node_modules exists above the project dir"; exit 1; }; d=$(dirname "$d"); done
+          plugins=$(jq -r '.expo.plugins // [] | .[] | if type == "array" then .[0] else . end' "$RUNNER_TEMP/repo-app.json")
+          for m in expo expo-updates expo/fingerprint $plugins; do
+            if node -e 'require.resolve(process.argv[1], { paths: [process.argv[2]] })' "$m" "$P" 2>/dev/null; then
+              echo "::error::'$m' is resolvable from the project dir; refusing to run eas-cli next to project code"; exit 1
+            fi
+          done
+          echo "Project config ready (resolved config from the build, eas.json from $SHA, generated package.json: expo $expo_v, expo-updates $upd_v); no project modules resolvable"
 
       - name: Check the build used the EAS production values (by hash)
         working-directory: ${{ runner.temp }}/project

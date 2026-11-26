@@ -114,7 +114,11 @@ jobs:
           P="$RUNNER_TEMP/project"; mkdir -p "$P"
           entries=$(gh api "repos/$REPO/contents/apps/mobile?ref=$SHA" --jq '.[].name')
           if grep -qE '^app\.config\.(js|ts|mjs|cjs)$' <<< "$entries"; then echo "::error::dynamic app config present; refusing"; exit 1; fi
-          raw apps/mobile/app.json "$SHA" > "$P/app.json"
+          # Without `plugins`: eas-cli's bundled reader can't resolve plugin
+          # code (and must not). Republish reuses the original update's
+          # manifest, so the config here only identifies the project.
+          raw apps/mobile/app.json "$SHA" > "$RUNNER_TEMP/repo-app.json"
+          jq '.expo |= del(.plugins)' "$RUNNER_TEMP/repo-app.json" > "$P/app.json"
           raw apps/mobile/eas.json "$SHA" > "$P/eas.json"
           jq -e --arg id "$EAS_PROJECT_ID" --arg acct "$EXPO_ACCOUNT" '
             .expo.extra.eas.projectId == $id
@@ -129,6 +133,16 @@ jobs:
           upd_v=$(jq -r '.dependencies["expo-updates"] // empty' <<< "$pkg")
           for x in "$expo_v" "$upd_v"; do [[ "$x" =~ ^[~^]?[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::unexpected expo/expo-updates version string"; exit 1; }; done
           jq -n --arg e "$expo_v" --arg u "$upd_v" '{name:"clearpass", private:true, dependencies:{expo:$e, "expo-updates":$u}}' > "$P/package.json"
+          # Same guard as ota-production.yml: nothing of the project's may be
+          # resolvable, so only eas-cli's bundled code runs.
+          [ -z "${NODE_PATH:-}" ] || { echo "::error::NODE_PATH is set"; exit 1; }
+          d="$P"; while [ "$d" != / ]; do [ ! -e "$d/node_modules" ] || { echo "::error::$d/node_modules exists above the project dir"; exit 1; }; d=$(dirname "$d"); done
+          plugins=$(jq -r '.expo.plugins // [] | .[] | if type == "array" then .[0] else . end' "$RUNNER_TEMP/repo-app.json")
+          for m in expo expo-updates expo/fingerprint $plugins; do
+            if node -e 'require.resolve(process.argv[1], { paths: [process.argv[2]] })' "$m" "$P" 2>/dev/null; then
+              echo "::error::'$m' is resolvable from the project dir; refusing"; exit 1
+            fi
+          done
 
       - name: Check the group, then republish it to production
         working-directory: ${{ runner.temp }}/project
