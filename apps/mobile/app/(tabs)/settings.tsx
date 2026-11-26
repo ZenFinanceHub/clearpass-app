@@ -23,8 +23,8 @@ import { useAccessibility } from '@/src/AccessibilityContext';
 import type { AccessibilitySettings } from '@/src/AccessibilityContext';
 import { useTheme } from '@/src/theme';
 import { uiV2 } from '@/src/uiFlags';
-import { useReduceMotion } from '@/src/design/ThemeProvider';
-import { REDUCED_MOTION_SETTING } from '@/src/design/motion';
+import { useOsReduceMotion } from '@/src/design/ThemeProvider';
+import { REDUCED_MOTION_SETTING, reduceMotionToggleState } from '@/src/design/motion';
 import { Colors } from '@/src/constants/theme';
 import { calculateReadiness } from '@clearpass/core';
 import { allQuestions, highwayCodeChapters, roadSigns } from '@clearpass/content';
@@ -157,8 +157,9 @@ function linkedInstructorsSubtitle(linked: number, pending: number): string {
 export default function SettingsScreen() {
   const { settings, setSetting } = useAccessibility();
   const theme = useTheme();
-  // Effective value (OS setting until the learner toggles it); only shown with ui_v2 on.
-  const reduceMotion = useReduceMotion();
+  // ui_v2 Reduce Motion row: on and locked while the OS setting is on (the OS is a minimum).
+  const osReduceMotion = useOsReduceMotion();
+  const reduceMotionRow = reduceMotionToggleState({ inApp: settings.reduceMotion, os: osReduceMotion });
 
   // Profile state
   const [username, setUsername]           = useState<string | null>(null);
@@ -836,7 +837,9 @@ export default function SettingsScreen() {
 
       <View style={[styles.group, { backgroundColor: theme.cardColor }]}>
         {ACCESSIBILITY_ROWS.map((item, index) => {
-          const value = item.key === 'reduceMotion' ? reduceMotion : settings[item.key];
+          const isRm = item.key === 'reduceMotion';
+          const value = isRm ? reduceMotionRow.value : settings[item.key];
+          const description = isRm && reduceMotionRow.note ? reduceMotionRow.note : item.description;
           return (
           <View
             key={item.key}
@@ -847,10 +850,11 @@ export default function SettingsScreen() {
             </View>
             <View style={styles.textWrap}>
               <Text style={[styles.label, { fontSize: theme.fontSize(15), fontFamily: theme.fontFamily, color: theme.textColor }]}>{item.label}</Text>
-              <Text style={[styles.description, { fontSize: theme.fontSize(12), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(17), color: theme.subTextColor }]}>{item.description}</Text>
+              <Text style={[styles.description, { fontSize: theme.fontSize(12), fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing, lineHeight: theme.lineHeight(17), color: theme.subTextColor }]}>{description}</Text>
             </View>
             <Switch
               value={value}
+              disabled={isRm ? reduceMotionRow.disabled : undefined}
               onValueChange={(val) => { setSetting(item.key, val); showSavedToast(); }}
               trackColor={{ false: '#E5E7EB', true: Colors.indigo }}
               thumbColor={value ? '#FFFFFF' : '#9CA3AF'}

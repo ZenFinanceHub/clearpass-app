@@ -138,25 +138,47 @@ test.describe('ui_v2 on', () => {
     await expect(page.getByTestId('topic-picker')).toBeVisible();
   });
 
-  test('Profile: Reduce Motion toggle defaults to the OS setting and is saved locally', async ({ page, context }) => {
+  const storedRm = (page: Page) =>
+    page.evaluate(() => JSON.parse(localStorage.getItem('accessibility_settings') ?? '{}').reduceMotion);
+
+  test('Profile: Reduce Motion is off by default, can be turned on, and is saved locally', async ({ page, context }) => {
     const contacted: string[] = [];
     await stubBackend(context, contacted);
-    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
     await seed(page);
     await page.goto('/settings');
     await dismissCelebrations(page);
     await expect(page.getByText('Reduce Motion', { exact: true })).toBeVisible({ timeout: 20000 });
     const sw = reduceMotionSwitch(page);
-    // The OS asks for reduced motion and nothing is stored yet: shown on.
-    await expect(sw).toBeChecked();
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('accessibility_settings') ?? '{}').reduceMotion)).toBeUndefined();
-    await sw.click();
+    // OS off + nothing stored: off, and the learner can change it.
     await expect(sw).not.toBeChecked();
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('accessibility_settings') ?? '{}').reduceMotion)).toBe(false);
+    await expect(sw).toBeEnabled();
+    expect(await storedRm(page)).toBeUndefined();
+    await sw.click();
+    await expect(sw).toBeChecked();
+    expect(await storedRm(page)).toBe(true);
     // Persisted: survives a reload.
     await page.reload();
     await expect(page.getByText('Reduce Motion', { exact: true })).toBeVisible({ timeout: 20000 });
-    await expect(reduceMotionSwitch(page)).not.toBeChecked();
+    await expect(reduceMotionSwitch(page)).toBeChecked();
+  });
+
+  test('Profile: with the OS setting on, Reduce Motion is on and locked, even if turned off in the app', async ({ page, context }) => {
+    const contacted: string[] = [];
+    await stubBackend(context, contacted);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    // The learner had turned it off in ClearPass: the OS setting still wins.
+    await seed(page, { accessibility_settings: JSON.stringify({ reduceMotion: false }) });
+    await page.goto('/settings');
+    await dismissCelebrations(page);
+    await expect(page.getByText('Reduce Motion', { exact: true })).toBeVisible({ timeout: 20000 });
+    const sw = reduceMotionSwitch(page);
+    await expect(sw).toBeChecked();
+    await expect(sw).toBeDisabled();
+    await expect(page.getByText("On because your device's Reduce Motion setting is on", { exact: true })).toBeVisible();
+    await sw.click({ force: true });
+    await expect(sw).toBeChecked();
+    expect(await storedRm(page)).toBe(false);
   });
 });
 

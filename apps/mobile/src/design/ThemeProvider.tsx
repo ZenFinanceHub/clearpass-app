@@ -22,7 +22,7 @@ import {
  * ClearPass 2.0 theme. Reads the EXISTING in-app accessibility settings
  * (src/AccessibilityContext: darkMode, highContrast, creamBackground,
  * largeText, dyslexiaFont, wordSpacing) and Reduced Motion (the OS setting,
- * or the in-app toggle when ui_v2 is on; see useReduceMotion).
+ * plus the in-app toggle when ui_v2 is on; see useReduceMotion).
  *
  * `DesignThemeProvider` is optional: `useDesignTheme()` works without it.
  * The provider exists so a dev preview can force a scheme
@@ -64,8 +64,8 @@ export function useOsReduceMotion(): boolean {
 
 /**
  * THE reduced-motion hook: every animation (road scene, Pip, ui_v2 screens)
- * reads this. With ui_v2 on, the in-app Profile › Accessibility toggle wins
- * once set; until then (and always with the flag off) it is the OS setting.
+ * reads this. With ui_v2 on: OS setting OR the in-app Profile › Accessibility
+ * toggle (the OS setting is a minimum). With the flag off: the OS setting.
  */
 export function useReduceMotion(): boolean {
   const { settings } = useAccessibility();
