@@ -280,9 +280,9 @@ For the avoidance of doubt, these were checked and **are** guarded, despite not
 using `verifyAuth`: `/api/delete-account` (verifies a token from the body via
 `auth.getUser`), `/api/seats/:token` and `/api/confirm-parent` (bearer-token
 style — the secret is the token in the URL), `/api/send-weekly-parent-emails`
-(checks `x-cron-secret` against `CRON_SECRET` inline, same secret the
-`/api/cron/*` routes use via `requireCronAuth`, just not through that shared
-helper), the Stripe and RevenueCat webhooks (signature / shared secret), and
+(fail-closed `requireCronAuth` on `x-cron-secret`, same as the `/api/cron/*`
+routes; before Nov 2026 it compared inline and let a header-less request through
+when `CRON_SECRET` was unset), the Stripe and RevenueCat webhooks (signature / shared secret), and
 every `/api/cron/*` route (`CRON_SECRET`).
 
 Not fixed now: only the two instructor endpoints were in scope for the
