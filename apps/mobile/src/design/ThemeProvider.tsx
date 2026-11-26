@@ -30,6 +30,13 @@ import {
 export interface DesignThemeOverrides {
   scheme?: ColorScheme;
   reduceMotion?: boolean;
+  /** Force the in-app Large Text setting (preview only). */
+  largeText?: boolean;
+  /**
+   * Emulate an OS font scale (preview only). react-native-web always reports
+   * fontScale 1, so the preview multiplies sizes itself to check 130% text.
+   */
+  fontScale?: number;
 }
 
 const OverridesContext = createContext<DesignThemeOverrides>({});
@@ -39,7 +46,12 @@ export function DesignThemeProvider({ overrides, children }: { overrides?: Desig
   return <OverridesContext.Provider value={value}>{children}</OverridesContext.Provider>;
 }
 
-/** OS reduce-motion setting. (An in-app toggle is planned for P6-1; it will be OR-ed in here.) */
+/**
+ * OS reduce-motion setting. The app has NO in-app reduced-motion setting today
+ * (AccessibilitySettings: dyslexiaFont, largeText, highContrast, textToSpeech,
+ * wordSpacing, creamBackground, darkMode, soundEffects). The toggle is planned
+ * for P6-1 and will be OR-ed in here.
+ */
 export function useOsReduceMotion(): boolean {
   const [reduce, setReduce] = useState(false);
   useEffect(() => {
@@ -74,12 +86,14 @@ export function useDesignTheme(): DesignTheme {
   const fontsLoaded = useInterFonts();
 
   const scheme: ColorScheme = overrides.scheme ?? (settings.darkMode ? 'dark' : 'light');
-  const { highContrast, creamBackground, largeText, dyslexiaFont, wordSpacing } = settings;
+  const { highContrast, creamBackground, dyslexiaFont, wordSpacing } = settings;
+  const largeText = overrides.largeText ?? settings.largeText;
+  const emulatedScale = overrides.fontScale ?? 1;
   const reduceMotion = overrides.reduceMotion ?? osReduceMotion;
 
   return useMemo<DesignTheme>(() => {
     const colors = buildColorTokens({ scheme, highContrast, cream: creamBackground });
-    const mult = largeText ? LARGE_TEXT_MULTIPLIER : 1;
+    const mult = (largeText ? LARGE_TEXT_MULTIPLIER : 1) * emulatedScale;
 
     function family(weight: FontWeight): Pick<TextStyle, 'fontFamily' | 'fontWeight'> {
       if (dyslexiaFont) {
@@ -112,5 +126,5 @@ export function useDesignTheme(): DesignTheme {
       textStyle,
       maxFontScale: (variant) => maxFontScale[variant],
     };
-  }, [scheme, highContrast, creamBackground, largeText, dyslexiaFont, wordSpacing, reduceMotion, fontsLoaded]);
+  }, [scheme, highContrast, creamBackground, largeText, dyslexiaFont, wordSpacing, reduceMotion, fontsLoaded, emulatedScale]);
 }
