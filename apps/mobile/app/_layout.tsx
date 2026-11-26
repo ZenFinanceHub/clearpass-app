@@ -23,6 +23,7 @@ import { resolvePostAuthRoute } from '@/src/postAuthRouting';
 import { CrossPlatformAlertHost } from '@/src/CrossPlatformAlert';
 import { Colors } from '@/src/constants/theme';
 import { registerAppSession } from '@/src/reviewPrompt';
+import { devScreensEnabled } from '@/src/uiFlags';
 import {
   getCacheStatus,
   cacheQuestions,
@@ -261,6 +262,14 @@ function RootLayout() {
       ]);
       const launchedPath = initialUrl ? getDeepLinkPath(initialUrl) : null;
       const launchedSegment = launchedPath ? launchedPath.split('/')[0] : null;
+
+      // Dev-only screens (/dev/*, e.g. the Daily Coach Home preview) render
+      // from fixtures without a session: don't bounce them to onboarding.
+      // devScreensEnabled is false in production exports, so this is inert there.
+      if (devScreensEnabled && launchedSegment === 'dev') {
+        navigated.current = true;
+        return;
+      }
 
       const decision = resolveBootstrapDestination({
         hasSession: !!session,
