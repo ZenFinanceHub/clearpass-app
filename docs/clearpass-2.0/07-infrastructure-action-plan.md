@@ -258,7 +258,7 @@ The server reads 18 variable names; your R1 summary mentioned 7 of them. The oth
 ### Part B — Release gate
 | # | Who | Step | How |
 |---|---|---|---|
-| 8 | You | Approve merging #109 (CI) and #119 (release gate). Claude merges them via the admin bypass for `.github` PRs; nothing deploys | Message |
+| 8 | You | ✅ 2026-11-26: approved. #109 → `27a7988`, #119 → `f0a64d8` (admin override for these two PRs only; 7/7 checks green on each first). `production` unchanged at `d791923`; no production deployments | Message |
 | 9 | You | Create the `clearpass-release` GitHub App and install it on this repo only; download its private key | **Prompt 4** |
 | 10 | You (terminal) | One-time setup: environment, App credentials and the test branch. The key goes from the file into GitHub, is never shown, and the file is deleted | Claude Code gives you the exact `! bash .github/release/setup-release-gate.sh <CLIENT_ID> <key-file>` line |
 | 11 | You | Add the App as a bypass actor on `production`, add the 7 required checks, and confirm the environment | **Prompt 5** |

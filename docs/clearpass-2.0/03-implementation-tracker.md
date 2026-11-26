@@ -137,8 +137,8 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
 | M0 Phase 0 safety | 🟨 PRs open: #107, #108, #109, #110 | Your review, then merges and releases per the sequence below |
 | Security fixes | 🟨 PRs open: #111, #113, **#118 (trials, stacked on #113)**, #116, #117; plus #112 schema | Your review, then merges and releases |
 | M0.5 static Home preview | ✅ Approved | — |
-| M0.6 refined Home | 🟨 Delivered (gallery v2, ZIP v2) | **Your sign-off locks the design system.** Decision D20 (road-sign artwork) |
-| M1 working Home and five tabs | 🟨 **Mostly built:**<br>• #115 `550ac6d`: QOTD, nudges, reminder offer, scheduled mocks.<br>• **#120:** five tabs with the desktop sidebar, Learn/Tests hubs, Profile, route map plus tests, e2e route coverage.<br>• The real signed-in Home was verified on the local stack.<br>• Tests: p2-1 8 + 66; p2-2 8 + 75 (1 skipped); tsc 0. | Topic-revision entry, subscription management, "Ask Pip about this" on results, the full scheduled-mock list (P4-1), on-device deep links, the remaining P1-2 components, the in-app Reduced Motion toggle. Waiting on: M0.6 sign-off, D20 |
+| M0.6 refined Home | 🟨 Delivered. Review pack 2026-11-26: `~/Downloads/ClearPass-Review-2026-11-26.zip` (all 6 learner states × mobile/desktop × light/dark, plus D20 before/after) | **Your visual sign-off locks the design system.** D20 approved; artwork in #121 |
+| M1 working Home and five tabs | 🟨 **Mostly built:**<br>• #115 `550ac6d`: QOTD, nudges, reminder offer, scheduled mocks.<br>• **#120:** five tabs with the desktop sidebar, Learn/Tests hubs, Profile, route map plus tests, e2e route coverage.<br>• The real signed-in Home was verified on the local stack.<br>• Tests: p2-1 8 + 66; p2-2 8 + 75 (1 skipped); tsc 0. | ✅ #123 (draft): Reduce Motion toggle (system setting is a minimum, per Craig 2026-11-26: learners can turn it on, never off while the device setting is on) and Topic revision. In progress: subscription management, "Ask Pip about this" on results, full scheduled-mock list, remaining shared components, deep-link verification.<br>**M1 is release-ready only when:** signed-in browser tests pass against the isolated local database; phone/tablet checks done; full CI green on the PR to `main`; the known failures below pass for real. Waiting on: M0.6 sign-off |
 | Hosted staging | ⏸ Prepared (`07-infrastructure-action-plan.md` G4) | Cost approval, ≈ $10–15/month |
 | Phases 3–7 | ⬜ | After M1 |
 
@@ -146,11 +146,11 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
 - **Release gate:** #119 has been revised (GitHub App, separate OS user, gate tests). The checklist is in `07-…`.
 
 Blockers:
-1. **Release control (G1)**: Part A complete 2026-11-26 (all four platforms track `production`, at `d791923`; Railway Wait for CI on). Merges to `main` no longer deploy, but nothing merges until Part B (#109 + #119) is approved. Previously: any merge deployed production. Every merge therefore waits for G1 or is treated as a release.
+1. **Release control (G1)**: Part A complete 2026-11-26. Step 8 done 2026-11-26: #109 merged (`27a7988`) and #119 merged (`f0a64d8`) via the admin override authorised for those two PRs only; all 7 checks green on both before merge; `production` still `d791923`, no production deployments. Next: steps 9–11 (release App, setup script, bypass and required checks).
 2. **#108** needs C1b (A12 plus turning the build override off) before it merges.
 3. **Required CI on `main`** needs #109 merged, then C7b.
 4. **Hosted review of M1** needs staging (G4). A local review is possible without it.
-5. **Road-sign correction** needs D20.
+5. **Known test failures, tracked against #108 (open, not resolved):** `route-coverage-v2.spec.ts` fails on `/paywall` and `/taster` (the "no non-local requests" check, because the branch still points at the production Supabase URL; requests were aborted, nothing sent). Seen on #120 and #123. Not resolved until those tests actually pass against the isolated local database (#108 config). The test must not be weakened to pass.
 
 ## Recommended merge and release sequence (2026-11-26, rev 3)
 
