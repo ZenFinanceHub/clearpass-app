@@ -14,6 +14,8 @@ const {
   applyTransfer,
   applySingleUserUpdate,
   buildSandboxPurchaseMarkerRow,
+  insertFunnelMarkerOnce,
+  TRIAL_MARKER_EVENTS,
 } = require('./lib/revenuecatWebhook');
 const { applyStripeProGrant } = require('./lib/stripeWebhook');
 const revenuecatApi = require('./lib/revenuecatApi');
@@ -615,10 +617,16 @@ app.post('/api/revenuecat-webhook', express.json(), async (req, res) => {
       await supabaseAdmin.from('revenuecat_webhook_events').delete().eq('event_id', eventId);
     },
     // Durable "this was a SANDBOX/test purchase" marker for reporting — see
-    // recordSandboxPurchaseMarker in lib/revenuecatWebhook.js.
+    // recordSandboxPurchaseMarker in lib/revenuecatWebhook.js. Written at
+    // most once per RevenueCat event id (insertFunnelMarkerOnce), so a
+    // retried webhook doesn't double-count.
     recordSandboxPurchase: async (userId, rcEvent) => {
-      const { error } = await supabaseAdmin.from('funnel_events').insert(buildSandboxPurchaseMarkerRow(userId, rcEvent));
-      if (error) throw error;
+      await insertFunnelMarkerOnce(supabaseAdmin, buildSandboxPurchaseMarkerRow(userId, rcEvent));
+    },
+    // Durable trial start / conversion / cancellation markers — see
+    // trialMarkersFor in lib/revenuecatWebhook.js. Same once-per-event rule.
+    recordTrialMarker: async (row) => {
+      await insertFunnelMarkerOnce(supabaseAdmin, row);
     },
   };
 
@@ -3632,11 +3640,29 @@ app.post('/api/cron/daily-stats', async (req, res) => {
     if (profilesErr) throw profilesErr;
     if (progressErr) throw progressErr;
 
+    // Trial start/conversion/cancellation markers from the last 24h (written
+    // by the RevenueCat webhook). Optional: a failed read shows "n/a" for
+    // those three figures, the rest of the post is unaffected.
+    let trialMarkers = null;
+    try {
+      const { data: markerRows, error: markerErr } = await supabaseAdmin
+        .from('funnel_events')
+        .select('user_id, anon_id, event, created_at, props')
+        .in('event', TRIAL_MARKER_EVENTS)
+        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .limit(MAX_STATS_ROWS);
+      if (markerErr) throw markerErr;
+      trialMarkers = markerRows || [];
+    } catch (markerReadErr) {
+      console.error('[daily-stats] trial markers unavailable:', markerReadErr);
+    }
+
     const stats = computeDailyStats({
       profiles: profiles || [],
       progressRows: progressRows || [],
       nowIso: new Date().toISOString(),
       refCode: CONFERENCE_REF_CODE,
+      trialMarkers,
     });
 
     // Funnel section. Optional: if the funnel_events table isn't there yet
