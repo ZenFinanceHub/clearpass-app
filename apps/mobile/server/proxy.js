@@ -13,6 +13,7 @@ const {
 const {
   applyTransfer,
   applySingleUserUpdate,
+  buildSandboxPurchaseMarkerRow,
 } = require('./lib/revenuecatWebhook');
 const { applyStripeProGrant } = require('./lib/stripeWebhook');
 const revenuecatApi = require('./lib/revenuecatApi');
@@ -61,10 +62,12 @@ const {
 } = require('./lib/seats');
 const {
   MAX_STATS_ROWS,
+  PAYING_SOURCES,
+  isActivePro,
   computeDailyStats,
   formatDailyStatsMessage,
 } = require('./lib/dailyStats');
-const { computeFunnelStats, formatFunnelLines, FUNNEL_LOOKBACK_DAYS } = require('./lib/funnelStats');
+const { computeFunnelStats, formatFunnelLines, FUNNEL_LOOKBACK_DAYS, sandboxTesterUserIds } = require('./lib/funnelStats');
 
 // Conference campaign tag reported in the daily stats post. Matches the QR
 // at getclearpass.co.uk/instructors?ref=adinjc26 (27 Sep 2026).
@@ -610,6 +613,12 @@ app.post('/api/revenuecat-webhook', express.json(), async (req, res) => {
     },
     deleteWebhookEvent: async (eventId) => {
       await supabaseAdmin.from('revenuecat_webhook_events').delete().eq('event_id', eventId);
+    },
+    // Durable "this was a SANDBOX/test purchase" marker for reporting — see
+    // recordSandboxPurchaseMarker in lib/revenuecatWebhook.js.
+    recordSandboxPurchase: async (userId, rcEvent) => {
+      const { error } = await supabaseAdmin.from('funnel_events').insert(buildSandboxPurchaseMarkerRow(userId, rcEvent));
+      if (error) throw error;
     },
   };
 
@@ -3642,7 +3651,17 @@ app.post('/api/cron/daily-stats', async (req, res) => {
         .order('created_at', { ascending: false })
         .limit(MAX_STATS_ROWS);
       if (eventsErr) throw eventsErr;
-      const excludedUserIds = (profiles || []).filter(p => p.exclude_from_stats === true).map(p => p.id);
+      const statsNowIso = new Date().toISOString();
+      // Store-sandbox testers (TestFlight / App Review / licence testers)
+      // are excluded like exclude_from_stats accounts, unless they now hold
+      // a real active paid grant — see sandboxTesterUserIds.
+      const payingUserIds = (progressRows || [])
+        .filter(r => isActivePro(r.progress, statsNowIso) && PAYING_SOURCES.includes(r.progress.proSource))
+        .map(r => r.id);
+      const excludedUserIds = [
+        ...(profiles || []).filter(p => p.exclude_from_stats === true).map(p => p.id),
+        ...sandboxTesterUserIds({ events: events || [], progressRows: progressRows || [], payingUserIds }),
+      ];
       funnelLines = formatFunnelLines(computeFunnelStats({ events: events || [], excludedUserIds, nowIso: new Date().toISOString() }));
     } catch (funnelErr) {
       console.error('[daily-stats] funnel section skipped:', funnelErr);

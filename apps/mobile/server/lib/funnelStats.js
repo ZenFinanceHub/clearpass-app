@@ -24,6 +24,28 @@ const FUNNEL_STEPS = [
 
 const FUNNEL_LOOKBACK_DAYS = 7;
 
+// Server-written marker (lib/revenuecatWebhook.js) for a RevenueCat SANDBOX
+// purchase. Not a funnel step itself.
+const SANDBOX_PURCHASE_MARKER_EVENT = 'iap_sandbox_purchase';
+
+// Users whose funnel activity is store-sandbox testing (TestFlight, App
+// Review, licence testers) and must not count as conversions: anyone with a
+// sandbox purchase marker in `events`, or whose current proSource is
+// 'iap_sandbox' — UNLESS they currently hold an active real paid grant
+// (iap/stripe/seat), i.e. a tester who has since genuinely bought, whose
+// real purchase must still count. payingUserIds is that set of real payers.
+function sandboxTesterUserIds({ events, progressRows, payingUserIds }) {
+  const paying = new Set(payingUserIds || []);
+  const ids = new Set();
+  for (const e of events || []) {
+    if (e.event === SANDBOX_PURCHASE_MARKER_EVENT && e.user_id) ids.add(e.user_id);
+  }
+  for (const r of progressRows || []) {
+    if (r && r.progress && r.progress.proSource === 'iap_sandbox') ids.add(r.id);
+  }
+  return [...ids].filter((id) => !paying.has(id));
+}
+
 function computeFunnelStats({ events, excludedUserIds, nowIso }) {
   const excluded = new Set(excludedUserIds || []);
   const now = Date.parse(nowIso);
@@ -67,4 +89,11 @@ function formatFunnelLines(steps) {
   return lines;
 }
 
-module.exports = { FUNNEL_STEPS, FUNNEL_LOOKBACK_DAYS, computeFunnelStats, formatFunnelLines };
+module.exports = {
+  FUNNEL_STEPS,
+  FUNNEL_LOOKBACK_DAYS,
+  SANDBOX_PURCHASE_MARKER_EVENT,
+  sandboxTesterUserIds,
+  computeFunnelStats,
+  formatFunnelLines,
+};

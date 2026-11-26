@@ -24,6 +24,12 @@ const PAYING_SOURCES = ['stripe', 'seat', 'iap'];
 //   comp       — manually granted (reviewers, partners, beta testers)
 const GRANTED_SOURCES = ['instructor', 'comp'];
 
+// Pro from a store SANDBOX purchase (TestFlight, App Store review, Google
+// Play licence testers), recorded by the RevenueCat webhook as
+// 'iap_sandbox'. Access is real, money is not: never paying, never part of
+// conversion (either side), reported on its own line so it's visible.
+const TEST_SOURCES = ['iap_sandbox'];
+
 // "Active" is defined as the exact inverse of the rule the expire-pro cron
 // uses, deliberately reusing isEligibleForProExpiry rather than restating
 // it. Two definitions of "is this person Pro" would drift, and drift in
@@ -79,6 +85,7 @@ function computeDailyStats({ profiles, progressRows, nowIso, refCode }) {
     grantedInstructor: 0,
     grantedComp: 0,
     grantedTotal: 0,
+    sandboxPro: 0,
     indefinite: 0,
     freeLearners: 0,
     newLast24h: 0,
@@ -126,6 +133,9 @@ function computeDailyStats({ profiles, progressRows, nowIso, refCode }) {
       stats.grantedTotal++;
       if (source === 'instructor') stats.grantedInstructor++;
       else if (source === 'comp') stats.grantedComp++;
+    } else if (active && TEST_SOURCES.includes(source)) {
+      // A test purchase: neither paying nor a free prospect.
+      stats.sandboxPro++;
     } else if (!isInstructorAccount) {
       // Signed up, no active Pro of any kind.
       stats.freeLearners++;
@@ -155,8 +165,9 @@ function formatDailyStatsMessage(stats, refCode) {
     `    • seats: ${stats.payingSeat}`,
     `    • in-app: ${stats.payingIap}`,
     `*Granted Pro, active:* ${stats.grantedTotal}  (${stats.grantedInstructor} instructor, ${stats.grantedComp} comp)`,
+    `*Sandbox/test Pro, active:* ${stats.sandboxPro}  _(store test purchases, not revenue)_`,
     `*Free learners:* ${stats.freeLearners}`,
-    `*Conversion:* ${stats.conversionPct}%  _(paying / paying + free; instructors and comps excluded)_`,
+    `*Conversion:* ${stats.conversionPct}%  _(paying / paying + free; instructors, comps and sandbox excluded)_`,
   ];
 
   if (stats.indefinite > 0) {
@@ -177,6 +188,7 @@ module.exports = {
   MAX_STATS_ROWS,
   PAYING_SOURCES,
   GRANTED_SOURCES,
+  TEST_SOURCES,
   isActivePro,
   computeDailyStats,
   formatDailyStatsMessage,
