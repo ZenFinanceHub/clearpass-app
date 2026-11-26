@@ -10,10 +10,15 @@
  * roadmap value is the same `passProbability ?? readinessScore` the
  * current Home feeds to RoadmapPath.
  *
- * The recommendation and Pip choices are simple, deterministic rules. They
- * change no data. (The tracker's fuller engine in packages/core is M1.)
+ * Presentation-only rules defined here:
+ *  - Journey start: fewer than JOURNEY_START_QUESTIONS answered and no mock
+ *    taken -> show "Journey started" instead of an assessed-looking "0% ready".
+ *  - Free goal cap: a free learner's daily goals never need more questions
+ *    than the free daily limit (FREE_QUESTION_LIMIT, passed in), and a
+ *    challenge they can't complete on the free plan is left out.
+ *  - Coach: Pip's advice line IS the recommendation, so the CTA acts on it.
  */
-import { copy, topicName } from './homeCopy.ts';
+import { copy, PRO_BENEFITS, topicName } from './homeCopy.ts';
 
 export type HomePlatform = 'ios' | 'android' | 'web';
 /** Existing Pip artwork poses (apps/mobile/assets/pip). No others exist. */
@@ -22,20 +27,25 @@ export type PipPose = 'celebrating' | 'encouraging' | 'neutral' | 'sleepy' | 'st
 export interface HomeProgress {
   totalQuestionsAnswered: number;
   topicScores: Record<string, number>;
-  mockTestHistory: ReadonlyArray<{ passed: boolean; score: number; takenAt?: string }>;
+  mockTestHistory: ReadonlyArray<{ passed: boolean; score: number; takenAt?: string; total?: number; passMark?: number }>;
   hazardPerceptionHistory: ReadonlyArray<{ passed: boolean }>;
   studyStreakDays: number;
   lastStudied: string;
   testDate: string | null;
   isPro: boolean;
   dailyQuestionsAnswered: number;
-  dailyChallenge: { date: string; description: string; completed: boolean; currentCount: number; targetCount: number } | null;
+  dailyChallenge: {
+    date: string; description: string; completed: boolean; currentCount: number; targetCount: number;
+    challengeType?: string;
+  } | null;
 }
 
 export interface HomeInputs {
   now: Date;
   platform: HomePlatform;
   loading: boolean;
+  /** Progress failed to load: show the error/retry state. */
+  error?: boolean;
   displayName: string | null;
   progress: HomeProgress | null;
   /** calculateReadiness(progress).score — consumed, never recomputed. */
@@ -46,34 +56,25 @@ export interface HomeInputs {
   dueReviewCount: number;
   /** hasFreeMockLeft(progress) from src/conversion.ts. */
   freeMockAvailable: boolean;
+  /** FREE_QUESTION_LIMIT from src/subscription.ts (10 today). */
+  freeDailyQuestionLimit: number;
   /** '@clearpass/has_submitted_result' === 'true' (existing key). */
   testResultSubmitted?: boolean;
 }
 
-export type HomeRoute =
-  | '/(tabs)/practice'
-  | '/(tabs)/mock'
-  | '/(tabs)/hazard'
-  | '/(tabs)/tutor'
-  | '/roadsigns'
-  | '/testday'
-  | '/paywall'
-  | '/ipassed';
-
 export type RecommendationId = 'first-practice' | 'test-day' | 'due-review' | 'free-mock' | 'pro-mock' | 'weak-topic' | 'hazard' | 'mixed';
+export type CoachIcon = 'school' | 'flag' | 'refresh' | 'clipboard' | 'locate' | 'eye' | 'shuffle';
 
-export interface Recommendation {
-  id: RecommendationId;
-  title: string;
-  description: string;
-  cta: string;
-  route: HomeRoute;
-  icon: 'school' | 'flag' | 'refresh' | 'clipboard' | 'locate' | 'eye' | 'shuffle';
+export interface Coach {
+  pose: PipPose;
+  headline: string;
+  advice: string;
+  /** null in loading/error states (error shows a retry instead). */
+  action: null | { id: RecommendationId; cta: string; route: string; icon: CoachIcon };
 }
 
-export interface PlanItem { id: 'questions' | 'challenge' | 'mock' | 'streak'; label: string; detail?: string; done: boolean; route: HomeRoute }
-
-export interface QuickAction { id: 'mock' | 'hazards' | 'signs' | 'pip'; label: string; route: HomeRoute; icon: string }
+export interface PlanItem { id: 'questions' | 'challenge' | 'mock' | 'streak'; label: string; detail?: string; done: boolean; route: string }
+export interface QuickAction { id: 'mock' | 'hazards' | 'signs' | 'pip'; label: string; route: string; icon: string }
 
 export type Countdown =
   | { kind: 'days'; days: number; title: string; subtitle: string }
@@ -81,20 +82,29 @@ export type Countdown =
   | { kind: 'past'; title: string; subtitle: string }
   | { kind: 'none'; title: string; subtitle: string };
 
+export type Upgrade =
+  | { kind: 'pro'; eyebrow: string; headline: string; sub: string; benefits: string[]; cta: string; route: '/paywall' }
+  | { kind: 'free-mock'; title: string; body: string; cta: string; route: '/(tabs)/mock' };
+
 export interface HomeViewModel {
-  state: 'loading' | 'new' | 'established';
+  state: 'loading' | 'error' | 'new' | 'established';
   greeting: { title: string; subtitle: string };
   countdown: Countdown;
   isPro: boolean;
-  /** Same number the roadmap gauge shows ("% ready"). */
-  roadmapValue: number;
-  pip: { pose: PipPose; title: string; message: string };
-  recommendation: Recommendation;
+  roadmap: {
+    /** Same number the roadmap gauge shows. */
+    value: number;
+    journeyStart: boolean;
+    badge: string;
+    journeyLine: string | null;
+    explainer: string;
+  };
+  coach: Coach;
   dailyPlan: { items: PlanItem[]; completed: number; total: number };
   streak: { days: number; studiedToday: boolean; atRisk: boolean; label: string; note: string };
   quickActions: QuickAction[];
-  upgrade: null | { kind: 'free-mock' | 'pro'; title: string; route: HomeRoute };
-  /** "I passed" / resit prompt: only on or after the test date (spec §6.1). */
+  upgrade: Upgrade | null;
+  /** "I passed" / resit prompt: only after the test date (spec §6.1). */
   showTestResultPrompt: boolean;
 }
 
@@ -116,7 +126,9 @@ export function daysUntil(testDateIso: string | null, now: Date): number | null 
   return d === null ? null : -d;
 }
 
-const DAILY_QUESTION_TARGET = 10;
+export const DAILY_QUESTION_TARGET = 10;
+/** Journey-start threshold: below this many answers (and no mock) readiness isn't shown as a score. */
+export const JOURNEY_START_QUESTIONS = 10;
 const WEAK_TOPIC_THRESHOLD = 70; // same threshold calculateReadiness uses for weak topics
 const MOCK_READY_QUESTIONS = 30;
 
@@ -131,13 +143,39 @@ export function weakestTopic(scores: Record<string, number>): { key: string; sco
   return best;
 }
 
+/** Practice route that opens a session on one topic (ui_v2 `topic` param in practice.tsx). */
+export const topicPracticeRoute = (topicKey: string) => `/(tabs)/practice?topic=${encodeURIComponent(topicKey)}`;
+
+/**
+ * Can a learner complete today's challenge? Pro: always. Free: only if it
+ * fits the free daily question limit (correct answers can't exceed questions
+ * answered), the free mock is still available for a mock challenge, and not
+ * the 20-minute timed challenge (10 questions rarely take 20 minutes).
+ */
+export function challengeFeasible(
+  dc: NonNullable<HomeProgress['dailyChallenge']>,
+  opts: { isPro: boolean; freeLimit: number; freeMockAvailable: boolean },
+): boolean {
+  if (opts.isPro || dc.completed) return true;
+  switch (dc.challengeType) {
+    case 'mock': return opts.freeMockAvailable;
+    case 'timeMinutes': return false;
+    case 'topic':
+    case 'anyQuestions':
+    case 'practiceScore':
+    default:
+      return dc.targetCount <= opts.freeLimit;
+  }
+}
+
 // ─── Builder ─────────────────────────────────────────────────────────────────
 
 export function buildHomeViewModel(input: HomeInputs): HomeViewModel {
   const { now, platform, loading, progress: p } = input;
   const isNew = !p || p.totalQuestionsAnswered < 1;
-  const state: HomeViewModel['state'] = loading ? 'loading' : isNew ? 'new' : 'established';
+  const state: HomeViewModel['state'] = loading ? 'loading' : input.error ? 'error' : isNew ? 'new' : 'established';
   const isPro = !!p?.isPro;
+  const freeLimit = Math.max(1, input.freeDailyQuestionLimit);
 
   const days = daysUntil(p?.testDate ?? null, now);
   const lastGap = p && p.totalQuestionsAnswered > 0 ? daysBetween(p.lastStudied, now) : null;
@@ -147,12 +185,13 @@ export function buildHomeViewModel(input: HomeInputs): HomeViewModel {
   const weak = p ? weakestTopic(p.topicScores) : null;
   const lastMock = p && p.mockTestHistory.length > 0 ? p.mockTestHistory[p.mockTestHistory.length - 1]! : null;
   const mockAllowed = isPro || input.freeMockAvailable;
-  const roadmapValue = Math.round(Math.max(0, Math.min(100, input.passProbability ?? input.readinessScore)));
+  const answeredToday = studiedToday ? (p?.dailyQuestionsAnswered ?? 0) : 0;
 
   // Greeting
   const greeting = {
     title: copy.greeting.title(input.displayName),
     subtitle: state === 'loading' ? copy.greeting.loading
+      : state === 'error' ? copy.greeting.error
       : state === 'new' ? copy.greeting.new
       : studiedToday ? copy.greeting.studiedToday
       : copy.greeting.default,
@@ -165,92 +204,129 @@ export function buildHomeViewModel(input: HomeInputs): HomeViewModel {
   else if (days === 0) countdown = { kind: 'today', title: copy.countdown.today, subtitle: copy.countdown.todaySub };
   else countdown = { kind: 'days', days, title: copy.countdown.days(days), subtitle: copy.countdown.daysSub };
 
-  // Pip (first matching rule wins)
-  let pip: HomeViewModel['pip'];
-  if (state === 'loading') pip = { pose: 'sleepy', ...copy.pip.loading };
-  else if (state === 'new') pip = { pose: 'teaching', ...copy.pip.new };
-  else if (days === 0) pip = { pose: 'encouraging', ...copy.pip.testDay };
-  else if (days !== null && days < 0) pip = { pose: 'thinking', ...copy.pip.testPast };
-  else if (lastMock?.passed) pip = { pose: 'celebrating', ...copy.pip.mockPassed };
-  else if (atRisk && streakDays >= 2) pip = { pose: 'streak', ...copy.pip.streakAtRisk(streakDays) };
-  else if (days !== null && days <= 7) pip = { pose: 'encouraging', ...copy.pip.finalWeek(days) };
-  else if (streakDays >= 7) pip = { pose: 'streak', ...copy.pip.streak(streakDays) };
-  else if (lastGap !== null && lastGap >= 3) pip = { pose: 'encouraging', ...copy.pip.returning };
-  else if (weak) pip = { pose: 'thinking', ...copy.pip.weakTopic(topicName(weak.key)) };
-  else pip = { pose: 'neutral', ...copy.pip.steady };
+  // Roadmap
+  const value = Math.round(Math.max(0, Math.min(100, input.passProbability ?? input.readinessScore)));
+  const answered = p?.totalQuestionsAnswered ?? 0;
+  const journeyStart = answered < JOURNEY_START_QUESTIONS && (p?.mockTestHistory.length ?? 0) === 0;
+  const roadmap = {
+    value,
+    journeyStart,
+    badge: journeyStart ? copy.roadmap.journeyBadge : copy.roadmap.readyBadge(value),
+    journeyLine: journeyStart && state !== 'loading' ? copy.roadmap.journeyLine(JOURNEY_START_QUESTIONS - answered) : null,
+    explainer: copy.roadmap.explainer,
+  };
 
-  // One recommended activity. Never something this platform/plan can't do:
-  // hazard perception is native-only and Pro-only; mocks need Pro or the free mock.
-  let recommendation: Recommendation;
-  if (isNew) recommendation = { id: 'first-practice', ...copy.rec.first, route: '/(tabs)/practice', icon: 'school' };
-  else if (days !== null && days >= 0 && days <= 1) recommendation = { id: 'test-day', ...copy.rec.testDay, route: '/testday', icon: 'flag' };
-  else if (input.dueReviewCount > 0) recommendation = { id: 'due-review', ...copy.rec.due(input.dueReviewCount), route: '/(tabs)/practice', icon: 'refresh' };
+  // Recommendation: one activity, never something this platform/plan can't do.
+  // Hazard perception is native-only and Pro-only; mocks need Pro or the free mock.
+  type Rec = { id: RecommendationId; advice: string; cta: string; route: string; icon: CoachIcon };
+  let rec: Rec;
+  if (isNew) rec = { id: 'first-practice', ...copy.rec.first, route: '/(tabs)/practice', icon: 'school' };
+  else if (days !== null && days >= 0 && days <= 1) rec = { id: 'test-day', ...copy.rec.testDay, route: '/testday', icon: 'flag' };
+  else if (input.dueReviewCount > 0) rec = { id: 'due-review', ...copy.rec.due(input.dueReviewCount), route: '/(tabs)/practice?mode=review', icon: 'refresh' };
   else if (p!.mockTestHistory.length === 0 && p!.totalQuestionsAnswered >= MOCK_READY_QUESTIONS && mockAllowed) {
-    recommendation = isPro
+    rec = isPro
       ? { id: 'pro-mock', ...copy.rec.proMock, route: '/(tabs)/mock', icon: 'clipboard' }
       : { id: 'free-mock', ...copy.rec.freeMock, route: '/(tabs)/mock', icon: 'clipboard' };
-  } else if (weak) recommendation = { id: 'weak-topic', ...copy.rec.weakTopic(topicName(weak.key), weak.score), route: '/(tabs)/practice', icon: 'locate' };
+  } else if (weak) rec = { id: 'weak-topic', ...copy.rec.weakTopic(topicName(weak.key), weak.score), route: topicPracticeRoute(weak.key), icon: 'locate' };
   else if (platform !== 'web' && isPro && !p!.hazardPerceptionHistory.some((h) => h.passed)) {
-    recommendation = { id: 'hazard', ...copy.rec.hazard, route: '/(tabs)/hazard', icon: 'eye' };
-  } else if (isPro) recommendation = { id: 'pro-mock', ...copy.rec.proMock, route: '/(tabs)/mock', icon: 'clipboard' };
-  else recommendation = { id: 'mixed', ...copy.rec.mixed, route: '/(tabs)/practice', icon: 'shuffle' };
+    rec = { id: 'hazard', ...copy.rec.hazard, route: '/(tabs)/hazard', icon: 'eye' };
+  } else if (isPro) rec = { id: 'pro-mock', ...copy.rec.proMock, route: '/(tabs)/mock', icon: 'clipboard' };
+  else rec = { id: 'mixed', ...copy.rec.mixed, route: '/(tabs)/practice', icon: 'shuffle' };
 
-  // Daily plan: three items derived from today's local activity. No new stored data.
-  const answeredToday = studiedToday ? (p?.dailyQuestionsAnswered ?? 0) : 0;
+  // Coach: headline from context (first rule wins), advice = the recommendation.
+  const recPose: Record<RecommendationId, PipPose> = {
+    'first-practice': 'teaching', 'test-day': 'encouraging', 'due-review': 'thinking', 'free-mock': 'encouraging',
+    'pro-mock': 'encouraging', 'weak-topic': 'thinking', hazard: 'teaching', mixed: 'neutral',
+  };
+  let coach: Coach;
+  if (state === 'loading') coach = { pose: 'sleepy', headline: copy.headline.loading, advice: copy.advice.loading, action: null };
+  else if (state === 'error') coach = { pose: 'thinking', headline: copy.headline.error, advice: copy.advice.error, action: null };
+  else {
+    let headline: string = copy.headline.byRec[rec.id] ?? copy.headline.steady;
+    let pose: PipPose = recPose[rec.id];
+    if (state === 'new') { headline = copy.headline.new; pose = 'teaching'; }
+    else if (days === 0) { headline = copy.headline.testDay; pose = 'encouraging'; }
+    else if (days !== null && days < 0) { headline = copy.headline.testPast; pose = 'thinking'; }
+    else if (lastMock?.passed) { headline = copy.headline.mockPassed; pose = 'celebrating'; }
+    else if (atRisk && streakDays >= 2) { headline = copy.headline.streakAtRisk(streakDays); pose = 'streak'; }
+    else if (days !== null && days <= 7) { headline = copy.headline.finalWeek(days); pose = 'encouraging'; }
+    else if (streakDays >= 7) { headline = copy.headline.streak(streakDays); pose = 'streak'; }
+    else if (lastGap !== null && lastGap >= 3) { headline = copy.headline.returning; pose = 'encouraging'; }
+    coach = { pose, headline, advice: rec.advice, action: { id: rec.id, cta: rec.cta, route: rec.route, icon: rec.icon } };
+  }
+
+  // Daily plan from today's local activity. No new stored data.
+  const questionTarget = isPro ? DAILY_QUESTION_TARGET : Math.min(DAILY_QUESTION_TARGET, freeLimit);
   const dc = p?.dailyChallenge ?? null;
   // dailyChallenge.date is written as toISOString().split('T')[0] (UTC date) by the current Home.
   const dcToday = dc && dc.date === now.toISOString().split('T')[0] ? dc : null;
+  const showChallenge = !!dcToday && challengeFeasible(dcToday, { isPro, freeLimit, freeMockAvailable: input.freeMockAvailable });
   const mockToday = !!p?.mockTestHistory.some((m) => m.takenAt && daysBetween(m.takenAt, now) === 0);
   const items: PlanItem[] = [
     {
       id: 'questions',
-      label: copy.plan.questions(DAILY_QUESTION_TARGET),
-      detail: `${Math.min(answeredToday, DAILY_QUESTION_TARGET)} of ${DAILY_QUESTION_TARGET}`,
-      done: answeredToday >= DAILY_QUESTION_TARGET,
+      label: copy.plan.questions(questionTarget),
+      detail: `${Math.min(answeredToday, questionTarget)} of ${questionTarget}`,
+      done: answeredToday >= questionTarget,
       route: '/(tabs)/practice',
     },
-    {
-      id: 'challenge',
-      label: copy.plan.challenge,
-      detail: dcToday?.description,
-      done: !!dcToday?.completed,
-      route: '/(tabs)/practice',
-    },
-    mockAllowed && !isNew
-      ? { id: 'mock', label: copy.plan.mock, done: mockToday, route: '/(tabs)/mock' }
-      : { id: 'streak', label: copy.plan.streak, done: studiedToday, route: '/(tabs)/practice' },
   ];
+  if (showChallenge) {
+    items.push({ id: 'challenge', label: copy.plan.challenge, detail: dcToday!.description, done: !!dcToday!.completed, route: '/(tabs)/practice' });
+  }
+  if (mockAllowed && !isNew && dcToday?.challengeType !== 'mock') {
+    items.push({ id: 'mock', label: copy.plan.mock, done: mockToday, route: '/(tabs)/mock' });
+  } else {
+    items.push({ id: 'streak', label: streakDays > 0 ? copy.plan.streak : copy.plan.startStreak, done: studiedToday, route: '/(tabs)/practice' });
+  }
   const completed = items.filter((i) => i.done).length;
 
   const quickActions: QuickAction[] = [
     { id: 'mock', label: copy.quick.mock, route: '/(tabs)/mock', icon: 'clipboard-outline' },
     // Hazard perception isn't available on web (spec §6.1): hide the tile.
-    ...(platform === 'web' ? [] : [{ id: 'hazards' as const, label: copy.quick.hazards, route: '/(tabs)/hazard' as const, icon: 'play-circle-outline' }]),
+    ...(platform === 'web' ? [] : [{ id: 'hazards' as const, label: copy.quick.hazards, route: '/(tabs)/hazard', icon: 'play-circle-outline' }]),
     { id: 'signs', label: copy.quick.signs, route: '/roadsigns', icon: 'warning-outline' },
     { id: 'pip', label: copy.quick.pip, route: '/(tabs)/tutor', icon: 'chatbubble-ellipses-outline' },
   ];
 
-  const upgrade: HomeViewModel['upgrade'] =
-    state !== 'established' || isPro ? null
-    : input.freeMockAvailable && recommendation.id !== 'free-mock' ? { kind: 'free-mock', title: copy.upgrade.freeMockTitle, route: '/(tabs)/mock' }
-    : !input.freeMockAvailable ? { kind: 'pro', title: copy.upgrade.proTitle, route: '/paywall' }
-    : null;
+  // Upgrade: never for Pro, never before the learner has started.
+  let upgrade: Upgrade | null = null;
+  if (state === 'established' && !isPro) {
+    if (input.freeMockAvailable) {
+      if (rec.id !== 'free-mock') upgrade = { kind: 'free-mock', ...copy.freeMock, route: '/(tabs)/mock' };
+    } else {
+      const scoredMock = lastMock && typeof lastMock.total === 'number' && typeof lastMock.passMark === 'number' ? lastMock : null;
+      let headline: string = copy.pro.headline.default;
+      let sub: string = copy.pro.sub.default;
+      if (answeredToday >= freeLimit) { headline = copy.pro.headline.limitReached(freeLimit); sub = copy.pro.sub.limitReached; }
+      else if (days !== null && days >= 0 && days <= 30) { headline = copy.pro.headline.testSoon(days); sub = copy.pro.sub.testSoon; }
+      else if (scoredMock && !scoredMock.passed) { headline = copy.pro.headline.mockShort(scoredMock.score, scoredMock.total!, scoredMock.passMark!); sub = copy.pro.sub.mockShort; }
+      upgrade = {
+        kind: 'pro',
+        eyebrow: copy.pro.eyebrow,
+        headline,
+        sub,
+        benefits: PRO_BENEFITS.map((b) => ('web' in b && platform === 'web' ? b.web : b.text(freeLimit))),
+        cta: copy.pro.cta,
+        route: '/paywall',
+      };
+    }
+  }
 
   return {
     state,
     greeting,
     countdown,
     isPro,
-    roadmapValue,
-    pip,
-    recommendation,
+    roadmap,
+    coach,
     dailyPlan: { items, completed, total: items.length },
     streak: {
       days: streakDays,
       studiedToday,
       atRisk,
       label: copy.streak.label(streakDays),
-      note: streakDays === 0 ? copy.streak.none : atRisk ? copy.streak.atRisk : copy.streak.safe,
+      note: streakDays === 0 ? copy.streak.zero : atRisk ? copy.streak.atRisk : copy.streak.safe,
     },
     quickActions,
     upgrade,

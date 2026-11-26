@@ -5,8 +5,8 @@
  */
 import type { HomeProgress } from './homeViewModel.ts';
 
-export type FixtureName = 'new' | 'established' | 'pro' | 'no-test-date' | 'loading';
-export const FIXTURE_NAMES: FixtureName[] = ['new', 'established', 'pro', 'no-test-date', 'loading'];
+export type FixtureName = 'new' | 'established' | 'pro' | 'no-test-date' | 'loading' | 'error';
+export const FIXTURE_NAMES: FixtureName[] = ['new', 'established', 'pro', 'no-test-date', 'loading', 'error'];
 
 /** Full progress object: HomeProgress plus the remaining UserProgress fields RoadmapPath reads. */
 export interface FixtureProgress extends HomeProgress {
@@ -24,6 +24,7 @@ export interface Fixture {
   name: FixtureName;
   displayName: string | null;
   loading: boolean;
+  error?: boolean;
   progress: FixtureProgress | null;
   dueReviewCount: number;
 }
@@ -140,5 +141,7 @@ export function getFixture(name: FixtureName, now: Date = new Date()): Fixture {
       };
     case 'loading':
       return { name, displayName: null, loading: true, dueReviewCount: 0, progress: null };
+    case 'error':
+      return { name, displayName: null, loading: false, error: true, dueReviewCount: 0, progress: null };
   }
 }
