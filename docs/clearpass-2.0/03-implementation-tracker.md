@@ -96,6 +96,37 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
   - **Follow-up on #108:** once #112 merges, `seed-local.js` and the docs need updating (they say `account_class` doesn't exist), and the bucket setup in `local-setup.sql` becomes redundant.
 - **Phase 1/2 started on local synthetic data:** P1-1 tokens/fonts/theme/`ui_v2` flag, the P1-2 subset Home needs, and the P2-1 Home with a fixture-driven preview route (M0.5). Branches start from `origin/main`; nothing depends on staging.
 
+## Recommended merge and deploy order (2026-11-26, draft; needs Craig's approval at each step)
+
+**Important:**
+- **Merging to `main` is a release.** Vercel's Git integration deploys `main` to production for clearpass-app and clearpass-instructor-web on every merge. Railway appears to deploy the server from `main` too (CLAUDE.md: "any push that deploys the Railway server"; Railway config isn't in the repo, so C1 should confirm the trigger).
+- So approving a merge of an app or server PR means approving a web or server release. OTA (native apps) is always a separate step via `npm run ota:production`.
+
+**Verified for the whole set:** all of #107, #108, #109, #111, #112 and #113 merged together → server 371/371 tests pass. The only textual conflict is **#110 ↔ #107** in `app/taster.tsx`, so whichever goes second gets a rebase.
+
+| Step | PR | What merging does in production | Before | After (verification) | Rollback |
+|---|---|---|---|---|---|
+| 1 | **#109** CI and test guard | Nothing user-facing (tests and workflow only). The web redeploy is identical | — | CI green on main | Revert |
+| 2 | **#106** docs | Nothing | — | — | Revert |
+| 3 | **#112** schema.sql | Nothing: the file is used only for local and staging replay. No migration | — | Local replay (done: 0 diffs) | Revert |
+| 4 | **#111** F2 cron auth | Railway: the parent-email endpoint refuses requests without the secret | Confirm `CRON_SECRET` is set in Railway | `npm run smoke:instructor` PASS. Check the next cron-job.org run | Redeploy the previous build. No data written |
+| 5 | **#113** F1 sandbox flag | Railway: new sandbox purchases are marked `iap_sandbox` and excluded from stats | — | Smoke PASS. Next daily Slack stats show the sandbox line | **See the #113 rollback procedure:** if unexpired `iap_sandbox` rows exist, revert but keep `iap_sandbox: 0` priority |
+| 6 | **Stripe livemode PR** (in development) | Railway: test-mode events refused in production | Live key confirmed as the configured mode | Smoke PASS. The next real Stripe event is processed | Redeploy the previous build |
+| 7 | **RevenueCat config PR** (in development) | Railway: no change in production (IDs pinned) | — | Smoke PASS | Redeploy the previous build |
+| 8 | **#108** environments | Web: production builds must declare their env | **A12: add the two Vercel Production variables first** | The production deploy succeeds and the site loads | Revert. The Vercel variables are harmless to leave |
+| 9 | **#110** P0-2 bug fixes | Web: the bug fixes go live | — | Web spot check of onboarding, limit results and FAB | Revert. **The OTA is a separate approval (A10)**, after the web check |
+| 10 | **#107** analytics (rebase on #110: `taster.tsx`) | Web: new events start flowing into `funnel_events` | A6 privacy stance | Events appear in read-only queries | Revert. Rows stay, harmless |
+| 11 | **#79** sign image fallback | Web: the fallback goes live | — | Road-signs views | Revert |
+| 12 | **#114 → #115** design foundation and Home | Web: **no visible change** (the `ui_v2` flag can't be on in production). Also adds `--clear` to `ota:production` | M0.5 review | Production site looks unchanged | Revert |
+
+**Why this order:**
+- CI first, so everything after it is checked.
+- Zero-impact docs and schema next.
+- Server security fixes each get their own deploy and smoke test, smallest first.
+- #108 only after its Vercel variables exist.
+- User-visible web changes last, each separately verifiable.
+- Steps 4–7 can each be deployed and soaked for a day before the next if you prefer. None depends on another.
+
 ## Consolidated PR plan
 
 **Effort columns:**
