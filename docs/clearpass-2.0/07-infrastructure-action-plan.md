@@ -261,7 +261,7 @@ The server reads 18 variable names; your R1 summary mentioned 7 of them. The oth
 | 8 | You | ✅ 2026-11-26: approved. #109 → `27a7988`, #119 → `f0a64d8` (admin override for these two PRs only; 7/7 checks green on each first). `production` unchanged at `d791923`; no production deployments | Message |
 | 9 | You | ✅ 2026-11-26: App `clearpass-release` (ID 5937676, client `Iv23liyEz1TcHXr1kjur`) installed on clearpass-app only; Contents + Workflows write, Metadata read; key downloaded, not opened | **Prompt 4** |
 | 10 | You (terminal) | ✅ 2026-11-26 13:46 UTC: setup script (as merged at `f0a64d8`) run by Craig. Verified via API: `production-release` (reviewer ZenFinanceHub only, admins can't bypass, branch policy `main` only); env variable `RELEASE_APP_CLIENT_ID`; env secret `RELEASE_APP_PRIVATE_KEY` (no repo-level secrets); `release-gate-test` at `d791923` under the production ruleset; key file deleted | — |
-| 11 | You | Add the App as a bypass actor on `production`, add the 7 required checks, and confirm the environment | **Prompt 5** |
+| 11 | You | ✅ 2026-11-26: App `clearpass-release` (5937676) added as "Always allow" bypass on production protection (production + release-gate-test); 7 required checks (GitHub Actions) on both rulesets, "up to date" off; installation verified. **Prevent self-review turned ON** at Craig's request (the setup script had set it off; #125 makes the script and gate tests match). Verified via API: sole reviewer is the user `ZenFinanceHub`, G4b–G4d PASS | **Prompt 5** |
 
 ### Part C — Claude Code's own identity and user
 | # | Who | Step | How |
