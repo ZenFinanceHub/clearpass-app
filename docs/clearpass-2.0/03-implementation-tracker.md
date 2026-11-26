@@ -75,6 +75,12 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
   - In a release bundle the app itself keeps its pinned-production fallback, deliberately: crashing every user is worse than a degraded update.
   - Tests: scripts 20 + 39 pass; instructor-web guard 7 pass.
 - **F2 → PR #111, F1 → PR #113** (details in `04-craig-actions.md` table F). #107's funnel query now excludes sandbox testers (validated with EXPLAIN only on production).
+- **Approved 2026-11-26** (development only):
+  - final review of #111/#113, plus a consolidated merge and deploy order;
+  - read-only test-purchase investigation (`04-craig-actions.md` §T);
+  - Stripe live/test-mode validation PR;
+  - RevenueCat IDs moved to env config.
+  None of these block the Home preview.
 - **F3 → PR #112** (schema-only; `schema.sql` only).
   - **Drift found:** 32 differences, including the missing `update_aggregate_stats` and `account_class`, the reshaped `hazard_clips` and `instructor_relationships`, and missing indexes, views and buckets.
   - **The repo was wrong in places:**

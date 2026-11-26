@@ -1,6 +1,6 @@
 # ClearPass 2.0 — Actions and Decisions for Craig
 
-Last updated 2026-11-26 (rev 4, F1–F3 approved; explicit production declaration). Step-by-step instructions are in `05-setup-guide.md`.
+Last updated 2026-11-26 (rev 5, #111/#113 direction approved; test-purchase investigation; Stripe livemode and RevenueCat config approved). Step-by-step instructions are in `05-setup-guide.md`.
 
 ## A. Actions (things only Craig can do)
 
@@ -19,6 +19,7 @@ Last updated 2026-11-26 (rev 4, F1–F3 approved; explicit production declaratio
 | A10 | Approve **production release** of the P0-2 bug fixes (OTA and web) once reviewed | P0-2 release | — | ⬜ |
 | A12 | **Before #108 merges:** add `EXPO_PUBLIC_APP_ENV=production` to clearpass-app and `NEXT_PUBLIC_APP_ENV=production` to clearpass-instructor-web, **Production scope only**, in Vercel. Chrome prompt **C1b**. Neither value is secret. Without them, the next production deploy fails its check: the site stays up on the previous deployment, but deploys are blocked | #108 merge | Blocks the #108 merge only | ⬜ |
 | A13 | Approve the **Railway deploys** of the F1 and F2 server fixes once reviewed | F1, F2 release | — | ⬜ |
+| A14 | Run Chrome prompt **C5** (RevenueCat, read-only check of 3 in-app Pro holders). The prompt is kept **outside the repo** because it contains user IDs | Test-purchase findings | Blocks the F1 backfill decision only | ⬜ |
 | A11 | Approve the **Railway deploy** of the Ask Pip allowance endpoint (P5-2) once reviewed and tested | P5-3 | — | ⬜ |
 
 ## R. Credential review after A0 (2026-11-26)
@@ -96,6 +97,24 @@ What the previews *did* do was let a logged-in team member use production data t
 ## F1–F3 status
 
 All three were approved on 2026-11-26 (see table F). They are being developed as three separate PRs. Nothing is deployed or migrated.
+
+## T. Historical in-app Pro holders (read-only investigation, 2026-11-26)
+
+Labelled H1–H3; user IDs aren't in this public repo. From production (read-only, no personal data):
+
+| | Store | Excluded from stats already | Purchase event | Current expiry | Provisional reading |
+|---|---|---|---|---|---|
+| H1 | — | **Yes** (`internal`) | none logged | 8 Dec | Internal/team account. Not in any reported figure, so no impact either way |
+| H2 | Android | No | 8 Nov | 11 Dec | A ~monthly expiry. Sandbox subscriptions renew within minutes and lapse within hours, so this **looks like a genuine subscriber** |
+| H3 | iOS | No | 24 Nov | **27 Nov (3 days)** | Neither a monthly nor a sandbox pattern. **Looks like a 3-day free trial**, which is counted as paying today. Possibly a sandbox purchase |
+
+**Reported figures today:** 3 paying learners out of 54 counted learners, i.e. **5.6% conversion** (1 Stripe web purchase, plus H2 and H3).
+- If H3 is a trial or a test: **2 / 54 = 3.7%**.
+- If H2 were also a test: 1 / 54 = 1.9%.
+
+**Separate finding: trials count as paying.** The webhook ignores RevenueCat's `period_type`, so anyone in a free trial is reported as a paying customer until the trial ends. Entitlement during the trial is correct; only the reporting is wrong. Proposed fix (needs approval): record trial status and report "in trial" separately from "paying".
+
+Confirmation needs the RevenueCat dashboard (A14 / C5). The server's RevenueCat key is only on Railway, and the Railway CLI isn't logged in here. **No production records will be changed until Craig has reviewed the findings.**
 
 ## Things Claude Code will not do without explicit approval
 
