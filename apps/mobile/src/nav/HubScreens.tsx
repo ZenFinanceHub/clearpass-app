@@ -1,14 +1,15 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Platform, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { loadUserProgress } from '@/src/storage';
 import { useNetwork } from '@/src/NetworkContext';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { useDesignTheme } from '@/src/design';
 import { contentMaxWidth, minTouchTarget } from '@/src/design/tokens';
-import { Card, Icon, Text, type IconName } from '@/src/ui';
+import { Badge, Card, Icon, Text, type IconName } from '@/src/ui';
 import { LEARN_HUB, PROGRESS_LINKS, TESTS_HUB, withTapNonce, type HubEntry } from './routeMap';
+import { TOPIC_PICKER_PARAM, topicRevisionList, type TopicRevisionItem } from './topicRevision';
 
 /**
  * ClearPass 2.0 hub screens (ui_v2 only). Presentation only: every entry
@@ -20,7 +21,7 @@ function go(route: string) {
   router.push(withTapNonce(route, Date.now()) as never);
 }
 
-function HubRow({ entry, disabledNote, onPress }: { entry: HubEntry; disabledNote?: string | null; onPress?: () => void }) {
+function HubRow({ entry, disabledNote, onPress, expanded }: { entry: HubEntry; disabledNote?: string | null; onPress?: () => void; expanded?: boolean }) {
   const { colors, radii } = useDesignTheme();
   const disabled = !!disabledNote;
   return (
@@ -29,7 +30,7 @@ function HubRow({ entry, disabledNote, onPress }: { entry: HubEntry; disabledNot
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={`${entry.title}. ${disabledNote ?? entry.subtitle}`}
-      accessibilityState={{ disabled }}
+      accessibilityState={expanded === undefined ? { disabled } : { disabled, expanded }}
       testID={`hub-${entry.id}`}
       style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({
         flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64,
@@ -46,7 +47,7 @@ function HubRow({ entry, disabledNote, onPress }: { entry: HubEntry; disabledNot
         <Text variant="bodyStrong" weight={700} color={disabled ? 'secondary' : 'primary'}>{entry.title}</Text>
         <Text variant="bodySmall" color="secondary">{disabledNote ?? entry.subtitle}</Text>
       </View>
-      {!disabled && <Icon name="chevron-forward" size={18} color={colors.text.secondary} />}
+      {!disabled && <Icon name={expanded === undefined ? 'chevron-forward' : expanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.text.secondary} />}
     </Pressable>
   );
 }
@@ -96,13 +97,73 @@ function SectionTitle({ children }: { children: string }) {
 
 // ─── Learn ───────────────────────────────────────────────────────────────────
 
+/** Topic revision: every topic with the learner's local score; a tap starts the existing topic launcher. */
+function TopicPicker({ topics }: { topics: TopicRevisionItem[] | null }) {
+  const { colors } = useDesignTheme();
+  return (
+    <Card padding={8} testID="topic-picker">
+      <Text variant="bodySmall" color="secondary" style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
+        {'Choose a topic to practise.'}
+      </Text>
+      {topics === null ? (
+        <Text variant="bodySmall" color="secondary" style={{ padding: 8 }}>{'Loading…'}</Text>
+      ) : topics.map((t) => {
+        const scoreText = t.score === null ? 'Not started' : `${t.score}%`;
+        return (
+          <Pressable
+            key={t.key}
+            onPress={() => go(t.route)}
+            accessibilityRole="button"
+            accessibilityLabel={`Practise ${t.name}. ${scoreText}${t.weakest ? '. Your weakest topic' : ''}`}
+            testID={`topic-pick-${t.key}`}
+            style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({
+              flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: minTouchTarget,
+              paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8,
+              backgroundColor: hovered ? colors.bg.subtle : 'transparent', opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text variant="body" weight={600} style={{ flex: 1, minWidth: 0 }}>{t.name}</Text>
+            {t.weakest ? <Badge label="Weakest" tone="gold" /> : null}
+            <Text variant="bodySmall" color="secondary">{scoreText}</Text>
+            <Icon name="chevron-forward" size={16} color={colors.text.secondary} />
+          </Pressable>
+        );
+      })}
+    </Card>
+  );
+}
+
 export function LearnHubV2() {
   const { isOffline } = useNetwork();
+  const params = useLocalSearchParams<{ [TOPIC_PICKER_PARAM]?: string }>();
+  const revise = params[TOPIC_PICKER_PARAM];
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [topics, setTopics] = useState<TopicRevisionItem[] | null>(null);
+
+  // Home's "Choose another topic" opens the Learn tab with the picker open.
+  // Clear the param so the next link from Home opens it again.
+  useEffect(() => {
+    if (revise !== 'topics') return;
+    setPickerOpen(true);
+    router.setParams({ [TOPIC_PICKER_PARAM]: undefined } as never);
+  }, [revise]);
+
+  // Read-only: the existing local topic scores, refreshed each time Learn is shown.
+  useFocusEffect(useCallback(() => {
+    void loadUserProgress()
+      .then((p) => setTopics(topicRevisionList(p?.topicScores as Record<string, number> | undefined)))
+      .catch(() => setTopics(topicRevisionList(null)));
+  }, []));
+
   const pick = (ids: string[]) => LEARN_HUB.filter((e) => ids.includes(e.id));
-  const row = (e: HubEntry) => <HubRow key={e.id} entry={e} disabledNote={isOffline && e.onlineOnly ? 'Requires internet' : null} />;
+  const row = (e: HubEntry) =>
+    e.id === 'topic-revision'
+      ? <HubRow key={e.id} entry={e} expanded={pickerOpen} onPress={() => setPickerOpen((o) => !o)} />
+      : <HubRow key={e.id} entry={e} disabledNote={isOffline && e.onlineOnly ? 'Requires internet' : null} />;
   return (
     <HubShell title="Learn" subtitle="Everything you need to pass" testID="learn-hub">
-      <HubGrid>{pick(['practice', 'ask-pip']).map(row)}</HubGrid>
+      <HubGrid>{pick(['practice', 'topic-revision', 'ask-pip']).map(row)}</HubGrid>
+      {pickerOpen && <TopicPicker topics={topics} />}
       <SectionTitle>{'Practice modes'}</SectionTitle>
       <HubGrid>{pick(['weak-spots', 'speed-round', 'battle', 'challenge', 'bookmarked']).map(row)}</HubGrid>
       <SectionTitle>{'Revise'}</SectionTitle>

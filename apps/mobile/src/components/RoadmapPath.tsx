@@ -1,11 +1,13 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import Svg, {
   Circle, Defs, Ellipse, G, Line, LinearGradient, Path, Polygon, RadialGradient, Rect, Stop,
 } from 'react-native-svg';
 import { Pip, PipMood } from './Pip';
 import type { UserProgress } from '@clearpass/core';
 import { Colors } from '@/src/constants/theme';
+// The single reduced-motion hook (OS setting; plus the in-app toggle with ui_v2 on).
+import { useReduceMotion } from '@/src/design/ThemeProvider';
 
 // ─── Driver's-view roadmap ───────────────────────────────────────────────────
 // The learner looks out through a windscreen at a road running to the horizon.
@@ -68,19 +70,6 @@ function mix(a: string, b: string, t: number): string {
   const ch = (shift: number) =>
     Math.round(lerp((pa >> shift) & 255, (pb >> shift) & 255, t)).toString(16).padStart(2, '0');
   return `#${ch(16)}${ch(8)}${ch(0)}`;
-}
-
-function useReduceMotion(): boolean {
-  const [reduce, setReduce] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then(v => { if (alive) setReduce(v); })
-      .catch(() => {});
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduce);
-    return () => { alive = false; sub?.remove?.(); };
-  }, []);
-  return reduce;
 }
 
 // ─── Centre-line dashes (the only part that re-renders on a timer) ───────────
