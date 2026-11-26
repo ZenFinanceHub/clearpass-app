@@ -138,11 +138,14 @@ Status: **Approved plan (rev 2, consolidated)** · last updated 2026-11-25 · Sp
 | Security fixes | 🟨 PRs open: #111, #113, **#118 (trials, stacked on #113)**, #116, #117; plus #112 schema | Your review, then merges and releases |
 | M0.5 static Home preview | ✅ Approved | — |
 | M0.6 refined Home | 🟨 Delivered (gallery v2, ZIP v2) | **Your sign-off locks the design system.** Decision D20 (road-sign artwork) |
-| M1 working Home and five tabs | 🟦 In development (stacked on #115): remaining Home features, the P2-2 navigator with desktop sidebar, and the real Home verified against local Supabase | ~5–7 active days from now. Needs M0.6 sign-off for visuals. Merging needs #108 and #109 first |
+| M1 working Home and five tabs | 🟨 **Mostly built:**<br>• #115 `550ac6d`: QOTD, nudges, reminder offer, scheduled mocks.<br>• **#120:** five tabs with the desktop sidebar, Learn/Tests hubs, Profile, route map plus tests, e2e route coverage.<br>• The real signed-in Home was verified on the local stack.<br>• Tests: p2-1 8 + 66; p2-2 8 + 75 (1 skipped); tsc 0. | Topic-revision entry, subscription management, "Ask Pip about this" on results, the full scheduled-mock list (P4-1), on-device deep links, the remaining P1-2 components, the in-app Reduced Motion toggle. Waiting on: M0.6 sign-off, D20 |
 | Hosted staging | ⏸ Prepared (`07-infrastructure-action-plan.md` G4) | Cost approval, ≈ $10–15/month |
 | Phases 3–7 | ⬜ | After M1 |
 
-**Current blockers** (nothing blocks local development):
+**Current blockers** (nothing blocks local development).
+- **Release gate:** #119 has been revised (GitHub App, separate OS user, gate tests). The checklist is in `07-…`.
+
+Blockers:
 1. **Release control (G1)** isn't in place, so any merge deploys production. Every merge therefore waits for G1 or is treated as a release.
 2. **#108** needs C1b (A12 plus turning the build override off) before it merges.
 3. **Required CI on `main`** needs #109 merged, then C7b.

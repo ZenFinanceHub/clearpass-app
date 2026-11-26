@@ -1,6 +1,6 @@
 # ClearPass 2.0 — Infrastructure Action Plan (ordered, with approval gates)
 
-For Craig. Last updated 2026-11-26 (rev 3: P1 model approved, with safeguards and a technical release-approval gate, PR #119). This consolidates every remaining infrastructure step into one sequence.
+For Craig. Last updated 2026-11-26 (rev 4: technical release gate finalised. GitHub App credential, separate OS user for Claude Code, gate tests, one ordered checklist). This consolidates every remaining infrastructure step into one sequence.
 
 **Every step is prepared, not authorised.** Each gate (G1–G5) needs your explicit go-ahead. Nothing here changes production data, credentials or pricing.
 
@@ -24,49 +24,66 @@ For Craig. Last updated 2026-11-26 (rev 3: P1 model approved, with safeguards an
 - **All four production deployments track `production`:** Vercel clearpass-app, clearpass-instructor-web and clearpass-web, plus Railway. Merging to `main` deploys nothing. On Vercel, `main` builds become preview builds, and the existing "Only build production" Ignored Build Step skips them.
 - **A release** fast-forwards `production` to a commit already merged to `main` and green in CI. It's done **only by the Release workflow (#119), after you approve it in GitHub**. Claude Code can't move `production` itself.
 - **Merging to `main`:** once G1 is complete, Claude Code can merge PRs that pass CI without asking you, which was your stated objective. Until you confirm you're happy to switch, it keeps asking before each merge.
-### The technical release-approval gate (PR #119)
+### The technical release-approval gate (PR #119), approved in principle
 
-**Problem:** Claude Code currently uses your own GitHub login, which is the repository owner and admin. Any approval or ruleset you can pass, that login can pass, so the gate would only be procedural.
+**Goal:** Claude Code develops, tests, merges and updates staging on its own. **Production releases need your approval, enforced by GitHub, not just by instructions.** No recurring cost.
 
-**Fix (no cost):** separate identities, plus a GitHub Environment approval.
+#### The three identities
 
-| Identity | Who uses it | Can do | Cannot do |
+| Identity | Used by | Can | Can't |
 |---|---|---|---|
-| **Your owner account** (`ZenFinanceHub`) | You, in the browser and the GitHub mobile app | Everything; **the only approver** of production releases | — |
-| **Machine user** (e.g. `clearpass-bot`; free; GitHub allows one per person) with **Write** access | Claude Code's CLI on this machine, only | Branches, PRs, merging to `main` when CI passes, triggering the Release workflow | Approve a release; read the release key; push `production`; edit rulesets, environments or secrets; change `.github/` without your review |
-| **Release deploy key** (SSH, write) | Only the approved `push` job of `release.yml` | Fast-forward `production` (or roll it back) | Nothing outside that job. It's stored as a secret of the `production-release` environment, which releases it only after your approval, and only to runs from `main` |
+| **You** (`ZenFinanceHub`, owner) | You: browser, GitHub mobile app, and your own terminal | Everything. **The only approver** of production releases | — |
+| **`clearpass-bot`** (machine user, Write access) | Claude Code only, running as a **separate Linux user** (`claude-dev`) | Branches, PRs, merging to `main` when CI passes, triggering the Release workflow, staging deploys (staging follows `main`) | Approve a release; push `production` or `release-gate-test`; push to `main` without a PR; merge `.github/` changes without your review; read or change environments, secrets, rulesets, keys or collaborators |
+| **`clearpass-release`** GitHub App (owned by you, installed on this repo only) | Only the approved `push` job of `release.yml` | Fast-forward (or, for rollback, reset) `production` | Anything else. Its token is minted after your approval, lives at most 1 hour, has contents and workflows permissions on this one repository only, and is revoked when the job ends |
 
-**How a release works:**
-1. Claude Code runs the **Release to production** workflow with the commit, mode (release or rollback) and a one-line reason.
-2. The **verify** job checks that the commit is on `main`, is a fast-forward, and has all 7 required CI checks green. It writes a summary for you: the commits, and which areas are touched (server, learner web, instructor site, marketing site, database files).
-3. GitHub emails and notifies you: *"Release to production is waiting for your review."*
-4. You open it in the browser or the GitHub mobile app, read the summary, and click **Approve and deploy**, or Reject.
-5. The **push** job fast-forwards `production`. Vercel ×3 build. Railway waits for the CI run on that push, then deploys.
-6. The **monitor** job confirms that all four platforms report `success` at the new commit. Claude Code then runs the smoke test.
+#### How each of your 10 requirements is met
 
-**Your overhead:** one approval click per release. **Merging to `main` needs nothing from you**, apart from PRs that change `.github/` (CI or the release workflow itself), which need your review as code owner.
+| # | Requirement | How it's met |
+|---|---|---|
+| 1 | `clearpass-bot` | The name is **free right now** (GitHub API: no such user, 2026-11-26). You create it in step 12; if it's taken by then, use `clearpass-ci-bot` |
+| 2 | No extra cost | Confirmed from GitHub's docs for a **public** repo on **Free**:<br>• environments, environment secrets and required reviewers are available ("only available for public repositories" on Free);<br>• Actions minutes on standard runners are free for public repos;<br>• GitHub's terms allow "no more than one free machine account";<br>• GitHub Apps cost nothing.<br>**Rulesets:** the docs page didn't state Free availability, but this repo's rulesets API responds (0 rulesets today), so they're available. Two settings the docs didn't fully confirm are **checked live by the prompts and the gate test**: "Restrict updates" with an App as bypass actor, and Code Owner review with 0 approvals |
+| 3 | The bot can't change CI, the release workflow, security rules or gate files | Everything under `/.github/` (CI, `release.yml`, `CODEOWNERS`, the gate scripts) needs **your Code Owner review**, and "approval of the most recent push" stops the bot changing anything after you approve. Rulesets, environments, secrets, Apps and keys are owner-only settings (the bot isn't admin). The environment only accepts runs from `main`, so a workflow edited on another branch can't reach the credential (tested in G9) |
+| 4 | The bot can't reach your admin credentials | **Claude Code moves to a separate Linux user, `claude-dev`.** Your home folder is already private (permissions 750), so `claude-dev` can't read your `gh` login, keyring, `~/.config/clearpass/db.env`, Expo session or shell variables. That user gets its own clone, its own **rootless** Docker (the normal `docker` group would give root-equivalent access to your files) and only the bot's GitHub login. **Your own terminal keeps your admin login**, because Claude Code no longer runs as you. Gate test G3 checks it |
+| 5 | Narrowest release credential | A GitHub App installed on **this repository only**, permissions **Contents: write + Workflows: write**. Workflows: write is required, because GitHub refuses pushes containing workflow-file changes without it. Its key exists only as a secret of `production-release`, released only to the approved job. The token lasts at most 1 hour and is revoked at job end. It can't push `main` (no PR) |
+| 6 | Approval tied to the exact commit | The release takes a full 40-character SHA, never a branch name. The approval screen shows **"the exact commit you are approving"**, the commit list and the workflow version. **Before the credential is created**, the approved job re-checks that `production` hasn't moved since you looked, that the SHA is still on `main`, and that all 7 CI checks are green. Re-running a run can't change its inputs |
+| 7 | Proven, not assumed | `.github/release/verify-gate.sh` runs **as the bot** and must show PASS for:<br>• **G1–G3:** the bot's identity and rights; no owner credentials reachable;<br>• **G4–G5:** pushing, force-pushing and deleting a production-protected branch;<br>• **G6:** a direct push to `main`;<br>• **G7:** reading or changing the environment, rulesets, keys or collaborators;<br>• **G8:** **approving its own release**;<br>• **G9:** **a modified workflow on another branch reaching the key**;<br>• **G10:** merging a `CODEOWNERS` change alone.<br>Then a **positive test**: you approve a `mode: test` run, and only `release-gate-test` moves. Nothing in the test touches `production` |
+| 8 | Safe emergency rollback | See "Emergency rollback" below: platform one-click rollback in seconds (no GitHub needed), then realign `production` with an approved rollback release |
+| 9 | No credential exposure in the public repo | • The only secret is the App key, stored in an environment restricted to `main`. PR and fork workflows can't receive it (GitHub doesn't pass secrets to fork-triggered runs, and the branch policy blocks same-repo branches).<br>• Fork PR workflows already need approval (C1). There's no `pull_request_target`, and **a release is refused if any workflow adds one, or if any workflow other than `release.yml` references secrets**.<br>• The token is masked; inputs reach the shell only through environment variables (no script injection); third-party code is limited to two official GitHub actions, pinned by commit SHA.<br>• CI uses no secrets. Default token permission is read |
+| 10 | One checklist | "Your setup checklist" below |
 
-**Rollback:**
-- **Normal:** run the same workflow with `mode: rollback` and the previous `production` commit. It only accepts an earlier commit that was actually deployed to production. After one approval, all four platforms redeploy that commit.
-- **Emergency** (seconds, no GitHub): Vercel Instant Rollback and Railway Redeploy previous. Then align `production` with a rollback release.
+#### Protection settings (Prompts 1 and 5)
 
-**Staging needs no approval:** Railway's staging environment deploys from `main`. The staging web build is a Vercel Preview of `main` (set up in V1). Both update on every merge.
-
-**Protection settings** (Prompt 1 now; Prompt 4 adds CI checks after #109):
-
-| | `main` | `production` |
+| | `main` | `production` and `release-gate-test` |
 |---|---|---|
 | Deletion | Blocked | Blocked |
-| Force push | Blocked | Blocked (except the release key's rollback) |
-| How it changes | Pull requests only. **0 required approvals.** Code Owner review is required **only for files under `.github/`**. "Approval of the most recent push" is ON, so the bot can't change a workflow after you've approved it | **"Restrict updates"**: only bypass actors can update it |
-| Required checks (Prompt 4) | 7 checks | 7 checks |
-| Bypass | Repository admin, **for pull requests only** (lets you merge your own `.github` PRs in an emergency) | **Deploy keys: always** (the release key). **Repository admin: always** (your emergency override) |
+| Force push | Blocked | Blocked, except the App's rollback |
+| How it changes | Pull requests only. **0 required approvals.** Code Owner review is required **only for `/.github/`**. "Approval of the most recent push" is ON | **Restrict updates:** only bypass actors |
+| Required checks | The 7 CI checks | The 7 CI checks |
+| Bypass | Repository admin, **pull requests only** (your emergency merge of a `.github` PR) | **`clearpass-release` App: always.** **Repository admin: always** (your emergency override) |
 
-**Remaining risks, and how they're covered:**
-- **Your admin credentials must not be on this machine's CLI.** Step G1.12 logs the CLI out of your owner account and in as the bot. If you later need the CLI as yourself, log in, then log out again afterwards. Optionally, Claude Code's permission settings can also block `gh auth login`/`switch` commands. That's one settings change; ask if you want it.
-- **Claude in Chrome acts in your signed-in browser.** Claude Code will never use browser tools on GitHub approval pages. You can also stop the extension acting on github.com (its site-access setting) except when you're running a prompt.
-- **The bot can merge non-`.github` code to `main` without you.** That's intended, for development and staging, and it can't reach production without your approval.
-- **If the release key leaked,** it could move `production`. It exists only as an environment secret released after approval. Re-running the setup script rotates it.
+#### Other production paths (outside GitHub), closed by the separate user
+On your user account this machine also holds:
+- an Expo/EAS session, which can publish OTA updates to every app user;
+- `~/.config/clearpass/db.env`, which gives write access to the production database;
+- a `CLOUDFLARE_API_TOKEN` in the environment.
+
+**None of these exist for `claude-dev`**, so Claude Code can't reach production through them either. Two production actions that Claude Code used to run itself then need a home:
+- **OTA updates:** recommended, a small `ota-production.yml` workflow behind the **same** approval, with the Expo token as an environment secret. Until then, OTAs are run from your user (they already need your approval, A10).
+- **Production migrations:** recommended, a `migrate-production.yml` behind the same approval, applying only migrations already merged to `main`. Until then, from your user. None are queued.
+
+These two are prepared as one follow-up PR **if you want them**. They aren't needed to start safe autonomous development.
+
+#### Emergency rollback (seconds, no GitHub needed)
+1. **Vercel**, per affected project: Deployments → the previous Production deployment → **⋯ → Instant Rollback**.
+2. **Railway:** clearpass-app → Deployments → the previous successful deployment → **⋯ → Redeploy**.
+3. Tell Claude Code. It starts the **Release workflow with `mode: rollback`**, targeting that same previous commit, and you approve. `production` then matches what's serving.
+4. **Then click "Undo Rollback"** on each Vercel project you rolled back. Until you do, Vercel won't auto-promote later deployments.
+5. **Database:** no action. Migrations are additive and separate, so older code keeps working (G1 rollback rules).
+6. **Data written by the new code** (e.g. #113/#118 grants): Claude Code follows that PR's documented check before any revert.
+
+Prompt E1 below walks Claude in Chrome through steps 1–2, confirming each click with you, if you'd rather not click through yourself.
+
+**Normal (non-emergency) rollback:** step 3 alone. One approval, and all four platforms redeploy the earlier commit.
 
 ### Verified before changing anything (2026-11-26, read-only)
 GitHub's deployment records show the **latest production deployment on all four platforms is `d791923`**, the current `main` (PR #105 merge), and every one reported `success`. That's 25 Nov: Railway at 15:55, clearpass-web 15:58, instructor-web 15:58, clearpass-app 15:59.
@@ -125,23 +142,8 @@ Either way the platforms are briefly out of step. Because of the compatibility r
 5. **API compatibility:** the server is backward-compatible with every live client. Server endpoints are additive; nothing is removed or changed incompatibly while 1.1.x apps exist. The smoke test exercises the instructor/learner contract after every server release.
 6. **OTA (native apps)** isn't part of this. It's released separately via `npm run ota:production`, with its own approval (A10). An OTA rollback uses EAS's republish of the previous update. Claude Code will add a guarded `ota:rollback` script, mirroring `ota:production`, before the first OTA release, so CLAUDE.md's "never run `eas update` directly" rule still holds.
 
-### G1 steps in order: who does what
-
-| Step | Who | Action | Verification |
-|---|---|---|---|
-| G1.1 | **You** | Approve G1 | — |
-| G1.2 | Claude Code | Re-check: `origin/main` = `d791923`, and all four latest production deployments are `success` at `d791923`. **Stop** if anything differs | Report |
-| G1.3 | Claude Code | Create `production` at `d791923`. Nothing tracks it yet | Branch list; no new deployment records |
-| G1.4 | **You** (Chrome) | **Prompt 1: rulesets** | The prompt reports the saved settings |
-| G1.5 | **You** (Chrome) | **Prompt 2: Vercel ×3** production branch → `production` | Serving commits before and after |
-| G1.6 | Claude Code | Check the deployment records | Report |
-| G1.7 | **You** (Chrome) | **Prompt 3: Railway** branch → `production` and Wait for CI on (at a quiet time) | Any deployment it triggered |
-| G1.8 | Claude Code | Check the deployment records; run `npm run smoke:instructor` | PASS/FAIL |
-| G1.9 | **You**, then Claude Code | Approve merging **#109** (CI) and **#119** (release gate). Claude Code merges them using the admin bypass for `.github` PRs. **Nothing deploys** | No production deployment records |
-| G1.10 | **You** (terminal) | Run the one-time gate setup (environment, release key, secret; the key is never shown): `! bash /home/craig/clearpass/.claude/worktrees/release-gate/.github/release/setup-release-gate.sh` | The script prints its checks |
-| G1.11 | **You** (Chrome) | **Prompt 4: required checks** on both rulesets, and confirm the environment settings | The prompt reports both |
-| G1.12 | **You** (browser, then terminal) | **Prompt 5: create the machine user** and add it as a collaborator. Then switch this machine's CLI: `! gh auth logout --hostname github.com --user ZenFinanceHub`, then `! gh auth login --hostname github.com --git-protocol https --web`, signing in **as the bot** in a private browser window | Claude Code checks `gh api user` = the bot and admin = false |
-| G1.13 | Claude Code, then **you** | **Validation release:** Claude Code runs the Release workflow for the #109/#119 merge commit. You approve it in GitHub. It confirms the gate, Wait for CI, and all four platforms at the new commit; Claude Code runs the smoke test | Workflow summary; smoke PASS |
+### G1 steps
+See **"Your setup checklist"** below, which is the single ordered list.
 
 ## Gate G2 — Pre-merge configuration (no cost)
 
@@ -222,38 +224,72 @@ The server reads 18 variable names; your R1 summary mentioned 7 of them. The oth
 
 ---
 
-## Execution order: every step, who does it, and its prompt
+## Your setup checklist (one ordered list)
 
-**Never run two prompts at once.** Paste each report back to Claude Code before starting the next.
+**Rules:**
+- Do one step at a time, and paste each report back to Claude Code.
+- "You" steps are yours; "Claude" steps are done by Claude Code. Nothing before step 19 changes what's served in production.
+- Estimated time for you: about **60–75 minutes** in total, spread over the steps.
 
-| # | Who | Step | Prompt / command |
+### Part A — Release control (production unchanged)
+| # | Who | Step | How |
 |---|---|---|---|
-| 1 | **You** | Approve G1, including the release gate | — |
-| 2 | Claude Code | Re-verify all four platforms at `d791923`; create `production` | — |
-| 3 | **You** | Rulesets | **Prompt 1** |
-| 4 | **You** | Vercel ×3 production branch | **Prompt 2** |
-| 5 | Claude Code | Check the deployment records | — |
-| 6 | **You** | Railway branch and Wait for CI (quiet time) | **Prompt 3** |
-| 7 | Claude Code | Check the records; smoke test | — |
-| 8 | **You**, then Claude Code | Approve, then merge #109 and #119 (nothing deploys) | — |
-| 9 | **You** | One-time gate setup | `! bash /home/craig/clearpass/.claude/worktrees/release-gate/.github/release/setup-release-gate.sh` |
-| 10 | **You** | Required checks plus the environment check | **Prompt 4** |
-| 11 | **You** | Machine user and the CLI switch | **Prompt 5** plus 2 terminal commands |
-| 12 | Claude Code, then **you** | Validation release: Claude Code starts it; you click Approve in GitHub | — |
-| 13 | **You** | Vercel secret clean-up (any time after 12) | **Prompt 6:** `06-chrome-prompts.md` § C5 |
-| 14 | Claude Code; **you** approve each release | Merges (no approval needed), then releases in the tracker's order: #106/#112 → #111 → #113 + #118 → #116 (after the Stripe prefix check) → #117 | — |
-| 15 | **You** | A12 variables plus turning off the build override, just before #108 | **Prompt 7:** `06-chrome-prompts.md` § C1b |
-| 16 | Claude Code; **you** approve each release | #108 → #110 → #107 → #79 → #114/#115/M1 | — |
-| 17 | **You** | Approve G4 staging (≈ $10–15/month) | — |
-| 18 | **You** | Supabase staging (you type the DB password) | **Prompt 8:** `06-chrome-prompts.md` § C2 |
-| 19 | **You** | Create `~/.config/clearpass/staging-db.env` | setup guide §1 |
-| 20 | Claude Code | Schema, migrations and seed on staging only | — |
-| 21 | **You** | Railway staging (you paste the secrets) | **Prompt 9:** R3 below |
-| 22 | **You** | Stripe test mode, RevenueCat staging, Vercel Preview / EAS preview (incl. the staging Ignored Build Step) | S1, RC1, V1, written when 21 is done |
+| 1 | You | Give the go-ahead for Part A | Message |
+| 2 | Claude | Re-check all four platforms are at `d791923`; create `production` and nothing else | — |
+| 3 | You | Rulesets for `main` and `production` | **Prompt 1** |
+| 4 | You | Vercel production branch → `production` (3 projects) | **Prompt 2** |
+| 5 | Claude | Check the deployment records | — |
+| 6 | You | Railway branch → `production`, Wait for CI on (quiet time) | **Prompt 3** |
+| 7 | Claude | Check the deployment records; smoke test | — |
+
+### Part B — Release gate
+| # | Who | Step | How |
+|---|---|---|---|
+| 8 | You | Approve merging #109 (CI) and #119 (release gate). Claude merges them via the admin bypass for `.github` PRs; nothing deploys | Message |
+| 9 | You | Create the `clearpass-release` GitHub App and install it on this repo only; download its private key | **Prompt 4** |
+| 10 | You (terminal) | One-time setup: environment, App credentials and the test branch. The key goes from the file into GitHub, is never shown, and the file is deleted | Claude Code gives you the exact `! bash .github/release/setup-release-gate.sh <CLIENT_ID> <key-file>` line |
+| 11 | You | Add the App as a bypass actor on `production`, add the 7 required checks, and confirm the environment | **Prompt 5** |
+
+### Part C — Claude Code's own identity and user
+| # | Who | Step | How |
+|---|---|---|---|
+| 12 | You | Create the `clearpass-bot` account (private window; 2FA on) | Manual: https://github.com/signup |
+| 13 | You | Invite the bot as collaborator; accept as the bot | **Prompt 6**, plus one click in the private window |
+| 14 | You (terminal) | Create the `claude-dev` Linux user with rootless Docker, its toolchain and a clone | "Separate user setup" below. Claude Code provides it as one script to read, then run |
+| 15 | You (terminal, as `claude-dev`) | Log `claude-dev`'s GitHub CLI in **as the bot** (private window), and log `claude-dev`'s Claude Code in to your Claude account | `gh auth login --web`, then `claude` → `/login` |
+| 16 | Claude (as `claude-dev`) | Run the gate tests | `bash .github/release/verify-gate.sh`. All PASS. Ignore the approval email for "gate self-approval probe"; the script cancels it |
+| 17 | Claude, then you | **Positive test:** Claude starts a `mode: test` release; you approve it in GitHub; only `release-gate-test` moves | GitHub email or mobile app |
+
+### Part D — First real release and normal running
+| # | Who | Step | How |
+|---|---|---|---|
+| 18 | You | Confirm switching to autonomous merges (Claude merges CI-green PRs to `main` without asking) | Message |
+| 19 | Claude, then you | **Validation release** of the #109/#119 merge commit: you approve; Railway waits for CI; all four platforms reach `success`; smoke PASS | GitHub approval |
+| 20 | You | Vercel secret clean-up (any time) | **Prompt 7:** `06-chrome-prompts.md` § C5 |
+| 21 | Claude, then you | Releases in the tracker's order, **one approval each**: #106/#112 → #111 → #113 + #118 → #116 (after the Stripe key-prefix check) → #117 | GitHub approval |
+| 22 | You | Just before the #108 release: the A12 variables plus turning off the build override | **Prompt 8:** `06-chrome-prompts.md` § C1b |
+| 23 | Claude, then you | #108 → #110 → #107 → #79 → #114/#115/#120 (one approval each) | GitHub approval |
+| 24 | You | When you want hosted staging (≈ $10–15/month): approve it, then run C2 and R3 (Prompts 9–10). S1, RC1 and V1 follow | Message, then prompts |
+
+### Separate user setup (step 14; Claude Code provides it as one script to read before running)
+```bash
+sudo apt-get install -y uidmap                          # needed for rootless Docker
+sudo adduser --disabled-password --gecos "" claude-dev  # no password login; you switch with sudo
+sudo loginctl enable-linger claude-dev                  # lets its rootless Docker run
+sudo -iu claude-dev bash -lc 'dockerd-rootless-setuptool.sh install'
+sudo -iu claude-dev bash -lc 'curl -fsSL https://mise.run | sh && ~/.local/bin/mise use -g node@22'
+sudo -iu claude-dev bash -lc 'curl -fsSL https://claude.ai/install.sh | bash'
+sudo -iu claude-dev bash -lc 'git clone https://github.com/ZenFinanceHub/clearpass-app.git ~/clearpass'
+# Then:  sudo -iu claude-dev   →   cd ~/clearpass && claude
+```
+- `claude-dev` is **not** added to `sudo` or `docker`.
+- `gh` must be installed system-wide; Claude Code checks this before giving you the final script.
+- **Afterwards you start Claude Code as `claude-dev`; your own account stays as it is.**
+- Claude Code copies over its project memory notes (no credentials) and re-seeds the local Docker database (synthetic data only).
 
 ## Prompts
 
-### Prompt 1 — Rulesets for `main` and `production` (G1.4; after Claude Code has created `production`)
+### Prompt 1 — Rulesets for `main` and `production` (step 3)
 
 ```text
 You are adding two branch rulesets to my GitHub repository ZenFinanceHub/clearpass-app. I am signed in to GitHub in this Chrome as the owner. I am the only person who works on this repository.
@@ -283,10 +319,8 @@ Ruleset 1. Open https://github.com/ZenFinanceHub/clearpass-app/settings/rules �
 Ruleset 2. Click New ruleset → New branch ruleset.
 - Ruleset name: production protection
 - Enforcement status: Active
-- Bypass list, two entries, each set to "Always allow":
-    1. Role "Repository admin".
-    2. "Deploy keys". If the bypass picker offers no "Deploy keys" option, STOP and tell me. Don't substitute anything else.
-- Target branches: Add target → Include by pattern → type: production
+- Bypass list: Add bypass → role "Repository admin" → "Always allow". (The release App is added later, in Prompt 5, once it exists.)
+- Target branches: Add target → Include by pattern → type: production. Then Add target → Include by pattern → type: release-gate-test.
 - Branch rules (tick ONLY these):
   [x] Restrict updates
   [x] Restrict deletions
@@ -299,7 +333,7 @@ Re-open both rulesets and report every setting exactly as saved: name, enforceme
 
 Note: "Require review from Code Owners" only bites once `.github/CODEOWNERS` (from #119) is on `main`. With 0 required approvals, normal PRs need no review; only PRs touching `.github/` need yours.
 
-### Prompt 2 — P1-V: Vercel production branch → `production` (G1.5)
+### Prompt 2 — Vercel production branch → `production` (step 4)
 
 ```text
 You are changing which Git branch deploys to production for three Vercel projects of my app ClearPass. I am signed in to Vercel in this Chrome. Team: https://vercel.com/zenfinancehubs-projects
@@ -329,7 +363,7 @@ REPORT, per project:
 Then: "No deployments were triggered manually, and only the production branch setting was changed."
 ```
 
-### Prompt 3 — P1-R: Railway branch → `production`, Wait for CI on (G1.7; at a quiet time)
+### Prompt 3 — Railway branch → `production`, Wait for CI on (step 6; at a quiet time)
 
 ```text
 You are changing which Git branch Railway deploys from, for my app ClearPass's server, and turning on "Wait for CI". I am signed in to Railway in this Chrome.
@@ -363,17 +397,50 @@ New deployment triggered by the change: yes/no (commit, status).
 Then: "Only the branch and Wait for CI settings were changed, and nothing was deployed manually."
 ```
 
-### Prompt 4 — Required CI checks, plus an environment check (G1.11; after #109 and #119 have merged and you've run the setup script)
+### Prompt 4 — Create the `clearpass-release` GitHub App (step 9)
 
 ```text
-In my GitHub repository ZenFinanceHub/clearpass-app, edit TWO existing rulesets and check (read-only) one environment. I am signed in to GitHub in this Chrome as the owner.
+You are creating a private GitHub App owned by my personal account and installing it on ONE repository. I am signed in to GitHub in this Chrome as the owner (ZenFinanceHub).
 
-SAFETY: Edit only the rulesets named "main protection" and "production protection", and only as described. The environment check is read-only. Change nothing else.
+SAFETY:
+- Create exactly one App, with exactly the permissions listed. Grant nothing else.
+- Install it ONLY on the repository ZenFinanceHub/clearpass-app ("Only select repositories"). Never on all repositories.
+- Do not change any other setting, App, OAuth app, repository, ruleset, secret or collaborator.
+- The private key download is a file. Never open it, read it, copy its contents, or paste it anywhere.
 
-Part A. For EACH of the two rulesets:
-1. Open https://github.com/ZenFinanceHub/clearpass-app/settings/rules and open the ruleset.
-2. Tick "Require status checks to pass". Leave "Require branches to be up to date before merging" OFF.
-3. Add these 7 checks, choosing each from the "GitHub Actions" suggestions (type the name, then pick it):
+1. Open https://github.com/settings/apps/new
+2. Fill in:
+   - GitHub App name: clearpass-release   (if taken, use clearpass-release-gate and tell me)
+   - Homepage URL: https://github.com/ZenFinanceHub/clearpass-app
+   - Callback URL: leave empty. Leave "Request user authorization (OAuth) during installation" UNticked. Leave "Enable Device Flow" UNticked.
+   - Setup URL: empty. Webhook: UNtick "Active" (no webhook).
+   - Repository permissions: set ONLY these two; leave every other permission at "No access":
+       Contents: Read and write
+       Workflows: Read and write
+     ("Metadata: Read-only" is added automatically. That's expected.)
+   - Organization permissions: none. Account permissions: none.
+   - Subscribe to events: none.
+   - "Where can this GitHub App be installed?": Only on this account.
+3. Click "Create GitHub App".
+4. On the App's settings page, report: the App name, the App ID and the Client ID (starts with "Iv"). These are not secrets.
+5. Scroll to "Private keys" → "Generate a private key". A .pem file downloads. Report ONLY the downloaded file's name. Do not open it.
+6. Left menu → "Install App" → Install on my account (ZenFinanceHub) → "Only select repositories" → select ONLY clearpass-app → Install.
+7. Report the installation's repository access and the permissions shown on the installation page.
+
+Final report: App name, App ID, Client ID, the private key file name (not its contents), the installed repositories, the permissions. And: "No other settings were changed and the key file was not opened."
+```
+
+### Prompt 5 — App bypass, required checks and environment confirmation (step 11)
+
+```text
+In my GitHub repository ZenFinanceHub/clearpass-app, update two existing rulesets and check one environment. I am signed in as the owner in this Chrome.
+
+SAFETY: Edit only the rulesets "main protection" and "production protection", exactly as described. The environment and App checks are read-only. Change nothing else.
+
+Part A. Open https://github.com/ZenFinanceHub/clearpass-app/settings/rules → "production protection".
+1. Bypass list → Add bypass → choose the GitHub App "clearpass-release" (or the name I give you) → "Always allow". Keep the existing "Repository admin – Always allow" entry. If an App can't be added, STOP and report what the picker offers.
+2. Confirm the targets include BOTH "production" and "release-gate-test".
+3. Tick "Require status checks to pass" (leave "Require branches to be up to date" OFF) and add these 7 checks from the GitHub Actions suggestions:
      Typecheck (apps/mobile)
      Typecheck (apps/instructor-web)
      Unit tests (packages/core, packages/content)
@@ -381,46 +448,63 @@ Part A. For EACH of the two rulesets:
      Unit tests (apps/mobile scripts)
      Unit tests (apps/instructor-web)
      E2E (Playwright, stubbed backend)
-   Do NOT add "Native fingerprint (informational)" or any "Vercel" check.
-4. Save. Re-open it and report the full saved settings (all rules and the bypass list).
+   (Not "Native fingerprint (informational)" or any Vercel check.)
+4. Save.
 
-Part B (read-only). Open https://github.com/ZenFinanceHub/clearpass-app/settings/environments → "production-release". Report:
-- Required reviewers (names).
-- Whether "Prevent self-review" is on.
-- Whether "Allow administrators to bypass configured protection rules" is on (it should be OFF).
-- Deployment branches and tags (it should allow only "main").
-- Environment secret NAMES (it should list RELEASE_DEPLOY_KEY). Never reveal any value.
-Then open https://github.com/ZenFinanceHub/clearpass-app/settings/keys and report the deploy keys by title and whether each has write access. Expect one titled "release-gate" with write access.
+Part B. "main protection": add the same 7 required checks the same way ("up to date" OFF). Don't change its bypass list. Save.
 
-Report Parts A and B, and confirm nothing else changed.
+Part C (read-only). https://github.com/ZenFinanceHub/clearpass-app/settings/environments → production-release. Report:
+- required reviewers;
+- "Prevent self-review" (on/off);
+- "Allow administrators to bypass configured protection rules" (should be OFF);
+- deployment branches (should be only "main");
+- environment secret NAMES (expect RELEASE_APP_PRIVATE_KEY);
+- environment variable names and values (expect RELEASE_APP_CLIENT_ID; its value is not secret).
+Never reveal secret values.
+
+Part D (read-only). https://github.com/settings/installations → clearpass-release → Configure: report the repository access and permissions.
+
+Report all four parts with every saved setting, and confirm nothing else changed.
 ```
 
-### Prompt 5 — Machine user for Claude Code (G1.12)
+### Prompt 6 — Invite the machine user (step 13)
 
-Creating an account involves email verification and a captcha, so **you do steps 1–2 yourself**. Chrome can help with 3–5.
+**First, yourself:** in a **private window**, create the account at https://github.com/signup. Use the name `clearpass-bot` (or `clearpass-ci-bot` if taken), an email you control (e.g. a `+bot` alias), and turn on **two-factor authentication**. Stay signed in there.
 
-1. In a **private browser window**, sign up at https://github.com/signup for a new account, e.g. `clearpass-bot`.
-   - Use an address you control, e.g. a `+bot` alias of your email.
-   - Turn on two-factor authentication.
-   - GitHub's terms allow one free machine account per person.
-2. Stay signed in as the bot in that private window.
-
+**Then, in your normal Chrome (signed in as you):**
 ```text
-You are giving a machine-user account limited access to my repository. In this normal Chrome window I am signed in to GitHub as the OWNER (ZenFinanceHub).
+You are giving a machine-user account collaborator access to my repository. In this Chrome I am signed in to GitHub as the OWNER (ZenFinanceHub).
 
-SAFETY: Only send the one invitation described. Don't change any other setting, collaborator, ruleset, environment, secret or key.
+SAFETY: Send only the one invitation described. Don't change any other setting, collaborator, ruleset, environment, secret, App or key.
 
 1. Open https://github.com/ZenFinanceHub/clearpass-app/settings/access
-2. Click "Add people". Enter the machine-user name I give you here: <BOT USERNAME>. Select exactly that account and send the invitation. On a personal repository this gives collaborator (write) access. It must NOT be made an owner or admin.
+2. Click "Add people". Enter exactly: <BOT USERNAME>. Select exactly that account and send the invitation. On a personal repository this grants collaborator (write) access, which is correct. It must not be an owner.
 3. Report: the account invited, the access level shown, and the full list of people with access afterwards.
 ```
+**Then:** in the private window, as the bot, open https://github.com/ZenFinanceHub/clearpass-app/invitations and click **Accept**.
 
-3. In the private window (signed in as the bot), open https://github.com/ZenFinanceHub/clearpass-app/invitations and accept.
-4. In the terminal (Claude Code): `! gh auth logout --hostname github.com --user ZenFinanceHub`
-5. Then `! gh auth login --hostname github.com --git-protocol https --web`. When the device page opens, complete it **in the private window signed in as the bot**.
-6. Tell Claude Code it's done. It checks `gh api user` returns the bot and that the bot has no admin rights. Your normal browser stays signed in as you, for approving releases.
+### Prompt E1 — Emergency rollback assistant (only when needed)
 
-### R3 — Railway staging environment (run after G4 approval and after C2; Claude Code fills the marked values first)
+```text
+EMERGENCY ROLLBACK for my app ClearPass. I am signed in to Vercel and Railway in this Chrome. I will tell you which platforms to roll back and the commit to go back to: <COMMIT> (short hash).
+
+SAFETY: Roll back ONLY the projects I name. Don't change settings, variables, domains or branches. Don't delete anything. Ask me to confirm before each rollback click.
+
+For each Vercel project I name (clearpass-app / clearpass-instructor-web / clearpass-web):
+1. https://vercel.com/zenfinancehubs-projects/<project>/deployments
+2. Find the most recent Production deployment at commit <COMMIT> with status Ready. Show me its time and commit, and ask me to confirm.
+3. On my confirmation: ⋯ → Instant Rollback → confirm. Wait until the Production domain shows it as Current. Report.
+(Do NOT click "Undo Rollback". I'll do that later, once the fixed release is live.)
+
+If I name Railway:
+1. https://railway.com/dashboard → ClearPass → production → clearpass-app → Deployments.
+2. Find the most recent successful deployment at commit <COMMIT>. Show me its time and commit, and ask me to confirm.
+3. On my confirmation: ⋯ → Redeploy. Wait until it is Active. Report.
+
+Final report: per platform, the commit now serving and the time.
+```
+
+### Prompt 10 — R3: Railway staging environment (run after G4 approval and after C2; Claude Code fills the marked values first)
 
 ```text
 You are creating an ISOLATED staging environment in Railway for my app ClearPass. I am signed in to Railway in this Chrome.
