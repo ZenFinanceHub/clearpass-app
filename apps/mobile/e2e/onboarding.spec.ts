@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support';
 
 test.describe('Onboarding', () => {
   test.beforeEach(async ({ page }) => {
@@ -14,7 +14,7 @@ test.describe('Onboarding', () => {
   });
 
   test('Next button advances to slide 2', async ({ page }) => {
-    await page.getByRole('button', { name: 'Next' }).click();
+    await page.getByText('Next', { exact: true }).click();
     await expect(page.getByText('Practice smarter')).toBeVisible();
   });
 
@@ -28,7 +28,7 @@ test.describe('Onboarding', () => {
 
     for (let i = 0; i < slides.length - 1; i++) {
       await expect(page.getByText(slides[i])).toBeVisible();
-      await page.getByRole('button', { name: 'Next' }).click();
+      await page.getByText('Next', { exact: true }).click();
     }
 
     await expect(page.getByText('Set your test date')).toBeVisible();
@@ -38,33 +38,33 @@ test.describe('Onboarding', () => {
   test('pagination dots update as slides advance', async ({ page }) => {
     // 4 dots total, first active
     const dots = page.locator('[style*="backgroundColor"]');
-    await page.getByRole('button', { name: 'Next' }).click();
+    await page.getByText('Next', { exact: true }).click();
     await expect(page.getByText('Practice smarter')).toBeVisible();
   });
 
   test('Skip for now skips date slide and navigates away', async ({ page }) => {
     // Navigate to final slide
     for (let i = 0; i < 3; i++) {
-      await page.getByRole('button', { name: 'Next' }).click();
+      await page.getByText('Next', { exact: true }).click();
     }
     await expect(page.getByText('Set your test date')).toBeVisible();
-    await page.getByRole('button', { name: 'Skip for now' }).click();
+    await page.getByText('Skip for now', { exact: true }).click();
     // Should leave onboarding (navigate to auth/signup or similar)
     await expect(page).not.toHaveURL('/onboarding');
   });
 
   test('invalid date shows error', async ({ page }) => {
     for (let i = 0; i < 3; i++) {
-      await page.getByRole('button', { name: 'Next' }).click();
+      await page.getByText('Next', { exact: true }).click();
     }
     await page.getByPlaceholder('DD/MM/YYYY').fill('99/99/9999');
-    await page.getByRole('button', { name: "Let's Go" }).click();
+    await page.getByText("Let's Go", { exact: true }).click();
     await expect(page.getByText('Enter a valid date (DD/MM/YYYY)')).toBeVisible();
   });
 
   test('valid date accepts and navigates away', async ({ page }) => {
     for (let i = 0; i < 3; i++) {
-      await page.getByRole('button', { name: 'Next' }).click();
+      await page.getByText('Next', { exact: true }).click();
     }
     // Set a future date
     const future = new Date();
@@ -73,7 +73,7 @@ test.describe('Onboarding', () => {
     const mm = String(future.getMonth() + 1).padStart(2, '0');
     const yyyy = future.getFullYear();
     await page.getByPlaceholder('DD/MM/YYYY').fill(`${dd}/${mm}/${yyyy}`);
-    await page.getByRole('button', { name: "Let's Go" }).click();
+    await page.getByText("Let's Go", { exact: true }).click();
     await expect(page).not.toHaveURL('/onboarding');
   });
 });
