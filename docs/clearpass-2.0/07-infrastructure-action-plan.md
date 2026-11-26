@@ -34,7 +34,7 @@ For Craig. Last updated 2026-11-26 (rev 4: technical release gate finalised. Git
 |---|---|---|---|
 | **You** (`ZenFinanceHub`, owner) | You: browser, GitHub mobile app, and your own terminal | Everything. **The only approver** of production releases | — |
 | **`clearpass-bot`** (machine user, Write access) | Claude Code only, running as a **separate Linux user** (`claude-dev`) | Branches, PRs, merging to `main` when CI passes, triggering the Release workflow, staging deploys (staging follows `main`) | Approve a release; push `production` or `release-gate-test`; push to `main` without a PR; merge `.github/` changes without your review; read or change environments, secrets, rulesets, keys or collaborators |
-| **`clearpass-release`** GitHub App (owned by you, installed on this repo only) | Only the approved `push` job of `release.yml` | Fast-forward (or, for rollback, reset) `production` | Anything else. Its token is minted after your approval, lives at most 1 hour, has contents and workflows permissions on this one repository only, and is revoked when the job ends |
+| **`clearpass-release`** GitHub App (owned by you, installed on this repo only) | Only the approved `push` job of `release.yml` | **Fast-forward** `production` only (never reset or force-push)  | Anything else. Its token is minted after your approval, lives at most 1 hour, has contents and workflows permissions on this one repository only, and is revoked when the job ends |
 
 #### How each of your 10 requirements is met
 
@@ -56,7 +56,7 @@ For Craig. Last updated 2026-11-26 (rev 4: technical release gate finalised. Git
 | | `main` | `production` and `release-gate-test` |
 |---|---|---|
 | Deletion | Blocked | Blocked |
-| Force push | Blocked | Blocked, except the App's rollback |
+| Force push | Blocked | Blocked (the release workflow is fast-forward only) |
 | How it changes | Pull requests only. **0 required approvals.** Code Owner review is required **only for `/.github/`**. "Approval of the most recent push" is ON | **Restrict updates:** only bypass actors |
 | Required checks | The 7 CI checks | The 7 CI checks |
 | Bypass | Repository admin, **pull requests only** (your emergency merge of a `.github` PR) | **`clearpass-release` App: always.** **Repository admin: always** (your emergency override) |
@@ -71,19 +71,32 @@ On your user account this machine also holds:
 - **OTA updates:** recommended, a small `ota-production.yml` workflow behind the **same** approval, with the Expo token as an environment secret. Until then, OTAs are run from your user (they already need your approval, A10).
 - **Production migrations:** recommended, a `migrate-production.yml` behind the same approval, applying only migrations already merged to `main`. Until then, from your user. None are queued.
 
-These two are prepared as one follow-up PR **if you want them**. They aren't needed to start safe autonomous development.
+✅ **D22 approved; built in draft PR #122** (stacked on #119):
+- **`ota-production.yml`:** the build job has no credentials. The upload job requires approval in `production-ota` and runs pinned `eas-cli` 27.7.2 only, with no project code; the bundle digest and RevenueCat keys are re-checked.
+- **`ota-rollback.yml`:** republishes a previous update group, under the same approval.
+- **`migrate-production.yml`:** **its own approval**, in `production-db`.
+  - Refuses destructive SQL and non-ClearPass tables.
+  - Requires `-- Compatibility:` and `-- Rollback:` headers.
+  - Shows the exact SQL and its SHA-256 for approval.
+  - The approver confirms a recent backup.
+  - Applies each file in one transaction, recording it in Supabase's migration history.
+
+The environments are created in setup step 10 (`setup-release-gate.sh ota` / `db`).
 
 #### Emergency rollback (seconds, no GitHub needed)
 1. **Vercel**, per affected project: Deployments → the previous Production deployment → **⋯ → Instant Rollback**.
 2. **Railway:** clearpass-app → Deployments → the previous successful deployment → **⋯ → Redeploy**.
-3. Tell Claude Code. It starts the **Release workflow with `mode: rollback`**, targeting that same previous commit, and you approve. `production` then matches what's serving.
+3. Tell Claude Code. It opens a **revert PR** on `main` (CI must pass), then starts a normal **Release** of the revert commit, which you approve. `production` only ever moves forward. The revert restores the old code, and `production` matches what's serving again.
 4. **Then click "Undo Rollback"** on each Vercel project you rolled back. Until you do, Vercel won't auto-promote later deployments.
 5. **Database:** no action. Migrations are additive and separate, so older code keeps working (G1 rollback rules).
 6. **Data written by the new code** (e.g. #113/#118 grants): Claude Code follows that PR's documented check before any revert.
 
 Prompt E1 below walks Claude in Chrome through steps 1–2, confirming each click with you, if you'd rather not click through yourself.
 
-**Normal (non-emergency) rollback:** step 3 alone. One approval, and all four platforms redeploy the earlier commit.
+**Normal (non-emergency) rollback:** step 3 alone: a revert PR plus one approved release. All four platforms deploy the reverted code.
+
+**OTA rollback** is a separate approved workflow (`ota-rollback.yml`, #122) that republishes a previous update group to the `production` channel.
+**Database rollback** is a new forward (compensating) migration through `migrate-production.yml` (#122), under its own approval.
 
 ### Verified before changing anything (2026-11-26, read-only)
 GitHub's deployment records show the **latest production deployment on all four platforms is `d791923`**, the current `main` (PR #105 merge), and every one reported `success`. That's 25 Nov: Railway at 15:55, clearpass-web 15:58, instructor-web 15:58, clearpass-app 15:59.
