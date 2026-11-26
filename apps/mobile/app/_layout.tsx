@@ -406,7 +406,9 @@ function RootLayout() {
       <NetworkProvider>
       <PipVisibilityProvider>
         {Platform.OS === 'web' && <Head><title>ClearPass</title></Head>}
-        <View suppressHydrationWarning style={{ flex: 1 }}>
+        {/* suppressHydrationWarning is a react-dom prop that react-native-web
+            forwards; RN's ViewProps doesn't declare it, so pass it untyped. */}
+        <View {...({ suppressHydrationWarning: true } as object)} style={{ flex: 1 }}>
           <Stack screenOptions={{ title: 'ClearPass' }}>
             <Stack.Screen name="index" options={{ headerShown: false }} />
             <Stack.Screen name="onboarding" options={{ headerShown: false }} />
