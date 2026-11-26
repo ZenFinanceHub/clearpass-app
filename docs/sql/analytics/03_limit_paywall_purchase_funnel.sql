@@ -26,6 +26,22 @@ excluded_users as (
   select up.id
   from public.user_progress up
   where up.progress->>'proSource' = 'comp'
+  union
+  -- Sandbox / App Review / TestFlight testers (PR #113, F1): never counted as
+  -- purchases, unless they now hold a genuine, unexpired paid grant.
+  select x.user_id from (
+    select fe.user_id from public.funnel_events fe
+     where fe.event = 'iap_sandbox_purchase' and fe.user_id is not null
+    union
+    select up.id from public.user_progress up where up.progress->>'proSource' = 'iap_sandbox'
+  ) x
+  where not exists (
+    select 1 from public.user_progress rp
+     where rp.id = x.user_id
+       and (rp.progress->>'isPro')::boolean is true
+       and rp.progress->>'proSource' in ('stripe', 'seat', 'iap')
+       and rp.progress->>'proExpiresAt' > to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+  )
 ),
 excluded_anon as (
   select distinct fe.anon_id

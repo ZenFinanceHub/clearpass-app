@@ -84,6 +84,7 @@ Platforms: **all** = iOS, Android and web. File references are
 | `plan_selected` | Plan toggled | `plan`: `monthly`, `quarterly` | all | `app/paywall.tsx:139` |
 | `purchase_started` | Buy tapped | `plan`; `rail`: `stripe`, `iap`; `trialDays` int 0-365 | all (`iap` on phones) | `app/paywall.tsx:152`, `:187` |
 | `purchase_succeeded` / `purchase_cancelled` / `purchase_failed` | Store purchase outcome | `plan`; `rail`; `trialDays`; `reason`: `no_package` (failed only) | iOS, Android | `app/paywall.tsx:184`, `:190` |
+| `iap_sandbox_purchase` | **Server-written** (RevenueCat webhook, PR #113) when a purchase arrives with `environment=SANDBOX` (App Review, TestFlight, licence testers). Not a funnel step. A durable marker so reporting can exclude testers after their sandbox grant expires | none | server | `server/proxy.js` (#113) |
 | `free_mock_started` | Free quick mock begun | `mode`: `standard`, `quick` | all | `app/(tabs)/mock.tsx:365` |
 | `free_mock_completed` | Free mock submitted | `passed` boolean; `correct`, `total` int 0-100 | all | `app/(tabs)/mock.tsx:518` |
 | `iap_unavailable` | Store could not be configured | `mode`: `missing_api_key`, `configure_threw`, `get_offerings_threw`, `no_quarterly_package`; `source`: `boot`, `refresh` | iOS, Android | `src/purchases.ts:66` |
