@@ -1,0 +1,4 @@
+# Changes to CI, the release workflow, the release-gate setup and this file need
+# the repository owner's review (the "main protection" ruleset requires Code
+# Owner review). Everything else merges with CI only.
+/.github/ @ZenFinanceHub

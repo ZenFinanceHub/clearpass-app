@@ -1,0 +1,202 @@
+name: Release to production
+
+# The ONLY way the `production` branch moves. Vercel (3 projects) and Railway
+# deploy from `production`. See docs/clearpass-2.0/07-infrastructure-action-plan.md.
+#
+#   1. verify   - checks the request; writes a summary for the approver.
+#   2. push     - runs in the `production-release` GitHub Environment, which
+#                 requires Craig's approval. Only this job can read the deploy
+#                 key that is allowed to update `production` (ruleset bypass).
+#   3. monitor  - waits for all four production deployments to report success.
+#
+# Security notes:
+# - Everything that runs is inline in this file (owned by CODEOWNERS). No repo
+#   scripts, no npm install, no third-party actions after the push job starts.
+# - The environment only accepts runs from `main`, so a modified copy of this
+#   workflow on another branch cannot reach the deploy key.
+# - Inputs reach the shell only through env vars, never ${{ }} inside `run`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Full 40-character commit SHA on main to release (or, for rollback, an earlier production commit)"
+        required: true
+        type: string
+      mode:
+        description: "release = move production forward; rollback = move production back to an earlier production commit"
+        required: true
+        default: release
+        type: choice
+        options: [release, rollback]
+      reason:
+        description: "One line for the approver, e.g. 'PR #111 cron auth'"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  checks: read
+  deployments: read
+
+concurrency:
+  group: release-production
+  cancel-in-progress: false
+
+env:
+  REQUIRED_CHECKS: |
+    Typecheck (apps/mobile)
+    Typecheck (apps/instructor-web)
+    Unit tests (packages/core, packages/content)
+    Unit tests (apps/mobile/server)
+    Unit tests (apps/mobile scripts)
+    Unit tests (apps/instructor-web)
+    E2E (Playwright, stubbed backend)
+  PRODUCTION_DEPLOYMENTS: |
+    Production – clearpass-app
+    Production – clearpass-instructor-web
+    Production – clearpass-web
+    Clearpass / production
+
+jobs:
+  verify:
+    name: Verify release request
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      current: ${{ steps.check.outputs.current }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - id: check
+        name: Check commit, ancestry, CI and history
+        env:
+          SHA: ${{ inputs.sha }}
+          MODE: ${{ inputs.mode }}
+          REASON: ${{ inputs.reason }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; echo "### ❌ Release refused: $1" >> "$GITHUB_STEP_SUMMARY"; exit 1; }
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || fail "sha must be a full 40-character lowercase commit SHA"
+          git fetch --quiet origin main production
+          CUR=$(git rev-parse origin/production)
+          echo "current=$CUR" >> "$GITHUB_OUTPUT"
+          [ "$SHA" != "$CUR" ] || fail "production is already at $SHA"
+          git merge-base --is-ancestor "$SHA" origin/main || fail "$SHA is not on main"
+
+          if [ "$MODE" = release ]; then
+            git merge-base --is-ancestor "$CUR" "$SHA" || fail "not a fast-forward from current production $CUR"
+            while IFS= read -r name; do
+              [ -n "$name" ] || continue
+              concl=$(gh api --paginate "repos/$REPO/commits/$SHA/check-runs?per_page=100" \
+                | jq -rs --arg n "$name" '[.[].check_runs[] | select(.name == $n)] | sort_by(.completed_at) | last | .conclusion // "missing"')
+              [ "$concl" = success ] || fail "required check '$name' is '$concl' on $SHA"
+            done <<< "$REQUIRED_CHECKS"
+          else
+            git merge-base --is-ancestor "$SHA" "$CUR" || fail "rollback target must be an earlier commit of production"
+            n=$(gh api --paginate "repos/$REPO/deployments?sha=$SHA&per_page=100" \
+              | jq -s '[.[][] | select(.environment | test("^Production|/ production$"))] | length')
+            [ "$n" -gt 0 ] || fail "$SHA was never deployed to production, so it is not a known-good rollback target"
+          fi
+
+          {
+            echo "## Production ${MODE} request"
+            echo "- **Reason:** ${REASON}"
+            echo "- **From:** \`${CUR}\`"
+            echo "- **To:** \`${SHA}\`"
+            echo
+            if [ "$MODE" = release ]; then
+              echo "### Commits being released"
+              git log --format='- %h %s' "$CUR..$SHA"
+              files=$(git diff --name-only "$CUR" "$SHA")
+            else
+              echo "### Commits being rolled back"
+              git log --format='- %h %s' "$SHA..$CUR"
+              files=$(git diff --name-only "$SHA" "$CUR")
+            fi
+            echo
+            echo "### Areas touched"
+            if grep -q '^apps/mobile/server/' <<< "$files"; then echo "- ⚙️ **Server (Railway)**"; fi
+            if grep -qE '^apps/mobile/(app|src|assets|api)/|^packages/' <<< "$files"; then echo "- 🌐 **Learner web app (Vercel)**. Native apps are unaffected (OTA is separate)"; fi
+            if grep -q '^apps/instructor-web/' <<< "$files"; then echo "- 🌐 **Instructor site (Vercel)**"; fi
+            if grep -q '^apps/web/' <<< "$files"; then echo "- 🌐 **Marketing site (Vercel)**"; fi
+            if grep -qE 'migrations/|schema\.sql' <<< "$files"; then echo "- 🗄️ **Database files changed.** Releases never run migrations; confirm any migration was applied separately and is backward-compatible"; fi
+            echo
+            echo "Approve only if this matches what you agreed to release."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  push:
+    name: Move production (requires approval)
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production-release
+    steps:
+      - name: Push to production with the release deploy key
+        env:
+          SHA: ${{ inputs.sha }}
+          MODE: ${{ inputs.mode }}
+          EXPECTED_CURRENT: ${{ needs.verify.outputs.current }}
+          RELEASE_DEPLOY_KEY: ${{ secrets.RELEASE_DEPLOY_KEY }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          [ -n "$RELEASE_DEPLOY_KEY" ] || { echo "::error::RELEASE_DEPLOY_KEY is not available in this environment"; exit 1; }
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$RELEASE_DEPLOY_KEY" > ~/.ssh/release_key
+          # Pin GitHub's published SSH host keys (from the HTTPS meta API) instead of trusting ssh-keyscan.
+          curl -fsSL https://api.github.com/meta | python3 -c 'import json,sys; [print("github.com " + k) for k in json.load(sys.stdin)["ssh_keys"]]' > ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/release_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          git init -q repo && cd repo
+          git remote add origin "git@github.com:${REPO}.git"
+          git fetch -q origin main production
+          CUR=$(git rev-parse origin/production)
+          [ "$CUR" = "$EXPECTED_CURRENT" ] || { echo "::error::production moved since verification ($EXPECTED_CURRENT -> $CUR); start a new release"; exit 1; }
+          git merge-base --is-ancestor "$SHA" origin/main || { echo "::error::$SHA is no longer on main"; exit 1; }
+          if [ "$MODE" = release ]; then
+            git push origin "$SHA:refs/heads/production"
+          else
+            git push --force-with-lease="production:$CUR" origin "$SHA:refs/heads/production"
+          fi
+          rm -f ~/.ssh/release_key
+          echo "production: $CUR -> $SHA ($MODE)" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  monitor:
+    name: Wait for all four production deployments
+    needs: push
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Poll GitHub deployment records
+        env:
+          SHA: ${{ inputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          deadline=$(( $(date +%s) + 25*60 ))
+          while :; do
+            pending=0; failed=0; table=""
+            while IFS= read -r envname; do
+              [ -n "$envname" ] || continue
+              id=$(gh api "repos/$REPO/deployments?sha=$SHA&per_page=100" \
+                | jq -r --arg e "$envname" '[.[] | select(.environment == $e)] | sort_by(.created_at) | last | .id // empty')
+              if [ -z "$id" ]; then state=not-started
+              else state=$(gh api "repos/$REPO/deployments/$id/statuses?per_page=1" --jq '.[0].state // "queued"'); fi
+              table+="| $envname | $state |"$'\n'
+              case "$state" in success) ;; failure|error) failed=1 ;; *) pending=1 ;; esac
+            done <<< "$PRODUCTION_DEPLOYMENTS"
+            if [ "$failed" = 1 ] || [ "$pending" = 0 ] || [ "$(date +%s)" -ge "$deadline" ]; then break; fi
+            sleep 30
+          done
+          { echo "### Deployments at \`$SHA\`"; echo "| Platform | State |"; echo "|---|---|"; printf '%s' "$table"; } >> "$GITHUB_STEP_SUMMARY"
+          printf '%s' "$table"
+          if [ "$failed" = 1 ]; then echo "::error::A platform failed. It keeps serving its previous deployment. Follow the rollback section of the plan."; exit 1; fi
+          if [ "$pending" = 1 ]; then echo "::error::Not every platform reported success within 25 minutes"; exit 1; fi
