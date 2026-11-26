@@ -3,7 +3,8 @@
 // and `next dev` start, where VERCEL_ENV is always available (no reliance on
 // Vercel's optional NEXT_PUBLIC_ system-variable exposure).
 //
-//  - Vercel production: anything allowed (today's configuration).
+//  - Vercel production: must declare NEXT_PUBLIC_APP_ENV=production (set in
+//    the Vercel Production environment); otherwise the build fails.
 //  - Vercel preview/development: production hosts refused, no override.
 //  - No VERCEL_ENV (a developer machine or CI): production hosts refused
 //    unless NEXT_PUBLIC_APP_ENV=production is set explicitly.
@@ -34,7 +35,12 @@ function isProductionUrl(url: string | undefined): boolean {
 
 export function backendProblems(env: BackendEnv): string[] {
   const vercelEnv = (env.VERCEL_ENV ?? "").trim();
-  if (vercelEnv === "production") return [];
+  const appEnv = (env.NEXT_PUBLIC_APP_ENV ?? "").trim();
+  if (vercelEnv === "production") {
+    return appEnv === "production"
+      ? []
+      : [`NEXT_PUBLIC_APP_ENV must be "production" in a Vercel production build (got "${appEnv}")`];
+  }
 
   const prodVars = (["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_API_URL"] as const).filter((k) =>
     isProductionUrl(env[k]),
@@ -44,7 +50,7 @@ export function backendProblems(env: BackendEnv): string[] {
   if (vercelEnv) {
     return prodVars.map((k) => `${k} points at production in a Vercel ${vercelEnv} build`);
   }
-  if ((env.NEXT_PUBLIC_APP_ENV ?? "").trim() === "production") return [];
+  if (appEnv === "production") return [];
   return prodVars.map(
     (k) => `${k} points at production. Use the local stack, or set NEXT_PUBLIC_APP_ENV=production to deliberately use live data`,
   );

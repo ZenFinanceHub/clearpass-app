@@ -13,6 +13,12 @@
  *    src/appEnv.ts requires APP_ENV) is allowed. Any other profile, e.g.
  *    `preview`, must be `local` or `staging`.
  *  - A production context must not carry a non-production APP_ENV either.
+ *  - EXPLICIT EVERYWHERE: EXPO_PUBLIC_APP_ENV must be set in every context
+ *    (production builds declare `production`). The only exception is the
+ *    EAS `development` profile, whose JS comes from Metro at run time.
+ *    Release paths declare it: eas.json production profile env,
+ *    `npm run ota:production` (scripts/publish-ota.js), and the Vercel
+ *    Production environment variable (dashboard).
  *  - local/staging must name their Supabase URL and anon key (staging also
  *    its API URL), none pointing at production. The same rules apply again
  *    at app start-up in src/appEnv.ts; this just fails the build earlier.
@@ -53,7 +59,8 @@ function isProductionKey(key) {
  * @returns {{ ok: boolean, context: string, problems: string[] }}
  */
 function checkBuildEnv(env) {
-  const appEnv = clean(env.EXPO_PUBLIC_APP_ENV) || 'production';
+  const declared = clean(env.EXPO_PUBLIC_APP_ENV);
+  const appEnv = declared || 'production';
   const vercelEnv = clean(env.VERCEL_ENV);
   const easProfile = clean(env.EAS_BUILD_PROFILE);
   const problems = [];
@@ -72,7 +79,13 @@ function checkBuildEnv(env) {
     else if (easProfile !== 'development') mustBeNonProduction = true;
   }
 
-  if (!['local', 'staging', 'production'].includes(appEnv)) {
+  const devClientBuild = !vercelEnv && easProfile === 'development';
+  if (!declared && !devClientBuild) {
+    problems.push(
+      `EXPO_PUBLIC_APP_ENV is not set (${context}). Every build must declare its environment: ` +
+        '"production", "staging" or "local"',
+    );
+  } else if (!['local', 'staging', 'production'].includes(appEnv)) {
     problems.push(`EXPO_PUBLIC_APP_ENV must be local, staging or production (got "${appEnv}")`);
   } else if (mustBeNonProduction && appEnv === 'production') {
     problems.push(

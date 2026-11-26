@@ -2,7 +2,11 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { quoteArg, exportCommand, updateCommand } = require('./otaCommands');
+const { quoteArg, checkCommand, exportCommand, updateCommand } = require('./otaCommands');
+
+test('check command runs the build-env guard inside the EAS production environment', () => {
+  assert.equal(checkCommand(), 'npx eas-cli env:exec production "node scripts/check-build-env.js"');
+});
 
 test('export command passes the inner expo command to env:exec as ONE quoted argument', () => {
   assert.equal(

@@ -10,8 +10,10 @@ const staging = {
 };
 
 describe("backendGuard", () => {
-  it("allows production values in a Vercel production build (today's config)", () => {
-    expect(backendProblems({ VERCEL_ENV: "production", ...prod })).toEqual([]);
+  it("Vercel production must declare NEXT_PUBLIC_APP_ENV=production explicitly", () => {
+    expect(backendProblems({ VERCEL_ENV: "production", ...prod })).toHaveLength(1);
+    expect(backendProblems({ VERCEL_ENV: "production", NEXT_PUBLIC_APP_ENV: "staging", ...prod })).toHaveLength(1);
+    expect(backendProblems({ VERCEL_ENV: "production", NEXT_PUBLIC_APP_ENV: "production", ...prod })).toEqual([]);
   });
 
   it("refuses production values in Vercel preview and development builds, with no override", () => {

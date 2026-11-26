@@ -17,14 +17,17 @@ const staging = (extra = {}) => ({
   ...extra,
 });
 
-test('Vercel production with APP_ENV unset is allowed (today\'s production build)', () => {
-  assert.equal(checkBuildEnv({ VERCEL_ENV: 'production' }).ok, true);
+test('Vercel production must declare APP_ENV=production explicitly', () => {
+  const r = checkBuildEnv({ VERCEL_ENV: 'production' });
+  assert.equal(r.ok, false);
+  assert.match(r.problems[0], /not set/);
+  assert.equal(checkBuildEnv({ VERCEL_ENV: 'production', EXPO_PUBLIC_APP_ENV: 'production' }).ok, true);
 });
 
 test('Vercel preview with NO env vars at all fails closed', () => {
   const r = checkBuildEnv({ VERCEL_ENV: 'preview' });
   assert.equal(r.ok, false);
-  assert.match(r.problems[0], /must be "staging" or "local"/);
+  assert.match(r.problems[0], /not set|must be "staging" or "local"/);
 });
 
 test('Vercel preview/development with APP_ENV=production fails', () => {
@@ -57,7 +60,8 @@ test('Vercel production carrying a staging APP_ENV fails', () => {
 });
 
 test('EAS: production profile production, preview must be staging, development allowed', () => {
-  assert.equal(checkBuildEnv({ EAS_BUILD_PROFILE: 'production' }).ok, true);
+  assert.equal(checkBuildEnv({ EAS_BUILD_PROFILE: 'production' }).ok, false);
+  assert.equal(checkBuildEnv({ EAS_BUILD_PROFILE: 'production', EXPO_PUBLIC_APP_ENV: 'production' }).ok, true);
   assert.equal(checkBuildEnv({ EAS_BUILD_PROFILE: 'preview' }).ok, false);
   assert.equal(checkBuildEnv({ EAS_BUILD_PROFILE: 'preview', ...staging() }).ok, true);
   assert.equal(checkBuildEnv({ EAS_BUILD_PROFILE: 'development' }).ok, true);
@@ -68,6 +72,13 @@ test('unknown APP_ENV value fails everywhere', () => {
   assert.equal(checkBuildEnv({ EXPO_PUBLIC_APP_ENV: 'prod' }).ok, false);
 });
 
-test('local machine with no signal and no APP_ENV is allowed (production export, e.g. ota:production)', () => {
-  assert.equal(checkBuildEnv({}).ok, true);
+test('no build signal and no APP_ENV fails: an unconfigured machine never defaults to production', () => {
+  assert.equal(checkBuildEnv({}).ok, false);
+  assert.equal(checkBuildEnv({ EXPO_PUBLIC_APP_ENV: 'production' }).ok, true);
+});
+
+test('eas.json declares production for the production profile and staging for preview', () => {
+  const eas = require('../../eas.json');
+  assert.equal(eas.build.production.env.EXPO_PUBLIC_APP_ENV, 'production');
+  assert.equal(eas.build.preview.env.EXPO_PUBLIC_APP_ENV, 'staging');
 });

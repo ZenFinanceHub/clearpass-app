@@ -28,7 +28,8 @@
       "environment": "production",
       "autoIncrement": true,
       "env": {
-        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "EXPO_PUBLIC_APP_ENV": "production"
       },
       "android": {
         "buildType": "app-bundle"

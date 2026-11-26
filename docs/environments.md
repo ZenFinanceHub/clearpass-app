@@ -10,7 +10,7 @@ now chosen by `EXPO_PUBLIC_APP_ENV`.
 
 | Variable | local | staging | production |
 |---|---|---|---|
-| `EXPO_PUBLIC_APP_ENV` | `local` | `staging` | unset (or `production`) in release builds. **Required** in development builds (`__DEV__`) |
+| `EXPO_PUBLIC_APP_ENV` | `local` | `staging` | `production`, **declared explicitly** by every release path (below) |
 | `EXPO_PUBLIC_SUPABASE_URL` | `http://127.0.0.1:55321` (required) | staging project URL (required) | ignored: pinned in `src/appEnv.ts` |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | local demo anon key (required) | staging anon key (required) | ignored: pinned |
 | `EXPO_PUBLIC_API_URL` | optional, default `http://localhost:3001` | staging Railway URL (required) | ignored: `__DEV__` → `http://localhost:3001`, release → production Railway |
@@ -21,7 +21,14 @@ Where they are set:
 - **local**: `npm run web:local` (from `apps/mobile/server`) sets them from the running local stack.
 - **staging**: EAS `preview` environment (`eas.json` preview profile now has `"environment": "preview"`) and Vercel **Preview** scope. See the setup guide §2 and §3.1.
 - **development builds** (`expo start`, dev client): `EXPO_PUBLIC_APP_ENV` must be set. Use `local`, or `production` explicitly to deliberately work against live data (the old default). An unset value now refuses to start.
-- **production**: nothing to set. EAS production builds, `npm run ota:production` and Vercel production deployments resolve exactly the values the app hardcoded before (unit-tested in `scripts/lib/appEnv.test.mjs`).
+- **production**: declared explicitly on every release path:
+  - EAS production builds: `eas.json` production profile `env`;
+  - `npm run ota:production`: `scripts/publish-ota.js` sets it, refuses a conflicting value in your shell, and runs the build-env check inside the EAS production environment before bundling;
+  - Vercel production (clearpass-app): `EXPO_PUBLIC_APP_ENV=production` in the Vercel **Production** environment variables;
+  - instructor-web on Vercel production: `NEXT_PUBLIC_APP_ENV=production` in its **Production** environment variables.
+
+  **The two Vercel variables must be added before this PR merges**, otherwise the next production deploy fails the check. The live site would stay on its previous deployment, but deploys would be blocked.
+- Previously, production needed nothing set. EAS production builds, `npm run ota:production` and Vercel production deployments resolve exactly the values the app hardcoded before (unit-tested in `scripts/lib/appEnv.test.mjs`).
 
 Code: `apps/mobile/src/appEnv.ts` (pure resolver, unit-tested) and
 `src/appConfig.ts` (the RN wrapper; it lists each `process.env.EXPO_PUBLIC_*`
@@ -37,7 +44,9 @@ statically, because Expo only inlines static references). `src/supabase.ts`,
 - a production context (Vercel production, EAS production) carries `local` or `staging`;
 - `local`/`staging` is missing a value or points at production (same checks as below).
 
-A release bundle can't detect where it runs, so with no build signal (a developer machine, `npm run ota:production`) an unset value still means production. That is what production builds rely on.
+- `EXPO_PUBLIC_APP_ENV` is not set at all, in **any** context, including a developer machine or CI with no build signal. The only exception is the EAS `development` profile, whose JavaScript comes from Metro, where the startup rule below applies.
+
+**Why the app itself still falls back to production when unset in a release bundle.** Every supported release path now declares `production` and is checked at build time. If a bundle were ever produced outside them (for example a bare `eas update`, which CLAUDE.md forbids, and which caused the 17 Sep 2026 incident), throwing at startup would crash the app for every user on that update. Falling back to production keeps it working. The build-time rule is what makes the declaration mandatory. The runtime fallback is a last-resort safety net and is unit-tested to resolve only to the pinned production values.
 
 **At startup**, `src/appConfig.ts` throws, and the app does not start, if:
 
