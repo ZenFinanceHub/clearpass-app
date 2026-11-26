@@ -1,0 +1,296 @@
+name: Release to production
+
+# The ONLY way the `production` branch moves. Vercel (3 projects) and Railway
+# deploy from `production`. See docs/clearpass-2.0/07-infrastructure-action-plan.md.
+#
+#   1. verify   - checks the request; writes a summary for the approver.
+#   2. push     - runs in the `production-release` GitHub Environment, which
+#                 requires the owner's approval and only accepts runs from
+#                 `main`. Only this job can mint a token for the
+#                 `clearpass-release` GitHub App, the one bypass actor (besides
+#                 the owner) allowed to update `production`. It re-validates
+#                 everything before pushing.
+#   3. monitor  - waits for all four production deployments to report success.
+#
+# Modes (both are FAST-FORWARD ONLY; nothing in this file can force-push):
+#   release - fast-forward `production` to a commit already on `main`.
+#   test    - the same, on `release-gate-test` instead of `production`. It
+#             exercises the same approval and credential path without
+#             touching production.
+#
+# Rolling back (production is never reset or force-pushed):
+#   Normal:    open a PR on `main` that reverts the bad change (`git revert`),
+#              merge it when CI passes, then run this workflow in `release`
+#              mode on the revert's merge commit. A rollback is just another
+#              approved, fast-forward release.
+#   Emergency: first restore service on the platforms themselves, which needs
+#              no GitHub at all:
+#                - Vercel: project -> Deployments -> previous Production
+#                  deployment -> "Instant Rollback" (then "Undo Rollback" once
+#                  the revert release below is live, or Vercel stops
+#                  auto-promoting new production deployments);
+#                - Railway: clearpass-app -> Deployments -> previous successful
+#                  deployment -> "Redeploy".
+#              Then do the normal revert release above, so `production` again
+#              matches what is serving.
+#
+# Why this workflow enforces CI itself:
+#   The `clearpass-release` App is a bypass actor on the production ruleset,
+#   and a ruleset bypass actor bypasses EVERY rule in that ruleset, including
+#   "Require status checks to pass". So the required checks on `production`
+#   do not stop the App. The only thing that does is this workflow: `verify`
+#   AND the pre-push re-validation both require all 7 checks below to have
+#   succeeded on the exact commit, in every mode, and only for check runs
+#   created by the GitHub Actions app (app slug "github-actions"), so a status
+#   or check run with the same name from any other source cannot satisfy them.
+#
+# Security notes:
+# - All logic is inline in this file, which is owned by CODEOWNERS. No repo
+#   scripts and no npm install. Only two official GitHub actions, pinned by
+#   commit SHA.
+# - Inputs reach the shell only through env vars, never via ${{ }} inside `run`.
+# - The App token is short-lived (1 h), limited to this repository, and has
+#   contents:write and workflows:write only. It is masked in logs and revoked
+#   at the end of the job.
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Full 40-character commit SHA on main to release (to roll back, release a revert commit)"
+        required: true
+        type: string
+      mode:
+        description: "release = fast-forward production; test = exercise the gate on release-gate-test only"
+        required: true
+        default: release
+        type: choice
+        options: [release, test]
+      reason:
+        description: "One line for the approver, e.g. 'PR #111 cron auth' or 'revert of PR #111'"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  checks: read
+  deployments: read
+
+concurrency:
+  group: release-production
+  cancel-in-progress: false
+
+env:
+  # Must match the job names in .github/workflows/ci.yml exactly.
+  REQUIRED_CHECKS: |
+    Typecheck (apps/mobile)
+    Typecheck (apps/instructor-web)
+    Unit tests (packages/core, packages/content)
+    Unit tests (apps/mobile/server)
+    Unit tests (apps/mobile scripts)
+    Unit tests (apps/instructor-web)
+    E2E (Playwright, stubbed backend)
+  # Only check runs created by this GitHub App count (see header).
+  CHECKS_APP_SLUG: github-actions
+  PRODUCTION_DEPLOYMENTS: |
+    Production – clearpass-app
+    Production – clearpass-instructor-web
+    Production – clearpass-web
+    Clearpass / production
+
+jobs:
+  verify:
+    name: Verify release request
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      current: ${{ steps.check.outputs.current }}
+      target: ${{ steps.check.outputs.target }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - id: check
+        name: Check commit, fast-forward, CI, history and workflow safety
+        env:
+          SHA: ${{ inputs.sha }}
+          MODE: ${{ inputs.mode }}
+          REASON: ${{ inputs.reason }}
+          WORKFLOW_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; echo "### ❌ Release refused: $1" >> "$GITHUB_STEP_SUMMARY"; exit 1; }
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || fail "sha must be a full 40-character lowercase commit SHA"
+          case "$MODE" in release) TARGET=production ;; test) TARGET=release-gate-test ;; *) fail "unknown mode '$MODE'" ;; esac
+
+          # Public-repo hygiene: no workflow on main may run untrusted PR code
+          # with secrets, and only the gated workflows may reference secrets.
+          if grep -rlE '^\s*pull_request_target\s*:' .github/workflows/ >/dev/null 2>&1; then fail "a workflow on main uses pull_request_target"; fi
+          others=$(grep -rlE 'secrets\.' .github/workflows/ | grep -vxE '\.github/workflows/release\.yml' || true)
+          [ -z "$others" ] || fail "workflows other than the gated ones reference secrets: $others"
+
+          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+          git fetch --quiet origin main "$TARGET"
+          CUR=$(git rev-parse "origin/$TARGET")
+          echo "current=$CUR" >> "$GITHUB_OUTPUT"
+          git merge-base --is-ancestor "$SHA" origin/main || fail "$SHA is not on main"
+
+          # Fast-forward only, in every mode. A no-op (same commit) is allowed
+          # only in test mode, so the gate tests can always reach approval.
+          if [ "$SHA" = "$CUR" ]; then
+            [ "$MODE" = test ] || fail "$TARGET is already at $SHA"
+          else
+            git merge-base --is-ancestor "$CUR" "$SHA" || fail "not a fast-forward from current $TARGET $CUR. To roll back, release a revert commit from main"
+          fi
+
+          # All 7 checks, every mode, GitHub Actions only (see header). The
+          # newest run of each name counts (highest id), so a later failed or
+          # still-running re-run is not hidden by an older success.
+          while IFS= read -r name; do
+            [ -n "$name" ] || continue
+            concl=$(gh api --paginate "repos/$REPO/commits/$SHA/check-runs?per_page=100&filter=all" \
+              | jq -rs --arg n "$name" --arg app "$CHECKS_APP_SLUG" \
+                '[.[].check_runs[] | select(.name == $n and .app.slug == $app)] | sort_by(.id) | last | .conclusion // "missing"')
+            [ "$concl" = success ] || fail "required check '$name' (GitHub Actions) is '$concl' on $SHA"
+          done <<< "$REQUIRED_CHECKS"
+
+          {
+            echo "## Production ${MODE} request"
+            echo "- **Reason:** ${REASON}"
+            echo "- **Target branch:** \`${TARGET}\` (fast-forward only)"
+            echo "- **From:** \`${CUR}\`"
+            echo "- **To (the exact commit you are approving):** \`${SHA}\`"
+            echo "- **Release workflow version:** \`${WORKFLOW_SHA}\`"
+            echo "- **CI:** all 7 required checks succeeded on this commit (GitHub Actions runs only)"
+            echo
+            echo "### Commits included"
+            git log --max-count=100 --format='- %h %s' "$CUR..$SHA"
+            files=$(git diff --name-only "$CUR" "$SHA")
+            reverts=$(git log --format='%s' "$CUR..$SHA" | { grep -c '^Revert ' || true; })
+            if [ "${reverts:-0}" -gt 0 ]; then echo; echo "↩️ **This release contains $reverts revert commit(s)** (a rollback)."; fi
+            echo
+            echo "### Areas touched"
+            if grep -q '^apps/mobile/server/' <<< "$files"; then echo "- ⚙️ **Server (Railway)**"; fi
+            if grep -qE '^apps/mobile/(app|src|assets|api)/|^packages/' <<< "$files"; then echo "- 🌐 **Learner web app (Vercel)**. Native apps are unaffected (OTA is separate)"; fi
+            if grep -q '^apps/instructor-web/' <<< "$files"; then echo "- 🌐 **Instructor site (Vercel)**"; fi
+            if grep -q '^apps/web/' <<< "$files"; then echo "- 🌐 **Marketing site (Vercel)**"; fi
+            if grep -qE '(^|/)(vercel\.json|eas\.json|app\.json|package\.json|next\.config\.[a-z]+)$|^\.github/' <<< "$files"; then echo "- ⚠️ **Build, deploy or CI configuration changed**"; fi
+            if grep -qE 'migrations/|schema\.sql' <<< "$files"; then echo "- 🗄️ **Database files changed.** Releases never run migrations; confirm any migration was applied separately and is backward-compatible"; fi
+            echo
+            echo "Approve only if this matches what you agreed to release."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  push:
+    name: Move the release branch (requires approval)
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production-release
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      # Same checks as `verify`, repeated after approval (which may come hours
+      # later) and before any credential exists. Duplicated on purpose: this
+      # job must not trust anything but its own inputs and the GitHub API.
+      - name: Re-validate immediately before pushing (no credential yet)
+        env:
+          SHA: ${{ inputs.sha }}
+          MODE: ${{ inputs.mode }}
+          TARGET: ${{ needs.verify.outputs.target }}
+          EXPECTED_CURRENT: ${{ needs.verify.outputs.current }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || fail "bad sha"
+          case "$MODE:$TARGET" in release:production|test:release-gate-test) ;; *) fail "mode/target mismatch ($MODE/$TARGET)";; esac
+          main=$(gh api "repos/$REPO/branches/main" --jq .commit.sha)
+          cur=$(gh api "repos/$REPO/branches/$TARGET" --jq .commit.sha)
+          [ "$cur" = "$EXPECTED_CURRENT" ] || fail "$TARGET moved since verification ($EXPECTED_CURRENT -> $cur); start a new release"
+          status=$(gh api "repos/$REPO/compare/$SHA...$main" --jq .status)
+          case "$status" in identical|ahead) ;; *) fail "$SHA is no longer on main (compare: $status)";; esac
+          ff=$(gh api "repos/$REPO/compare/$cur...$SHA" --jq .status)
+          case "$MODE:$ff" in release:ahead|test:ahead|test:identical) ;; *) fail "not a fast-forward from $TARGET ($cur...$SHA: $ff)";; esac
+          while IFS= read -r name; do
+            [ -n "$name" ] || continue
+            concl=$(gh api --paginate "repos/$REPO/commits/$SHA/check-runs?per_page=100&filter=all" \
+              | jq -rs --arg n "$name" --arg app "$CHECKS_APP_SLUG" \
+                '[.[].check_runs[] | select(.name == $n and .app.slug == $app)] | sort_by(.id) | last | .conclusion // "missing"')
+            [ "$concl" = success ] || fail "required check '$name' (GitHub Actions) is now '$concl' on $SHA"
+          done <<< "$REQUIRED_CHECKS"
+          echo "Re-validated: $TARGET $cur -> $SHA ($MODE, fast-forward, 7/7 checks)"
+
+      - name: Mint a short-lived release token (clearpass-release App)
+        id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          repositories: clearpass-app
+          permission-contents: write
+          permission-workflows: write
+
+      - name: Push (fast-forward only)
+        env:
+          SHA: ${{ inputs.sha }}
+          MODE: ${{ inputs.mode }}
+          TARGET: ${{ needs.verify.outputs.target }}
+          EXPECTED_CURRENT: ${{ needs.verify.outputs.current }}
+          TOKEN: ${{ steps.app.outputs.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          auth=$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          git init -q repo && cd repo
+          git config --local "http.https://github.com/.extraheader" "AUTHORIZATION: basic $auth"
+          git remote add origin "https://github.com/${REPO}.git"
+          git fetch -q origin main "$TARGET"
+          [ "$(git rev-parse "origin/$TARGET")" = "$EXPECTED_CURRENT" ] || { echo "::error::$TARGET moved; start a new release"; exit 1; }
+          git merge-base --is-ancestor "$SHA" origin/main || { echo "::error::$SHA is not on main"; exit 1; }
+          git merge-base --is-ancestor "$EXPECTED_CURRENT" "$SHA" || { echo "::error::not a fast-forward"; exit 1; }
+          # A plain push: git and GitHub both reject a non-fast-forward update
+          # without --force, and this file never passes --force.
+          git push -q origin "$SHA:refs/heads/$TARGET"
+          git config --local --unset-all "http.https://github.com/.extraheader"
+          echo "$TARGET: $EXPECTED_CURRENT -> $SHA ($MODE)" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  monitor:
+    name: Wait for all four production deployments
+    needs: push
+    if: github.ref == 'refs/heads/main' && inputs.mode == 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Poll GitHub deployment records
+        env:
+          SHA: ${{ inputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          deadline=$(( $(date +%s) + 25*60 ))
+          while :; do
+            pending=0; failed=0; table=""
+            while IFS= read -r envname; do
+              [ -n "$envname" ] || continue
+              id=$(gh api "repos/$REPO/deployments?sha=$SHA&per_page=100" \
+                | jq -r --arg e "$envname" '[.[] | select(.environment == $e)] | sort_by(.created_at) | last | .id // empty')
+              if [ -z "$id" ]; then state=not-started
+              else state=$(gh api "repos/$REPO/deployments/$id/statuses?per_page=1" --jq '.[0].state // "queued"'); fi
+              table+="| $envname | $state |"$'\n'
+              case "$state" in success) ;; failure|error) failed=1 ;; *) pending=1 ;; esac
+            done <<< "$PRODUCTION_DEPLOYMENTS"
+            if [ "$failed" = 1 ] || [ "$pending" = 0 ] || [ "$(date +%s)" -ge "$deadline" ]; then break; fi
+            sleep 30
+          done
+          { echo "### Deployments at \`$SHA\`"; echo "| Platform | State |"; echo "|---|---|"; printf '%s' "$table"; } >> "$GITHUB_STEP_SUMMARY"
+          printf '%s' "$table"
+          if [ "$failed" = 1 ]; then echo "::error::A platform failed. It keeps serving its previous deployment. Fix forward, or roll back with a revert release (see the header of this file)."; exit 1; fi
+          if [ "$pending" = 1 ]; then echo "::error::Not every platform reported success within 25 minutes"; exit 1; fi
