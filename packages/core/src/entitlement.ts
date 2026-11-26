@@ -1,6 +1,8 @@
 // 'iap_sandbox': a RevenueCat purchase from the store SANDBOX environment
 // (TestFlight, App Review, licence testers). Grants access, never revenue.
-export type ProSource = 'stripe' | 'iap' | 'instructor' | 'comp' | 'seat' | 'iap_sandbox';
+// 'iap_trial': a PRODUCTION RevenueCat subscription still in its free trial
+// (period_type TRIAL). Same access as 'iap', not yet paying.
+export type ProSource = 'stripe' | 'iap' | 'instructor' | 'comp' | 'seat' | 'iap_trial' | 'iap_sandbox';
 
 export interface ProGrantState {
   isPro: boolean;
@@ -26,6 +28,10 @@ const PRO_SOURCE_PRIORITY: Record<ProSource, number> = {
   comp: 3,
   instructor: 2,
   seat: 1,
+  // A free trial never replaces anything paid for or given (stripe, iap,
+  // comp, instructor, seat), replaces a sandbox grant, and is replaced by
+  // the paid 'iap' period that ends it. Mirrors server/lib/entitlement.js.
+  iap_trial: 0.5,
   // Below every real source: a sandbox (test) purchase never replaces a real
   // grant, and any real grant replaces it. Mirrors server/lib/entitlement.js.
   iap_sandbox: 0,
@@ -85,8 +91,14 @@ export function clearInstructorGrant<T extends ProGrantState>(state: T): T {
 // clearInstructorGrant's guard exactly: only clears if the grant is still
 // iap-sourced, so a late-arriving or out-of-order EXPIRATION for a grant
 // that's since been superseded (e.g. manually comp'd) can never clobber it.
-export function clearIapGrant<T extends ProGrantState>(state: T): T {
-  if (state.proSource !== 'iap') return state;
+//
+// iapSource selects which RevenueCat grant(s) may be cleared: 'iap'
+// (default), 'iap_trial', 'iap_sandbox', or a list (a production event owns
+// both 'iap' and 'iap_trial'). Mirrors server/lib/entitlement.js.
+const CLEARABLE_IAP_SOURCES: ProSource[] = ['iap', 'iap_trial', 'iap_sandbox'];
+export function clearIapGrant<T extends ProGrantState>(state: T, iapSource: ProSource | ProSource[] = 'iap'): T {
+  const sources = (Array.isArray(iapSource) ? iapSource : [iapSource]).filter((s) => CLEARABLE_IAP_SOURCES.includes(s));
+  if (!state.proSource || !sources.includes(state.proSource)) return state;
   return { ...state, isPro: false, proExpiresAt: null, proSource: null };
 }
 

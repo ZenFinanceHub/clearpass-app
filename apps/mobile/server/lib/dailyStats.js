@@ -16,7 +16,8 @@ const MAX_STATS_ROWS = 20000;
 // Pro that someone paid for, split by channel:
 //   stripe — direct card purchase on the web
 //   seat   — an instructor bought a 90-day seat for a pupil (£5.99)
-//   iap    — App Store / Google Play, via the RevenueCat webhook
+//   iap    — App Store / Google Play, via the RevenueCat webhook, in a PAID
+//            period (a free trial is 'iap_trial', see TRIAL_SOURCES)
 const PAYING_SOURCES = ['stripe', 'seat', 'iap'];
 
 // Pro that was given away. Real users, no revenue.
@@ -29,6 +30,23 @@ const GRANTED_SOURCES = ['instructor', 'comp'];
 // 'iap_sandbox'. Access is real, money is not: never paying, never part of
 // conversion (either side), reported on its own line so it's visible.
 const TEST_SOURCES = ['iap_sandbox'];
+
+// Pro from a PRODUCTION store subscription that is still in its free trial
+// ('iap_trial', set by the RevenueCat webhook from period_type TRIAL). Real
+// access, no money yet: never paying. A trial learner IS a prospect who
+// hasn't paid, so they stay in the conversion denominator (alongside free
+// learners) but never the numerator. On conversion the grant becomes 'iap'
+// and moves to paying.
+const TRIAL_SOURCES = ['iap_trial'];
+
+// Server-written funnel_events markers (lib/revenuecatWebhook.js) that the
+// 24h trial figures are counted from. Duplicated as literals rather than
+// required so this module stays free of webhook dependencies.
+const TRIAL_MARKERS = {
+  started: 'iap_trial_started',
+  converted: 'iap_trial_converted',
+  cancelled: 'iap_trial_cancelled',
+};
 
 // "Active" is defined as the exact inverse of the rule the expire-pro cron
 // uses, deliberately reusing isEligibleForProExpiry rather than restating
@@ -70,7 +88,13 @@ function isActivePro(progress, nowIso) {
 // Those are excluded because they got Pro for free and will never convert;
 // these are excluded because they are not real prospects at all. An account
 // can be both.
-function computeDailyStats({ profiles, progressRows, nowIso, refCode }) {
+//
+// trialMarkers: funnel_events rows ({ user_id, event, created_at, props })
+// for the three trial markers, or null/undefined if they couldn't be read —
+// then the 24h trial figures are null and the message says "unavailable"
+// rather than a misleading 0. Counted per RevenueCat event
+// (props.rc_event_id), excluding exclude_from_stats accounts.
+function computeDailyStats({ profiles, progressRows, nowIso, refCode, trialMarkers }) {
   const progressById = new Map((progressRows || []).map((r) => [r.id, r.progress || {}]));
 
   const stats = {
@@ -86,6 +110,10 @@ function computeDailyStats({ profiles, progressRows, nowIso, refCode }) {
     grantedComp: 0,
     grantedTotal: 0,
     sandboxPro: 0,
+    trialActive: 0,
+    trialsStarted24h: null,
+    trialConversions24h: null,
+    trialCancellations24h: null,
     indefinite: 0,
     freeLearners: 0,
     newLast24h: 0,
@@ -95,6 +123,8 @@ function computeDailyStats({ profiles, progressRows, nowIso, refCode }) {
 
   const dayAgoIso = new Date(Date.parse(nowIso) - 24 * 60 * 60 * 1000).toISOString();
   let payingLearners = 0;
+  let trialLearners = 0;
+  const excludedIds = new Set();
 
   for (const profile of profiles) {
     const isInstructorAccount = profile.account_type === 'instructor';
@@ -107,6 +137,7 @@ function computeDailyStats({ profiles, progressRows, nowIso, refCode }) {
 
     if (profile.exclude_from_stats === true) {
       stats.excluded++;
+      excludedIds.add(profile.id);
       // Nothing below this line runs for an excluded account: no Pro
       // bucket, no free-learner tally, no 24h count. Seeding eight
       // fixtures must not read as eight new signups.
@@ -136,6 +167,11 @@ function computeDailyStats({ profiles, progressRows, nowIso, refCode }) {
     } else if (active && TEST_SOURCES.includes(source)) {
       // A test purchase: neither paying nor a free prospect.
       stats.sandboxPro++;
+    } else if (active && TRIAL_SOURCES.includes(source)) {
+      // In a free trial: Pro, not paying. A learner on trial still counts
+      // in the conversion denominator (not yet paid), never the numerator.
+      stats.trialActive++;
+      if (!isInstructorAccount) trialLearners++;
     } else if (!isInstructorAccount) {
       // Signed up, no active Pro of any kind.
       stats.freeLearners++;
@@ -146,10 +182,33 @@ function computeDailyStats({ profiles, progressRows, nowIso, refCode }) {
   // since an active comp is neither paying nor free. Both would otherwise
   // sit permanently in the denominator and depress a number that is meant
   // to measure learners choosing to pay.
-  const base = payingLearners + stats.freeLearners;
+  const base = payingLearners + stats.freeLearners + trialLearners;
   stats.conversionPct = base === 0 ? 0 : Math.round((payingLearners / base) * 1000) / 10;
 
+  if (Array.isArray(trialMarkers)) {
+    const seen = {
+      [TRIAL_MARKERS.started]: new Set(),
+      [TRIAL_MARKERS.converted]: new Set(),
+      [TRIAL_MARKERS.cancelled]: new Set(),
+    };
+    for (const m of trialMarkers) {
+      if (!m || !(m.event in seen)) continue;
+      if (m.user_id && excludedIds.has(m.user_id)) continue;
+      if (!m.created_at || m.created_at <= dayAgoIso || m.created_at > nowIso) continue;
+      // One per RevenueCat event, even if a marker were ever written twice.
+      const key = (m.props && m.props.rc_event_id) || m.anon_id || `${m.user_id}:${m.created_at}`;
+      seen[m.event].add(key);
+    }
+    stats.trialsStarted24h = seen[TRIAL_MARKERS.started].size;
+    stats.trialConversions24h = seen[TRIAL_MARKERS.converted].size;
+    stats.trialCancellations24h = seen[TRIAL_MARKERS.cancelled].size;
+  }
+
   return stats;
+}
+
+function fmt24h(n) {
+  return n === null || n === undefined ? 'n/a' : String(n);
 }
 
 function formatDailyStatsMessage(stats, refCode) {
@@ -165,9 +224,11 @@ function formatDailyStatsMessage(stats, refCode) {
     `    • seats: ${stats.payingSeat}`,
     `    • in-app: ${stats.payingIap}`,
     `*Granted Pro, active:* ${stats.grantedTotal}  (${stats.grantedInstructor} instructor, ${stats.grantedComp} comp)`,
+    `*Free trials, active:* ${stats.trialActive}  _(Pro, not paying yet)_`,
+    `    • trials (24h): ${fmt24h(stats.trialsStarted24h)} started, ${fmt24h(stats.trialConversions24h)} converted to paid, ${fmt24h(stats.trialCancellations24h)} cancelled`,
     `*Sandbox/test Pro, active:* ${stats.sandboxPro}  _(store test purchases, not revenue)_`,
     `*Free learners:* ${stats.freeLearners}`,
-    `*Conversion:* ${stats.conversionPct}%  _(paying / paying + free; instructors, comps and sandbox excluded)_`,
+    `*Conversion:* ${stats.conversionPct}%  _(paying / paying + free + on trial; instructors, comps and sandbox excluded)_`,
   ];
 
   if (stats.indefinite > 0) {
@@ -189,6 +250,8 @@ module.exports = {
   PAYING_SOURCES,
   GRANTED_SOURCES,
   TEST_SOURCES,
+  TRIAL_SOURCES,
+  TRIAL_MARKERS,
   isActivePro,
   computeDailyStats,
   formatDailyStatsMessage,

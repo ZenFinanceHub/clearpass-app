@@ -221,6 +221,38 @@ describe('clearIapGrant', () => {
     const state = { isPro: false, proExpiresAt: null };
     expect(clearIapGrant(state)).toEqual(state);
   });
+
+  test('default clears only iap; a production list clears iap_trial too; sandbox only its own', () => {
+    const trial = { isPro: true, proExpiresAt: '2027-01-01T00:00:00.000Z', proSource: 'iap_trial' as const };
+    const sandbox = { isPro: true, proExpiresAt: '2027-01-01T00:00:00.000Z', proSource: 'iap_sandbox' as const };
+    expect(clearIapGrant(trial)).toEqual(trial);
+    expect(clearIapGrant(trial, ['iap', 'iap_trial'])).toEqual({ isPro: false, proExpiresAt: null, proSource: null });
+    expect(clearIapGrant(sandbox, ['iap', 'iap_trial'])).toEqual(sandbox);
+    expect(clearIapGrant(sandbox, 'iap_sandbox')).toEqual({ isPro: false, proExpiresAt: null, proSource: null });
+    expect(clearIapGrant(trial, ['stripe'])).toEqual(trial);
+  });
+});
+
+describe('iap_trial priority', () => {
+  const EXP = '2027-01-01T00:00:00.000Z';
+  const LATER = '2027-03-01T00:00:00.000Z';
+  test('a trial never replaces stripe, iap, comp, instructor or seat', () => {
+    for (const s of ['stripe', 'iap', 'comp', 'instructor', 'seat'] as const) {
+      expect(shouldApplyProGrant(s, 'iap_trial', EXP, LATER)).toBe(false);
+    }
+  });
+  test('a trial replaces iap_sandbox; paid iap (conversion) and every other real source replace a trial', () => {
+    expect(shouldApplyProGrant('iap_sandbox', 'iap_trial', LATER, EXP)).toBe(true);
+    for (const s of ['stripe', 'iap', 'comp', 'instructor', 'seat'] as const) {
+      expect(shouldApplyProGrant('iap_trial', s, LATER, EXP)).toBe(true);
+    }
+    expect(shouldApplyProGrant('iap_trial', 'iap_sandbox', EXP, LATER)).toBe(false);
+    expect(shouldApplyProGrant('iap_trial', 'iap_trial', EXP, LATER)).toBe(true);
+  });
+  test('an iap_trial grant expires through the normal rule', () => {
+    expect(isEligibleForProExpiry({ isPro: true, proExpiresAt: '2020-01-01T00:00:00.000Z', proSource: 'iap_trial' }, EXP)).toBe(true);
+    expect(isExemptFromProExpiry('iap_trial')).toBe(false);
+  });
 });
 
 describe('isInstructorGrantAlreadyCorrect', () => {

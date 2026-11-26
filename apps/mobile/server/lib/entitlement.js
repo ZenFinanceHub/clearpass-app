@@ -25,7 +25,30 @@
 // BELOW every real source: a sandbox purchase never replaces any real
 // grant, and any real grant (including a later production purchase by the
 // same person) always replaces it.
-const PRO_SOURCE_PRIORITY = { stripe: 4, iap: 4, comp: 3, instructor: 2, seat: 1, iap_sandbox: 0 };
+//
+// 'iap_trial' is a PRODUCTION RevenueCat subscription that is still inside
+// its free-trial period (event period_type 'TRIAL'). Access is real and
+// identical to 'iap' (same isPro/proExpiresAt, same expire-pro rule), but
+// nobody has paid yet, so reporting counts it as a trial, not a paying
+// customer (lib/dailyStats.js). It sits between iap_sandbox and seat:
+//   - a trial never replaces any grant someone paid for or was given
+//     (stripe, iap, comp, instructor, seat);
+//   - a trial does replace an iap_sandbox grant (a real store account
+//     beats a test one, same rule as every other real grant);
+//   - the paid period that ends a trial arrives as 'iap' (priority 4), so a
+//     real conversion always replaces 'iap_trial'.
+// The value lives in progress.proSource, which the
+// protect_user_progress_entitlement trigger already stops clients writing,
+// so a learner can neither fake nor hide being in a trial.
+//
+// ROLLBACK: a server without 'iap_trial' in this table reads its priority
+// as undefined, and every comparison against undefined is false, so that
+// user's later grants (stripe, comp, instructor, seat, a production
+// RENEWAL as 'iap') would be refused until expire-pro clears the trial.
+// Roll back with a revert that KEEPS `iap_trial: 0.5` here (and the
+// clear/match helpers below) — see docs/sql/trials.sql query 1 for the
+// pre-rollback check.
+const PRO_SOURCE_PRIORITY = { stripe: 4, iap: 4, comp: 3, instructor: 2, seat: 1, iap_trial: 0.5, iap_sandbox: 0 };
 
 // The proSource a RevenueCat grant is recorded under, by the event's own
 // `environment` field. Only an explicit 'SANDBOX' maps to iap_sandbox;
@@ -34,8 +57,26 @@ const PRO_SOURCE_PRIORITY = { stripe: 4, iap: 4, comp: 3, instructor: 2, seat: 1
 // payload quirk.
 const IAP_SOURCE = 'iap';
 const IAP_SANDBOX_SOURCE = 'iap_sandbox';
+const IAP_TRIAL_SOURCE = 'iap_trial';
 function iapSourceForEnvironment(environment) {
   return environment === 'SANDBOX' ? IAP_SANDBOX_SOURCE : IAP_SOURCE;
+}
+
+// Every proSource a RevenueCat event from this environment may act on
+// (CANCELLATION/EXPIRATION/TRANSFER-source clears). A production event owns
+// both the paid 'iap' grant and the 'iap_trial' grant (they are the same
+// subscription before and after the trial ends); a SANDBOX event owns only
+// 'iap_sandbox'. Missing/unknown environment is production, as above.
+function iapSourcesForEnvironment(environment) {
+  return environment === 'SANDBOX' ? [IAP_SANDBOX_SOURCE] : [IAP_SOURCE, IAP_TRIAL_SOURCE];
+}
+
+// The proSource for a RevenueCat grant given its environment and whether
+// the period being granted is a free trial. SANDBOX always wins (a sandbox
+// trial is still just a test purchase).
+function iapGrantSource(environment, inTrial) {
+  if (environment === 'SANDBOX') return IAP_SANDBOX_SOURCE;
+  return inTrial ? IAP_TRIAL_SOURCE : IAP_SOURCE;
 }
 
 function shouldApplyProGrant(currentSource, incomingSource, currentExpiresAt, incomingExpiresAt) {
@@ -128,9 +169,14 @@ function clearInstructorGrant(state) {
 // never clear a real production grant (sandbox subscriptions auto-expire
 // within hours, so a tester who later bought for real would otherwise lose
 // paid access), and vice versa.
+//
+// iapSource may also be an array (iapSourcesForEnvironment) — production
+// events clear either 'iap' or 'iap_trial'. Only the three RevenueCat
+// sources are ever clearable here.
+const CLEARABLE_IAP_SOURCES = [IAP_SOURCE, IAP_TRIAL_SOURCE, IAP_SANDBOX_SOURCE];
 function clearIapGrant(state, iapSource = IAP_SOURCE) {
-  if (iapSource !== IAP_SOURCE && iapSource !== IAP_SANDBOX_SOURCE) return state;
-  if (state.proSource !== iapSource) return state;
+  const sources = (Array.isArray(iapSource) ? iapSource : [iapSource]).filter((s) => CLEARABLE_IAP_SOURCES.includes(s));
+  if (!sources.includes(state.proSource)) return state;
   return { ...state, isPro: false, proExpiresAt: null, proSource: null };
 }
 
@@ -164,7 +210,10 @@ function hasBlockingRelationships(relationships) {
 module.exports = {
   IAP_SOURCE,
   IAP_SANDBOX_SOURCE,
+  IAP_TRIAL_SOURCE,
   iapSourceForEnvironment,
+  iapSourcesForEnvironment,
+  iapGrantSource,
   shouldApplyProGrant,
   isExemptFromProExpiry,
   isEligibleForProExpiry,

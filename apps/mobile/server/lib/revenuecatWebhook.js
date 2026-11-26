@@ -1,7 +1,53 @@
 'use strict';
 
 const { computeIapExpiresAt } = require('./proExpiry');
-const { shouldApplyProGrant, clearIapGrant, iapSourceForEnvironment, IAP_SANDBOX_SOURCE } = require('./entitlement');
+const {
+  shouldApplyProGrant,
+  clearIapGrant,
+  iapSourceForEnvironment,
+  iapSourcesForEnvironment,
+  iapGrantSource,
+  isExemptFromProExpiry,
+  IAP_SOURCE,
+  IAP_TRIAL_SOURCE,
+} = require('./entitlement');
+
+// RevenueCat's webhook `period_type` for the period an event describes:
+//   TRIAL       — a free trial. Access, no money yet → 'iap_trial'.
+//   INTRO       — an introductory PRICE (pay-up-front / pay-as-you-go
+//                 offer). Money changed hands → paid 'iap'.
+//   NORMAL      — the standard paid period → 'iap'.
+//   PREPAID     — Google Play prepaid plan, paid up front → 'iap'.
+//   PROMOTIONAL — a RevenueCat-granted promotional entitlement. Kept as
+//                 'iap' (unchanged from before this fix) but logged, since
+//                 no store money changed hands. ClearPass doesn't grant RC
+//                 promotionals today; see the PR for the open decision.
+// Missing or unrecognised → NORMAL ('iap', the behaviour before this fix)
+// with a logged warning, so a payload quirk can never take Pro away; at
+// worst a trial is counted as paying, and the warning makes that visible.
+// RENEWAL also carries `is_trial_conversion` (boolean): true on the first
+// paid renewal after a trial. It wins over period_type.
+const RC_PERIOD_TYPES = ['TRIAL', 'INTRO', 'NORMAL', 'PROMOTIONAL', 'PREPAID'];
+const PERIOD_TYPE_EVENTS = ['INITIAL_PURCHASE', 'RENEWAL', 'CANCELLATION'];
+
+function classifyPeriod(event) {
+  const type = event && event.type;
+  const raw = event ? event.period_type : undefined;
+  const isTrialConversion = !!(event && type === 'RENEWAL' && event.is_trial_conversion === true);
+  let periodType = raw;
+  let warning = null;
+  if (!RC_PERIOD_TYPES.includes(raw)) {
+    periodType = 'NORMAL';
+    if (PERIOD_TYPE_EVENTS.includes(type)) {
+      const what = raw === undefined || raw === null ? 'missing' : `unexpected ${JSON.stringify(raw)}`;
+      warning = `${type} ${event.id}: ${what} period_type — treating as NORMAL (paid)`;
+    }
+  } else if (raw === 'PROMOTIONAL' && PERIOD_TYPE_EVENTS.includes(type)) {
+    warning = `${type} ${event.id}: PROMOTIONAL period_type — recorded as paid iap (no store payment); review`;
+  }
+  const inTrial = periodType === 'TRIAL' && !isTrialConversion;
+  return { periodType, inTrial, isTrialConversion, warning };
+}
 
 // RevenueCat's expiration_at_ms is epoch milliseconds — an absolute
 // end-of-period timestamp computed by the store (App Store/Play Store),
@@ -43,11 +89,20 @@ function expirationMsToIso(expirationAtMs) {
 // a sandbox CANCELLATION/EXPIRATION can't touch a real 'iap' grant and a
 // production one can't touch an 'iap_sandbox' grant. Omitted/unknown
 // environment behaves exactly as before (production 'iap').
-function resolveRevenueCatUpdate(eventType, expirationAtMs, currentProgress, environment) {
+//
+// period ({ inTrial } from classifyPeriod; omitted = paid, as before) picks
+// between 'iap_trial' and 'iap' for a PRODUCTION grant; SANDBOX is always
+// 'iap_sandbox'. A trial grant never replaces stripe/iap/comp/instructor/
+// seat (entitlement priority) — except a time-limited grant that has
+// already lapsed (isPro false, or proExpiresAt in the past) and that the
+// expire-pro cron just hasn't cleared yet, so a returning learner isn't left
+// without server-side Pro until the 01:00 run.
+function resolveRevenueCatUpdate(eventType, expirationAtMs, currentProgress, environment, period = {}) {
   const currentSource = currentProgress.proSource;
-  const iapSource = iapSourceForEnvironment(environment);
+  const ownedSources = iapSourcesForEnvironment(environment);
 
   if (eventType === 'INITIAL_PURCHASE' || eventType === 'RENEWAL') {
+    const incomingSource = iapGrantSource(environment, !!period.inTrial);
     let incomingExpiresAt = expirationMsToIso(expirationAtMs);
     let warning = null;
     if (incomingExpiresAt === null) {
@@ -55,12 +110,21 @@ function resolveRevenueCatUpdate(eventType, expirationAtMs, currentProgress, env
       incomingExpiresAt = computeIapExpiresAt();
     }
 
-    if (!shouldApplyProGrant(currentSource, iapSource, currentProgress.proExpiresAt, incomingExpiresAt)) {
+    const currentLapsed =
+      incomingSource === IAP_TRIAL_SOURCE &&
+      !!currentSource &&
+      !isExemptFromProExpiry(currentSource) &&
+      (currentProgress.isPro !== true ||
+        (!!currentProgress.proExpiresAt && currentProgress.proExpiresAt < new Date().toISOString()));
+    if (
+      !currentLapsed &&
+      !shouldApplyProGrant(currentSource, incomingSource, currentProgress.proExpiresAt, incomingExpiresAt)
+    ) {
       return { progress: null, warning };
     }
 
     return {
-      progress: { isPro: true, proExpiresAt: incomingExpiresAt, proSource: iapSource },
+      progress: { isPro: true, proExpiresAt: incomingExpiresAt, proSource: incomingSource },
       warning,
     };
   }
@@ -70,7 +134,9 @@ function resolveRevenueCatUpdate(eventType, expirationAtMs, currentProgress, env
     // already paid for. expiration_at_ms IS the end of that period; once
     // it passes, the existing expire-pro cron reconciles it naturally via
     // isEligibleForProExpiry, no special-case revocation logic needed here.
-    if (currentSource !== iapSource) return { progress: null, warning: null };
+    // A cancelled TRIAL works the same way: Pro stays until the trial's end
+    // date (expiration_at_ms), and proSource stays 'iap_trial'.
+    if (!ownedSources.includes(currentSource)) return { progress: null, warning: null };
 
     const incomingExpiresAt = expirationMsToIso(expirationAtMs);
     if (incomingExpiresAt === null) {
@@ -85,8 +151,8 @@ function resolveRevenueCatUpdate(eventType, expirationAtMs, currentProgress, env
   if (eventType === 'EXPIRATION') {
     // The authoritative "access has ended" signal — unlike CANCELLATION,
     // this fires when the paid period is actually over.
-    if (currentSource !== iapSource) return { progress: null, warning: null };
-    const cleared = clearIapGrant(currentProgress, iapSource);
+    if (!ownedSources.includes(currentSource)) return { progress: null, warning: null };
+    const cleared = clearIapGrant(currentProgress, ownedSources);
     return {
       progress: { isPro: cleared.isPro, proExpiresAt: cleared.proExpiresAt, proSource: cleared.proSource },
       warning: null,
@@ -120,9 +186,12 @@ function isSupabaseUserId(id) {
 // resolveRevenueCatUpdate's progress field.
 // iapSource ('iap' default, or 'iap_sandbox' for a SANDBOX transfer) limits
 // the clear to the grant from the transfer's own environment.
+// An array (iapSourcesForEnvironment) is accepted too: a production
+// transfer clears either 'iap' or 'iap_trial'.
 function resolveTransferSourceUpdate(currentProgress, iapSource = 'iap') {
-  if (currentProgress.proSource !== iapSource) return null;
-  const cleared = clearIapGrant(currentProgress, iapSource);
+  const owned = Array.isArray(iapSource) ? iapSource : [iapSource];
+  if (!owned.includes(currentProgress.proSource)) return null;
+  const cleared = clearIapGrant(currentProgress, owned);
   return { isPro: cleared.isPro, proExpiresAt: cleared.proExpiresAt, proSource: cleared.proSource };
 }
 
@@ -151,6 +220,20 @@ function resolveTransferDestinationUpdate(currentProgress, sourceExpiresAt, iapS
     progress: { isPro: true, proExpiresAt: sourceExpiresAt, proSource: iapSource },
     warning: null,
   };
+}
+
+// The proSource a TRANSFER destination is granted under. TRANSFER carries
+// no period_type, so a restore keeps whatever the source account(s) had: a
+// paid 'iap' source → 'iap'; only 'iap_trial' sources → 'iap_trial' (still a
+// trial on the new account). SANDBOX is always 'iap_sandbox'. With no
+// usable source row (e.g. an anonymous RevenueCat id) it falls back to
+// 'iap', the pre-fix behaviour, since nothing says it is a trial.
+function transferGrantSource(environment, sourceRows) {
+  if (environment === 'SANDBOX') return iapSourceForEnvironment(environment);
+  const sources = (sourceRows || []).map((r) => r && r.progress && r.progress.proSource);
+  if (sources.includes(IAP_SOURCE)) return IAP_SOURCE;
+  if (sources.includes(IAP_TRIAL_SOURCE)) return IAP_TRIAL_SOURCE;
+  return IAP_SOURCE;
 }
 
 // Deletes the dedup row for a failed event, so RevenueCat's retry isn't
@@ -270,14 +353,16 @@ async function applyTransfer(event, db, rcApi, slack) {
 // applyTransferViaRevenueCat's comment for the retry-safety reasoning,
 // which applies identically here.
 async function applyTransferLocal(event, db, sourceRows, destRows, sourceIds) {
-  const iapSource = iapSourceForEnvironment(event.environment);
+  const owned = iapSourcesForEnvironment(event.environment);
   const nowIso = new Date().toISOString();
+  const liveSourceRows = sourceRows.filter(
+    ({ progress }) => owned.includes(progress.proSource) && progress.proExpiresAt && progress.proExpiresAt > nowIso,
+  );
+  const iapSource = transferGrantSource(event.environment, liveSourceRows);
   let sourceExpiresAt = null;
-  for (const { progress } of sourceRows) {
-    if (progress.proSource === iapSource && progress.proExpiresAt && progress.proExpiresAt > nowIso) {
-      if (!sourceExpiresAt || progress.proExpiresAt > sourceExpiresAt) {
-        sourceExpiresAt = progress.proExpiresAt;
-      }
+  for (const { progress } of liveSourceRows) {
+    if (!sourceExpiresAt || progress.proExpiresAt > sourceExpiresAt) {
+      sourceExpiresAt = progress.proExpiresAt;
     }
   }
 
@@ -306,7 +391,7 @@ async function applyTransferLocal(event, db, sourceRows, destRows, sourceIds) {
   }
 
   for (const { id, progress } of sourceRows) {
-    const patch = resolveTransferSourceUpdate(progress, iapSource);
+    const patch = resolveTransferSourceUpdate(progress, owned);
     if (patch) {
       const { error } = await db.upsertProgress(id, { ...progress, ...patch });
       if (error) {
@@ -339,8 +424,15 @@ async function applyTransferLocal(event, db, sourceRows, destRows, sourceIds) {
 // The source label (iap vs iap_sandbox) comes from the TRANSFER event's own
 // environment — RC's active_entitlements response doesn't say whether the
 // entitlement is backed by a sandbox receipt.
+//
+// Trial vs paid isn't in RC's active_entitlements response either: it is
+// carried over from the source account's own proSource (transferGrantSource).
 async function applyTransferViaRevenueCat(event, db, rcApi, slack, sourceRows, destRows) {
-  const iapSource = iapSourceForEnvironment(event.environment);
+  const owned = iapSourcesForEnvironment(event.environment);
+  const iapSource = transferGrantSource(
+    event.environment,
+    sourceRows.filter(({ progress }) => owned.includes(progress.proSource)),
+  );
   for (const { id, progress } of destRows) {
     let entitlement;
     try {
@@ -390,7 +482,7 @@ async function applyTransferViaRevenueCat(event, db, rcApi, slack, sourceRows, d
   for (const { id, progress } of sourceRows) {
     // Nothing to clear locally regardless of what RC says — skip the
     // lookup entirely rather than spend an API call on it.
-    if (progress.proSource !== iapSource) continue;
+    if (!owned.includes(progress.proSource)) continue;
 
     let entitlement;
     try {
@@ -407,7 +499,7 @@ async function applyTransferViaRevenueCat(event, db, rcApi, slack, sourceRows, d
       continue;
     }
 
-    const patch = resolveTransferSourceUpdate(progress, iapSource);
+    const patch = resolveTransferSourceUpdate(progress, owned);
     if (patch) {
       const { error } = await db.upsertProgress(id, { ...progress, ...patch });
       if (error) {
@@ -447,15 +539,40 @@ function warnOnUnexpectedEnvironment(event) {
 // is optional so older adapters/tests keep working.
 const SANDBOX_PURCHASE_MARKER_EVENT = 'iap_sandbox_purchase';
 
-// The funnel_events row for that marker. anon_id is NOT NULL (8-64 chars)
-// on that table; a per-event synthetic value keeps it unique and obviously
-// server-written. props carry only non-personal store metadata.
+// Durable trial history, same mechanism. The 'iap_trial' proSource only
+// says who is in a trial RIGHT NOW; once a trial converts (→ 'iap') or
+// ends (→ cleared) that is gone, so these rows are what reporting counts
+// trial starts / conversions / cancellations from (lib/dailyStats.js,
+// docs/sql/analytics/05_trials.sql). PRODUCTION (or missing environment)
+// only — a sandbox trial is a test purchase and gets the sandbox marker.
+//   iap_trial_started   — INITIAL_PURCHASE with period_type TRIAL
+//   iap_trial_converted — RENEWAL with is_trial_conversion true, or the
+//                         first paid RENEWAL over an 'iap_trial' grant
+//   iap_trial_cancelled — CANCELLATION with period_type TRIAL (auto-renew
+//                         turned off during the trial; Pro stays until the
+//                         trial's end date). props.cancel_reason says why.
+// Written whether or not the grant itself applied (e.g. a comp user who
+// also starts a store trial still started a trial), like the sandbox
+// marker; reporting applies its own exclusions.
+const TRIAL_STARTED_MARKER_EVENT = 'iap_trial_started';
+const TRIAL_CONVERTED_MARKER_EVENT = 'iap_trial_converted';
+const TRIAL_CANCELLED_MARKER_EVENT = 'iap_trial_cancelled';
+const TRIAL_MARKER_EVENTS = [TRIAL_STARTED_MARKER_EVENT, TRIAL_CONVERTED_MARKER_EVENT, TRIAL_CANCELLED_MARKER_EVENT];
+
+// The funnel_events row for a marker. anon_id is NOT NULL (8-64 chars) on
+// that table; `revenuecat:<event id>` keeps it obviously server-written and
+// is the idempotency key (see insertFunnelMarkerOnce). props carry only
+// non-personal store metadata.
 const RC_STORE_PLATFORM = { APP_STORE: 'ios', MAC_APP_STORE: 'ios', PLAY_STORE: 'android' };
+
+function markerAnonId(event) {
+  return `revenuecat:${String(event.id)}`.slice(0, 64);
+}
 
 function buildSandboxPurchaseMarkerRow(userId, event) {
   return {
     user_id: userId,
-    anon_id: `revenuecat:${String(event.id)}`.slice(0, 64),
+    anon_id: markerAnonId(event),
     event: SANDBOX_PURCHASE_MARKER_EVENT,
     platform: RC_STORE_PLATFORM[event.store] || null,
     props: {
@@ -466,6 +583,64 @@ function buildSandboxPurchaseMarkerRow(userId, event) {
       product_id: typeof event.product_id === 'string' ? event.product_id.slice(0, 100) : null,
     },
   };
+}
+
+function buildTrialMarkerRow(markerEvent, userId, event) {
+  const str = (v, n) => (typeof v === 'string' ? v.slice(0, n) : null);
+  return {
+    user_id: userId,
+    anon_id: markerAnonId(event),
+    event: markerEvent,
+    platform: RC_STORE_PLATFORM[event.store] || null,
+    props: {
+      source: 'revenuecat_webhook',
+      rc_event_id: String(event.id).slice(0, 100),
+      rc_event_type: str(event.type, 40),
+      environment: str(event.environment, 20) || 'PRODUCTION',
+      store: str(event.store, 40),
+      product_id: str(event.product_id, 100),
+      period_type: str(event.period_type, 20),
+      is_trial_conversion: event.is_trial_conversion === true,
+      cancel_reason: str(event.cancel_reason, 40),
+    },
+  };
+}
+
+// Which trial markers one single-user event produces, given the user's
+// progress as read BEFORE this event was applied.
+function trialMarkersFor(event, currentProgress, period) {
+  if (event.environment === 'SANDBOX') return [];
+  if (event.type === 'INITIAL_PURCHASE' && period.inTrial) return [TRIAL_STARTED_MARKER_EVENT];
+  if (event.type === 'RENEWAL') {
+    if (period.isTrialConversion) return [TRIAL_CONVERTED_MARKER_EVENT];
+    if (!period.inTrial && (currentProgress || {}).proSource === IAP_TRIAL_SOURCE) return [TRIAL_CONVERTED_MARKER_EVENT];
+    return [];
+  }
+  if (event.type === 'CANCELLATION' && period.periodType === 'TRIAL') return [TRIAL_CANCELLED_MARKER_EVENT];
+  return [];
+}
+
+// Inserts a marker row at most once per (event, anon_id) — i.e. once per
+// RevenueCat event id per marker type. RevenueCat retries a webhook after
+// any 5xx (and the dedup row is deleted on failure so the retry isn't
+// swallowed), so without this a retried event could write its marker twice.
+// funnel_events has no unique index to lean on (adding one is a migration),
+// so this is check-then-insert; the dedup row in revenuecat_webhook_events
+// already stops two deliveries of one event running concurrently, which is
+// the only race that could slip past the check. `client` is a supabase-js
+// client (the service role in proxy.js).
+async function insertFunnelMarkerOnce(client, row) {
+  const { data, error } = await client
+    .from('funnel_events')
+    .select('id')
+    .eq('event', row.event)
+    .eq('anon_id', row.anon_id)
+    .limit(1);
+  if (error) throw error;
+  if (Array.isArray(data) && data.length > 0) return { inserted: false };
+  const { error: insertError } = await client.from('funnel_events').insert(row);
+  if (insertError) throw insertError;
+  return { inserted: true };
 }
 
 async function recordSandboxPurchaseMarker(db, event, userId) {
@@ -479,6 +654,33 @@ async function recordSandboxPurchaseMarker(db, event, userId) {
       '—',
       err.message || err,
     );
+  }
+}
+
+async function recordTrialMarker(db, markerEvent, event, userId) {
+  if (typeof db.recordTrialMarker !== 'function') return;
+  try {
+    await db.recordTrialMarker(buildTrialMarkerRow(markerEvent, userId, event));
+  } catch (err) {
+    console.error(
+      `[revenuecat-webhook] ${event.type} ${event.id}: failed to record ${markerEvent} marker for`,
+      userId,
+      '—',
+      err.message || err,
+    );
+  }
+}
+
+// Markers are written only once the event has been fully handled (grant
+// written, or deliberately not applied) — never before a step that can
+// still fail and trigger a RevenueCat retry. Together with
+// insertFunnelMarkerOnce in the adapter, a retried event can't double-count.
+async function recordMarkers(db, event, userId, currentProgress, period) {
+  if (event.environment === 'SANDBOX' && event.type === 'INITIAL_PURCHASE') {
+    await recordSandboxPurchaseMarker(db, event, userId);
+  }
+  for (const markerEvent of trialMarkersFor(event, currentProgress, period)) {
+    await recordTrialMarker(db, markerEvent, event, userId);
   }
 }
 
@@ -509,8 +711,9 @@ async function applySingleUserUpdate(event, db) {
   }
 
   warnOnUnexpectedEnvironment(event);
-  if (event.environment === 'SANDBOX' && event.type === 'INITIAL_PURCHASE') {
-    await recordSandboxPurchaseMarker(db, event, userId);
+  const period = classifyPeriod(event);
+  if (period.warning) {
+    console.warn(`[revenuecat-webhook] ${period.warning} (user ${userId})`);
   }
 
   let currentProgress;
@@ -527,12 +730,14 @@ async function applySingleUserUpdate(event, db) {
     event.expiration_at_ms,
     currentProgress,
     event.environment,
+    period,
   );
   if (warning) {
     console.warn(`[revenuecat-webhook] ${warning} (event ${event.id}, user ${userId})`);
   }
   if (!patch) {
     console.log(`[revenuecat-webhook] ${event.type}: no update applied for user`, userId);
+    await recordMarkers(db, event, userId, currentProgress, period);
     return { ok: true };
   }
 
@@ -543,13 +748,27 @@ async function applySingleUserUpdate(event, db) {
     await safeDeleteWebhookEvent(db, event.id);
     return { ok: false, retry: true };
   }
-  console.log(`[revenuecat-webhook] ${event.type} applied for user`, userId, `(environment ${event.environment || 'unset'})`);
+  console.log(
+    `[revenuecat-webhook] ${event.type} applied for user`,
+    userId,
+    `(environment ${event.environment || 'unset'}, period ${period.periodType}${period.isTrialConversion ? ', trial conversion' : ''})`,
+  );
+  await recordMarkers(db, event, userId, currentProgress, period);
   return { ok: true };
 }
 
 module.exports = {
   SANDBOX_PURCHASE_MARKER_EVENT,
+  TRIAL_STARTED_MARKER_EVENT,
+  TRIAL_CONVERTED_MARKER_EVENT,
+  TRIAL_CANCELLED_MARKER_EVENT,
+  TRIAL_MARKER_EVENTS,
   buildSandboxPurchaseMarkerRow,
+  buildTrialMarkerRow,
+  trialMarkersFor,
+  insertFunnelMarkerOnce,
+  classifyPeriod,
+  transferGrantSource,
   expirationMsToIso,
   resolveRevenueCatUpdate,
   isSupabaseUserId,
