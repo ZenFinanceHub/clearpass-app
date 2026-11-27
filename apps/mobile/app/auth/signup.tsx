@@ -20,6 +20,7 @@ import { signInWithApple, signInWithGoogle } from '@/src/socialAuth';
 import { resolvePostAuthRoute } from '@/src/postAuthRouting';
 import { Colors } from '@/src/constants/theme';
 import PasswordInput from '@/src/components/PasswordInput';
+import { logFunnelEvent } from '@/src/funnel';
 // Plain CommonJS, shared with proxy.js and with
 // server/scripts/test-instructor-fixes.js — see that file's own header for
 // why this isn't inlined here anymore.
@@ -50,6 +51,8 @@ export default function SignUpScreen() {
   const [magicLinkSending,       setMagicLinkSending]       = useState(false);
   const [magicLinkSent,          setMagicLinkSent]          = useState(false);
   const [magicLinkError,         setMagicLinkError]         = useState('');
+
+  useEffect(() => { logFunnelEvent('signup_started'); }, []);
 
   useEffect(() => {
     // Don't persist params.ref to storage here — that would write on mere
@@ -94,6 +97,8 @@ export default function SignUpScreen() {
         }
         return;
       }
+      // Empty identities = Supabase's obfuscated reply for an already-registered address.
+      if (user && user.identities?.length !== 0) logFunnelEvent('signup_completed', { method: 'email', confirm_required: !session });
 
       // user.id is available even when email confirmation is required (session will be null)
       const userId = session?.user?.id ?? user?.id;

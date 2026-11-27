@@ -26,6 +26,7 @@ import { getAccessToken } from '@/src/getAccessToken';
 import { handleSessionExpired } from '@/src/handleSessionExpired';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
+import { useFeatureUsed } from '@/src/useFeatureUsed';
 
 const DAILY_MINUTES_OPTIONS = [10, 20, 30, 45];
 
@@ -152,6 +153,7 @@ function DayCard({ day, isToday, isPast }: { day: StudyDay; isToday: boolean; is
 // ─── StudyPlanScreen ──────────────────────────────────────────────────────────
 
 export default function StudyPlanScreen() {
+  useFeatureUsed('ai_study_plan');
   const theme = useTheme();
 
   const [plan,             setPlan]             = useState<StudyPlan | null>(null);

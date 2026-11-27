@@ -24,6 +24,7 @@ import { createFreshUserProgress, loadUserProgress, saveUserProgress } from '@/s
 import { Pip } from '@/src/components/Pip';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
+import { useFeatureUsed } from '@/src/useFeatureUsed';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -987,6 +988,7 @@ function LobbyView({
 // ─── ChallengeScreen ───────────────────────────────────────────────────────────
 
 export default function ChallengeScreen() {
+  useFeatureUsed('challenge');
   const [view,            setView]            = useState<AppView>('lobby');
   const [myUserId,        setMyUserId]        = useState('');
   const [myUsername,      setMyUsername]      = useState('');

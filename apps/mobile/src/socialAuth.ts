@@ -4,6 +4,7 @@ import { makeRedirectUri } from 'expo-auth-session';
 import type { Session } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
+import { logFunnelEvent } from './funnel';
 
 export type SocialAuthResult = {
   session: Session;
@@ -88,6 +89,7 @@ export async function signInWithApple(): Promise<SocialAuthResult> {
   const email = credential.email ?? session.user.email;
   const isNewUser = await checkIsNewUser(session.user.id);
   if (isNewUser) await stashPendingIdentity(displayName, email);
+  if (isNewUser) logFunnelEvent('signup_completed', { method: 'apple', confirm_required: false });
 
   return { session, isNewUser };
 }
@@ -128,6 +130,7 @@ export async function signInWithGoogle(): Promise<SocialAuthResult | null> {
   const displayName = (meta?.full_name ?? meta?.name) as string | undefined;
   const isNewUser = await checkIsNewUser(session.user.id);
   if (isNewUser) await stashPendingIdentity(displayName, session.user.email);
+  if (isNewUser) logFunnelEvent('signup_completed', { method: 'google', confirm_required: false });
 
   return { session, isNewUser };
 }

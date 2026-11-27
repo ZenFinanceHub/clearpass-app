@@ -14,6 +14,7 @@ import { loadUserProgress, syncProgressToCloud } from '@/src/storage';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
 import { Pip } from '@/src/components/Pip';
+import { useFeatureUsed } from '@/src/useFeatureUsed';
 
 type LeaderboardEntry = {
   username: string;
@@ -26,6 +27,7 @@ type LeaderboardEntry = {
 const RANK_COLORS = ['#F59E0B', '#9CA3AF', '#B45309'];
 
 export default function LeaderboardScreen() {
+  useFeatureUsed('leaderboard');
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);

@@ -23,6 +23,7 @@ import { resolvePostAuthRoute } from '@/src/postAuthRouting';
 import { CrossPlatformAlertHost } from '@/src/CrossPlatformAlert';
 import { Colors } from '@/src/constants/theme';
 import { registerAppSession } from '@/src/reviewPrompt';
+import { useAppOpenedLogging } from '@/src/funnel';
 import {
   getCacheStatus,
   cacheQuestions,
@@ -377,6 +378,7 @@ function RootLayout() {
   useEffect(() => {
     void registerAppSession();
   }, []);
+  useAppOpenedLogging();
 
   // Background: cache static content on first launch or after a week
   useEffect(() => {

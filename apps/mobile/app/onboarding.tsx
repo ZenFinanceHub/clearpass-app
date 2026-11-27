@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -11,9 +11,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { setOnboardingComplete, savePendingTestDate } from '@/src/storage';
 import { Colors } from '@/src/constants/theme';
 import { Pip, PipMood } from '@/src/components/Pip';
+import { logFunnelEvent, type OnboardingStep } from '@/src/funnel';
 
 type Slide = {
-  key: string;
+  key: OnboardingStep;
   mood: PipMood;
   title: string;
   subtitle: string;
@@ -72,6 +73,9 @@ export default function OnboardingScreen() {
   const isLast = activeIndex === SLIDES.length - 1;
   const slide  = SLIDES[activeIndex];
   const insets = useSafeAreaInsets();
+
+  useEffect(() => { logFunnelEvent('onboarding_started'); }, []);
+  useEffect(() => { logFunnelEvent('onboarding_step_viewed', { step: slide.key }); }, [slide.key]);
 
   function handleNext() {
     if (isLast) {

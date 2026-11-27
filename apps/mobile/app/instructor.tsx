@@ -16,6 +16,7 @@ import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { Alert } from '@/src/CrossPlatformAlert';
 import { supabase } from '@/src/supabase';
+import { logFunnelEvent } from '@/src/funnel';
 import { getAccessToken } from '@/src/getAccessToken';
 import { createFreshUserProgress, loadUserProgress } from '@/src/storage';
 import { getProxyUrl } from '@/src/proxyUrl';
@@ -652,12 +653,13 @@ function AddLearnerModal({
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      await supabase.from('instructor_relationships').insert({
+      const { error: inviteError } = await supabase.from('instructor_relationships').insert({
         instructor_id: user.id,
         learner_email: trimmed,
         status: 'pending',
         invite_code: instructorCode,
       });
+      if (!inviteError) logFunnelEvent('instructor_invite_sent', { method: 'email' });
       Alert.alert(
         'Invite created',
         `Ask ${trimmed} to open ClearPass, go to Settings → Linked Instructors, and enter your code: ${instructorCode ?? ''}`,
@@ -1220,6 +1222,7 @@ function InstructorCodeCard({ code }: { code: string }) {
 
   async function handleCopy() {
     await Clipboard.setStringAsync(code);
+    logFunnelEvent('instructor_invite_sent', { method: 'copy_code' });
     // Inline feedback rather than Alert.alert: this screen is part of the
     // static web export, and Alert is a no-op on react-native-web — the
     // same reasoning already applied to paywall.tsx's notice text.
@@ -1365,14 +1368,16 @@ function InstructorDashboard({
   async function handleCopyLink() {
     if (!referralCode) return;
     await Clipboard.setStringAsync(`https://getclearpass.co.uk/start?ref=${referralCode}`);
+    logFunnelEvent('referral_shared', { method: 'copy', surface: 'instructor' });
     Alert.alert('Copied!', 'Referral link copied to clipboard.');
   }
 
   async function handleShareLink() {
     if (!referralCode) return;
-    await Share.share({
+    const shared = await Share.share({
       message: `I recommend ClearPass for your theory test revision. Use my link for the UK's smartest theory test app: getclearpass.co.uk/start?ref=${referralCode}`,
     });
+    if (shared.action === Share.sharedAction) logFunnelEvent('referral_shared', { method: 'share', surface: 'instructor' });
   }
 
   if (loading) {

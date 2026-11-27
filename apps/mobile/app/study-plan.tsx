@@ -13,6 +13,7 @@ import { getStudyPlan, type StudyPace, type SimpleStudyPlan, type SimpleTask } f
 import { TopicCategory } from '@clearpass/core';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
+import { useFeatureUsed } from '@/src/useFeatureUsed';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -96,6 +97,7 @@ function DayCard({ plan, isToday }: { plan: SimpleStudyPlan['weekPlan'][0]; isTo
 // ─── StudyPlanScreen ──────────────────────────────────────────────────────────
 
 export default function StudyPlanScreen() {
+  useFeatureUsed('study_plan');
   const theme = useTheme();
   const [plan, setPlan] = useState<SimpleStudyPlan | null>(null);
   const [testDate, setTestDate] = useState<string | null>(null);

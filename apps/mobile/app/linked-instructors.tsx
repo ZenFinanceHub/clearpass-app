@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/src/supabase';
+import { logFunnelEvent } from '@/src/funnel';
 import { Alert } from '@/src/CrossPlatformAlert';
 import { useTheme } from '@/src/theme';
 import { Colors } from '@/src/constants/theme';
@@ -154,7 +155,8 @@ function LearnerModeView({
   async function handleAcceptInvite(relId: string) {
     setResponding(relId);
     try {
-      await supabase.from('instructor_relationships').update({ status: 'accepted' }).eq('id', relId);
+      const { error: acceptError } = await supabase.from('instructor_relationships').update({ status: 'accepted' }).eq('id', relId);
+      if (!acceptError) logFunnelEvent('instructor_link_accepted', { method: 'invite' });
       onRefresh();
     } catch {
       Alert.alert('Error', 'Could not accept invite. Please try again.');
@@ -222,13 +224,14 @@ function LearnerModeView({
         .eq('id', user.id)
         .maybeSingle();
 
-      await supabase.from('instructor_relationships').insert({
+      const { error: linkError } = await supabase.from('instructor_relationships').insert({
         instructor_id: instructorProfile.id,
         learner_id: user.id,
         learner_name: (myProfile as { username?: string } | null)?.username ?? null,
         status: 'accepted',
         invite_code: code,
       });
+      if (!linkError) logFunnelEvent('instructor_link_accepted', { method: 'code' });
 
       const { display_name, username } = instructorProfile as { display_name?: string | null; username?: string | null };
       const iname = resolveInstructorDisplayName(display_name, username) ?? 'your instructor';

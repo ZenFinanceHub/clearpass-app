@@ -93,6 +93,7 @@ export default function TestDateScreen() {
   const [showPendingModal, setShowPendingModal] = useState(false);
 
   useEffect(() => {
+    logFunnelEvent('onboarding_step_viewed', { step: 'test_date' });
     if (params.pendingInstructor === '1') setShowPendingModal(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

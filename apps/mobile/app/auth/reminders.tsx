@@ -17,6 +17,7 @@ export default function RemindersScreen() {
 
   useEffect(() => {
     if (Platform.OS === 'web') { router.replace('/(tabs)/home'); return; }
+    logFunnelEvent('onboarding_step_viewed', { step: 'reminders' });
     logFunnelEvent('reminder_offer_viewed', { context: 'onboarding' });
     void recordReminderAsk();
   }, []);
