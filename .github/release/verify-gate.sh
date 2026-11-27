@@ -181,7 +181,7 @@ fi
 if [ "$st" = waiting ]; then
   pd=$(gh api "repos/$REPO/actions/runs/$run/pending_deployments" 2>/dev/null || echo "")
   env_id=$(jq -r '.[0].environment.id // empty' <<< "$pd" 2>/dev/null)
-  can=$(jq -r '.[0].current_user_can_approve // empty' <<< "$pd" 2>/dev/null)
+  can=$(jq -r '.[0].current_user_can_approve | if . == null then "" else tostring end' <<< "$pd" 2>/dev/null)
   if [ "$can" = false ]; then ok "G8a GitHub reports the App cannot approve (current_user_can_approve=false)"
   elif [ -z "$can" ]; then ok "G8a pending deployment details are not readable by the App (cannot approve)"
   else stop "G8a current_user_can_approve=$can"; fi
