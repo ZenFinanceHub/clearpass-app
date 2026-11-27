@@ -11,3 +11,4 @@
 #                decides what "green" means), the release-gate scripts, and
 #                this CODEOWNERS file itself.
 /.github/ @ZenFinanceHub
+# G10 probe (temporary, never to be merged)
