@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pip } from '@/src/components/Pip';
 import { supabase } from '@/src/supabase';
-
-const ONBOARDING_KEY = '@clearpass/onboarding_complete';
+import { hasCompletedOnboarding, setOnboardingComplete } from '@/src/storage';
+import { resolveWelcomeAction } from '@/src/onboardingState';
 
 const FEATURES = [
   { emoji: '🧠', label: 'Smart Practice' },
@@ -24,16 +23,15 @@ export default function OnboardingScreen() {
     async function resolveNoSession() {
       if (resolved) return;
       resolved = true;
-      if (Platform.OS === 'web') {
-        router.replace('/landing');
-        return;
-      }
-      const val = await AsyncStorage.getItem(ONBOARDING_KEY);
-      if (val) {
-        router.replace('/auth/signin');
-      } else {
-        setChecking(false);
-      }
+      const isWeb = Platform.OS === 'web';
+      const action = resolveWelcomeAction({
+        isWeb,
+        hasSession: false,
+        hasSeenOnboarding: isWeb ? false : await hasCompletedOnboarding(),
+      });
+      if (action === 'landing') router.replace('/landing');
+      else if (action === 'signin') router.replace('/auth/signin');
+      else setChecking(false);
     }
 
     const {
@@ -43,6 +41,7 @@ export default function OnboardingScreen() {
       if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
         if (session) {
           resolved = true;
+          // resolveWelcomeAction: a session always means 'home'.
           router.replace('/(tabs)/home');
         } else if (event === 'INITIAL_SESSION') {
           void resolveNoSession();
@@ -60,12 +59,12 @@ export default function OnboardingScreen() {
   }, []);
 
   async function handleGetStarted() {
-    await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
+    await setOnboardingComplete();
     router.replace('/auth/signup');
   }
 
   async function handleSignIn() {
-    await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
+    await setOnboardingComplete();
     router.replace('/auth/signin');
   }
 

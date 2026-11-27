@@ -11,8 +11,8 @@ import { Pip } from '@/src/components/Pip';
 import { Question, TopicCategory } from '@clearpass/core';
 import { allQuestions, questionsByTopic } from '@clearpass/content';
 import * as Haptics from 'expo-haptics';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logFunnelEvent } from '@/src/funnel';
+import { setOnboardingComplete } from '@/src/storage';
 
 const TASTER_COUNT = 5;
 const LABELS = ['A', 'B', 'C', 'D'];
@@ -110,7 +110,7 @@ export default function TasterScreen() {
           <Text style={styles.upsellItem}>{'✓  Pass probability score updated daily'}</Text>
         </View>
 
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => { void AsyncStorage.setItem('@clearpass/onboarding_complete', 'true'); router.replace('/auth/signup'); }} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => { void setOnboardingComplete(); router.replace('/auth/signup'); }} activeOpacity={0.85}>
           <Text style={styles.primaryBtnText}>{'Create Free Account'}</Text>
         </TouchableOpacity>
 

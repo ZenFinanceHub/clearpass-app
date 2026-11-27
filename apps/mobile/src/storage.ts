@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { QuestionState, TopicCategory, UserProgress } from '@clearpass/core';
 import { supabase } from './supabase';
+import { ONBOARDING_KEY, ONBOARDING_READ_KEYS, hasSeenOnboardingFrom } from './onboardingState';
 
 const KEYS = {
   USER_PROGRESS:    '@clearpass/user_progress',
@@ -227,12 +228,12 @@ export async function getSessionHistory(): Promise<SessionHistoryEntry[]> {
 
 // ─── Onboarding ───────────────────────────────────────────────────────────────
 
-const ONBOARDING_KEY = '@clearpass/hasSeenOnboarding';
 const PENDING_TEST_DATE_KEY = '@clearpass/pending_test_date';
 
+/** Reads the current key and the legacy one (see src/onboardingState.ts). */
 export async function hasCompletedOnboarding(): Promise<boolean> {
   try {
-    return (await AsyncStorage.getItem(ONBOARDING_KEY)) === 'true';
+    return hasSeenOnboardingFrom(await AsyncStorage.multiGet([...ONBOARDING_READ_KEYS]));
   } catch { return false; }
 }
 

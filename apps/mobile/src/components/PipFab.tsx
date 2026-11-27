@@ -1,13 +1,16 @@
 import React from 'react';
-import { Animated, Image, PanResponder, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native';
+import { Animated, Image, PanResponder, Platform, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePipVisibility } from '@/src/PipVisibilityContext';
 import {
+  DEFAULT_FAB_POS,
   FAB_SIZE,
+  fabBounds,
   fromStored,
   parseStoredFabPos,
+  shouldHideFab,
   snapFab,
   toStored,
   type FabBounds,
@@ -19,8 +22,6 @@ import {
 const PIP_FAB_IMAGE = require('../../assets/pip/pip-fab.png');
 
 const STORAGE_KEY = '@clearpass/pip_fab_position';
-// Room kept clear at the bottom for the tab bar.
-const BOTTOM_RESERVED = 90;
 // Movement (px) before a touch counts as a drag rather than a tap.
 const DRAG_THRESHOLD = 6;
 
@@ -28,26 +29,25 @@ const DRAG_THRESHOLD = 6;
  * Floating "Ask Pip" button. Tap to open Pip; drag to move it out of the way.
  * It snaps to the nearer side of the screen and remembers where it was left.
  */
-export function PipFab({ defaultTop }: { defaultTop: number }) {
+export function PipFab() {
   const segments = useSegments();
   const { hidden } = usePipVisibility();
   const { width, height } = useWindowDimensions();
+  // Web export: the server render has no window (0x0), which put the button
+  // top-left over the page title, and hydration keeps the server's inline
+  // transform. Render only once mounted in the browser.
+  const [mounted, setMounted] = React.useState(Platform.OS !== 'web');
+  React.useEffect(() => { setMounted(true); }, []);
   const insets = useSafeAreaInsets();
 
-  const bounds: FabBounds = React.useMemo(() => {
-    const minY = insets.top + 8;
-    return { width, minY, maxY: Math.max(minY, height - insets.bottom - FAB_SIZE - BOTTOM_RESERVED) };
-  }, [width, height, insets.top, insets.bottom]);
-
-  const defaultStored = React.useMemo<StoredFabPos>(
-    () => toStored({ side: 'right', y: defaultTop }, bounds),
-    // The default is only a starting point; it doesn't follow later layout changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+  // Below the header/title and safe area, above the tab bar (see fabBounds).
+  const bounds: FabBounds = React.useMemo(
+    () => fabBounds({ width, height, insetTop: insets.top, insetBottom: insets.bottom }),
+    [width, height, insets.top, insets.bottom],
   );
 
-  const stored = React.useRef<StoredFabPos>(defaultStored);
-  const current = React.useRef(fromStored(defaultStored, bounds));
+  const stored = React.useRef<StoredFabPos>(DEFAULT_FAB_POS);
+  const current = React.useRef(fromStored(DEFAULT_FAB_POS, bounds));
   const pos = React.useRef(new Animated.ValueXY(current.current)).current;
   const dragStart = React.useRef({ x: 0, y: 0 });
   // Set when a touch turned into a drag, so the press that web fires on release
@@ -102,7 +102,7 @@ export function PipFab({ defaultTop }: { defaultTop: number }) {
     });
   }, [bounds, pos]);
 
-  if (hidden || (segments as string[]).includes('tutor')) return null;
+  if (!mounted || shouldHideFab(segments as string[], hidden)) return null;
 
   // Derived from the current route rather than hardcoded: this button is
   // reachable from nearly every screen in the app.

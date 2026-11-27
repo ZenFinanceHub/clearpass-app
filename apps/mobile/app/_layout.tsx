@@ -20,6 +20,7 @@ import { supabase } from '@/src/supabase';
 import { configureNotificationHandler } from '@/src/notifications';
 import { configurePurchases } from '@/src/purchases';
 import { resolvePostAuthRoute } from '@/src/postAuthRouting';
+import { hasCompletedOnboarding } from '@/src/storage';
 import { CrossPlatformAlertHost } from '@/src/CrossPlatformAlert';
 import { Colors } from '@/src/constants/theme';
 import { registerAppSession } from '@/src/reviewPrompt';
@@ -44,8 +45,6 @@ Sentry.init({
 });
 
 configureNotificationHandler();
-
-const ONBOARDING_KEY = '@clearpass/hasSeenOnboarding';
 
 // PUBLIC_ROUTES and the entry-points set bootstrap() checks below now live
 // in server/lib/bootstrapRouting.js, alongside the pure decision function
@@ -257,7 +256,7 @@ function RootLayout() {
       const [{ data: { session } }, initialUrl, seenOnboarding] = await Promise.all([
         supabase.auth.getSession(),
         Linking.getInitialURL(),
-        AsyncStorage.getItem(ONBOARDING_KEY),
+        hasCompletedOnboarding(),
       ]);
       const launchedPath = initialUrl ? getDeepLinkPath(initialUrl) : null;
       const launchedSegment = launchedPath ? launchedPath.split('/')[0] : null;
@@ -265,7 +264,7 @@ function RootLayout() {
       const decision = resolveBootstrapDestination({
         hasSession: !!session,
         launchedSegment,
-        hasSeenOnboarding: !!seenOnboarding,
+        hasSeenOnboarding: seenOnboarding,
       });
 
       if (session && Platform.OS !== 'web') {
@@ -446,11 +445,12 @@ function RootLayout() {
               PipVisibilityContext reports the current screen wants it hidden
               (e.g. the hazard perception player, so it doesn't sit over the
               video or steal taps meant for hazard scoring).
-              Anchored below the header (not bottom-right) so it never overlaps
+              Anchored just below the header (not bottom-right; see
+              src/pipFabPosition.ts fabBounds) so it never overlaps
               in-content bottom controls — e.g. Mock Test's Prev/Next row, or any
               other screen's bottom CTA — which a fixed bottom-right FAB would
               otherwise sit on top of and intercept taps for. */}
-          <PipFab defaultTop={insets.top + 56} />
+          <PipFab />
           <InstructorRouteGuardOverlay />
           <CrossPlatformAlertHost />
           {showCachingToast && (
