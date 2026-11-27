@@ -1,6 +1,9 @@
 import { useAccessibility } from './AccessibilityContext';
 import { Colors } from './constants/theme';
 export { Colors, Typography, Radii } from './constants/theme';
+// ClearPass 2.0 (ui_v2) theme. The legacy `useTheme` below keeps driving every
+// existing screen unchanged; new and migrated screens use `useDesignTheme`.
+export { useDesignTheme, DesignThemeProvider } from './design';
 
 export function useTheme() {
   const { settings } = useAccessibility();

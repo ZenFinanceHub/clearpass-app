@@ -19,8 +19,12 @@ function quoteArg(value) {
   return `"${s}"`;
 }
 
+// --clear: Metro's transform cache does not key on EXPO_PUBLIC_* values, so
+// a bundle built earlier on this machine with e.g. EXPO_PUBLIC_UI_V2=1 /
+// EXPO_PUBLIC_APP_ENV=local could otherwise leak those inlined values into a
+// production update (verified with the ui_v2 flag, Nov 2026).
 function exportCommand(outputDir) {
-  const inner = `npx expo export --platform ios --platform android --output-dir ${outputDir}`;
+  const inner = `npx expo export --clear --platform ios --platform android --output-dir ${outputDir}`;
   return `npx eas-cli env:exec production ${quoteArg(inner)}`;
 }
 

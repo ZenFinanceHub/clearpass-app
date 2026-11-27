@@ -21,6 +21,7 @@
     "@clearpass/ai": "file:../../packages/ai",
     "@clearpass/content": "file:../../packages/content",
     "@clearpass/core": "file:../../packages/core",
+    "@expo-google-fonts/inter": "^0.4.2",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "11.4.1",
