@@ -50,6 +50,7 @@ import { cancelStreakProtectionNotification, rescheduleStudyNudges } from '@/src
 import { ReminderOffer, useReminderOffer } from '@/src/components/ReminderOffer';
 import { FREE_QUESTION_LIMIT, isPremium } from '@/src/subscription';
 import { explainAnswer } from '@clearpass/ai';
+import { getProxyUrl } from '@/src/proxyUrl';
 import { getAccessToken } from '@/src/getAccessToken';
 import { handleSessionExpired } from '@/src/handleSessionExpired';
 import { TOPIC_LABELS } from '@/src/tutorNudges';
@@ -806,6 +807,7 @@ export default function PracticeScreen() {
       selectedIndex,
       ANTHROPIC_API_KEY,
       accessToken,
+      getProxyUrl(),
     );
     if (result.status === 'unauthorized') {
       setAiSessionExpired(true);

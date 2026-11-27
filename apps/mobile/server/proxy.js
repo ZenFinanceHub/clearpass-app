@@ -1,4 +1,10 @@
-require('dotenv').config({ path: __dirname + '/.env' });
+// CLEARPASS_SERVER_ENV=local is set only by scripts/local-stack.js, which
+// passes every value explicitly: skip server/.env (production values) and
+// refuse a non-local SUPABASE_URL. Unset (Railway, `npm run proxy`): exactly
+// as before. See lib/envGuard.js and docs/environments.md.
+const { shouldLoadDotenv, assertLocalServerEnv } = require('./lib/envGuard');
+if (shouldLoadDotenv(process.env)) require('dotenv').config({ path: __dirname + '/.env' });
+assertLocalServerEnv(process.env);
 
 const express = require('express');
 const cors = require('cors');

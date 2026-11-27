@@ -1,9 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 import { AppState, Platform } from 'react-native';
 
-const SUPABASE_URL = 'https://secavejbaapapvvqbwed.supabase.co';
-const SUPABASE_ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlY2F2ZWpiYWFwYXB2dnFid2VkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3NjY2NTcsImV4cCI6MjA5MzM0MjY1N30.pu0LhnRdup6ZpQWBgcBYP1Z8tQu-BzPl2JmY50e5zfU';
+import { appConfig } from './appConfig';
+
+// Production values are pinned in src/appEnv.ts; local/staging come from
+// EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY.
+const SUPABASE_URL = appConfig.supabaseUrl;
+const SUPABASE_ANON_KEY = appConfig.supabaseAnonKey;
 
 // On web, omit the storage option so Supabase uses its built-in localStorage handling.
 // On native, pass AsyncStorage explicitly since there is no window.localStorage.

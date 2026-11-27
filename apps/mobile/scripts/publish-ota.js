@@ -16,7 +16,7 @@ const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { checkOtaBundles } = require('./lib/otaKeyCheck');
-const { exportCommand, updateCommand, quoteArg } = require('./lib/otaCommands');
+const { checkCommand, exportCommand, updateCommand, quoteArg } = require('./lib/otaCommands');
 
 const appDir = path.resolve(__dirname, '..');
 const distDir = path.join(appDir, 'dist-ota');
@@ -47,8 +47,19 @@ try {
   process.exit(1);
 }
 
+// Declare the environment explicitly; never rely on the unset default.
+// Child processes (env:exec, expo export) inherit it. A shell that already
+// set a different value is refused rather than overridden.
+const preset = (process.env.EXPO_PUBLIC_APP_ENV || '').trim();
+if (preset && preset !== 'production') {
+  console.error(`EXPO_PUBLIC_APP_ENV is "${preset}" in this shell. Unset it before publishing a production OTA.`);
+  process.exit(1);
+}
+process.env.EXPO_PUBLIC_APP_ENV = 'production';
+
 fs.rmSync(distDir, { recursive: true, force: true });
 
+run(checkCommand());
 run(exportCommand(path.basename(distDir)));
 
 const check = checkOtaBundles(distDir);

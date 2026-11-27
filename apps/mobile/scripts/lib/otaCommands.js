@@ -19,6 +19,12 @@ function quoteArg(value) {
   return `"${s}"`;
 }
 
+// Runs the build-env guard inside the EAS production environment, so a
+// conflicting EXPO_PUBLIC_APP_ENV defined there is caught before bundling.
+function checkCommand() {
+  return `npx eas-cli env:exec production ${quoteArg('node scripts/check-build-env.js')}`;
+}
+
 function exportCommand(outputDir) {
   const inner = `npx expo export --platform ios --platform android --output-dir ${outputDir}`;
   return `npx eas-cli env:exec production ${quoteArg(inner)}`;
@@ -36,4 +42,4 @@ function updateCommand(inputDir, message) {
   ].join(' ');
 }
 
-module.exports = { quoteArg, exportCommand, updateCommand };
+module.exports = { quoteArg, checkCommand, exportCommand, updateCommand };
