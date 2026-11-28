@@ -141,6 +141,21 @@ else
   bad "G4 'update' rule NOT visible on production"
 fi
 
+# ---------------------------------------------------------------- G4b-d the environment (read-only)
+# Owner-only reviewer, self-review prevented, no admin bypass. (Reading the
+# environment is allowed for the App; changing it is refused in G7.)
+envj=$(gh api "repos/$REPO/environments/$ENV_NAME" 2>/dev/null || echo "")
+if [ -z "$envj" ]; then
+  bad "G4b-d could not read the $ENV_NAME environment"
+else
+  rv=$(jq -r '[.protection_rules[]? | select(.type=="required_reviewers") | .reviewers[] | "\(.type):\(.reviewer.login)"] | join(",")' <<< "$envj")
+  psr=$(jq -r '[.protection_rules[]? | select(.type=="required_reviewers") | .prevent_self_review][0] | tostring' <<< "$envj")
+  cab=$(jq -r '.can_admins_bypass | tostring' <<< "$envj")
+  if [ "$rv" = "User:$OWNER" ]; then ok "G4b sole required reviewer is the owner account"; else bad "G4b required reviewers are '$rv'"; fi
+  if [ "$psr" = true ]; then ok "G4c prevent self-review is ON"; else bad "G4c prevent self-review is $psr"; fi
+  if [ "$cab" = false ]; then ok "G4d admins cannot bypass the environment"; else bad "G4d can_admins_bypass=$cab"; fi
+fi
+
 # ---------------------------------------------------------------- G5 push / force-push / delete on release-gate-test
 git fetch -q origin release-gate-test || { bad "G5 release-gate-test does not exist"; exit 1; }
 git checkout -q -B probe origin/release-gate-test

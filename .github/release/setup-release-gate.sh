@@ -8,6 +8,10 @@
 # It:
 #   1. Creates the `production-release` GitHub Environment:
 #      - required reviewer: the repository owner;
+#      - prevent self-review: the identity that starts a release (the
+#        clearpass-dev App) can never approve it. The owner approves releases
+#        the App starts; the owner should not start releases themselves
+#        (they could not approve their own);
 #      - admins cannot bypass;
 #      - deployments only from `main`.
 #   2. Stores the App's client ID as environment variable RELEASE_APP_CLIENT_ID.
@@ -42,11 +46,11 @@ if [ "$me" != "$owner" ] || [ "$is_admin" != "true" ]; then
 fi
 owner_id=$(gh api "users/$owner" --jq .id)
 
-echo "1/5 Environment '$ENV_NAME' (reviewer: $owner; admins cannot bypass; main only)..."
+echo "1/5 Environment '$ENV_NAME' (reviewer: $owner; prevent self-review; admins cannot bypass; main only)..."
 gh api -X PUT "repos/$REPO/environments/$ENV_NAME" --input - >/dev/null <<JSON
 {
   "wait_timer": 0,
-  "prevent_self_review": false,
+  "prevent_self_review": true,
   "can_admins_bypass": false,
   "reviewers": [{ "type": "User", "id": $owner_id }],
   "deployment_branch_policy": { "protected_branches": false, "custom_branch_policies": true }
@@ -79,7 +83,7 @@ if command -v shred >/dev/null; then shred -u "$pem"; else rm -f "$pem"; fi
 echo
 echo "Done. Check:"
 gh api "repos/$REPO/environments/$ENV_NAME" \
-  --jq '"  environment: \(.name); reviewers: \([.protection_rules[]? | select(.type=="required_reviewers") | .reviewers[].reviewer.login] | join(",")); admins can bypass: \(.can_admins_bypass)"'
+  --jq '"  environment: \(.name); reviewers: \([.protection_rules[]? | select(.type=="required_reviewers") | .reviewers[].reviewer.login] | join(",")); prevent self-review: \([.protection_rules[]? | select(.type=="required_reviewers") | .prevent_self_review][0]); admins can bypass: \(.can_admins_bypass)"'
 gh api "repos/$REPO/environments/$ENV_NAME/deployment-branch-policies" --jq '"  branches allowed: \([.branch_policies[].name] | join(","))"'
 gh variable list --repo "$REPO" --env "$ENV_NAME" | sed 's/^/  variable: /'
 gh secret list --repo "$REPO" --env "$ENV_NAME" | sed 's/^/  secret: /'
