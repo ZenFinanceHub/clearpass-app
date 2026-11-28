@@ -43,6 +43,8 @@ const { deleteInstructorDocuments } = require('./lib/instructorDocuments');
 const { isE2EUser } = require('./lib/e2e');
 const lifecycleEmails = require('./lib/lifecycleEmails');
 const { selectInChunks } = require('./lib/selectInChunks');
+const { requireCronAuth } = require('./lib/cronAuth');
+const { createWeeklyParentEmailsHandler } = require('./lib/weeklyParentEmails');
 const {
   ALLOWED_DIRECT_MIME_TYPES,
   MAX_FILE_SIZE_BYTES,
@@ -204,14 +206,7 @@ async function postToSlackUnlessE2E(text, isE2E) {
   return postToSlack(text);
 }
 
-function requireCronAuth(req, res) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || req.headers['x-cron-secret'] !== secret) {
-    res.status(401).json({ error: 'Unauthorized' });
-    return false;
-  }
-  return true;
-}
+// requireCronAuth (fail-closed CRON_SECRET check) lives in lib/cronAuth.js.
 
 // Stripe error types where the API response itself confirms no transfer was
 // created, so it's safe to release the claimed earnings for a retry.
@@ -2349,72 +2344,13 @@ app.get('/api/confirm-parent', async (req, res) => {
 
 // ─── POST /api/send-weekly-parent-emails ─────────────────────────────────────
 
-app.post('/api/send-weekly-parent-emails', async (req, res) => {
-  if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  const supabaseAdmin = getSupabaseAdmin();
-  let sent = 0;
-  let failed = 0;
-
-  try {
-    const { data: subs } = await supabaseAdmin
-      .from('parent_email_subscriptions')
-      .select('parent_email, learner_id')
-      .eq('confirmed', true);
-
-    if (!subs || subs.length === 0) {
-      return res.json({ sent: 0, failed: 0 });
-    }
-
-    for (const sub of subs) {
-      try {
-        const [{ data: progressRow }, { data: profile }] = await Promise.all([
-          supabaseAdmin.from('user_progress').select('progress').eq('id', sub.learner_id).single(),
-          supabaseAdmin.from('profiles').select('username').eq('id', sub.learner_id).single(),
-        ]);
-
-        const p = progressRow?.progress || {};
-        const name = profile?.username || 'your learner';
-        const readiness = p.readinessScore || 0;
-        const totalQ = p.totalQuestionsAnswered || 0;
-        const streak = p.studyStreakDays || 0;
-        const mocks = (p.mockTestHistory || []).length;
-        const bestMock = mocks > 0 ? Math.max(...(p.mockTestHistory || []).map(m => m.score || 0)) : null;
-
-        await sendEmail({
-          to: sub.parent_email,
-          subject: `ClearPass weekly update for ${name}`,
-          html: `
-            <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
-              <h2 style="color:#0D9488">Weekly Progress Update</h2>
-              <p style="color:#374151">Here is <strong>${name}</strong>'s ClearPass progress this week:</p>
-              <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:15px">
-                <tr style="background:#F0FDFA"><td style="padding:12px;font-weight:600;color:#374151">Pass Probability</td><td style="padding:12px;font-weight:700;color:#0D9488">${readiness}%</td></tr>
-                <tr><td style="padding:12px;font-weight:600;color:#374151">Questions Answered</td><td style="padding:12px;color:#374151">${totalQ}</td></tr>
-                <tr style="background:#F9FAFB"><td style="padding:12px;font-weight:600;color:#374151">Study Streak</td><td style="padding:12px;color:#374151">${streak} days</td></tr>
-                <tr><td style="padding:12px;font-weight:600;color:#374151">Mock Tests Taken</td><td style="padding:12px;color:#374151">${mocks}</td></tr>
-                ${bestMock !== null ? `<tr style="background:#F9FAFB"><td style="padding:12px;font-weight:600;color:#374151">Best Mock Score</td><td style="padding:12px;color:#374151">${bestMock} / 50</td></tr>` : ''}
-              </table>
-              <p style="color:#9CA3AF;font-size:13px">To unsubscribe, ask ${name} to remove your email in their ClearPass settings.</p>
-              <p style="color:#9CA3AF;font-size:12px">ClearPass &bull; UK Theory Test Preparation</p>
-            </div>
-          `,
-        });
-        sent++;
-      } catch (e) {
-        console.error(`[weekly-email] failed for ${sub.parent_email}:`, e.message);
-        failed++;
-      }
-    }
-
-    res.json({ sent, failed });
-  } catch (err) {
-    console.error('[send-weekly-parent-emails]', err);
-    res.status(500).json({ error: err.message });
-  }
-});
+// Fail-closed cron auth (lib/cronAuth.js): an unset CRON_SECRET refuses
+// every request, same as the /api/cron/* routes. Called weekly by
+// cron-job.org with the x-cron-secret header.
+app.post(
+  '/api/send-weekly-parent-emails',
+  createWeeklyParentEmailsHandler({ getSupabaseAdmin, sendEmail: (opts) => sendEmail(opts) }),
+);
 
 // ─── POST /api/delete-account ────────────────────────────────────────────────
 
