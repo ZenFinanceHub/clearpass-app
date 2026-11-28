@@ -27,6 +27,12 @@ const LILAC_PALE = '#C7D2FE';
 const GOLD       = '#FBBF24';
 const GOLD_DEEP  = '#B45309';
 
+// UK traffic-sign colours, sampled from the sign artwork in DfT "Know Your
+// Traffic Signs" (2023 edition, GOV.UK).
+const SIGN_BLUE      = '#1476C6';   // mandatory (blue circle) signs
+const SIGN_BLUE_DEEP = '#0B3F6B';   // drop shadow behind the blue disc
+const SIGN_RED       = '#E51636';   // warning-triangle border
+
 // ─── Milestone progress from UserProgress ────────────────────────────────────
 // 0 = nothing reached yet, 1 = Road signs, 2 = Rules, 3 = Hazards, 4 = Test ready.
 
@@ -150,22 +156,24 @@ function Landmark({ kind, bx, by, u, dim, uid }: { kind: LandmarkKind; bx: numbe
     <G opacity={dim ? 0.72 : 1}>
       <Ellipse cx={bx} cy={by} rx={u * 0.17} ry={u * 0.035} fill={INK_DEEP} opacity={0.55} />
 
-      {kind === 'sign' && (
-        <G>
-          {pole(0.6)}
-          <Circle cx={bx + u * 0.02} cy={by - u * 0.76} r={u * 0.235} fill="#7F1D1D" />
-          <Circle cx={bx} cy={by - u * 0.78} r={u * 0.235} fill={Colors.red} />
-          <Circle cx={bx} cy={by - u * 0.78} r={u * 0.16} fill="#FFFFFF" />
-          <Path
-            d={`M ${bx} ${by - u * 0.7} V ${by - u * 0.86} M ${bx - u * 0.06} ${by - u * 0.8} L ${bx} ${by - u * 0.87} L ${bx + u * 0.06} ${by - u * 0.8}`}
-            stroke={Colors.textPrimary}
-            strokeWidth={Math.max(1.5, u * 0.035)}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-          />
-        </G>
-      )}
+      {/* "Ahead only": blue disc, thin white rim, white upward arrow (Highway Code, signs giving orders). */}
+      {kind === 'sign' && (() => {
+        const cy = by - u * 0.78;
+        const r  = u * 0.215;   // blue field inside the white rim
+        const arrow = [
+          [0, -0.74], [0.44, -0.24], [0.14, -0.24], [0.14, 0.74],
+          [-0.14, 0.74], [-0.14, -0.24], [-0.44, -0.24],
+        ].map(([x, y]) => `${bx + x * r},${cy + y * r}`).join(' ');
+        return (
+          <G>
+            {pole(0.6)}
+            <Circle cx={bx + u * 0.02} cy={by - u * 0.76} r={u * 0.235} fill={SIGN_BLUE_DEEP} />
+            <Circle cx={bx} cy={cy} r={u * 0.235} fill="#FFFFFF" />
+            <Circle cx={bx} cy={cy} r={r} fill={SIGN_BLUE} />
+            <Polygon points={arrow} fill="#FFFFFF" />
+          </G>
+        );
+      })()}
 
       {kind === 'lights' && (
         <G>
@@ -175,12 +183,15 @@ function Landmark({ kind, bx, by, u, dim, uid }: { kind: LandmarkKind; bx: numbe
             x={bx - u * 0.125} y={by - u} width={u * 0.25} height={u * 0.5} rx={u * 0.06}
             fill={INK} stroke="#4B4F7A" strokeWidth={Math.max(1, u * 0.015)}
           />
+          {/* A real signal never shows all three: show GREEN alone ("you may go on if the
+              way is clear"), with red and amber present but unlit. */}
           {[Colors.red, Colors.amber, Colors.emerald].map((c, i) => {
-            const cy = by - u * (0.91 - i * 0.16);
+            const cy  = by - u * (0.91 - i * 0.16);
+            const lit = i === 2;
             return (
               <G key={c}>
-                <Circle cx={bx} cy={cy} r={u * 0.062} fill={c} />
-                <Circle cx={bx - u * 0.02} cy={cy - u * 0.02} r={u * 0.018} fill="#FFFFFF" opacity={0.6} />
+                <Circle cx={bx} cy={cy} r={u * 0.062} fill={lit ? c : mix(c, INK, 0.72)} />
+                {lit && <Circle cx={bx - u * 0.02} cy={cy - u * 0.02} r={u * 0.018} fill="#FFFFFF" opacity={0.6} />}
               </G>
             );
           })}
@@ -197,7 +208,7 @@ function Landmark({ kind, bx, by, u, dim, uid }: { kind: LandmarkKind; bx: numbe
           <Polygon
             points={`${bx},${by - u} ${bx - u * 0.25},${by - u * 0.56} ${bx + u * 0.25},${by - u * 0.56}`}
             fill="#FFFFFF"
-            stroke={Colors.red}
+            stroke={SIGN_RED}
             strokeWidth={Math.max(2, u * 0.05)}
             strokeLinejoin="round"
           />
