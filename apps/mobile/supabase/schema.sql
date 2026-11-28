@@ -44,40 +44,64 @@ CREATE POLICY "Users can insert own profile" ON profiles
   FOR INSERT WITH CHECK (true);
 
 -- Hazard perception clips catalogue
+--
+-- Reconciled against production 2026-11-26 (F3 schema reconcile): the live
+-- table has a UUID id (gen_random_uuid()), not TEXT; every column except
+-- the first four is nullable; scoring_method defaults to 'frame' and has no
+-- CHECK constraint; and the column order is as below. This definition now
+-- describes that shape so a fresh replay matches production.
 CREATE TABLE IF NOT EXISTS hazard_clips (
-  id             TEXT PRIMARY KEY,
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title          TEXT NOT NULL,
   duration_seconds INTEGER NOT NULL,
   storage_path   TEXT NOT NULL,
   thumbnail_path TEXT,
-  difficulty     TEXT NOT NULL DEFAULT 'medium' CHECK (difficulty IN ('easy','medium','hard')),
-  sort_order     INTEGER NOT NULL DEFAULT 0,
-  is_active      BOOLEAN NOT NULL DEFAULT true,
+  difficulty     TEXT DEFAULT 'medium' CHECK (difficulty IN ('easy','medium','hard')),
+  is_active      BOOLEAN DEFAULT true,
+  sort_order     INTEGER DEFAULT 0,
+  created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   -- 'time' for CGI clips 1-10 (SS.centiseconds), 'frame' for all others (25fps)
-  scoring_method TEXT NOT NULL DEFAULT 'time' CHECK (scoring_method IN ('time','frame')),
+  scoring_method TEXT DEFAULT 'frame',
   -- Clips 1-10 include a solution clip in the second minute
-  has_solution_clip BOOLEAN NOT NULL DEFAULT false,
+  has_solution_clip BOOLEAN DEFAULT false,
   solution_start_s  FLOAT,
   -- JSONB array of hazard windows:
   -- [{ "hazard_number": 1, "bands": [{ "points": 5, "start_s": 18.19, "end_s": 19.18 }, ...] }]
-  scoring_windows JSONB NOT NULL DEFAULT '[]',
-  created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  scoring_windows JSONB DEFAULT '[]'
 );
 
 ALTER TABLE hazard_clips ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Anyone can read active clips" ON hazard_clips FOR SELECT USING (is_active = true);
+-- The only live read policy is "Authenticated users can read active clips"
+-- (TO authenticated), created by migration 20260907150521. An earlier
+-- public-role policy ("Anyone can read active clips") was declared here but
+-- does not exist in production — removed 2026-11-26 (F3) so a fresh replay
+-- does not grant anon read access production does not grant.
 
 -- Instructor / Learner relationships
+--
+-- Reconciled against production 2026-11-26 (F3): instructor_id, status and
+-- created_at are NOT NULL; status defaults to 'pending' (not 'accepted')
+-- and its CHECK includes 'consent_withdrawn' (written by
+-- set_progress_sharing_consent() below, so a replay without it rejects
+-- every consent withdrawal); learner_id's FK is ON DELETE SET NULL, not
+-- CASCADE. The three indexes after the table are live too.
 CREATE TABLE IF NOT EXISTS instructor_relationships (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  instructor_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  learner_id    UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  instructor_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  learner_id    UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   learner_email TEXT,
   learner_name  TEXT,
-  status        TEXT DEFAULT 'accepted' CHECK (status IN ('pending', 'accepted', 'rejected')),
+  status        TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected', 'consent_withdrawn')),
   invite_code   TEXT,
-  created_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  created_at    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS ir_instructor_idx ON instructor_relationships(instructor_id);
+CREATE INDEX IF NOT EXISTS ir_learner_idx ON instructor_relationships(learner_id);
+-- One relationship per instructor/learner pair; pending email invites
+-- (learner_id still NULL) are exempt.
+CREATE UNIQUE INDEX IF NOT EXISTS ir_unique_pair ON instructor_relationships(instructor_id, learner_id)
+  WHERE learner_id IS NOT NULL;
 
 ALTER TABLE instructor_relationships ENABLE ROW LEVEL SECURITY;
 
@@ -100,13 +124,17 @@ CREATE POLICY "Participants can delete own relationships" ON instructor_relation
   FOR DELETE USING (auth.uid() = instructor_id OR auth.uid() = learner_id);
 
 -- Instructor lesson notes
+--
+-- Reconciled against production 2026-11-26 (F3): both FKs reference
+-- public.profiles(id) with no delete action (not auth.users ON DELETE
+-- CASCADE), and lesson_date comes after created_at.
 CREATE TABLE IF NOT EXISTS instructor_lesson_notes (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  instructor_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  learner_id    UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  instructor_id UUID REFERENCES profiles(id),
+  learner_id    UUID REFERENCES profiles(id),
   note          TEXT NOT NULL,
-  lesson_date   DATE,
-  created_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  created_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  lesson_date   DATE
 );
 
 ALTER TABLE instructor_lesson_notes ENABLE ROW LEVEL SECURITY;
@@ -134,11 +162,13 @@ CREATE POLICY "Instructors manage own notes" ON instructor_lesson_notes
 -- likely never fires, but it's a live footgun worth knowing about.
 -- (payout_id and the status CHECK are already handled below, once
 -- `payouts` exists — not duplicated here.)
+-- amount is unconstrained NUMERIC live, not DECIMAL(10,2) as previously
+-- declared here (reconciled 2026-11-26, F3).
 CREATE TABLE IF NOT EXISTS instructor_earnings (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   instructor_id UUID NOT NULL REFERENCES auth.users(id),
   learner_id    UUID NOT NULL REFERENCES auth.users(id),
-  amount        DECIMAL(10,2) DEFAULT 2.50,
+  amount        NUMERIC DEFAULT 2.50,
   status        TEXT DEFAULT 'pending',
   created_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -154,9 +184,13 @@ CREATE POLICY "Instructors can view own earnings" ON instructor_earnings
 
 -- Add instructor / referral columns to profiles
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS instructor_code TEXT UNIQUE;
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS referral_code   TEXT UNIQUE;
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS expo_push_token TEXT;
+-- referral_code has NO unique constraint in production (reconciled
+-- 2026-11-26, F3) — this used to declare it UNIQUE, so a fresh replay had
+-- a constraint production does not. Recorded as-is, not fixed: whether it
+-- should be unique is a separate decision.
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS referral_code   TEXT;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS referred_by     TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS expo_push_token TEXT;
 -- (existing profile RLS policies already cover these columns)
 
 -- Per-user hazard perception attempt log
@@ -166,19 +200,26 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS referred_by     TEXT;
 -- documented, unapplied blueprint rather than deleted: it's real design
 -- work, not describing anything real today. Do not assume hazard attempts
 -- are being persisted.
-CREATE TABLE IF NOT EXISTS hazard_attempts (
-  id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id    UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  clip_id    TEXT REFERENCES hazard_clips(id),
-  score      INTEGER NOT NULL,
-  max_score  INTEGER NOT NULL,
-  clicks     JSONB NOT NULL DEFAULT '[]',
-  attempted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-ALTER TABLE hazard_attempts ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can insert own attempts" ON hazard_attempts FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can read own attempts" ON hazard_attempts FOR SELECT USING (auth.uid() = user_id);
+--
+-- Commented out 2026-11-26 (F3 schema reconcile) so that replaying this
+-- file yields production's structure, which has no such table. clip_id is
+-- now UUID to match hazard_clips.id's live type (it was TEXT, which can no
+-- longer reference hazard_clips(id)). Move it into a migration if and when
+-- it is built.
+--
+-- CREATE TABLE IF NOT EXISTS hazard_attempts (
+--   id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+--   user_id    UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+--   clip_id    UUID REFERENCES hazard_clips(id),
+--   score      INTEGER NOT NULL,
+--   max_score  INTEGER NOT NULL,
+--   clicks     JSONB NOT NULL DEFAULT '[]',
+--   attempted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+-- );
+--
+-- ALTER TABLE hazard_attempts ENABLE ROW LEVEL SECURITY;
+-- CREATE POLICY "Users can insert own attempts" ON hazard_attempts FOR INSERT WITH CHECK (auth.uid() = user_id);
+-- CREATE POLICY "Users can read own attempts" ON hazard_attempts FOR SELECT USING (auth.uid() = user_id);
 
 -- Stripe Connect: instructor payout accounts
 -- Kept in a separate table (not extra columns on `profiles`) because
@@ -433,8 +474,14 @@ CREATE POLICY "Learners can update own consent" ON progress_sharing_consent
 -- withdrawal control in apps/mobile's Settings) — correctness must not
 -- depend on every future caller, in every app, remembering the convention.
 -- A trigger makes it structurally impossible to forget.
+--
+-- SET search_path = public is live on this function and on
+-- set_progress_sharing_consent() below (Supabase's "function search path
+-- mutable" hardening) — recorded here 2026-11-26 (F3).
 CREATE OR REPLACE FUNCTION set_updated_at()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SET search_path = public
+AS $$
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
@@ -466,6 +513,7 @@ CREATE OR REPLACE FUNCTION set_progress_sharing_consent(p_instructor_id UUID, p_
 RETURNS void
 LANGUAGE plpgsql
 SECURITY INVOKER
+SET search_path = public
 AS $$
 BEGIN
   UPDATE progress_sharing_consent
@@ -669,6 +717,31 @@ CREATE POLICY "Anyone can read aggregate stats" ON aggregate_stats FOR SELECT US
 -- (SECURITY DEFINER, runs as the table owner, which Postgres exempts from
 -- RLS entirely since FORCE ROW LEVEL SECURITY isn't set here).
 
+-- The write path referenced above, called by src/analytics.ts's
+-- submitSessionStats via supabase.rpc('update_aggregate_stats', ...).
+-- Live in production but never declared here until 2026-11-26 (F3 schema
+-- reconcile) — body, SECURITY DEFINER, search_path and grants copied from
+-- the production catalog. EXECUTE is granted to authenticated and
+-- service_role only: not PUBLIC, not anon.
+CREATE OR REPLACE FUNCTION update_aggregate_stats(p_topic TEXT, p_correct INTEGER, p_total INTEGER)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO aggregate_stats (topic, total_correct, total_answered)
+  VALUES (p_topic, p_correct, p_total)
+  ON CONFLICT (topic) DO UPDATE SET
+    total_correct  = aggregate_stats.total_correct  + p_correct,
+    total_answered = aggregate_stats.total_answered + p_total,
+    updated_at     = now();
+END;
+$$;
+
+REVOKE ALL ON FUNCTION update_aggregate_stats(TEXT, INTEGER, INTEGER) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION update_aggregate_stats(TEXT, INTEGER, INTEGER) TO authenticated, service_role;
+
 -- Async challenge mode: one row per challenge; either party can update
 -- scores as they play. share_code supports joining without knowing the
 -- challenged party up front (app/challenge.tsx's "enter a code" flow).
@@ -791,8 +864,99 @@ ALTER TABLE waitlist ENABLE ROW LEVEL SECURITY;
 ALTER TABLE instructor_earnings ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP WITH TIME ZONE;
 
 -- ─────────────────────────────────────────────────────────────────
+-- RECONCILED 2026-11-26 (F3 schema reconcile) — objects live in
+-- production but declared nowhere in this file or the migrations, found
+-- by diffing a structure-only dump of production against a fresh local
+-- replay of this file + supabase/migrations. Everything below is
+-- idempotent: a no-op against production, and what a fresh database
+-- (local stack, staging) needs to match it. Other drift found in the same
+-- pass was fixed in place above (hazard_clips, instructor_relationships,
+-- instructor_lesson_notes, instructor_earnings.amount,
+-- profiles.referral_code, hazard_attempts, update_aggregate_stats,
+-- set_updated_at/set_progress_sharing_consent search_path).
+-- ─────────────────────────────────────────────────────────────────
+
+-- profiles.account_class: added directly to production, outside this
+-- file and the migrations, with an index. Nothing in this repo reads or
+-- writes it yet; docs/clearpass-2.0 plans to use it to tell genuine from
+-- internal/test accounts in analytics. Shape recorded exactly as live.
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS account_class TEXT NOT NULL DEFAULT 'unclassified';
+CREATE INDEX IF NOT EXISTS idx_profiles_account_class ON profiles(account_class);
+
+-- Business-name length cap on profiles.display_name (live; the
+-- instructor dashboard's Business name field).
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'profiles_display_name_length' AND conrelid = 'public.profiles'::regclass
+  ) THEN
+    ALTER TABLE profiles ADD CONSTRAINT profiles_display_name_length
+      CHECK (display_name IS NULL OR char_length(display_name) <= 60);
+  END IF;
+END;
+$$;
+
+-- Signup reporting views (live, created by hand). security_invoker, and
+-- readable by service_role only: anon/authenticated hold no privilege on
+-- them in production, so the REVOKEs below undo Supabase's default
+-- grants on a fresh database. v_genuine_signups reads auth.users, so it
+-- must never become readable by client roles.
+CREATE OR REPLACE VIEW v_genuine_signups WITH (security_invoker = true) AS
+SELECT
+  p.id,
+  p.account_type,
+  p.created_at,
+  p.created_at::date AS signup_date,
+  date_trunc('week', p.created_at)::date AS signup_week,
+  date_trunc('month', p.created_at)::date AS signup_month,
+  p.instructor_code,
+  p.signup_ref,
+  u.last_sign_in_at
+FROM profiles p
+JOIN auth.users u ON u.id = p.id
+WHERE p.exclude_from_stats = false;
+
+CREATE OR REPLACE VIEW v_signups_daily WITH (security_invoker = true) AS
+SELECT
+  signup_date,
+  count(*) AS signups,
+  count(*) FILTER (WHERE account_type = 'learner') AS learners,
+  count(*) FILTER (WHERE account_type = 'instructor') AS instructors,
+  sum(count(*)) OVER (ORDER BY signup_date) AS cumulative
+FROM v_genuine_signups
+GROUP BY signup_date
+ORDER BY signup_date;
+
+REVOKE ALL ON v_genuine_signups, v_signups_daily FROM PUBLIC, anon, authenticated;
+GRANT ALL ON v_genuine_signups, v_signups_daily TO service_role;
+
+-- Storage buckets ClearPass reads (bucket configuration, not contents).
+-- instructor-documents is created by migration 20260911180000; the other
+-- two existed only in production until now. None has a size limit or MIME
+-- allow-list live. The only storage.objects policy ClearPass has live is
+-- "Pro users can read hazard videos" (migration 20260907150521).
+--   question-images: public (packages/content links to
+--     /storage/v1/object/public/question-images/<file>).
+--   hazard-videos: private; src/hazardVideos.ts signs URLs, gated by the
+--     policy above.
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('question-images', 'question-images', true)
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('hazard-videos', 'hazard-videos', false)
+ON CONFLICT (id) DO NOTHING;
+
+-- Deliberately NOT declared here (live in production, ClearPass-owned):
+-- archive_profiles_20260914 and archive_stale_codes_20260915. One-off
+-- snapshot tables (dated 14 and 15 Sep 2026 by their names; no keys,
+-- no FKs, RLS on with no policies). They hold archived rows, not
+-- application structure, so a fresh database has no use for them.
+
+-- ─────────────────────────────────────────────────────────────────
 -- This Supabase project is SHARED with Zen Footy. The live schema
--- additionally contains matches, players, lineups and attendance, which
+-- additionally contains matches, players, lineups and attendance (with
+-- their indexes, FKs and "coaches manage own ..." policies), which
 -- belong to that product and are correctly absent from this file.
 -- Service-role code here can reach them — keep writes narrowly scoped.
 -- ─────────────────────────────────────────────────────────────────
