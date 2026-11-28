@@ -132,6 +132,10 @@ const PORT = 3001;
 //     the RevenueCat dashboard's webhook configuration (app.revenuecat.com >
 //     Project > Integrations > Webhooks) — RC sends it back verbatim on
 //     every delivery, there is no HMAC signature scheme like Stripe's.
+//   CLEARPASS_SERVER_ENV  — local | staging | production; unset = production (lib/serverEnv.js).
+//   REVENUECAT_PROJECT_ID, REVENUECAT_PRO_ENTITLEMENT_ID  — required for staging/local
+//     (their own RevenueCat project). Production pins its ids in lib/revenuecatApi.js;
+//     setting either to a different value there refuses to start.
 
 const corsOptions = {
   origin: function (origin, callback) {
@@ -3661,6 +3665,11 @@ app.post('/api/cron/daily-stats', async (req, res) => {
     res.status(500).json({ error: 'daily_stats_failed', detail: String(err.message || err) });
   }
 });
+
+// Refuse to start on a wrong RevenueCat project/entitlement config (see
+// resolveRevenueCatConfig in lib/revenuecatApi.js) rather than talk to the
+// wrong project: production pins its ids, staging/local must set their own.
+revenuecatApi.assertRevenueCatConfigAtStartup(process.env);
 
 app.listen(PORT, () => {
   console.log(`ClearPass proxy running on http://localhost:${PORT}`);
