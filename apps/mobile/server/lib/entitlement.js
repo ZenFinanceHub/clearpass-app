@@ -16,7 +16,27 @@
 // automated reconciliation. Equal priority still applies for same-source
 // pairs (e.g. a Stripe renewal, or the instructor cron re-confirming an
 // existing instructor grant).
-const PRO_SOURCE_PRIORITY = { stripe: 4, iap: 4, comp: 3, instructor: 2, seat: 1 };
+//
+// 'iap_sandbox' is a RevenueCat purchase made in the store SANDBOX
+// environment (TestFlight, App Store review, Google Play licence testers).
+// It still grants access — App Review must be able to unlock Pro — but no
+// money changed hands, so it is excluded from every revenue/paying/
+// conversion number (see lib/dailyStats.js, lib/funnelStats.js) and sits
+// BELOW every real source: a sandbox purchase never replaces any real
+// grant, and any real grant (including a later production purchase by the
+// same person) always replaces it.
+const PRO_SOURCE_PRIORITY = { stripe: 4, iap: 4, comp: 3, instructor: 2, seat: 1, iap_sandbox: 0 };
+
+// The proSource a RevenueCat grant is recorded under, by the event's own
+// `environment` field. Only an explicit 'SANDBOX' maps to iap_sandbox;
+// 'PRODUCTION' — and, defensively, a missing/unknown value — stays 'iap',
+// so a genuine customer's grant can never be downgraded to "test" by a
+// payload quirk.
+const IAP_SOURCE = 'iap';
+const IAP_SANDBOX_SOURCE = 'iap_sandbox';
+function iapSourceForEnvironment(environment) {
+  return environment === 'SANDBOX' ? IAP_SANDBOX_SOURCE : IAP_SOURCE;
+}
 
 function shouldApplyProGrant(currentSource, incomingSource, currentExpiresAt, incomingExpiresAt) {
   if (!currentSource) return true;
@@ -102,8 +122,15 @@ function clearInstructorGrant(state) {
 // exactly: only clears if the grant is still iap-sourced, so a late-arriving
 // or out-of-order EXPIRATION for a grant that's since been superseded (e.g.
 // manually comp'd) can never clobber it.
-function clearIapGrant(state) {
-  if (state.proSource !== 'iap') return state;
+//
+// iapSource selects WHICH RevenueCat grant this event may clear: 'iap'
+// (production, the default) or 'iap_sandbox'. A sandbox EXPIRATION must
+// never clear a real production grant (sandbox subscriptions auto-expire
+// within hours, so a tester who later bought for real would otherwise lose
+// paid access), and vice versa.
+function clearIapGrant(state, iapSource = IAP_SOURCE) {
+  if (iapSource !== IAP_SOURCE && iapSource !== IAP_SANDBOX_SOURCE) return state;
+  if (state.proSource !== iapSource) return state;
   return { ...state, isPro: false, proExpiresAt: null, proSource: null };
 }
 
@@ -135,6 +162,9 @@ function hasBlockingRelationships(relationships) {
 }
 
 module.exports = {
+  IAP_SOURCE,
+  IAP_SANDBOX_SOURCE,
+  iapSourceForEnvironment,
   shouldApplyProGrant,
   isExemptFromProExpiry,
   isEligibleForProExpiry,

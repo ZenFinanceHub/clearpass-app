@@ -1,7 +1,7 @@
 'use strict';
 
 const { computeIapExpiresAt } = require('./proExpiry');
-const { shouldApplyProGrant, clearIapGrant } = require('./entitlement');
+const { shouldApplyProGrant, clearIapGrant, iapSourceForEnvironment, IAP_SANDBOX_SOURCE } = require('./entitlement');
 
 // RevenueCat's expiration_at_ms is epoch milliseconds — an absolute
 // end-of-period timestamp computed by the store (App Store/Play Store),
@@ -35,8 +35,17 @@ function expirationMsToIso(expirationAtMs) {
 // anything other than exactly what computeIapExpiresAt() assumes.
 // computeIapExpiresAt() is only a fallback for the rare case RC's payload
 // doesn't include it.
-function resolveRevenueCatUpdate(eventType, expirationAtMs, currentProgress) {
+//
+// environment is RC's event.environment ('SANDBOX' | 'PRODUCTION'). A
+// SANDBOX purchase still grants Pro (App Review / TestFlight must work) but
+// is recorded as proSource 'iap_sandbox' so it never counts as revenue,
+// and every event only ever acts on the grant from its OWN environment:
+// a sandbox CANCELLATION/EXPIRATION can't touch a real 'iap' grant and a
+// production one can't touch an 'iap_sandbox' grant. Omitted/unknown
+// environment behaves exactly as before (production 'iap').
+function resolveRevenueCatUpdate(eventType, expirationAtMs, currentProgress, environment) {
   const currentSource = currentProgress.proSource;
+  const iapSource = iapSourceForEnvironment(environment);
 
   if (eventType === 'INITIAL_PURCHASE' || eventType === 'RENEWAL') {
     let incomingExpiresAt = expirationMsToIso(expirationAtMs);
@@ -46,12 +55,12 @@ function resolveRevenueCatUpdate(eventType, expirationAtMs, currentProgress) {
       incomingExpiresAt = computeIapExpiresAt();
     }
 
-    if (!shouldApplyProGrant(currentSource, 'iap', currentProgress.proExpiresAt, incomingExpiresAt)) {
+    if (!shouldApplyProGrant(currentSource, iapSource, currentProgress.proExpiresAt, incomingExpiresAt)) {
       return { progress: null, warning };
     }
 
     return {
-      progress: { isPro: true, proExpiresAt: incomingExpiresAt, proSource: 'iap' },
+      progress: { isPro: true, proExpiresAt: incomingExpiresAt, proSource: iapSource },
       warning,
     };
   }
@@ -61,7 +70,7 @@ function resolveRevenueCatUpdate(eventType, expirationAtMs, currentProgress) {
     // already paid for. expiration_at_ms IS the end of that period; once
     // it passes, the existing expire-pro cron reconciles it naturally via
     // isEligibleForProExpiry, no special-case revocation logic needed here.
-    if (currentSource !== 'iap') return { progress: null, warning: null };
+    if (currentSource !== iapSource) return { progress: null, warning: null };
 
     const incomingExpiresAt = expirationMsToIso(expirationAtMs);
     if (incomingExpiresAt === null) {
@@ -76,8 +85,8 @@ function resolveRevenueCatUpdate(eventType, expirationAtMs, currentProgress) {
   if (eventType === 'EXPIRATION') {
     // The authoritative "access has ended" signal — unlike CANCELLATION,
     // this fires when the paid period is actually over.
-    if (currentSource !== 'iap') return { progress: null, warning: null };
-    const cleared = clearIapGrant(currentProgress);
+    if (currentSource !== iapSource) return { progress: null, warning: null };
+    const cleared = clearIapGrant(currentProgress, iapSource);
     return {
       progress: { isPro: cleared.isPro, proExpiresAt: cleared.proExpiresAt, proSource: cleared.proSource },
       warning: null,
@@ -109,9 +118,11 @@ function isSupabaseUserId(id) {
 // actually theirs from RC's rails, not whatever else they have now.
 // Returns null for "no change" (nothing to clear), same convention as
 // resolveRevenueCatUpdate's progress field.
-function resolveTransferSourceUpdate(currentProgress) {
-  if (currentProgress.proSource !== 'iap') return null;
-  const cleared = clearIapGrant(currentProgress);
+// iapSource ('iap' default, or 'iap_sandbox' for a SANDBOX transfer) limits
+// the clear to the grant from the transfer's own environment.
+function resolveTransferSourceUpdate(currentProgress, iapSource = 'iap') {
+  if (currentProgress.proSource !== iapSource) return null;
+  const cleared = clearIapGrant(currentProgress, iapSource);
   return { isPro: cleared.isPro, proExpiresAt: cleared.proExpiresAt, proSource: cleared.proSource };
 }
 
@@ -126,18 +137,18 @@ function resolveTransferSourceUpdate(currentProgress) {
 // Goes through the same shouldApplyProGrant precedence as every other iap
 // grant, so a destination with a higher-priority existing grant (stripe,
 // comp) is never downgraded.
-function resolveTransferDestinationUpdate(currentProgress, sourceExpiresAt) {
+function resolveTransferDestinationUpdate(currentProgress, sourceExpiresAt, iapSource = 'iap') {
   if (!sourceExpiresAt) {
     return {
       progress: null,
       warning: 'TRANSFER destination has no usable source proExpiresAt — not granting (no open-ended Pro)',
     };
   }
-  if (!shouldApplyProGrant(currentProgress.proSource, 'iap', currentProgress.proExpiresAt, sourceExpiresAt)) {
+  if (!shouldApplyProGrant(currentProgress.proSource, iapSource, currentProgress.proExpiresAt, sourceExpiresAt)) {
     return { progress: null, warning: null };
   }
   return {
-    progress: { isPro: true, proExpiresAt: sourceExpiresAt, proSource: 'iap' },
+    progress: { isPro: true, proExpiresAt: sourceExpiresAt, proSource: iapSource },
     warning: null,
   };
 }
@@ -211,6 +222,7 @@ async function applyTransfer(event, db, rcApi, slack) {
 
   const sourceIds = rawFrom.filter(isSupabaseUserId);
   const destIds = rawTo.filter(isSupabaseUserId);
+  warnOnUnexpectedEnvironment(event);
 
   if (destIds.length === 0) {
     console.log(`[revenuecat-webhook] TRANSFER ${event.id}: no Supabase-user destinations, skipping`);
@@ -258,10 +270,11 @@ async function applyTransfer(event, db, rcApi, slack) {
 // applyTransferViaRevenueCat's comment for the retry-safety reasoning,
 // which applies identically here.
 async function applyTransferLocal(event, db, sourceRows, destRows, sourceIds) {
+  const iapSource = iapSourceForEnvironment(event.environment);
   const nowIso = new Date().toISOString();
   let sourceExpiresAt = null;
   for (const { progress } of sourceRows) {
-    if (progress.proSource === 'iap' && progress.proExpiresAt && progress.proExpiresAt > nowIso) {
+    if (progress.proSource === iapSource && progress.proExpiresAt && progress.proExpiresAt > nowIso) {
       if (!sourceExpiresAt || progress.proExpiresAt > sourceExpiresAt) {
         sourceExpiresAt = progress.proExpiresAt;
       }
@@ -269,7 +282,7 @@ async function applyTransferLocal(event, db, sourceRows, destRows, sourceIds) {
   }
 
   for (const { id, progress } of destRows) {
-    const { progress: patch, warning } = resolveTransferDestinationUpdate(progress, sourceExpiresAt);
+    const { progress: patch, warning } = resolveTransferDestinationUpdate(progress, sourceExpiresAt, iapSource);
     if (warning) {
       console.warn(`[revenuecat-webhook] ${warning} (event ${event.id}, destination ${id})`);
     }
@@ -281,7 +294,7 @@ async function applyTransferLocal(event, db, sourceRows, destRows, sourceIds) {
         return { ok: false, retry: true };
       }
       console.log(
-        `[revenuecat-webhook] TRANSFER ${event.id}: granted iap to destination`,
+        `[revenuecat-webhook] TRANSFER ${event.id}: granted ${iapSource} to destination`,
         id,
         'source',
         sourceIds.join(',') || '(none)',
@@ -293,7 +306,7 @@ async function applyTransferLocal(event, db, sourceRows, destRows, sourceIds) {
   }
 
   for (const { id, progress } of sourceRows) {
-    const patch = resolveTransferSourceUpdate(progress);
+    const patch = resolveTransferSourceUpdate(progress, iapSource);
     if (patch) {
       const { error } = await db.upsertProgress(id, { ...progress, ...patch });
       if (error) {
@@ -322,7 +335,12 @@ async function applyTransferLocal(event, db, sourceRows, destRows, sourceIds) {
 // reapplication is idempotent (see shouldApplyProGrant) — and then clears
 // the source. The reverse order would have nothing left to grant from if a
 // destination write failed after its source had already been cleared.
+//
+// The source label (iap vs iap_sandbox) comes from the TRANSFER event's own
+// environment — RC's active_entitlements response doesn't say whether the
+// entitlement is backed by a sandbox receipt.
 async function applyTransferViaRevenueCat(event, db, rcApi, slack, sourceRows, destRows) {
+  const iapSource = iapSourceForEnvironment(event.environment);
   for (const { id, progress } of destRows) {
     let entitlement;
     try {
@@ -346,12 +364,12 @@ async function applyTransferViaRevenueCat(event, db, rcApi, slack, sourceRows, d
       await safeSlackPost(slack, `ClearPass transfer: not granted, destination ${id}, expiry none`);
       continue;
     }
-    if (!shouldApplyProGrant(progress.proSource, 'iap', progress.proExpiresAt, entitlement.expiresAt)) {
+    if (!shouldApplyProGrant(progress.proSource, iapSource, progress.proExpiresAt, entitlement.expiresAt)) {
       await safeSlackPost(slack, `ClearPass transfer: not granted, destination ${id}, expiry ${entitlement.expiresAt}`);
       continue;
     }
 
-    const patch = { isPro: true, proExpiresAt: entitlement.expiresAt, proSource: 'iap' };
+    const patch = { isPro: true, proExpiresAt: entitlement.expiresAt, proSource: iapSource };
     const { error } = await db.upsertProgress(id, { ...progress, ...patch });
     if (error) {
       console.error(`[revenuecat-webhook] TRANSFER ${event.id}: destination upsert failed for`, id, error.message || error);
@@ -360,7 +378,7 @@ async function applyTransferViaRevenueCat(event, db, rcApi, slack, sourceRows, d
       return { ok: false, retry: true };
     }
     console.log(
-      `[revenuecat-webhook] TRANSFER ${event.id}: granted iap to destination`,
+      `[revenuecat-webhook] TRANSFER ${event.id}: granted ${iapSource} to destination`,
       id,
       'expires',
       patch.proExpiresAt,
@@ -372,7 +390,7 @@ async function applyTransferViaRevenueCat(event, db, rcApi, slack, sourceRows, d
   for (const { id, progress } of sourceRows) {
     // Nothing to clear locally regardless of what RC says — skip the
     // lookup entirely rather than spend an API call on it.
-    if (progress.proSource !== 'iap') continue;
+    if (progress.proSource !== iapSource) continue;
 
     let entitlement;
     try {
@@ -389,7 +407,7 @@ async function applyTransferViaRevenueCat(event, db, rcApi, slack, sourceRows, d
       continue;
     }
 
-    const patch = resolveTransferSourceUpdate(progress);
+    const patch = resolveTransferSourceUpdate(progress, iapSource);
     if (patch) {
       const { error } = await db.upsertProgress(id, { ...progress, ...patch });
       if (error) {
@@ -403,6 +421,65 @@ async function applyTransferViaRevenueCat(event, db, rcApi, slack, sourceRows, d
   }
 
   return { ok: true };
+}
+
+// RevenueCat always sends environment 'SANDBOX' or 'PRODUCTION'. Anything
+// else is treated as production (iapSourceForEnvironment) so a genuine
+// customer is never downgraded, but it's logged loudly: if RC ever changed
+// the field, sandbox purchases would silently start counting as revenue.
+function warnOnUnexpectedEnvironment(event) {
+  if (event.environment !== 'SANDBOX' && event.environment !== 'PRODUCTION') {
+    console.warn(
+      `[revenuecat-webhook] ${event.type} ${event.id}: unexpected environment ${JSON.stringify(event.environment)} — treating as PRODUCTION`,
+    );
+  }
+}
+
+// Durable record that this user made a SANDBOX (test) purchase. The
+// 'iap_sandbox' proSource only lasts while the sandbox subscription does
+// (Apple/Google sandbox subscriptions expire within hours), but the app's
+// own purchase_succeeded funnel event stays in the reporting window for
+// days — this marker is what lets funnel reporting (lib/funnelStats.js,
+// docs/sql) keep excluding it. Stored as a funnel_events row (no schema
+// change): event 'iap_sandbox_purchase', written with the service role.
+// Best-effort — never fails or retries the webhook; the entitlement grant
+// is what matters, the marker only feeds reporting. db.recordSandboxPurchase
+// is optional so older adapters/tests keep working.
+const SANDBOX_PURCHASE_MARKER_EVENT = 'iap_sandbox_purchase';
+
+// The funnel_events row for that marker. anon_id is NOT NULL (8-64 chars)
+// on that table; a per-event synthetic value keeps it unique and obviously
+// server-written. props carry only non-personal store metadata.
+const RC_STORE_PLATFORM = { APP_STORE: 'ios', MAC_APP_STORE: 'ios', PLAY_STORE: 'android' };
+
+function buildSandboxPurchaseMarkerRow(userId, event) {
+  return {
+    user_id: userId,
+    anon_id: `revenuecat:${String(event.id)}`.slice(0, 64),
+    event: SANDBOX_PURCHASE_MARKER_EVENT,
+    platform: RC_STORE_PLATFORM[event.store] || null,
+    props: {
+      source: 'revenuecat_webhook',
+      rc_event_id: String(event.id).slice(0, 100),
+      environment: 'SANDBOX',
+      store: typeof event.store === 'string' ? event.store.slice(0, 40) : null,
+      product_id: typeof event.product_id === 'string' ? event.product_id.slice(0, 100) : null,
+    },
+  };
+}
+
+async function recordSandboxPurchaseMarker(db, event, userId) {
+  if (typeof db.recordSandboxPurchase !== 'function') return;
+  try {
+    await db.recordSandboxPurchase(userId, event);
+  } catch (err) {
+    console.error(
+      `[revenuecat-webhook] ${event.type} ${event.id}: failed to record sandbox purchase marker for`,
+      userId,
+      '—',
+      err.message || err,
+    );
+  }
 }
 
 // Applies one single-user RC event (INITIAL_PURCHASE/RENEWAL/CANCELLATION/
@@ -431,6 +508,11 @@ async function applySingleUserUpdate(event, db) {
     return { ok: true };
   }
 
+  warnOnUnexpectedEnvironment(event);
+  if (event.environment === 'SANDBOX' && event.type === 'INITIAL_PURCHASE') {
+    await recordSandboxPurchaseMarker(db, event, userId);
+  }
+
   let currentProgress;
   try {
     currentProgress = (await db.getProgress(userId)) || {};
@@ -440,7 +522,12 @@ async function applySingleUserUpdate(event, db) {
     return { ok: false, retry: true };
   }
 
-  const { progress: patch, warning } = resolveRevenueCatUpdate(event.type, event.expiration_at_ms, currentProgress);
+  const { progress: patch, warning } = resolveRevenueCatUpdate(
+    event.type,
+    event.expiration_at_ms,
+    currentProgress,
+    event.environment,
+  );
   if (warning) {
     console.warn(`[revenuecat-webhook] ${warning} (event ${event.id}, user ${userId})`);
   }
@@ -456,11 +543,13 @@ async function applySingleUserUpdate(event, db) {
     await safeDeleteWebhookEvent(db, event.id);
     return { ok: false, retry: true };
   }
-  console.log(`[revenuecat-webhook] ${event.type} applied for user`, userId);
+  console.log(`[revenuecat-webhook] ${event.type} applied for user`, userId, `(environment ${event.environment || 'unset'})`);
   return { ok: true };
 }
 
 module.exports = {
+  SANDBOX_PURCHASE_MARKER_EVENT,
+  buildSandboxPurchaseMarkerRow,
   expirationMsToIso,
   resolveRevenueCatUpdate,
   isSupabaseUserId,

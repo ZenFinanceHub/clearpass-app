@@ -1,4 +1,6 @@
-export type ProSource = 'stripe' | 'iap' | 'instructor' | 'comp' | 'seat';
+// 'iap_sandbox': a RevenueCat purchase from the store SANDBOX environment
+// (TestFlight, App Review, licence testers). Grants access, never revenue.
+export type ProSource = 'stripe' | 'iap' | 'instructor' | 'comp' | 'seat' | 'iap_sandbox';
 
 export interface ProGrantState {
   isPro: boolean;
@@ -24,6 +26,9 @@ const PRO_SOURCE_PRIORITY: Record<ProSource, number> = {
   comp: 3,
   instructor: 2,
   seat: 1,
+  // Below every real source: a sandbox (test) purchase never replaces a real
+  // grant, and any real grant replaces it. Mirrors server/lib/entitlement.js.
+  iap_sandbox: 0,
 };
 
 export function shouldApplyProGrant(
